@@ -37,11 +37,15 @@ export class MemStorage implements IStorage {
     const id = this.currentId++;
     const now = new Date().toISOString();
     const session: AssessmentSession = { 
-      ...insertSession, 
       id,
+      sessionId: insertSession.sessionId,
+      responses: insertSession.responses ?? null,
+      analysis: insertSession.analysis ?? null,
+      purposePaths: insertSession.purposePaths ?? null,
+      salaryData: insertSession.salaryData ?? null,
       createdAt: now,
       updatedAt: now
-    };
+    } as AssessmentSession;
     this.assessmentSessions.set(session.sessionId, session);
     return session;
   }

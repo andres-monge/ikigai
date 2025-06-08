@@ -18,7 +18,7 @@ import type { QuestionnaireResponses, AssessmentResults } from '@/types/assessme
 
 type AppState = 'home' | 'questionnaire' | 'results';
 
-function App() {
+function AppContent() {
   const [currentState, setCurrentState] = useSessionStorage<AppState>('appState', 'home');
   const [language, setLanguage] = useSessionStorage<Language>('language', 'en');
   const [sessionId, setSessionId] = useSessionStorage<string>('sessionId', '');
@@ -85,40 +85,45 @@ function App() {
   };
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <div className="min-h-screen bg-slate-50">
-          <Header language={language} onLanguageChange={setLanguage} />
-          
-          <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            {currentState === 'home' && (
-              <Home onStartAssessment={handleStartAssessment} language={language} />
-            )}
-            
-            {currentState === 'questionnaire' && (
-              <Questionnaire onComplete={handleQuestionnaireComplete} language={language} />
-            )}
-            
-            {currentState === 'results' && results && (
-              <Results
-                results={results}
-                onOpenChat={handleOpenChat}
-                onStartOver={handleStartOver}
-                language={language}
-              />
-            )}
-          </main>
-
-          <ChatInterface
-            isOpen={isChatOpen}
-            onClose={handleCloseChat}
-            sessionId={sessionId}
+    <div className="min-h-screen bg-slate-50">
+      <Header language={language} onLanguageChange={setLanguage} />
+      
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {currentState === 'home' && (
+          <Home onStartAssessment={handleStartAssessment} language={language} />
+        )}
+        
+        {currentState === 'questionnaire' && (
+          <Questionnaire onComplete={handleQuestionnaireComplete} language={language} />
+        )}
+        
+        {currentState === 'results' && results && (
+          <Results
+            results={results}
+            onOpenChat={handleOpenChat}
+            onStartOver={handleStartOver}
             language={language}
           />
+        )}
+      </main>
 
-          <LoadingOverlay isVisible={isLoading} language={language} />
-        </div>
-        
+      <ChatInterface
+        isOpen={isChatOpen}
+        onClose={handleCloseChat}
+        sessionId={sessionId}
+        language={language}
+      />
+
+      <LoadingOverlay isVisible={isLoading} language={language} />
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <AppContent />
         <Toaster />
       </TooltipProvider>
     </QueryClientProvider>
