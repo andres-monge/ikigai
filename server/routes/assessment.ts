@@ -65,7 +65,7 @@ assessmentRouter.post("/sessions", async (req, res) => {
  */
 assessmentRouter.post("/responses", async (req, res) => {
   try {
-    const validation = questionnaireResponsesSchema.safeParse(req.body);
+    const validation = analysisRequestSchema.safeParse(req.body);
     if (!validation.success) {
       return res.status(400).json({
         error: "Invalid request data",

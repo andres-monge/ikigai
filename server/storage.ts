@@ -182,12 +182,10 @@ export class MemStorage implements IStorage {
                       salaries.push(salary);
                   }
               }
-              // @ts-ignore
-              purposePaths.push({ ...path, salaryData: salaries });
+              purposePaths.push({ ...path, salaryData: salaries } as PurposePath & { salaryData: SalaryData[] });
           }
       }
-      // @ts-ignore
-      return { ...session, purposePaths };
+      return { ...session, purposePaths } as AssessmentSession & { purposePaths: (PurposePath & { salaryData: SalaryData[] })[] };
   }
 }
 
