@@ -17,7 +17,7 @@
  * - zod: Runtime type validation and schema definition
  * 
  * @notes
- * - All timestamps use text format for compatibility with in-memory storage
+ * - All timestamps use proper timestamp columns with timezone support
  * - JSONB columns store complex nested data structures
  * - Foreign key relationships support CASCADE deletion for data consistency
  * - Schema is designed for seamless transition from MemStorage to PostgreSQL
@@ -38,13 +38,13 @@ import { z } from "zod";
 export const assessmentSessions = pgTable("assessment_sessions", {
   id: serial("id").primaryKey(),
   sessionId: text("session_id").notNull().unique(),
-  language: text("language").notNull(), // 'en' or 'es'
+  language: text("language").$type<"en" | "es">().notNull(),
   responses: jsonb("responses"), // Initial questionnaire answers
   coreDriversAnalysis: jsonb("core_drivers_analysis"), // AI analysis of user's core drivers
   chosenPathId: integer("chosen_path_id"), // FK to purpose_paths.id, nullable until user chooses
   actionPlan: jsonb("action_plan"), // Detailed step-by-step action plan
-  createdAt: text("created_at").notNull(),
-  updatedAt: text("updated_at").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().onUpdateNow().notNull(),
 });
 
 /**
@@ -53,12 +53,14 @@ export const assessmentSessions = pgTable("assessment_sessions", {
  */
 export const purposePaths = pgTable("purpose_paths", {
   id: serial("id").primaryKey(),
-  sessionId: text("session_id").notNull(), // References assessment_sessions.session_id
+  sessionId: integer("session_id")
+    .references(() => assessmentSessions.id, { onDelete: "cascade" })
+    .notNull(),
   title: text("title").notNull(),
   description: text("description"),
   ikigaiAlignment: jsonb("ikigai_alignment"), // Contains love, goodAt, worldNeeds, pay alignment details
   actionStrategy: text("action_strategy"), // High-level strategy overview
-  createdAt: text("created_at").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 /**
@@ -67,13 +69,15 @@ export const purposePaths = pgTable("purpose_paths", {
  */
 export const salaryData = pgTable("salary_data", {
   id: serial("id").primaryKey(),
-  pathId: integer("path_id").notNull(), // FK to purpose_paths.id
+  pathId: integer("path_id")
+    .references(() => purposePaths.id, { onDelete: "cascade" })
+    .notNull(),
   entryLevel: text("entry_level"),
   midLevel: text("mid_level"),
   seniorLevel: text("senior_level"),
   location: text("location"),
-  sources: jsonb("sources").$type<string[]>(), // Array of URL strings for data sources
-  retrievedAt: text("retrieved_at").notNull(),
+  sources: text("sources").array(), // Array of URL strings for data sources
+  retrievedAt: timestamp("retrieved_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 /**
@@ -82,11 +86,13 @@ export const salaryData = pgTable("salary_data", {
  */
 export const chatMessages = pgTable("chat_messages", {
   id: serial("id").primaryKey(),
-  sessionId: text("session_id").notNull(), // References assessment_sessions.session_id
-  role: text("role").notNull(), // 'user' or 'assistant'
+  sessionId: integer("session_id")
+    .references(() => assessmentSessions.id, { onDelete: "cascade" })
+    .notNull(),
+  role: text("role").$type<"user" | "assistant">().notNull(),
   content: text("content").notNull(),
   context: text("context"), // 'discovery' or 'action_plan' - determines conversation focus
-  timestamp: text("timestamp").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 // =============================================================================
@@ -205,10 +211,6 @@ export const insertAssessmentSessionSchema = createInsertSchema(assessmentSessio
   responses: z.record(z.any()).optional(),
   coreDriversAnalysis: coreDriversAnalysisSchema.optional(),
   actionPlan: actionPlanSchema.optional(),
-}).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
 });
 
 export const selectAssessmentSessionSchema = createSelectSchema(assessmentSessions);
@@ -216,9 +218,6 @@ export const selectAssessmentSessionSchema = createSelectSchema(assessmentSessio
 // Purpose path schemas
 export const insertPurposePathSchema = createInsertSchema(purposePaths, {
   ikigaiAlignment: ikigaiAlignmentSchema.optional(),
-}).omit({
-  id: true,
-  createdAt: true,
 });
 
 export const selectPurposePathSchema = createSelectSchema(purposePaths);
@@ -226,9 +225,6 @@ export const selectPurposePathSchema = createSelectSchema(purposePaths);
 // Salary data schemas
 export const insertSalaryDataSchema = createInsertSchema(salaryData, {
   sources: z.array(z.string().url()).optional(),
-}).omit({
-  id: true,
-  retrievedAt: true,
 });
 
 export const selectSalaryDataSchema = createSelectSchema(salaryData);
@@ -237,8 +233,6 @@ export const selectSalaryDataSchema = createSelectSchema(salaryData);
 export const insertChatMessageSchema = createInsertSchema(chatMessages, {
   role: z.enum(["user", "assistant"]),
   context: z.enum(["discovery", "action_plan"]).optional(),
-}).omit({
-  id: true,
 });
 
 export const selectChatMessageSchema = createSelectSchema(chatMessages);
