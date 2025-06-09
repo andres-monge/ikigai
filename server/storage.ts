@@ -1,82 +1,195 @@
-import { 
-  assessmentSessions, 
-  chatMessages,
-  type AssessmentSession, 
+/**
+ * @description
+ * This file provides the data storage layer for the application. For the MVP, it uses
+ * an in-memory storage solution (`MemStorage`) to simulate a database. This allows for
+ * rapid development without requiring a live database connection.
+ *
+ * The `IStorage` interface defines the contract that any storage implementation must follow,
+ * making it easy to swap `MemStorage` with a real Postgres implementation in the future.
+ *
+ * @dependencies
+ * - @shared/schema: Provides Drizzle schema types for data consistency.
+ */
+
+import {
+  type AssessmentSession,
   type InsertAssessmentSession,
+  type PurposePath,
+  type InsertPurposePath,
+  type SalaryData,
+  type InsertSalaryData,
   type ChatMessage,
-  type InsertChatMessage
+  type InsertChatMessage,
 } from "@shared/schema";
 
 export interface IStorage {
   // Assessment sessions
-  getAssessmentSession(sessionId: string): Promise<AssessmentSession | undefined>;
-  createAssessmentSession(session: InsertAssessmentSession): Promise<AssessmentSession>;
+  getAssessmentSessionById(id: number): Promise<AssessmentSession | undefined>;
+  getAssessmentSessionBySessionId(sessionId: string): Promise<AssessmentSession | undefined>;
+  createAssessmentSession(session: Omit<InsertAssessmentSession, 'id'>): Promise<AssessmentSession>;
   updateAssessmentSession(sessionId: string, updates: Partial<InsertAssessmentSession>): Promise<AssessmentSession | undefined>;
-  
+
+  // Purpose Paths
+  createPurposePath(path: Omit<InsertPurposePath, 'id'>): Promise<PurposePath>;
+  deletePurposePathsByAssessmentId(assessmentId: number): Promise<void>;
+
+  // Salary Data
+  createSalaryData(data: Omit<InsertSalaryData, 'id'>): Promise<SalaryData>;
+
   // Chat messages
-  getChatMessages(sessionId: string): Promise<ChatMessage[]>;
-  createChatMessage(message: InsertChatMessage): Promise<ChatMessage>;
+  getChatMessages(assessmentId: number): Promise<ChatMessage[]>;
+  createChatMessage(message: Omit<InsertChatMessage, 'id'>): Promise<ChatMessage>;
 }
 
+/**
+ * @class MemStorage
+ * @description An in-memory implementation of the IStorage interface.
+ * It uses Maps to simulate database tables.
+ * NOTE: This is for development and MVP purposes only. Data is not persisted.
+ */
 export class MemStorage implements IStorage {
-  private assessmentSessions: Map<string, AssessmentSession>;
-  private chatMessages: Map<string, ChatMessage[]>;
-  private currentId: number;
+  private assessmentSessions: Map<number, AssessmentSession> = new Map();
+  private purposePaths: Map<number, PurposePath> = new Map();
+  private salaryData: Map<number, SalaryData> = new Map();
+  private chatMessages: Map<number, ChatMessage> = new Map();
 
-  constructor() {
-    this.assessmentSessions = new Map();
-    this.chatMessages = new Map();
-    this.currentId = 1;
+  // Simple auto-incrementing ID counters
+  private nextSessionId = 1;
+  private nextPathId = 1;
+  private nextSalaryId = 1;
+  private nextMessageId = 1;
+
+  // Index for quick lookup of session by sessionId string
+  private sessionIdIndex: Map<string, number> = new Map();
+
+  async getAssessmentSessionById(id: number): Promise<AssessmentSession | undefined> {
+    const session = this.assessmentSessions.get(id);
+    if (!session) return undefined;
+    return this.hydrateSession(session);
   }
 
-  async getAssessmentSession(sessionId: string): Promise<AssessmentSession | undefined> {
-    return this.assessmentSessions.get(sessionId);
+  async getAssessmentSessionBySessionId(sessionId: string): Promise<AssessmentSession | undefined> {
+    const internalId = this.sessionIdIndex.get(sessionId);
+    if (internalId === undefined) return undefined;
+    const session = this.assessmentSessions.get(internalId);
+    return session ? this.hydrateSession(session) : undefined;
   }
 
-  async createAssessmentSession(insertSession: InsertAssessmentSession): Promise<AssessmentSession> {
-    const id = this.currentId++;
-    const now = new Date().toISOString();
-    const session: AssessmentSession = { 
+  async createAssessmentSession(insertSession: Omit<InsertAssessmentSession, 'id'>): Promise<AssessmentSession> {
+    const id = this.nextSessionId++;
+    const now = new Date();
+    const session: AssessmentSession = {
       id,
-      sessionId: insertSession.sessionId,
-      responses: insertSession.responses ?? null,
-      analysis: insertSession.analysis ?? null,
-      purposePaths: insertSession.purposePaths ?? null,
-      salaryData: insertSession.salaryData ?? null,
+      sessionId: insertSession.sessionId!,
+      language: insertSession.language || 'en',
+      responses: insertSession.responses || null,
+      coreDriversAnalysis: insertSession.coreDriversAnalysis || null,
+      chosenPathId: insertSession.chosenPathId || null,
+      actionPlan: insertSession.actionPlan || null,
       createdAt: now,
-      updatedAt: now
-    } as AssessmentSession;
-    this.assessmentSessions.set(session.sessionId, session);
-    return session;
+      updatedAt: now,
+    };
+    this.assessmentSessions.set(id, session);
+    this.sessionIdIndex.set(session.sessionId, id);
+    return this.hydrateSession(session);
   }
 
   async updateAssessmentSession(sessionId: string, updates: Partial<InsertAssessmentSession>): Promise<AssessmentSession | undefined> {
-    const existing = this.assessmentSessions.get(sessionId);
+    const internalId = this.sessionIdIndex.get(sessionId);
+    if (internalId === undefined) return undefined;
+
+    const existing = this.assessmentSessions.get(internalId);
     if (!existing) return undefined;
 
     const updated: AssessmentSession = {
       ...existing,
       ...updates,
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date(),
     };
-    this.assessmentSessions.set(sessionId, updated);
-    return updated;
+    this.assessmentSessions.set(internalId, updated);
+    return this.hydrateSession(updated);
   }
 
-  async getChatMessages(sessionId: string): Promise<ChatMessage[]> {
-    return this.chatMessages.get(sessionId) || [];
+  async createPurposePath(insertPath: Omit<InsertPurposePath, 'id'>): Promise<PurposePath> {
+    const id = this.nextPathId++;
+    const path: PurposePath = { id, ...insertPath };
+    this.purposePaths.set(id, path);
+    return path;
   }
 
-  async createChatMessage(insertMessage: InsertChatMessage): Promise<ChatMessage> {
-    const id = this.currentId++;
-    const message: ChatMessage = { ...insertMessage, id };
-    
-    const existing = this.chatMessages.get(message.sessionId) || [];
-    existing.push(message);
-    this.chatMessages.set(message.sessionId, existing);
-    
+  async deletePurposePathsByAssessmentId(assessmentId: number): Promise<void> {
+      const pathsToDelete: number[] = [];
+      for (const path of this.purposePaths.values()) {
+          if (path.assessmentId === assessmentId) {
+              pathsToDelete.push(path.id);
+          }
+      }
+
+      for (const pathId of pathsToDelete) {
+          // also delete related salary data
+          const salariesToDelete: number[] = [];
+          for (const salary of this.salaryData.values()) {
+              if (salary.pathId === pathId) {
+                  salariesToDelete.push(salary.id);
+              }
+          }
+          salariesToDelete.forEach(id => this.salaryData.delete(id));
+          this.purposePaths.delete(pathId);
+      }
+  }
+
+  async createSalaryData(insertData: Omit<InsertSalaryData, 'id'>): Promise<SalaryData> {
+    const id = this.nextSalaryId++;
+    const data: SalaryData = {
+      id,
+      retrievedAt: new Date(),
+      ...insertData,
+      sources: insertData.sources || [],
+    };
+    this.salaryData.set(id, data);
+    return data;
+  }
+
+  async getChatMessages(assessmentId: number): Promise<ChatMessage[]> {
+    const messages: ChatMessage[] = [];
+    for (const msg of this.chatMessages.values()) {
+      if (msg.assessmentId === assessmentId) {
+        messages.push(msg);
+      }
+    }
+    return messages.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  }
+
+  async createChatMessage(insertMessage: Omit<InsertChatMessage, 'id'>): Promise<ChatMessage> {
+    const id = this.nextMessageId++;
+    const message: ChatMessage = {
+      id,
+      createdAt: new Date(),
+      ...insertMessage,
+    };
+    this.chatMessages.set(id, message);
     return message;
+  }
+
+  // Helper to simulate relational queries
+  private async hydrateSession(session: AssessmentSession): Promise<AssessmentSession> {
+      const purposePaths: (PurposePath & { salaryData: SalaryData[] })[] = [];
+      for(const path of this.purposePaths.values()){
+          if(path.assessmentId === session.id){
+              const salaries: SalaryData[] = [];
+              for(const salary of this.salaryData.values()){
+                  if(salary.pathId === path.id){
+                      salaries.push(salary);
+                  }
+              }
+              // @ts-ignore
+              purposePaths.push({ ...path, salaryData: salaries });
+          }
+      }
+      // @ts-ignore
+      return { ...session, purposePaths };
   }
 }
 
-export const storage = new MemStorage();
+// Export a singleton instance of the storage class.
+export const storage: IStorage = new MemStorage();
