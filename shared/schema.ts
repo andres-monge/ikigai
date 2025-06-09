@@ -44,7 +44,7 @@ export const assessmentSessions = pgTable("assessment_sessions", {
   chosenPathId: integer("chosen_path_id"), // FK to purpose_paths.id, nullable until user chooses
   actionPlan: jsonb("action_plan"), // Detailed step-by-step action plan
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 /**
