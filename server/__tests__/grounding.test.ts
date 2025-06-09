@@ -161,6 +161,7 @@ describe('generateWithRetry', () => {
     await expect(
       generateWithRetry({
         prompt: 'test prompt',
+        maxRetries: 1, // Prevent retries for this test
       })
     ).rejects.toThrow('Gemini API error: 400 Bad Request');
 
@@ -181,6 +182,7 @@ describe('generateWithRetry', () => {
     await expect(
       generateWithRetry({
         prompt: 'test prompt',
+        maxRetries: 1, // Prevent retries for this test
       })
     ).rejects.toThrow('No content received from Gemini API');
 
@@ -212,6 +214,7 @@ describe('generateWithRetry', () => {
       generateWithRetry({
         prompt: 'test prompt',
         isJsonMode: true,
+        maxRetries: 1, // Prevent retries for this test
       })
     ).rejects.toThrow();
 
@@ -219,6 +222,8 @@ describe('generateWithRetry', () => {
   });
 
   it('should throw error when API key is missing', async () => {
+    // Store original value to restore later
+    const originalApiKey = process.env.GEMINI_API_KEY;
     delete process.env.GEMINI_API_KEY;
 
     await expect(
@@ -228,6 +233,9 @@ describe('generateWithRetry', () => {
     ).rejects.toThrow('Gemini API key is not configured in .env.local');
 
     expect(fetch).not.toHaveBeenCalled();
+    
+    // Restore the API key for other tests
+    process.env.GEMINI_API_KEY = originalApiKey;
   });
 
   it('should include search tools when useSearch is true', async () => {
@@ -271,7 +279,7 @@ describe('generateWithRetry', () => {
           content: {
             parts: [
               {
-                text: 'Response'
+                text: '{"test": "response"}'
               }
             ]
           }
