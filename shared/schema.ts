@@ -1,55 +1,69 @@
-
 /**
- * @description 
- * This file defines the complete database schema for the Purpose Finder application using Drizzle ORM and Zod validation.
- * It establishes the foundational data structures for the ikigai assessment workflow including sessions, purpose paths, 
- * salary data, and chat messages.
- * 
- * Key features:
- * - Multi-table schema supporting the complete user journey from assessment to action plan
- * - Proper foreign key relationships and data normalization
- * - Comprehensive Zod schemas for API validation and type safety
- * - Support for both in-memory development and PostgreSQL production
- * 
+ * @description
+ * Central Drizzle + Zod schema for Purpose Finder.
+ * Defines Postgres tables, FK relationships, and run-time validation.
+ *
+ * Key features
+ * ─────────────
+ * • 4 inter-related tables covering the full user journey  
+ * • Strict FK constraints with ON CASCADE / ON SET NULL behaviour  
+ * • Timestamp columns auto-maintained by Postgres (`defaultNow` + `onUpdateNow`)  
+ * • `createInsertSchema` / `createSelectSchema` for type-safe inserts & selects  
+ *
  * @dependencies
- * - drizzle-orm/pg-core: PostgreSQL table definitions and column types
- * - drizzle-zod: Integration between Drizzle and Zod for schema validation
- * - zod: Runtime type validation and schema definition
- * 
+ * • drizzle-orm/pg-core – table & column DSL  
+ * • drizzle-zod           – Drizzle → Zod bridge  
+ * • zod                  – run-time validation  
+ *
  * @notes
- * - All timestamps use proper timestamp columns with timezone support
- * - JSONB columns store complex nested data structures
- * - Foreign key relationships support CASCADE deletion for data consistency
- * - Schema is designed for seamless transition from MemStorage to PostgreSQL
+ * • Column names are **snake_case** to match SQL convention; camelCase is used
+ *   only in TypeScript where appropriate.  
+ * • When we migrate from MemStorage to Postgres the DB will auto-fill timestamps,
+ *   but the in-memory adapter still stamps ISO strings for compatibility.  
  */
 
-import { pgTable, text, serial, integer, boolean, jsonb, timestamp } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  serial,
+  text,
+  integer,
+  jsonb,
+  timestamp,
+} from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// =============================================================================
-// DATABASE TABLES
-// =============================================================================
+// ────────────────────────────────────────────────────────────
+// TABLES
+// ────────────────────────────────────────────────────────────
 
 /**
- * Main assessment sessions table - stores top-level session information
- * and tracks the user's journey through the ikigai discovery process
+ * `assessment_sessions`
+ * Top-level record tracking a user’s entire flow from questionnaire to action plan.
  */
 export const assessmentSessions = pgTable("assessment_sessions", {
   id: serial("id").primaryKey(),
   sessionId: text("session_id").notNull().unique(),
   language: text("language").$type<"en" | "es">().notNull(),
-  responses: jsonb("responses"), // Initial questionnaire answers
-  coreDriversAnalysis: jsonb("core_drivers_analysis"), // AI analysis of user's core drivers
-  chosenPathId: integer("chosen_path_id"), // FK to purpose_paths.id, nullable until user chooses
-  actionPlan: jsonb("action_plan"), // Detailed step-by-step action plan
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  responses: jsonb("responses"), // questionnaire answers
+  coreDriversAnalysis: jsonb("core_drivers_analysis"),
+  chosenPathId: integer("chosen_path_id").references(
+    () => purposePaths.id,
+    { onDelete: "set null" }
+  ),
+  actionPlan: jsonb("action_plan"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .defaultNow()
+    .onUpdateNow()
+    .notNull(),
 });
 
 /**
- * Purpose paths table - stores the three AI-generated career paths
- * Each session has exactly 3 paths generated from the ikigai analysis
+ * `purpose_paths`
+ * Three AI-generated career directions per session.
  */
 export const purposePaths = pgTable("purpose_paths", {
   id: serial("id").primaryKey(),
@@ -58,14 +72,16 @@ export const purposePaths = pgTable("purpose_paths", {
     .notNull(),
   title: text("title").notNull(),
   description: text("description"),
-  ikigaiAlignment: jsonb("ikigai_alignment"), // Contains love, goodAt, worldNeeds, pay alignment details
-  actionStrategy: text("action_strategy"), // High-level strategy overview
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  ikigaiAlignment: jsonb("ikigai_alignment"),
+  actionStrategy: text("action_strategy"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
 });
 
 /**
- * Salary data table - stores real-time salary information
- * Linked to specific purpose paths with source citations
+ * `salary_data`
+ * Real-time pay benchmarks linked to a single purpose path.
  */
 export const salaryData = pgTable("salary_data", {
   id: serial("id").primaryKey(),
@@ -76,13 +92,16 @@ export const salaryData = pgTable("salary_data", {
   midLevel: text("mid_level"),
   seniorLevel: text("senior_level"),
   location: text("location"),
-  sources: text("sources").array(), // Array of URL strings for data sources
-  retrievedAt: timestamp("retrieved_at", { withTimezone: true }).defaultNow().notNull(),
+  sources: text("sources").array(),
+  retrievedAt: timestamp("retrieved_at", { withTimezone: true })
+    .defaultNow()
+    .onUpdateNow()
+    .notNull(),
 });
 
 /**
- * Chat messages table - stores all chat interactions with Nami
- * Supports context-aware conversations for both discovery and action plan refinement
+ * `chat_messages`
+ * All user ⇄ Nami exchanges, context-tagged.
  */
 export const chatMessages = pgTable("chat_messages", {
   id: serial("id").primaryKey(),
@@ -91,216 +110,145 @@ export const chatMessages = pgTable("chat_messages", {
     .notNull(),
   role: text("role").$type<"user" | "assistant">().notNull(),
   content: text("content").notNull(),
-  context: text("context"), // 'discovery' or 'action_plan' - determines conversation focus
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  context: text("context"), // discovery | action_plan
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
 });
 
-// =============================================================================
-// DRIZZLE SCHEMA INFERENCE TYPES
-// =============================================================================
+// ────────────────────────────────────────────────────────────
+// DRIZZLE-INFERRED TYPES
+// ────────────────────────────────────────────────────────────
 
-// Base table types for TypeScript inference
 export type AssessmentSession = typeof assessmentSessions.$inferSelect;
 export type PurposePath = typeof purposePaths.$inferSelect;
-export type SalaryData = typeof salaryData.$inferSelect;
+export type SalaryDatum = typeof salaryData.$inferSelect;   // singular for clarity
 export type ChatMessage = typeof chatMessages.$inferSelect;
 
-// Insert types for creating new records
 export type InsertAssessmentSession = typeof assessmentSessions.$inferInsert;
 export type InsertPurposePath = typeof purposePaths.$inferInsert;
-export type InsertSalaryData = typeof salaryData.$inferInsert;
+export type InsertSalaryDatum = typeof salaryData.$inferInsert;
 export type InsertChatMessage = typeof chatMessages.$inferInsert;
 
-// =============================================================================
-// ZOD VALIDATION SCHEMAS
-// =============================================================================
+// ────────────────────────────────────────────────────────────
+// COMPLEX JSON SCHEMAS
+// ────────────────────────────────────────────────────────────
 
-/**
- * Core data structure schemas for complex JSONB fields
- */
-
-// Schema for ikigai alignment analysis within purpose paths
 export const ikigaiAlignmentSchema = z.object({
-  love: z.string().describe("How this path aligns with what the user loves"),
-  goodAt: z.string().describe("How this path leverages what the user is good at"),
-  worldNeeds: z.string().describe("How this path addresses what the world needs"),
-  pay: z.string().describe("Salary range and economic viability"),
+  love: z.string(),
+  goodAt: z.string(),
+  worldNeeds: z.string(),
+  pay: z.string(),
 });
 
-// Schema for core drivers analysis from AI
 export const coreDriversAnalysisSchema = z.object({
-  energy: z.string().describe("What energizes the user - their passions and interests"),
-  edge: z.string().describe("The user's unique strengths and advantages"),
-  impact: z.string().describe("How the user wants to make a difference in the world"),
-  economic: z.string().describe("Economic reality and financial considerations"),
+  energy: z.string(),
+  edge: z.string(),
+  impact: z.string(),
+  economic: z.string(),
 });
 
-// Schema for detailed action plan structure
 export const actionPlanSchema = z.object({
-  overview: z.string().describe("High-level summary of the action plan"),
-  milestones: z.array(z.object({
-    title: z.string(),
-    description: z.string(),
-    timeframe: z.string(),
-    tasks: z.array(z.string()),
-  })).describe("Key milestones in the career transition"),
-  skills: z.array(z.object({
-    name: z.string(),
-    priority: z.enum(["high", "medium", "low"]),
-    resources: z.array(z.string()),
-  })).describe("Skills to develop with learning resources"),
-  projects: z.array(z.object({
-    title: z.string(),
-    description: z.string(),
-    difficulty: z.enum(["beginner", "intermediate", "advanced"]),
-  })).describe("Hands-on projects to build experience"),
-  networking: z.array(z.string()).describe("Networking and community engagement strategies"),
-  resources: z.array(z.object({
-    title: z.string(),
-    url: z.string(),
-    type: z.enum(["course", "book", "article", "video", "community"]),
-  })).describe("Educational resources including YouTube courses"),
+  overview: z.string(),
+  milestones: z.array(
+    z.object({
+      title: z.string(),
+      description: z.string(),
+      timeframe: z.string(),
+      tasks: z.array(z.string()),
+    })
+  ),
+  skills: z.array(
+    z.object({
+      name: z.string(),
+      priority: z.enum(["high", "medium", "low"]),
+      resources: z.array(z.string()),
+    })
+  ),
+  projects: z.array(
+    z.object({
+      title: z.string(),
+      description: z.string(),
+      difficulty: z.enum(["beginner", "intermediate", "advanced"]),
+    })
+  ),
+  networking: z.array(z.string()),
+  resources: z.array(
+    z.object({
+      title: z.string(),
+      url: z.string().url(),
+      type: z.enum(["course", "book", "article", "video", "community"]),
+    })
+  ),
 });
 
-// =============================================================================
-// API REQUEST/RESPONSE SCHEMAS
-// =============================================================================
+// ────────────────────────────────────────────────────────────
+// API PAYLOAD VALIDATORS
+// ────────────────────────────────────────────────────────────
 
-/**
- * Input validation schemas for API endpoints
- */
-
-// Schema for questionnaire submission
 export const questionnaireResponseSchema = z.object({
-  sessionId: z.string().min(1, "Session ID is required"),
-  step: z.number().int().min(1).max(10, "Step must be between 1 and 10"),
-  responses: z.record(z.any()).describe("User responses keyed by question ID"),
+  sessionId: z.string().min(1),
+  step: z.number().int().min(1).max(10),
+  responses: z.record(z.any()),
 });
 
-// Schema for chat requests with context awareness
 export const chatRequestSchema = z.object({
-  sessionId: z.string().min(1, "Session ID is required"),
-  message: z.string().min(1, "Message cannot be empty"),
-  context: z.enum(["discovery", "action_plan"]).optional().describe("Chat context for AI focus"),
-});
-
-// Schema for analysis requests
-export const analysisRequestSchema = z.object({
-  sessionId: z.string().min(1, "Session ID is required"),
-  responses: z.record(z.any()).describe("Complete questionnaire responses"),
-});
-
-// Schema for action plan generation requests
-export const actionPlanRequestSchema = z.object({
-  sessionId: z.string().min(1, "Session ID is required"),
-  chosenPathId: z.number().int().positive("Valid path ID is required"),
-});
-
-// =============================================================================
-// DRIZZLE-ZOD INTEGRATION SCHEMAS
-// =============================================================================
-
-/**
- * Auto-generated Zod schemas from Drizzle table definitions
- * These provide runtime validation for database operations
- */
-
-// Assessment session schemas
-export const insertAssessmentSessionSchema = createInsertSchema(assessmentSessions, {
-  language: z.enum(["en", "es"]),
-  responses: z.record(z.any()).optional(),
-  coreDriversAnalysis: coreDriversAnalysisSchema.optional(),
-  actionPlan: actionPlanSchema.optional(),
-});
-
-export const selectAssessmentSessionSchema = createSelectSchema(assessmentSessions);
-
-// Purpose path schemas
-export const insertPurposePathSchema = createInsertSchema(purposePaths, {
-  ikigaiAlignment: ikigaiAlignmentSchema.optional(),
-});
-
-export const selectPurposePathSchema = createSelectSchema(purposePaths);
-
-// Salary data schemas
-export const insertSalaryDataSchema = createInsertSchema(salaryData, {
-  sources: z.array(z.string().url()).optional(),
-});
-
-export const selectSalaryDataSchema = createSelectSchema(salaryData);
-
-// Chat message schemas
-export const insertChatMessageSchema = createInsertSchema(chatMessages, {
-  role: z.enum(["user", "assistant"]),
+  sessionId: z.string().min(1),
+  message: z.string().min(1),
   context: z.enum(["discovery", "action_plan"]).optional(),
 });
 
+export const analysisRequestSchema = z.object({
+  sessionId: z.string().min(1),
+  responses: z.record(z.any()),
+});
+
+export const actionPlanRequestSchema = z.object({
+  sessionId: z.string().min(1),
+  chosenPathId: z.number().int().positive(),
+});
+
+// ────────────────────────────────────────────────────────────
+// INSERT / SELECT SCHEMAS (DRIZZLE-ZOD)
+// ────────────────────────────────────────────────────────────
+
+export const insertAssessmentSessionSchema = createInsertSchema(
+  assessmentSessions,
+  {
+    language: z.enum(["en", "es"]),
+    responses: z.record(z.any()).optional(),
+    coreDriversAnalysis: coreDriversAnalysisSchema.optional(),
+    actionPlan: actionPlanSchema.optional(),
+  }
+).omit({ id: true, createdAt: true, updatedAt: true });
+
+export const selectAssessmentSessionSchema =
+  createSelectSchema(assessmentSessions);
+
+export const insertPurposePathSchema = createInsertSchema(purposePaths, {
+  ikigaiAlignment: ikigaiAlignmentSchema.optional(),
+}).omit({ id: true, createdAt: true });
+
+export const selectPurposePathSchema = createSelectSchema(purposePaths);
+
+export const insertSalaryDataSchema = createInsertSchema(salaryData, {
+  sources: z.array(z.string().url()).optional(),
+}).omit({ id: true, retrievedAt: true });
+
+export const selectSalaryDataSchema = createSelectSchema(salaryData);
+
+export const insertChatMessageSchema = createInsertSchema(chatMessages, {
+  role: z.enum(["user", "assistant"]),
+  context: z.enum(["discovery", "action_plan"]).optional(),
+}).omit({ id: true, createdAt: true });
+
 export const selectChatMessageSchema = createSelectSchema(chatMessages);
 
-// =============================================================================
-// UTILITY TYPES AND ACTION STATE
-// =============================================================================
+// ────────────────────────────────────────────────────────────
+// GENERIC ACTION-STATE TYPE
+// ────────────────────────────────────────────────────────────
 
-/**
- * Generic action state type for consistent API responses
- * Provides a standard success/error pattern across all endpoints
- */
 export type ActionState<T> =
   | { isSuccess: true; message: string; data: T }
-  | { isSuccess: false; message: string; data?: never };
-
-/**
- * Exported type aliases for easier imports throughout the application
- */
-export type QuestionnaireResponse = z.infer<typeof questionnaireResponseSchema>;
-export type ChatRequest = z.infer<typeof chatRequestSchema>;
-export type AnalysisRequest = z.infer<typeof analysisRequestSchema>;
-export type ActionPlanRequest = z.infer<typeof actionPlanRequestSchema>;
-export type IkigaiAlignment = z.infer<typeof ikigaiAlignmentSchema>;
-export type CoreDriversAnalysis = z.infer<typeof coreDriversAnalysisSchema>;
-export type ActionPlan = z.infer<typeof actionPlanSchema>;
-
-/**
- * Language type for internationalization
- */
-export type Language = "en" | "es";
-
-// =============================================================================
-// SCHEMA VALIDATION HELPERS
-// =============================================================================
-
-/**
- * Helper function to validate and parse questionnaire responses
- * @param data - Raw questionnaire data from frontend
- * @returns Parsed and validated questionnaire response
- */
-export function validateQuestionnaireResponse(data: unknown): QuestionnaireResponse {
-  return questionnaireResponseSchema.parse(data);
-}
-
-/**
- * Helper function to validate and parse chat requests
- * @param data - Raw chat request data from frontend
- * @returns Parsed and validated chat request
- */
-export function validateChatRequest(data: unknown): ChatRequest {
-  return chatRequestSchema.parse(data);
-}
-
-/**
- * Helper function to validate and parse analysis requests
- * @param data - Raw analysis request data from frontend
- * @returns Parsed and validated analysis request
- */
-export function validateAnalysisRequest(data: unknown): AnalysisRequest {
-  return analysisRequestSchema.parse(data);
-}
-
-/**
- * Helper function to validate and parse action plan requests
- * @param data - Raw action plan request data from frontend
- * @returns Parsed and validated action plan request
- */
-export function validateActionPlanRequest(data: unknown): ActionPlanRequest {
-  return actionPlanRequestSchema.parse(data);
-}
+  | { isSuccess: false; message: string };
+// (data omitted on error)
