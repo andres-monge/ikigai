@@ -50,7 +50,7 @@ interface GeminiRequestOptions {
  * @returns {Promise<any>} The parsed JSON response from the API.
  * @throws {Error} If the API key is missing or if the request fails after all retries.
  */
-async function generateWithRetry({
+export async function generateWithRetry({
   prompt,
   isJsonMode = false,
   useSearch = false,
