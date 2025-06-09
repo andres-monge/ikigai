@@ -1,0 +1,72 @@
+The new tables, helper types and most Zod schemas are in place, but several critical details (column types, FK wiring, timestamps and storage alignment) are missing or inconsistent. Below are the concrete changes you still need in shared/schema.ts (Step 3) and server/storage.ts + touch-points (Step 4).
+
+1 — Fixes for Step 3 – Drizzle & Zod schema
+Area	What’s wrong now	How to fix
+Timestamps	createdAt, updatedAt, retrievedAt, timestamp are text columns populated by hand.	Use timestamp("…", { withTimezone: true }).defaultNow() (and .onUpdateNow() for updatedAt). Remove manual setting in storage.
+Foreign-keys	No FK helpers; purposePaths.sessionId is text.	```ts
+sessionId: integer("session_id").references(() => assessmentSessions.id, { onDelete: "cascade" })		
+```
+salaryData.pathId → purposePaths.id, chatMessages.sessionId → assessmentSessions.id.		
+Sources column	jsonb("sources").$type<string[]>()	Simpler/cheaper array type: text("sources").array()
+Naming	Mixed camel/snake case in DB.	Keep snake_case in tables, convert to camel in code if needed (Drizzle adapters or manual map).
+Missing defaults	purpose_paths.created_at / salary_data.retrieved_at have no default.	Add .defaultNow()
+Zod inference	Schemas already exist, but still accept old shapes.	Regenerate from the corrected Drizzle tables (no manual text fields). Adjust insert*Schema overrides only where really needed.
+
+<details> <summary>Minimal patch for the tables (excerpt)</summary>
+ts
+Copy
+Edit
+import { pgTable, serial, text, integer, jsonb, timestamp } from "drizzle-orm/pg-core";
+
+/*  assessment_sessions  */
+export const assessmentSessions = pgTable("assessment_sessions", {
+  id:        serial("id").primaryKey(),
+  sessionId: text("session_id").notNull().unique(),
+  language:  text("language").$type<"en" | "es">().notNull(),
+  responses: jsonb("responses"),
+  coreDriversAnalysis: jsonb("core_drivers_analysis"),
+  chosenPathId: integer("chosen_path_id"),
+  actionPlan: jsonb("action_plan"),
+  createdAt: timestamp("created_at",{ withTimezone:true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at",{ withTimezone:true }).defaultNow().onUpdateNow().notNull(),
+});
+
+/*  purpose_paths  */
+export const purposePaths = pgTable("purpose_paths", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id")
+      .references(() => assessmentSessions.id, { onDelete:"cascade" })
+      .notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  ikigaiAlignment: jsonb("ikigai_alignment"),
+  actionStrategy: text("action_strategy"),
+  createdAt: timestamp("created_at",{ withTimezone:true }).defaultNow().notNull(),
+});
+
+/*  salary_data  */
+export const salaryData = pgTable("salary_data", {
+  id: serial("id").primaryKey(),
+  pathId: integer("path_id")
+      .references(() => purposePaths.id, { onDelete:"cascade" })
+      .notNull(),
+  entryLevel: text("entry_level"),
+  midLevel:   text("mid_level"),
+  seniorLevel:text("senior_level"),
+  location:   text("location"),
+  sources:    text("sources").array(),
+  retrievedAt: timestamp("retrieved_at",{ withTimezone:true }).defaultNow().notNull(),
+});
+
+/*  chat_messages  */
+export const chatMessages = pgTable("chat_messages", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id")
+      .references(() => assessmentSessions.id, { onDelete:"cascade" })
+      .notNull(),
+  role:    text("role").$type<"user"|"assistant">().notNull(),
+  content: text("content").notNull(),
+  context: text("context"),
+  createdAt: timestamp("created_at",{ withTimezone:true }).defaultNow().notNull(),
+});
+</details>
