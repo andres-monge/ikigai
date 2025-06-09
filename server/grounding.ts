@@ -76,8 +76,8 @@ async function generateWithRetry({
   };
 
   if (useSearch) {
-    // For gemini-1.5 models, Google Search_retrieval is the tool to use for grounding.
-    body.tools = [{ Google Search_retrieval: {} }];
+    // For gemini-1.5 models, Google Search retrieval is the tool to use for grounding.
+    body.tools = [{ googleSearchRetrieval: {} }];
   }
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
