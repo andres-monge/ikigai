@@ -1,0 +1,692 @@
+You are an AI code generator responsible for implementing a web application based on a provided technical specification and implementation plan.
+
+Your task is to systematically implement each step of the plan, one at a time.
+
+First, carefully review the following inputs:
+
+<project_request>
+# Project Name
+Purpose Finder
+
+## Project Description
+An AI-powered web application designed to help career-switchers and students find their *ikigai* (a reason for being) and navigate their career path. The application, guided by an AI persona named Nami, will go beyond simple skills-matching to incorporate a user's core values, personality, and life priorities. The MVP will focus on delivering three distinct and actionable ikigai-aligned career paths based on a comprehensive user assessment. The user will select one and then the app will deliver an action plan for that path. The platform will be fully bilingual (English and Spanish) from launch.
+
+## Target Audience
+- Career-switchers and students, treated as a unified group for the MVP.
+
+## Desired Features
+### Purpose Discovery
+- [ ] User completes a structured, multi-part questionnaire to identify their passions, skills, values, and economic needs.
+- [ ] The AI (Nami) analyzes the user's input.
+- [ ] The system generates and displays a summary of the user's core drivers (Energy, Edge, Impact, Economic Reality).
+- [ ] The system presents three distinct "Purpose Paths" for the user to choose from.
+    - [ ] Each path includes a title, a short description, and a breakdown of how it aligns with the four ikigai dimensions (Love, Good at, World Needs, Pay).
+    - [ ] Each path includes a high-level action plan or strategy (e.g., "Bootstrapped MVP in 6 mo").
+- [ ] The system provides a comparative table with estimated salary ranges for the suggested paths, generated using real-time web search to ensure data is current and localized.
+    - [ ] The AI must cite the URLs of its sources for the salary data.
+- [ ] User can initiate a chat-based conversation with Nami to refine or request changes to the generated suggestions.
+- [ ] User can export their results page to a PDF document.
+
+### Action Plan & Guidance 
+- [ ] Once a user selects a path, the AI generates a detailed, step-by-step action plan.
+- [ ] The action plan includes key milestones (e.g., side project ideas, specific skills to learn, networking goals).
+- [ ] The system recommends specific educational resources (YouTube courses).
+- [ ] User can initiate a chat-based conversation with Nami to refine or request changes to the action plan.
+- [ ] User can export their action plan page to a PDF document.
+
+### AI & Core Technology
+- [ ] AI persona "Nami" will have a personality inspired by Paul Graham's essays and stoic principles (encouraging, wise, action-oriented).
+- [ ] The core AI will be powered by a Gemini model, specified via an environment variable for easy updates (initial model: `models/gemini-2.5-flash-preview-05-20`).
+- [ ] The web application will be built and deployed using Replit.
+
+### General
+- [ ] No user accounts will be required for the MVP; user session data will be stored temporarily in the browser.
+- [ ] Full bilingual support for English and Spanish across the entire user interface and AI interactions from day one.
+
+## Design Requests
+- [ ] Sleek and modern UI. Responsive and mobile-friendly.
+- [ ] The output of the ikigai analysis should be clearly structured and presented in a format similar to the user's example.
+    - [ ] A summary section ("What's popping out of your answers").
+    - [ ] A clear, table-based comparison of the three ikigai options.
+    - [ ] A secondary table providing salary benchmarks.
+- [ ] A clean, intuitive chat interface for interacting with Nami for refinements.
+
+</project_request>
+
+<project_rules>
+## Tech Stack
+
+|Area|Actual Stack|
+|---|---|
+|**Frontend**|**Vite + React 18**, Tailwind CSS, Shadcn UI, Framer Motion, Wouter (SPA routing), Lucide-React icons|
+|**Backend API**|**Express 4** (`server/`), Routes registered in `server/routes.ts`|
+|**Database**|Postgres (Neon in dev), **Drizzle ORM** (`shared/schema.ts`, `drizzle.config.ts`)|
+|**State / Data Fetching**|React-Query v5 (`client/src/lib/queryClient.ts`)|
+|**Storage**|In-memory via `MemStorage` for the MVP; Postgres tables already defined for future persistence|
+|**Auth**|**None for MVP** – sessions are anonymous and stored in `sessionStorage`|
+|**Payments**|_Not in scope for MVP_|
+|**Analytics**|PostHog planned; not yet wired|
+|**Deployment**|Replit (dev) → single Express server running on **port 5000**; Vite builds the static client into `dist/public`|
+
+---
+
+## Project Structure (required)
+
+```
+My_Directory_Structure/
+├── client/          # All React, Tailwind & UI code lives here
+│   ├── index.html
+│   └── src/
+│       ├── pages/ …          # Wouter routes
+│       ├── components/ …     # Shared + route-specific
+│       ├── lib/ …            # Client utilities (Gemini, i18n, pdf, queryClient, utils)
+│       ├── hooks/ …          # React hooks
+│       └── types/ …          # Front-end-only TypeScript types
+├── server/          # Express HTTP server, routes, MemStorage, Vite helper
+│   ├── routes.ts    # All REST endpoints
+│   └── storage.ts   # Temporary in-mem “DB”
+├── shared/          # Code shared by client & server (DB schemas, Zod validators)
+└── …
+```
+
+> **Naming convention:** keep **kebab-case** for files & folders (e.g. `question-card.tsx`, `core-drivers-summary.tsx`).  
+> Use absolute imports with the `@` alias (already configured in `vite.config.ts`).
+
+---
+
+## Environment Variables
+
+- **Backend only** variables live in `.env.local` (never commit to VCS).
+    
+- **No values are exposed to the browser** because the client is a pure SPA hitting our own Express API.
+    
+- If you must expose something, prefix with `VITE_` (Vite convention) – but avoid when possible.
+    
+
+Update `.env.example` whenever you add or rename a variable.
+
+---
+
+## Type Rules
+
+- All global/shared types go in `shared/` or `client/src/types/`
+    
+- Export barrel files (`index.ts`) the same way the template does.
+    
+- Prefer **interfaces** for object shapes.
+    
+- Database-derived types come from Drizzle (`$inferSelect`, `$inferInsert`) and are re-exported from `shared/schema.ts`.
+    
+
+---
+
+## Frontend Rules
+
+### General
+
+- **No `"use server"` / `"use client"` pragmas** – they’re Next-specific.
+    
+- Keep components pure-client; data arrives via React-Query calls to `/api/...` endpoints.
+    
+
+### Routing
+
+- Use **Wouter** (`<Switch>` + `<Route>`) directly inside `client/src/App.tsx`.
+    
+- Do **not** add Next/React-Router code.
+    
+
+### Component Conventions
+
+- Shared components → `client/src/components/`
+    
+- One-off route pieces → collocate under `.../_components/` folder.
+    
+- Stick to Tailwind + Shadcn primitives; extend only when necessary.
+    
+- Import icons from `lucide-react`.
+    
+
+### Styling
+
+- Custom utility classes live in `client/src/index.css` under `@layer utilities`.
+    
+- Keep colors synced with CSS variables declared in the same file.
+    
+
+### Data Fetching
+
+- **Fetch inside React-Query hooks or mutations** (see `App.tsx`).
+    
+- Keep API calls in `client/src/lib/queryClient.ts` (use `apiRequest`).
+    
+- Avoid global fetches outside React-Query context.
+    
+
+---
+
+## Backend Rules (Express)
+
+### Folder Layout
+
+- All route handlers stay in `server/routes.ts`.
+    
+- Heavy logic can be split, but export functions and import into the routes file.
+    
+
+### Error Handling
+
+- Throw or forward to Express error middleware; responses use `{ error: string }` JSON shape.
+    
+- Log every `/api/*` request (already instrumented in `server/index.ts`).
+    
+
+### Database & Storage
+
+1. **Drizzle ORM** is the truth.
+    
+    - Schemas live in `shared/schema.ts`.
+        
+    - Do **not** generate migrations in the template – manual SQL or Drizzle-Kit outside scope.
+        
+2. **In-memory MemStorage** is used during MVP until Postgres connection is ready.
+    
+    - When switching to Postgres, replace calls in `server/storage.ts`.
+        
+
+### Server Actions Pattern
+
+- We mimic “actions” by hitting `/api/<path>` endpoints from the client.
+    
+- Keep **all** insert/update/delete logic in the Express layer – never in the browser.
+    
+
+---
+
+## Session Management
+
+- No login: each browser session gets a random `sessionId` stored via `useSessionStorage`.
+    
+- The server trusts the `sessionId` field in each request body – don’t treat it as a secure identifier.
+    
+
+---
+
+## PDF / Exports
+
+- **All PDF logic is client-side** (`jspdf`).
+    
+- Save or download directly; the server never stores generated files.
+    
+
+---
+
+## Internationalisation (i18n)
+
+- Add new keys to `client/src/lib/i18n.ts`.
+    
+- **Never** hard-code display strings in JSX – always call `t('key', language)`.
+    
+
+---
+
+## Testing & Linting
+
+- (Not yet configured.) If you add Jest/Vitest or ESLint rules, put config files at repo root and update `package.json` scripts.
+    
+
+---
+
+## Future-Ready Placeholders (out of MVP scope)
+
+- Authentication (Clerk), Stripe payments, Supabase Storage, and PostHog analytics are referenced in the original rules but **not active now**.  
+    When you introduce them:
+    
+    - Create new sections in this rule-set instead of resurrecting the generic ones.
+        
+    - Follow provider-specific best practices.
+        
+
+---
+
+## “Action State” Helper Pattern (Kept)
+
+We still use the generic type for consistent API results:
+
+```ts
+export type ActionState<T> =
+  | { isSuccess: true; message: string; data: T }
+  | { isSuccess: false; message: string; data?: never }
+```
+
+Return it from any helper functions you add under `server/` **or** future storage helpers.
+
+</project_rules>
+
+<technical_specification>
+# Purpose Finder Technical Specification
+
+## 1. System Overview
+
+- **Core Purpose and Value Proposition:** An AI-powered web application to help users find their _ikigai_ (a reason for being). It provides three actionable career paths based on a user's profile, and upon selection of a path, generates a detailed, step-by-step action plan. The entire experience is bilingual (English/Spanish).
+    
+- **Key Workflows:**
+    
+    1. **Assessment & Discovery:** The user completes a questionnaire. The system calls the Gemini API to generate a "Core Drivers" summary and three initial "Purpose Paths" with real-time salary data.
+    2. **Discovery Refinement (Optional):** From the results page, the user can open a chat with "Nami." The chat is context-aware and helps the user modify or ask questions about the three generated paths. Changes are reflected in the UI.
+    3. **Path Selection:** The user selects their preferred path from the three (now possibly refined) options.
+    4. **Action Plan Generation:** Selecting a path triggers a new, distinct call to the Gemini API to generate a detailed, step-by-step action plan for that specific path, including milestones and recommended YouTube courses.
+    5. **Action Plan Display:** The user is taken to a new view displaying their detailed action plan.
+    6. **Action Plan Refinement (Optional):** From the action plan view, the user can once again open the chat with "Nami" to refine or request changes to the detailed action plan steps.
+    7. **Export:** The user can export their "Purpose Discovery" results or their final "Action Plan" to separate PDF documents.
+- **System Architecture:**
+    
+    - **Frontend:** React SPA (Vite, TypeScript), using TanStack Query for server state. UI built with shadcn/ui and Tailwind CSS.
+    - **Backend:** Node.js server (Express), acting as a Backend-for-Frontend (BFF).
+    - **AI & Data:** Google Gemini (`models/gemini-2.5-flash-preview-05-20`). The search grounding feature is used for real-time salary data and educational resource lookups.
+    - **Data Persistence:** For the MVP, session data is stored in-memory on the server (`MemStorage`). The schema is designed for a seamless transition to PostgreSQL.
+    - **Deployment:** The application is packaged for deployment on Replit.
+
+Code snippet
+
+```
+graph TD
+    subgraph "Browser (Client)"
+        C1[React SPA] -->|HTTPS| S1(Express Server)
+        C2(User Session) -- Stored in --> C3(SessionStorage & Cookie)
+    end
+
+    subgraph "Replit Environment"
+        subgraph "Server (Node.js)"
+            S1 --> R1{API Router}
+            R1 -- "/api/analyze" --> A1[1. Discovery Action]
+            R1 -- "/api/action-plan" --> A2[2. Action Plan Action]
+            R1 -- "/api/chat" --> A3[3. Refinement Chat Action]
+
+            A1 & A2 & A3 --> GW[Gemini Wrapper]
+            GW -->|API Call w/ Retry| G(Google Gemini API)
+            G -- "JSON, Text, Grounding Sources" --> GW
+            GW --> M(In-Memory Storage)
+        end
+    end
+
+    subgraph "External Services"
+        G
+    end
+
+    style C1 fill:#cce5ff,stroke:#333
+    style S1 fill:#d5e8d4,stroke:#333
+    style G fill:#fff0cc,stroke:#333
+```
+
+## 2. Project Structure
+
+The project will be organized with a clear separation of concerns, adding more granularity to the server-side structure.
+
+```
+My_Directory_Structure/
+├── client/                     # Frontend React SPA
+├── scripts/                    # Database migration scripts
+│   └── migrate.ts
+├── server/                     # Backend Node.js/Express server
+│   ├── routes/                 # Feature-based API route handlers
+│   │   ├── assessment.ts       # Handles /analyze and /action-plan
+│   │   └── chat.ts             # Handles /chat
+│   ├── grounding.ts            # Centralized helper for all Gemini API calls
+│   ├── index.ts                # Server entry point, middleware setup
+│   └── storage.ts              # In-memory storage implementation
+├── shared/                     # Isomorphic code shared between client & server
+│   └── schema.ts               # Drizzle/Zod schemas for data structures
+└── .env.example                # Environment variable definitions
+```
+
+## 3. Feature Specification
+
+### 3.1 Purpose Discovery & Refinement
+
+- **User Story:** As a user, I want to answer a questionnaire and receive three personalized career paths. I then want the ability to chat with an AI assistant to adjust these paths before making my final choice.
+- **Implementation Steps:**
+    1. **Generation:** The initial flow remains as described in the previous spec: Questionnaire -> `POST /api/analyze` -> Gemini generates 3 paths -> Results page is displayed.
+    2. **Refinement:**
+        - The "Refine with Nami" button on the Results page opens the `ChatInterface` component.
+        - A `context` prop will be passed: `<ChatInterface context="discovery" ... />`.
+        - When the user sends a message, a `POST` request is sent to `/api/chat` including `{ sessionId, message, context: 'discovery' }`.
+        - The server's chat handler will use this context to build a specific prompt for Gemini, including the user's questionnaire answers and the _current three purpose paths_, asking the AI to modify them based on the user's message.
+        - The AI's response (which could be a revised set of paths in JSON format or just text) is streamed back via SSE. The client-side logic will parse this response and update the `purposePaths` in its state, causing the UI to re-render with the refined paths.
+
+### 3.2 Action Plan Generation & Refinement
+
+- **User Story:** As a user, after I've chosen my preferred career path, I want the system to generate a detailed, step-by-step action plan for me. I then want to be able to ask the AI for changes or clarifications to this plan.
+- **Implementation Steps:**
+    1. **Selection:** On the Results page, each of the three `PurposePath` cards will have a "Choose this Path & Get Plan" button. Clicking it calls `handleChoosePath(pathId)`.
+    2. **Generation:**
+        - This triggers a React Query mutation that sends a `POST` request to `/api/action-plan` with `{ sessionId, chosenPathId }`. A loading screen is shown.
+        - The server receives the request and calls the Gemini Wrapper with a prompt focused on generating a detailed plan (milestones, skills, project ideas) for the _single_ chosen path. It will enable the search tool to find and cite YouTube course URLs.
+        - The server saves the generated `actionPlan` object to storage and returns it.
+        - The client navigates to a new `'actionPlan'` view, displaying the plan in a structured format (e.g., using Accordions).
+    3. **Refinement:**
+        - The Action Plan page will also have a "Refine with Nami" button.
+        - This button opens the _same_ `ChatInterface` component, but with a different context: `<ChatInterface context="action_plan" ... />`.
+        - The `POST` request to `/api/chat` will now include `{ context: 'action_plan' }`.
+        - The server's chat handler sees this context and loads the _generated action plan_ into the Gemini prompt, allowing the user to have a focused conversation about refining it.
+
+## 4. Database Schema
+
+The normalized schema supports the distinct stages of the user journey.
+
+### 4.1 Tables
+
+- **`assessment_sessions`**: Stores the top-level session information.
+    
+    - `id`: `serial` (PK)
+    - `session_id`: `text` (UNIQUE, NOT NULL)
+    - `language`: `text` (NOT NULL, 'en' or 'es')
+    - `responses`: `jsonb` (The initial questionnaire answers)
+    - `core_drivers_analysis`: `jsonb`
+    - `chosen_path_id`: `integer` (FK to `purpose_paths.id`, NULLABLE)
+    - `action_plan`: `jsonb` (The detailed action plan)
+    - `created_at`: `timestamptz` (DEFAULT `now()`)
+    - `updated_at`: `timestamptz` (DEFAULT `now()`)
+- **`purpose_paths`**: Stores the three (potentially refined) paths.
+    
+    - `id`: `serial` (PK)
+    - `session_id`: `integer` (FK to `assessment_sessions.id` ON DELETE CASCADE)
+    - `title`: `text` (NOT NULL)
+    - `description`: `text`
+    - `ikigai_alignment`: `jsonb`
+    - `action_strategy`: `text` (High-level strategy)
+- **`salary_data`**: Stores salary info linked to a specific path.
+    
+    - `id`: `serial` (PK)
+    - `path_id`: `integer` (FK to `purpose_paths.id` ON DELETE CASCADE)
+    - `entry_level`, `mid_level`, `senior_level`: `text`
+    - `location`: `text`
+    - `sources`: `text[]` (Array of strings)
+    - `retrieved_at`: `timestamptz` (DEFAULT `now()`)
+- **`chat_messages`**: Stores all chat history, regardless of context.
+    
+    - `id`: `serial` (PK)
+    - `session_id`: `integer` (FK to `assessment_sessions.id` ON DELETE CASCADE)
+    - `role`: `text` (NOT NULL)
+    - `content`: `text` (NOT NULL)
+    - `context`: `text` ('discovery' or 'action_plan')
+    - `created_at`: `timestamptz` (DEFAULT `now()`)
+
+## 5. Server Actions
+
+### 5.1 API Endpoints
+
+- **`POST /api/analyze`**: Orchestrates the initial Purpose Discovery.
+- **`POST /api/action-plan`**: Orchestrates the detailed Action Plan generation for a single chosen path.
+- **`POST /api/chat`**: Handles chat messages for refinement.
+    - **Input:** `{ sessionId: string, message: string, context: 'discovery' | 'action_plan' }`
+    - **Logic:** Uses the `context` field to load the correct data (either the 3 purpose paths or the single action plan) into the Gemini system prompt, ensuring the AI's response is relevant. The response is streamed back via Server-Sent Events (SSE).
+
+### 5.2 Gemini Wrapper (`server/grounding.ts`)
+
+- **Description:** A centralized module to handle all interactions with the Gemini API.
+- **`generateWithRetry(prompt, options)`**:
+    - **Logic:** Implements retry-on-failure with exponential backoff. Validates JSON responses against Zod schemas. Logs API usage for monitoring.
+
+## 6. Design System
+
+(No changes from previous specification - remains robust)
+
+## 7. Component Architecture
+
+- **`ChatInterface.tsx` Component:**
+    - This component is now fully reusable.
+    - **Props:**
+        
+        TypeScript
+        
+        ```
+        interface ChatInterfaceProps {
+          isOpen: boolean;
+          onClose: () => void;
+          sessionId: string;
+          language: Language;
+          // New prop to determine the chat's purpose
+          context: 'discovery' | 'action_plan';
+        }
+        ```
+        
+- **Error Handling:** Components will be wrapped in a React `<ErrorBoundary>` to gracefully handle rendering errors without crashing the application.
+
+## 8. Authentication & Authorization
+
+- **MVP Strategy:** No user accounts. Session is anonymous and identified by `sessionId`.
+- **Session Token:** The `sessionId` will be stored in both `sessionStorage` for client-side access and a `httpOnly`, `SameSite=Lax` cookie.
+
+## 9. Data Flow
+
+- **Client ↔ Server:** REST API calls over HTTPS for primary actions (`analyze`, `action-plan`).
+- **Chat Stream:** A persistent `EventSource` connection streams chat responses for a real-time UX.
+- **State Management:**
+    1. **TanStack Query:** Manages all server state and caching.
+    2. **`useSessionStorage` Hook:** Persists `appState` and `sessionId`.
+    3. **React Context:** Manages global UI concerns like language selection.
+</technical_specification>
+
+<implementation_plan>
+
+## Project Setup & Configuration
+
+- [x] Step 1: Synchronize Environment Variables
+    
+    - **Task**: Update the `.env.example` file to include all necessary environment variables for the project, specifically for the Gemini API. This ensures that any developer can get started quickly.
+    - **Files**:
+        - `.env.example`: Add `GEMINI_API_KEY=""` and `GEMINI_MODEL="models/gemini-1.5-flash-preview-0514"`. Add comments explaining what each variable is for.
+    - **Step Dependencies**: None
+    - **User Instructions**: After this step, create a copy of this file named `.env.local` and fill in your actual `GEMINI_API_KEY`. This file is git-ignored and should not be committed.
+- [x] Step 2: Add Testing and Typechecking Scripts
+    
+    - **Task**: Add `test` and `typecheck` scripts to the `package.json` file to standardize quality checks.
+    - **Files**:
+        - `package.json`: In the `scripts` section, add `"test": "vitest"` and `"typecheck": "tsc --noEmit"`.
+    - **Step Dependencies**: None
+    - **User Instructions**: You will install the testing libraries in a later step.
+
+---
+
+## Database & Storage Layer
+
+- [x] Step 3: Extend Drizzle and Zod Schemas
+    
+    - **Task**: Overhaul the `shared/schema.ts` file to match the detailed, multi-table database schema from the technical specification. This is a foundational step that defines the application's data structures.
+    - **Files**:
+        - `shared/schema.ts`:
+            - Replace the existing `assessmentSessions` and `chatMessages` tables with the new, detailed versions from the technical specification.
+            - Add the new `purpose_paths`, `salary_data` tables.
+            - Define and export all related Zod schemas for API validation (`ActionState`, etc.) and Drizzle types (`$inferSelect`, `$inferInsert`).
+    - **Step Dependencies**: Step 1
+    - **User Instructions**: If using a live Postgres database (like Neon), run `npm run db:push` after this step to sync the schema.
+- [x] Step 4: Update In-Memory Storage
+    
+    - **Task**: Update the `server/storage.ts` module to support the new database schema. This ensures the application can run in development without a live database connection by mimicking the new table structures in memory.
+    - **Files**:
+        - `server/storage.ts`:
+            - Update the `IStorage` interface to include new methods for CRUD operations on `purpose_paths`, `salary_data`, and the updated `assessment_sessions` and `chat_messages`.
+            - In the `MemStorage` class, add new `Map` objects to hold the data for these new "tables" and implement the corresponding interface methods.
+    - **Step Dependencies**: Step 3
+
+---
+
+## Backend Core Refactor
+
+- [ ] Step 5: Refactor Server Routes into Feature-Based Files
+    
+    - **Task**: Reorganize the backend routes from a single file into a more maintainable, feature-based structure as specified.
+    - **Files**:
+        - `server/routes/assessment.ts`: Create this new file and move all logic related to the `/api/analyze` and (future) `/api/action-plan` endpoints here.
+        - `server/routes/chat.ts`: Create this new file and move all logic for the `/api/chat` endpoint here.
+        - `server/routes.ts`: This file should now be removed or repurposed to simply import and register the routers from `assessment.ts` and `chat.ts` with the main Express app.
+        - `server/index.ts`: Update the `registerRoutes` import and call to reflect the new structure.
+    - **Step Dependencies**: Step 4
+- [ ] Step 6: Create Centralized Gemini Wrapper
+    
+    - **Task**: Create a dedicated module for all Gemini API interactions. This wrapper will handle API calls, retries with exponential backoff, and centralized error handling, making the route handlers cleaner and more robust.
+    - **Files**:
+        - `server/grounding.ts`: Create this new file. Implement a `generateWithRetry` function that takes a prompt and options. This function should contain the `fetch` call to the Gemini API, implement a retry mechanism for failed requests, and parse the JSON response. Add helper functions for generating the specific prompts for analysis, action plans, and chat.
+    - **Step Dependencies**: Step 5
+
+---
+
+## API Endpoint Implementation
+
+- [ ] Step 7: Implement `/api/analyze` Endpoint with Search
+    
+    - **Task**: Implement the full logic for the `POST /api/analyze` endpoint using the new Gemini wrapper. This endpoint will perform the core Ikigai analysis and fetch real-time salary data using web search.
+    - **Files**:
+        - `server/routes/assessment.ts`: In the `/api/analyze` handler, call the `generateWithRetry` function from `grounding.ts` to get the core drivers and purpose paths. Make a second call to the wrapper, this time enabling the search tool, to fetch salary data for the generated paths. Store all results using the storage module.
+        - `server/grounding.ts`: Ensure the wrapper function can enable the `tool_code` for web search and correctly formats the request.
+    - **Step Dependencies**: Step 6
+- [ ] Step 8: Implement `/api/action-plan` Endpoint
+    
+    - **Task**: Create the `POST /api/action-plan` endpoint. This is triggered when a user selects a career path and is responsible for generating the detailed, step-by-step action plan for that path.
+    - **Files**:
+        - `server/routes/assessment.ts`: Add the new `POST /api/action-plan` handler. It should retrieve the user's session and the chosen path from storage, then call the Gemini wrapper with a focused prompt to generate the plan. It should also use the search tool to find YouTube resources. Store the result in the `assessment_sessions` "table".
+    - **Step Dependencies**: Step 7
+- [ ] Step 9: Enhance `/api/chat` with Context and SSE Streaming
+    
+    - **Task**: Upgrade the `/api/chat` endpoint to handle streaming responses via Server-Sent Events (SSE) and to use the `context` parameter to provide the correct information to the AI.
+    - **Files**:
+        - `server/routes/chat.ts`: Modify the `/api/chat` handler.
+            - Set response headers for SSE (`Content-Type: text/event-stream`, `Cache-Control: no-cache`).
+            - Based on the `{ context: 'discovery' | 'action_plan' }` from the request body, load the appropriate data (purpose paths or the action plan) from storage.
+            - Call the Gemini API with streaming enabled. As data chunks are received, write them to the response stream in the `data: ...\n\n` format.
+    - **Step Dependencies**: Step 8
+
+---
+
+## Frontend Core & State Management
+
+- [ ] Step 10: Refactor Client-Side Routing
+    
+    - **Task**: Convert the main application flow from a state machine (`const [currentState, ... ]`) to a proper URL-based Single-Page Application using `wouter`.
+    - **Files**:
+        - `client/src/App.tsx`: Remove the `currentState` state management. Replace the conditional rendering with a `<Switch>` and `<Route>` structure from `wouter`. Define routes for `/`, `/questionnaire`, `/results`, and `/action-plan`.
+        - `client/src/pages/action-plan.tsx`: Create this new, initially empty, page component.
+        - `client/src/pages/home.tsx`, `questionnaire.tsx`, `results.tsx`: Ensure any navigation logic now uses `useLocation` from `wouter` instead of `setCurrentState`.
+    - **Step Dependencies**: Step 9
+- [ ] Step 11: Update Frontend Types and Create Query Hooks
+    
+    - **Task**: Synchronize frontend types with the backend schema and create dedicated React Query hooks for fetching data and performing mutations.
+    - **Files**:
+        - `client/src/types/assessment.ts`: Update all interfaces (`PurposePath`, `SalaryData`, `AssessmentResults`, etc.) to match the new schema. Add new types for the `ActionPlan`.
+        - `client/src/hooks/use-assessment.ts`: Create this new file. Add custom hooks `useCreateActionPlan` (a mutation that posts to `/api/action-plan`) and `useGetActionPlan` (a query that fetches the plan data for the action plan page).
+    - **Step Dependencies**: Step 10
+
+---
+
+## Feature Implementation: UI & UX
+
+- [ ] Step 12: Implement "Choose Path" Flow
+    
+    - **Task**: Wire up the UI to allow a user to select a purpose path, which triggers the action plan generation and navigates them to the new page.
+    - **Files**:
+        - `client/src/components/results/purpose-paths.tsx`: Add a "Choose this Path & Get Plan" `Button` to each path card. This button should call a handler function passed down via props.
+        - `client/src/pages/results.tsx`: Pass the handler to `PurposePaths`. This handler will call the `useCreateActionPlan` mutation. On success, it will navigate the user to the `/action-plan` route.
+    - **Step Dependencies**: Step 11
+- [ ] Step 13: Build the Action Plan Page
+    
+    - **Task**: Develop the `action-plan.tsx` page to display the detailed plan fetched from the server.
+    - **Files**:
+        - `client/src/pages/action-plan.tsx`: Use the `useGetActionPlan` hook to fetch data. Display the plan details using Shadcn components like `Accordion` for milestones, and `Card` for resource links. Add placeholder buttons for "Export to PDF" and "Refine with Nami".
+    - **Step Dependencies**: Step 12
+- [ ] Step 14: Implement PDF Export for Action Plan
+    
+    - **Task**: Add the functionality to export the detailed action plan to a PDF document.
+    - **Files**:
+        - `client/src/lib/pdf-export.ts`: Add a new function `exportActionPlanToPDF(plan)` that takes the action plan data and uses `jspdf` to generate a well-formatted document.
+        - `client/src/pages/action-plan.tsx`: Wire the "Export to PDF" button to call the new `exportActionPlanToPDF` function.
+    - **Step Dependencies**: Step 13
+- [ ] Step 15: Add Context to Chat Interface and Consume SSE Stream
+    
+    - **Task**: Make the `ChatInterface` component context-aware and refactor it to handle the streaming SSE response from the backend.
+    - **Files**:
+        - `client/src/components/chat-interface.tsx`:
+            - Add a `context: 'discovery' | 'action_plan'` prop and include it in the `POST` request to `/api/chat`.
+            - Replace the React Query mutation with a standard `fetch` call to initiate the chat.
+            - Use the `EventSource` API in a `useEffect` hook to connect to the SSE stream. Listen for `message` events, parse the data, and append it to the currently displayed assistant message for a real-time effect.
+        - `client/src/pages/results.tsx`: Pass `context="discovery"` to `<ChatInterface />`.
+        - `client/src/pages/action-plan.tsx`: Pass `context="action_plan"` to `<ChatInterface />`.
+    - **Step Dependencies**: Step 13, Step 9
+
+---
+
+## Finishing Touches & Testing
+
+- [ ] Step 16: Add Internationalization (i18n) Keys
+    
+    - **Task**: Add all new user-facing strings for both English and Spanish to the i18n module to ensure the application is fully bilingual.
+    - **Files**:
+        - `client/src/lib/i18n.ts`: Add translations for the action plan page title, button labels ("Choose Path", "Export Action Plan"), and any other new UI text.
+    - **Step Dependencies**: Step 13
+- [ ] Step 17: Configure Vitest and Add Sample Tests
+    
+    - **Task**: Set up the testing framework (`Vitest`) and write initial unit tests for a critical backend utility and a frontend component to establish a testing pattern.
+    - **Files**:
+        - `vitest.config.ts`: Create this new configuration file at the project root. Configure it to work with Vite, TypeScript aliases, and a `jsdom` environment.
+        - `server/__tests__/grounding.test.ts`: Create this directory and test file. Write a test for the `generateWithRetry` function, mocking `fetch` to ensure it handles success and failure cases correctly.
+        - `client/src/components/__tests__/header.test.tsx`: Create this directory and test file. Write a simple rendering test for the `Header` component to verify it displays the title and language toggle.
+    - **Step Dependencies**: Step 2
+    - **User Instructions**: Run `npm install -D vitest @vitejs/plugin-react jsdom @testing-library/react @testing-library/jest-dom` to install the necessary development dependencies.
+- [ ] Step 18: Update Documentation and Add Analytics Stub
+    
+    - **Task**: Finalize the project by updating the README with new instructions and adding a placeholder for future analytics integration.
+    - **Files**:
+        - `README.md`: Add sections explaining the new environment variables, how to run tests (`npm test`), and the `drizzle-kit` workflow.
+        - `client/src/lib/analytics.ts`: Create this new file with stub functions (e.g., `trackEvent`) that do nothing.
+        - `client/src/App.tsx`: Import the `trackEvent` function and call it at a key point (e.g., when the assessment starts) to demonstrate where future analytics will be wired.
+    - **Step Dependencies**: Step 17
+</implementation_plan>
+
+Your task is to implement the next incomplete step of the Implementation Plan.
+
+The implementation plan is just a suggestion meant to provide a high-level overview of the objective. Use it to guide you, but you do not have to adhere to it strictly. Make sure to follow the given rules as you work along the lines of the plan.
+
+For EVERY file you modify or create, it MUST follow the format below.
+
+Filepath: src/components/Example.tsx
+```
+/**
+ * @description 
+ * This component handles [specific functionality].
+ * It is responsible for [specific responsibilities].
+ * 
+ * Key features:
+ * - Feature 1: Description
+ * - Feature 2: Description
+ * 
+ * @dependencies
+ * - DependencyA: Used for X
+ * - DependencyB: Used for Y
+ * 
+ * @notes
+ * - Important implementation detail 1
+ * - Important implementation detail 2
+ */
+
+BEGIN WRITING FILE CODE
+// Complete implementation with extensive inline comments & documentation...
+```
+
+Documentation requirements:
+- File-level documentation explaining the purpose and scope
+- Component/function-level documentation detailing inputs, outputs, and behavior
+- Inline comments explaining complex logic or business rules
+- Type documentation for all interfaces and types
+- Notes about edge cases and error handling
+- Any assumptions or limitations
+
+Guidelines:
+- Implement exactly one step at a time
+- Ensure all code follows the project rules and technical specification
+- Include ALL necessary imports and dependencies
+- Write clean, well-documented code with appropriate error handling
+- Handle edge cases and add input validation where appropriate
+- Follow TypeScript best practices and ensure type safety
+- Include necessary tests as specified in the testing strategy
+
+You also have permission to update the implementation plan if needed. If you update the implementation plan, include each modified step in full and return them as markdown code blocks at the end of the user instructions. No need to mark the current step as complete - that is implied.
