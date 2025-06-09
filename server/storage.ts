@@ -159,7 +159,7 @@ export class MemStorage implements IStorage {
     const session = await this.getAssessmentSession(sessionId);
     if (!session) return [];
 
-    // Filter purpose paths by session ID
+    // Filter purpose paths by numeric session ID
     const paths: PurposePath[] = [];
     for (const path of this.purposePaths.values()) {
       if (path.sessionId === session.id) {
@@ -177,6 +177,7 @@ export class MemStorage implements IStorage {
    */
   async createPurposePath(insertPath: InsertPurposePath): Promise<PurposePath> {
     const id = this.purposePathIdCounter++;
+    const now = new Date().toISOString();
     
     const path: PurposePath = {
       id,
@@ -184,7 +185,8 @@ export class MemStorage implements IStorage {
       title: insertPath.title,
       description: insertPath.description ?? null,
       ikigaiAlignment: insertPath.ikigaiAlignment ?? null,
-      actionStrategy: insertPath.actionStrategy ?? null
+      actionStrategy: insertPath.actionStrategy ?? null,
+      createdAt: now
     };
     
     this.purposePaths.set(id, path);

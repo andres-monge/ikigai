@@ -1,4 +1,3 @@
-
 /**
  * @description 
  * This module handles all assessment-related API routes for the Purpose Finder application.
@@ -27,32 +26,27 @@ import {
   questionnaireResponseSchema,
   analysisRequestSchema
 } from "@shared/schema";
+import crypto from "crypto";
 
 /**
  * Registers assessment-related routes with the Express application
  * @param app - Express application instance
  */
 export function registerAssessmentRoutes(app: Express): void {
-  
-  // Create or get assessment session
+
+  // Create new session
   app.post("/api/sessions", async (req: Request, res: Response) => {
     try {
-      const sessionId = req.body.sessionId || generateSessionId();
-      
-      let session = await storage.getAssessmentSession(sessionId);
-      if (!session) {
-        session = await storage.createAssessmentSession({
-          sessionId,
-          responses: null,
-          analysis: null,
-          purposePaths: null,
-          salaryData: null
-        });
-      }
-      
-      res.json(session);
+      const sessionId = crypto.randomUUID();
+
+      const session = await storage.createAssessmentSession({
+        sessionId,
+        language: req.body.language ?? "en",
+      });
+
+      res.json({ sessionId: session.sessionId });
     } catch (error) {
-      console.error("Session creation error:", error);
+      console.error("Create session error:", error);
       res.status(500).json({ error: "Failed to create session" });
     }
   });
@@ -61,12 +55,12 @@ export function registerAssessmentRoutes(app: Express): void {
   app.post("/api/responses", async (req: Request, res: Response) => {
     try {
       const { sessionId, responses } = questionnaireResponseSchema.parse(req.body);
-      
+
       const session = await storage.updateAssessmentSession(sessionId, { responses });
       if (!session) {
         return res.status(404).json({ error: "Session not found" });
       }
-      
+
       res.json(session);
     } catch (error) {
       console.error("Response saving error:", error);
@@ -78,25 +72,24 @@ export function registerAssessmentRoutes(app: Express): void {
   app.post("/api/analyze", async (req: Request, res: Response) => {
     try {
       const { sessionId, responses } = analysisRequestSchema.parse(req.body);
-      
+
       // TODO: Call Gemini API for analysis (will be implemented in Step 6-7)
       // For now, return mock data to maintain functionality
       const analysisResult = await generateMockAnalysis(responses);
-      
+      const coreDriversAnalysis = analysisResult.analysis;
+
       // TODO: Fetch salary data using web search (will be implemented in Step 7)
       const salaryData = await fetchMockSalaryData(analysisResult.purposePaths);
-      
-      const session = await storage.updateAssessmentSession(sessionId, {
-        responses,
-        analysis: analysisResult.analysis,
-        purposePaths: analysisResult.purposePaths,
-        salaryData
+
+      // Update session with analysis
+      await storage.updateAssessmentSession(sessionId, {
+        coreDriversAnalysis: coreDriversAnalysis
       });
-      
+
       if (!session) {
         return res.status(404).json({ error: "Session not found" });
       }
-      
+
       res.json(session);
     } catch (error) {
       console.error("Analysis error:", error);
