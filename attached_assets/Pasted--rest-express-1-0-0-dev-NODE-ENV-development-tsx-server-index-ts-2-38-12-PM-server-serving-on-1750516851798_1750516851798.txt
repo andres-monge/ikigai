@@ -1,0 +1,63 @@
+
+> rest-express@1.0.0 dev
+> NODE_ENV=development tsx server/index.ts
+
+2:38:12 PM [server] serving on port 5000
+Browserslist: browsers data (caniuse-lite) is 8 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+DEBUG - Using model: models/gemini-2.5-flash
+DEBUG - API Key exists: true
+DEBUG - Full URL (key redacted): https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=***
+DEBUG - Using model: models/gemini-2.5-flash
+DEBUG - API Key exists: true
+DEBUG - Full URL (key redacted): https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=***
+Gemini API attempt 1 failed: Error: Gemini API error: 400 Bad Request | Body: {
+  "error": {
+    "code": 400,
+    "message": "Search Grounding is not supported.",
+    "status": "INVALID_ARGUMENT"
+  }
+}
+
+    at generateWithRetry (/home/runner/workspace/server/grounding.ts:120:7)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async fetchSalaryDataForPaths (/home/runner/workspace/server/grounding.ts:250:23)
+    at async <anonymous> (/home/runner/workspace/server/routes/assessment.ts:77:23)
+Gemini API attempt 2 failed: Error: Gemini API error: 400 Bad Request | Body: {
+  "error": {
+    "code": 400,
+    "message": "Search Grounding is not supported.",
+    "status": "INVALID_ARGUMENT"
+  }
+}
+
+    at generateWithRetry (/home/runner/workspace/server/grounding.ts:120:7)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async fetchSalaryDataForPaths (/home/runner/workspace/server/grounding.ts:250:23)
+    at async <anonymous> (/home/runner/workspace/server/routes/assessment.ts:77:23)
+Gemini API attempt 3 failed: Error: Gemini API error: 400 Bad Request | Body: {
+  "error": {
+    "code": 400,
+    "message": "Search Grounding is not supported.",
+    "status": "INVALID_ARGUMENT"
+  }
+}
+
+    at generateWithRetry (/home/runner/workspace/server/grounding.ts:120:7)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async fetchSalaryDataForPaths (/home/runner/workspace/server/grounding.ts:250:23)
+    at async <anonymous> (/home/runner/workspace/server/routes/assessment.ts:77:23)
+Failed to fetch or parse salary data from AI: Error: Gemini API error: 400 Bad Request | Body: {
+  "error": {
+    "code": 400,
+    "message": "Search Grounding is not supported.",
+    "status": "INVALID_ARGUMENT"
+  }
+}
+
+    at generateWithRetry (/home/runner/workspace/server/grounding.ts:120:7)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async fetchSalaryDataForPaths (/home/runner/workspace/server/grounding.ts:250:23)
+    at async <anonymous> (/home/runner/workspace/server/routes/assessment.ts:77:23)
+2:38:54 PM [express] POST /api/analyze 200 in 19946ms :: {"id":1,"sessionId":"test-session-1","language":"en","responses":{"passions":{"activities":"building software applicati…
