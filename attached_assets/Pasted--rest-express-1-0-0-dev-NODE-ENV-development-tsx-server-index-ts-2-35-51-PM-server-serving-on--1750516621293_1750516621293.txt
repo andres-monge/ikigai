@@ -1,0 +1,28 @@
+> rest-express@1.0.0 dev
+> NODE_ENV=development tsx server/index.ts
+
+2:35:51 PM [server] serving on port 5000
+Browserslist: browsers data (caniuse-lite) is 8 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+Gemini API attempt 1 failed: Error: Gemini API error: 404 Not Found | Body: 
+    at generateWithRetry (/home/runner/workspace/server/grounding.ts:115:7)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async generateAnalysisAndPaths (/home/runner/workspace/server/grounding.ts:190:21)
+    at async <anonymous> (/home/runner/workspace/server/routes/assessment.ts:61:24)
+Gemini API attempt 2 failed: Error: Gemini API error: 404 Not Found | Body: 
+    at generateWithRetry (/home/runner/workspace/server/grounding.ts:115:7)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async generateAnalysisAndPaths (/home/runner/workspace/server/grounding.ts:190:21)
+    at async <anonymous> (/home/runner/workspace/server/routes/assessment.ts:61:24)
+Gemini API attempt 3 failed: Error: Gemini API error: 404 Not Found | Body: 
+    at generateWithRetry (/home/runner/workspace/server/grounding.ts:115:7)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async generateAnalysisAndPaths (/home/runner/workspace/server/grounding.ts:190:21)
+    at async <anonymous> (/home/runner/workspace/server/routes/assessment.ts:61:24)
+Unhandled Error: Error: Gemini API error: 404 Not Found | Body: 
+    at generateWithRetry (/home/runner/workspace/server/grounding.ts:115:7)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async generateAnalysisAndPaths (/home/runner/workspace/server/grounding.ts:190:21)
+    at async <anonymous> (/home/runner/workspace/server/routes/assessment.ts:61:24)
+2:36:25 PM [express] POST /api/analyze 500 in 3378ms :: {"error":"Gemini API error: 404 Not Found | Body: "}
