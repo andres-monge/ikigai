@@ -4,6 +4,7 @@ async function testSearchGrounding() {
   
   try {
     // First, create a test session
+    console.log('🔗 Attempting to connect to: http://localhost:5000/api/assessment/session');
     const sessionResponse = await fetch('http://localhost:5000/api/assessment/session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -11,7 +12,9 @@ async function testSearchGrounding() {
     });
     
     if (!sessionResponse.ok) {
-      throw new Error(`Failed to create session: ${sessionResponse.status}`);
+      const errorText = await sessionResponse.text();
+      console.log('Session response error body:', errorText.substring(0, 200));
+      throw new Error(`Failed to create session: ${sessionResponse.status} - ${errorText.substring(0, 100)}`);
     }
     
     const sessionData = await sessionResponse.json();
