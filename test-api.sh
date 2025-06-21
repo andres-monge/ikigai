@@ -12,7 +12,7 @@ curl -X POST http://localhost:5000/api/analyze \
       "passions": {
         "activities": "building software applications and solving complex problems",
         "topics": ["technology", "innovation", "user experience"],
-        "energizing": "Creating solutions that make people's lives easier"
+        "energizing": "Creating solutions that make people lives easier"
       },
       "skills": {
         "strengths": ["programming", "problem-solving", "communication"],
