@@ -103,9 +103,12 @@ generationConfig,
 };
 
 if (useSearch) {
-    // Per the documentation, `googleSearchRetrieval` is the correct tool for 1.5 models.
-body.tools = [{ googleSearchRetrieval: {} }];
-}
+    // FIX: The `googleSearchRetrieval` tool is only for Gemini 1.5 models.
+    // For the newer Gemini 2.x series (including 2.5-flash), the correct
+    // tool must be specified as `googleSearch`. This was the cause of the
+    // "Search Grounding is not supported" error.
+    body.tools = [{ googleSearch: {} }];
+  }
 
 for (let attempt = 1; attempt <= maxRetries; attempt++) {
 try {
