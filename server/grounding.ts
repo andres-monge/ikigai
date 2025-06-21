@@ -13,12 +13,15 @@
 */
 
 import {
-type QuestionnaireResponses,
+questionnaireResponsesSchema,
 type PurposePath,
 type InsertPurposePath,
 type SalaryData,
 type InsertSalaryData,
 } from "@shared/schema";
+import { z } from "zod";
+
+type QuestionnaireResponses = z.infer<typeof questionnaireResponsesSchema>;
 import { storage } from "./storage";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
