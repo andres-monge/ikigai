@@ -1,6 +1,4 @@
 
-const fetch = require('node-fetch');
-
 async function testSearchGrounding() {
   console.log('Testing the search grounding fix...');
   
