@@ -24,7 +24,7 @@ import { storage } from "./storage";
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_MODEL =
 process.env.GEMINI_MODEL || "models/gemini-2.5-flash";
-const BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
+const BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
 
 /**
  * @interface GeminiCandidate
@@ -83,7 +83,12 @@ if (!GEMINI_API_KEY) {
 throw new Error("Gemini API key is not configured in .env.local");
 }
 
+// Debug logging
+console.log("DEBUG - Using model:", GEMINI_MODEL);
+console.log("DEBUG - API Key exists:", !!GEMINI_API_KEY);
+
 const url = `${BASE_URL}/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+console.log("DEBUG - Full URL (key redacted):", url.replace(GEMINI_API_KEY, "***"));
 
 const generationConfig: Record<string, any> = {
 temperature,
