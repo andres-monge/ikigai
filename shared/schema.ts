@@ -209,6 +209,9 @@ stability: z.string().min(1),
 });
 export type QuestionnaireResponses = z.infer<typeof questionnaireResponsesSchema>;
 
+// **FIX**: Export the Language type so it can be imported by other modules.
+export type Language = z.infer<typeof languageEnum.enum>;
+
 // Schema for the /api/analyze endpoint
 export const analysisRequestSchema = z.object({
 sessionId: z.string().min(1),
@@ -234,5 +237,5 @@ export type ChatRequest = z.infer<typeof chatRequestSchema>;
 
 // Generic ActionState for consistent API responses
 export type ActionState<T> =
-| { isSuccess: true; message: string; data: T }
+| { isSuccess: true; message:string; data: T }
 | { isSuccess: false; message: string; data?: never };

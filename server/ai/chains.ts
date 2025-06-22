@@ -25,11 +25,6 @@ import type { Language, QuestionnaireResponses } from '@shared/schema';
 
 // ========= INTERNAL ZOD SCHEMAS FOR AI OUTPUT VALIDATION =========
 
-/**
- * @schema salaryFunctionArgSchema
- * @description Validates the arguments for the `getSalaryDataForCareers` function call.
- * The AI must provide a list of careers, each with a title and a location.
- */
 const salaryFunctionArgSchema = z.object({
   careers: z
     .array(
@@ -44,10 +39,6 @@ const salaryFunctionArgSchema = z.object({
 });
 type SalaryFunctionArgs = z.infer<typeof salaryFunctionArgSchema>;
 
-/**
- * @schema rawSalaryDataSchema
- * @description The structure for salary data fetched and returned by the function.
- */
 const rawSalaryDataSchema = z.object({
   title: z.string(),
   location: z.string(),
@@ -58,11 +49,6 @@ const rawSalaryDataSchema = z.object({
 });
 export type RawSalaryData = z.infer<typeof rawSalaryDataSchema>;
 
-/**
- * @schema purposeDiscoveryResultSchema
- * @description Validates the final, complete JSON output from the Purpose Discovery chain.
- * This ensures the AI has returned all required fields in the correct format.
- */
 export const purposeDiscoveryResultSchema = z.object({
   coreDriversAnalysis: z.object({
     energy: z.string(),
@@ -89,11 +75,6 @@ export type PurposeDiscoveryResult = z.infer<
 
 // ========= OPENAPI SCHEMA FOR FORCED JSON OUTPUT =========
 
-/**
- * @description OpenAPI 3.0 schema representation of `PurposeDiscoveryResult`.
- * This is passed to the Gemini API to enforce a structured JSON response,
- * which is more reliable than parsing JSON from a text response.
- */
 const purposeDiscoveryOpenApiSchema = {
   type: 'OBJECT',
   properties: {
@@ -275,12 +256,16 @@ export async function getPurposeDiscoveryChain(
       const systemPrompt = _getSystemPrompt(userInput, language);
       const initialContent: GeminiContent[] = [{ role: 'user', parts: [{ text: systemPrompt }] }];
       const reasoningResponse1 = await generateContent(GEMINI_REASONING_MODEL, initialContent, [getSalaryDataTool]);
-      const functionCallPart = reasoningResponse1.candidates?.[0]?.content?.parts.find(p => !!p.functionCall)?.functionCall;
-      if (!functionCallPart || functionCallPart.name !== 'getSalaryDataForCareers') {
+
+      // **FIX**: Safely find the part with the function call and then access the call.
+      const partWithFunctionCall = reasoningResponse1.candidates?.[0]?.content?.parts.find(p => !!p.functionCall);
+      const functionCall = partWithFunctionCall?.functionCall;
+
+      if (!functionCall || functionCall.name !== 'getSalaryDataForCareers') {
         throw new Error('Reasoning model did not call the required function.');
       }
 
-      const validation = salaryFunctionArgSchema.safeParse(functionCallPart.args);
+      const validation = salaryFunctionArgSchema.safeParse(functionCall.args);
       if (!validation.success) {
         throw new Error(`Reasoning model provided invalid arguments for function call: ${validation.error.message}`);
       }
@@ -303,8 +288,6 @@ export async function getPurposeDiscoveryChain(
         GEMINI_REASONING_MODEL,
         fullConversation,
         [getSalaryDataTool],
-        // **NEW**: Enforce a strict JSON output based on our OpenAPI schema.
-        // This is much more reliable than parsing text.
         {
           responseMimeType: 'application/json',
           responseSchema: purposeDiscoveryOpenApiSchema,
