@@ -21,8 +21,8 @@ export function Questionnaire({ onComplete, language }: QuestionnaireProps) {
           id: 'passions.activities',
           type: 'textarea' as const,
           title: language === 'en' 
-            ? 'What activities make you feel most alive and energized?'
-            : '¿Qué actividades te hacen sentir más vivo y con energía?',
+            ? 'What activities make you forget to check the clock because you’re so into them? '
+            : '¿Qué actividades te absorben tanto que pierdes la noción del tiempo?',
           description: language === 'en'
             ? 'Describe the activities, hobbies, or work that genuinely excite you...'
             : 'Describe las actividades, pasatiempos o trabajo que realmente te emocionan...',

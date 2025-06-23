@@ -1,137 +1,170 @@
 /**
-* @description
-* This file defines the API routes for the assessment-related features of the Purpose Finder application.
-* It includes routes for session management, submitting questionnaire responses, generating the core
-* purpose-path analysis, and generating a detailed action plan. It orchestrates calls to the
-* storage layer and the AI grounding wrapper.
-*
-* @dependencies
-* - express: For creating and managing the router.
-* - @shared/schema: Provides Zod schemas for request validation and TypeScript types.
-* - ../storage: The storage interface for database interactions (currently in-memory).
-* - ../grounding: The centralized wrapper for all Gemini API interactions.
-*/
+ * @description
+ * This file defines the API routes for the assessment-related features of the Purpose Finder application.
+ * It includes routes for submitting questionnaire responses and generating the core
+ * purpose-path analysis, as well as generating a detailed action plan.
+ * It acts as a simple orchestrator, calling the appropriate AI chain and storage methods.
+ *
+ * @dependencies
+ * - express: For creating and managing the router.
+ * - @shared/schema: Provides Zod schemas for request validation and TypeScript types.
+ * - ../storage: The storage interface for database interactions.
+ * - ../ai/chains: The high-level AI orchestration logic for analysis and action plans.
+ */
 
 import { Router } from "express";
 import { storage } from "../storage";
-import { analysisRequestSchema, actionPlanRequestSchema } from "@shared/schema";
 import {
-generateAnalysisAndPaths,
-fetchSalaryDataForPaths,
-} from "../grounding";
+  analysisRequestSchema,
+  actionPlanRequestSchema,
+  type AssessmentSession,
+  type PurposePath,
+} from "@shared/schema";
+import { getPurposeDiscoveryChain, getActionPlanChain } from "../ai/chains";
 
 // Create a new router instance for assessment-related endpoints
 export const assessmentRouter = Router();
 
 /**
-* @endpoint POST /api/analyze
-* @description Triggers the main AI analysis to generate core drivers and purpose paths.
-* It coordinates getting a session, calling the Gemini wrapper for analysis, fetching
-* salary data, and storing all results.
-*
-* @body {AnalysisRequest} The request containing the sessionId and questionnaire responses.
-*
-* @response {AssessmentSession} The updated session object with full analysis results.
-*/
+ * @endpoint POST /api/analyze
+ * @description Triggers the main AI analysis to generate core drivers and purpose paths.
+ * This endpoint is the orchestrator for the "Purpose Discovery" workflow.
+ * It validates the user's input, calls the `getPurposeDiscoveryChain` which encapsulates
+ * all the complex AI logic (including the two-call chain with function calling),
+ * and then persists the complete, structured results to the in-memory storage.
+ *
+ * @body {AnalysisRequest} The request containing the sessionId, questionnaire responses, and language.
+ *
+ * @response {AssessmentSession} The updated session object with full analysis results, including
+ * the core drivers summary, three purpose paths, and their associated salary data.
+ */
 assessmentRouter.post("/analyze", async (req, res, next) => {
-try {
-const validation = analysisRequestSchema.safeParse(req.body);
-if (!validation.success) {
-return res.status(400).json({
-error: "Invalid request data",
-details: validation.error.errors,
-});
-}
-const { sessionId, responses, language } = validation.data;
+  try {
+    // 1. Validate the incoming request body against the Zod schema.
+    const validation = analysisRequestSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        error: "Invalid request data",
+        details: validation.error.errors,
+      });
+    }
+    const { sessionId, responses, language } = validation.data;
 
-// 1. Get existing session or create a new one.
-let session = await storage.getAssessmentSessionBySessionId(sessionId);
-if (!session) {
-session = await storage.createAssessmentSession({
-sessionId,
-language,
-responses,
-});
-} else {
-// Update session with latest responses if it already exists
-await storage.updateAssessmentSession(sessionId, { responses, language });
-}
+    // 2. Get existing session or create a new one to persist data.
+    let session = await storage.getAssessmentSessionBySessionId(sessionId);
+    if (!session) {
+      session = await storage.createAssessmentSession({
+        sessionId,
+        language,
+        responses,
+      });
+    } else {
+      // If the user is re-submitting, update the session with the latest responses.
+      await storage.updateAssessmentSession(sessionId, { responses, language });
+    }
 
-// 2. Call the Gemini wrapper to get the core analysis and purpose paths.
-const analysisResult = await generateAnalysisAndPaths(responses, language);
+    // 3. Call the main AI orchestration chain.
+    const analysisResult = await getPurposeDiscoveryChain(responses, language);
 
-// 3. Clear any previous paths/salaries for this session before adding new ones.
-await storage.deletePurposePathsByAssessmentId(session.id);
+    // 4. Before storing new data, clear any previous analysis results for this session.
+    await storage.deletePurposePathsByAssessmentId(session.id);
 
-// 4. Store the new Purpose Paths and get their IDs.
-const createdPaths = [];
-for (const path of analysisResult.purposePaths) {
-const createdPath = await storage.createPurposePath({
-assessmentId: session.id,
-...path,
-});
-createdPaths.push(createdPath);
-}
+    // 5. Persist the new, validated AI-generated data to storage.
+    for (const path of analysisResult.purposePaths) {
+      const createdPath = await storage.createPurposePath({
+        assessmentId: session.id,
+        title: path.title,
+        description: path.description,
+        ikigaiAlignment: path.ikigaiAlignment,
+        actionStrategy: path.actionStrategy,
+      });
 
-// 5. Fetch salary data for the newly created paths using the grounding wrapper.
-const salaryResults = await fetchSalaryDataForPaths(createdPaths, language);
+      const pathSalaryData = analysisResult.salaryData.find(
+        (salary) => salary.title.toLowerCase() === path.title.toLowerCase(),
+      );
 
-// 6. Store salary data.
-for (const salary of salaryResults) {
-await storage.createSalaryData(salary);
-}
+      if (pathSalaryData) {
+        await storage.createSalaryData({
+          pathId: createdPath.id,
+          entryLevel: pathSalaryData.entryLevel,
+          midLevel: pathSalaryData.midLevel,
+          seniorLevel: pathSalaryData.seniorLevel,
+          location: pathSalaryData.location,
+          sources: pathSalaryData.sources,
+        });
+      }
+    }
 
-// 7. Update the session with the core drivers analysis.
-const updatedSession = await storage.updateAssessmentSession(sessionId, {
-coreDriversAnalysis: analysisResult.coreDriversAnalysis,
-});
+    // 6. Update the main session object with the Core Drivers Analysis summary.
+    await storage.updateAssessmentSession(sessionId, {
+      coreDriversAnalysis: analysisResult.coreDriversAnalysis,
+    });
 
-if (!updatedSession) {
-return res.status(404).json({ error: "Session not found after update" });
-}
+    // 7. Retrieve the complete, hydrated session data and send it back to the client.
+    const fullSessionData =
+      await storage.getAssessmentSessionBySessionId(sessionId);
 
-// 8. Retrieve the full session data with all relations (paths, salaries).
-const fullSessionData =
-await storage.getAssessmentSessionBySessionId(sessionId);
-
-res.json(fullSessionData);
-} catch (error) {
-// Forward the error to the global error handler
-next(error);
-}
+    res.json(fullSessionData);
+  } catch (error) {
+    // If any part of the chain fails, pass the error to the global error handler.
+    next(error);
+  }
 });
 
 /**
-* @endpoint POST /api/action-plan
-* @description Generates a detailed action plan for a user's chosen purpose path.
-*
-* @body {ActionPlanRequest} The request containing sessionId and chosenPathId.
-*
-* @response {AssessmentSession} The updated session object with the generated action plan.
-*/
+ * @endpoint POST /api/action-plan
+ * @description Generates a detailed action plan for a user's chosen purpose path.
+ *
+ * @body {ActionPlanRequest} The request containing sessionId and chosenPathId.
+ *
+ * @response {AssessmentSession} The updated session object with the generated action plan.
+ */
 assessmentRouter.post("/action-plan", async (req, res, next) => {
-try {
-const validation = actionPlanRequestSchema.safeParse(req.body);
-if (!validation.success) {
-return res
-.status(400)
-.json({
-error: "Invalid request data",
-details: validation.error.errors,
-});
-}
-// const { sessionId, chosenPathId } = validation.data;
+  try {
+    // 1. Validate the request body
+    const validation = actionPlanRequestSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        error: "Invalid request data",
+        details: validation.error.errors,
+      });
+    }
+    const { sessionId, chosenPathId } = validation.data;
 
-// This endpoint will be fully implemented in a future step (Step 8).
-// The logic will be similar to /analyze, orchestrating calls to:
-// 1. `storage` to get session and chosen path.
-// 2. `grounding.generateActionPlanForPath` to get the plan from the AI.
-// 3. `storage` to save the generated plan to the session.
-// 4. Return the updated session.
+    // 2. Fetch the session and all its related data (including purpose paths)
+    const session = await storage.getAssessmentSessionBySessionId(sessionId);
+    if (!session) {
+      return res.status(404).json({ error: "Session not found" });
+    }
 
-res.status(501).json({ message: "Not Implemented" });
-} catch (error) {
-// Forward the error to the global error handler
-next(error);
-}
+    // In MemStorage, purposePaths are hydrated directly onto the session object.
+    const purposePaths = (session as any).purposePaths as (PurposePath & { salaryData: any[] })[];
+
+    // 3. Find the specific path the user chose from the session's paths
+    const chosenPath = purposePaths?.find((p) => p.id === chosenPathId);
+    if (!chosenPath) {
+      return res
+        .status(404)
+        .json({ error: "Chosen path not found for this session" });
+    }
+
+    // 4. Call the Action Plan AI chain with the chosen path details.
+    const actionPlan = await getActionPlanChain(chosenPath, session.language);
+
+    // 5. Save the generated plan and the chosen path ID to the session.
+    await storage.updateAssessmentSession(sessionId, {
+      actionPlan,
+      chosenPathId: chosenPath.id,
+    });
+
+    // 6. Retrieve the latest, fully updated session data.
+    const updatedSession =
+      await storage.getAssessmentSessionBySessionId(sessionId);
+
+    // 7. Return the updated session to the client.
+    res.json(updatedSession);
+  } catch (error) {
+    // Forward any errors to the global error handler.
+    next(error);
+  }
 });
