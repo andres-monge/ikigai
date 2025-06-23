@@ -1,23 +1,20 @@
+
 export interface QuestionnaireResponses {
   passions: {
     activities: string;
-    topics: string[];
-    energizing: string;
+    topics: string;
   };
   skills: {
-    strengths: string[];
-    achievements: string;
-    feedback: string;
+    strengths: string;
+    experience: string;
   };
   values: {
-    workValues: string[];
+    frustrations: string;
     impact: string;
-    environment: string;
   };
   economic: {
-    salaryExpectation: string;
-    timeline: string;
-    stability: string;
+    preferences: string;
+    constraints: string;
   };
 }
 

@@ -1,21 +1,3 @@
-/**
-* @description
-* This file defines the complete database schema for the Purpose Finder application using Drizzle ORM.
-* It includes table definitions, relationships, and Zod schemas for data validation and type inference.
-* This schema is the single source of truth for all data structures shared between the server and client.
-*
-* The schema is designed to be normalized, separating concerns into distinct tables:
-* - `assessment_sessions`: The core table for a user's journey.
-* - `purpose_paths`: The three AI-generated career paths for a session.
-* - `salary_data`: Salary benchmarks for each career path, fetched from the web.
-* - `chat_messages`: A log of all interactions with the Nami AI assistant.
-*
-* @dependencies
-* - drizzle-orm: Used for defining the database schema and relationships.
-* - drizzle-zod: Used for generating Zod schemas from the Drizzle schema for validation.
-* - zod: Used for defining custom validation schemas.
-*/
-
 import {
   pgTable,
   text,
@@ -221,23 +203,19 @@ export type InsertChatMessage = typeof chatMessages.$inferInsert;
 export const questionnaireResponsesSchema = z.object({
   passions: z.object({
     activities: z.string().min(1),
-    topics: z.array(z.string()).min(1),
-    energizing: z.string().min(1),
+    topics: z.string().min(1),
   }),
   skills: z.object({
-    strengths: z.array(z.string()).min(1),
-    achievements: z.string().min(1),
-    feedback: z.string().min(1),
+    strengths: z.string().min(1),
+    experience: z.string().min(1),
   }),
   values: z.object({
-    workValues: z.array(z.string()).min(1),
+    frustrations: z.string().min(1),
     impact: z.string().min(1),
-    environment: z.string().min(1),
   }),
   economic: z.object({
-    salaryExpectation: z.string().min(1),
-    timeline: z.string().min(1),
-    stability: z.string().min(1),
+    preferences: z.string().min(1),
+    constraints: z.string().min(1),
   }),
 });
 export type QuestionnaireResponses = z.infer<
