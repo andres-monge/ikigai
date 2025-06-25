@@ -102,14 +102,17 @@ export interface GeminiGenerateContentResponse {
 /* ────────────────────────────────────────────────────────────────────────── */
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
-// As per the technical specification, we use two different models.
-// These are configurable via environment variables.
-export const GEMINI_FACTS_MODEL =
-  process.env.GEMINI_FACTS_MODEL || 'models/gemini-2.5-flash-lite';
-export const GEMINI_REASONING_MODEL =
-  process.env.GEMINI_REASONING_MODEL || 'models/gemini-2.5-flash';
+// === CHANGED: Removed default values. Throws error if not set in .env ===
+if (!process.env.GEMINI_REASONING_MODEL || !process.env.GEMINI_FACTS_MODEL) {
+  throw new Error(
+    'Please set GEMINI_REASONING_MODEL and GEMINI_FACTS_MODEL in your .env.local file.',
+  );
+}
+export const GEMINI_REASONING_MODEL = process.env.GEMINI_REASONING_MODEL;
+export const GEMINI_FACTS_MODEL = process.env.GEMINI_FACTS_MODEL;
 
-const BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
+// === CHANGED: Shortened BASE_URL to accommodate full model path from .env ===
+const BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /* Internal Utilities                                                         */
@@ -138,7 +141,11 @@ async function _generateWithRetry(
     throw new Error('GEMINI_API_KEY is not configured in environment variables.');
   }
 
+  // The `model` variable now correctly contains the full path e.g., "models/gemini-2.5-flash"
   const url = `${BASE_URL}/${model}:generateContent?key=${GEMINI_API_KEY}`;
+  
+  // === ADDED: Logging for debugging ===
+  console.log(`[AI WRAPPER] Fetching Gemini API URL: ${url}`);
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
