@@ -207,7 +207,7 @@ const purposeDiscoveryOpenApiSchema = {
           entryLevel: { type: 'STRING' },
           midLevel: { type: 'STRING' },
           seniorLevel: { type: 'STRING' },
-          sources: { type: 'ARRAY', items: { type: 'STRING', format: 'uri' } },
+          sources: { type: 'ARRAY', items: { type: 'STRING' } },
         },
         required: [
           'title',
@@ -248,7 +248,7 @@ const actionPlanOpenApiSchema = {
               type: 'OBJECT',
               properties: {
                 title: { type: 'STRING' },
-                url: { type: 'STRING', format: 'uri' },
+                url: { type: 'STRING' },
               },
               required: ['title', 'url'],
             },
