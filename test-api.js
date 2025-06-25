@@ -1,5 +1,5 @@
 
-const fetch = require('node-fetch');
+import fetch from 'node-fetch';
 
 const BASE_URL = 'http://localhost:5000';
 
@@ -20,26 +20,30 @@ async function testAPI() {
     return;
   }
 
-  // Test 2: Test /api/analyze endpoint
+  // Test 2: Test /api/analyze endpoint with correct schema
   try {
     console.log('\n2. Testing /api/analyze endpoint...');
     const testData = {
-      passions: [
-        { question: "What activities make you lose track of time?", answer: "Programming and solving complex problems" },
-        { question: "What topics fascinate you?", answer: "Artificial intelligence and technology" }
-      ],
-      skills: [
-        { question: "What are you naturally good at?", answer: "Logical thinking and problem-solving" },
-        { question: "What achievements are you proud of?", answer: "Built several web applications" }
-      ],
-      values: [
-        { question: "What impact do you want to make?", answer: "Help people through technology" },
-        { question: "What work environment do you prefer?", answer: "Collaborative and innovative" }
-      ],
-      economic: [
-        { question: "What are your salary expectations?", answer: "$80,000-$120,000" },
-        { question: "What are your financial goals?", answer: "Financial stability and growth" }
-      ]
+      sessionId: "test-session-123",
+      language: "en",
+      responses: {
+        passions: [
+          { question: "What activities make you lose track of time?", answer: "Programming and solving complex problems" },
+          { question: "What topics fascinate you?", answer: "Artificial intelligence and technology" }
+        ],
+        skills: [
+          { question: "What are you naturally good at?", answer: "Logical thinking and problem-solving" },
+          { question: "What achievements are you proud of?", answer: "Built several web applications" }
+        ],
+        values: [
+          { question: "What impact do you want to make?", answer: "Help people through technology" },
+          { question: "What work environment do you prefer?", answer: "Collaborative and innovative" }
+        ],
+        economic: [
+          { question: "What are your salary expectations?", answer: "$80,000-$120,000" },
+          { question: "What are your financial goals?", answer: "Financial stability and growth" }
+        ]
+      }
     };
 
     const response = await fetch(`${BASE_URL}/api/analyze`, {
@@ -53,18 +57,20 @@ async function testAPI() {
       console.log('✅ /api/analyze endpoint working');
       console.log('   Response contains:', Object.keys(result));
     } else {
-      console.log('❌ /api/analyze failed:', response.status, await response.text());
+      const errorText = await response.text();
+      console.log('❌ /api/analyze failed:', response.status);
+      console.log('   Error details:', errorText);
     }
   } catch (error) {
     console.log('❌ /api/analyze error:', error.message);
   }
 
-  // Test 3: Test /api/chat endpoint (SSE)
+  // Test 3: Test /api/chat endpoint (SSE) with correct context
   try {
     console.log('\n3. Testing /api/chat endpoint (SSE)...');
     const chatData = {
       message: "Hello Nami, can you help me understand my career options?",
-      context: "purpose_discovery",
+      context: "discovery", // Fixed: using 'discovery' instead of 'purpose_discovery'
       sessionId: "test-session-123"
     };
 
@@ -80,6 +86,10 @@ async function testAPI() {
     } else {
       console.log('❌ /api/chat not configured for SSE');
       console.log('   Content-Type:', response.headers.get('content-type'));
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.log('   Error details:', errorText);
+      }
     }
   } catch (error) {
     console.log('❌ /api/chat error:', error.message);
