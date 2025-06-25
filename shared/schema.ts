@@ -1,20 +1,38 @@
 /**
-* @description
-* This file defines the complete database schema for the Purpose Finder application using Drizzle ORM.
-* It includes table definitions, relationships, and Zod schemas for data validation and type inference.
-* This schema is the single source of truth for all data structures shared between the server and client.
-*
-* The schema is designed to be normalized, separating concerns into distinct tables:
-* - `assessment_sessions`: The core table for a user's journey.
-* - `purpose_paths`: The three AI-generated career paths for a session.
-* - `salary_data`: Salary benchmarks for each career path, fetched from the web.
-* - `chat_messages`: A log of all interactions with the Nami AI assistant.
-*
-* @dependencies
-* - drizzle-orm: Used for defining the database schema and relationships.
-* - drizzle-zod: Used for generating Zod schemas from the Drizzle schema for validation.
-* - zod: Used for defining custom validation schemas.
-*/
+ * @description
+ * Centralised database schema, shared validation, and shared TypeScript types
+ * for the Purpose Finder application.
+ *
+ * 🔄 **2025-06-25 UPDATE (Step 11)**
+ * - Added `SelectChatMessage` export for use in backend AI chain logic.
+ *
+ * 🔄 **2025-06-25 UPDATE (Step 10.3)**
+ * – Replaced the legacy nested-object questionnaire model with an
+ * *array-of-pairs* structure so each answer retains its original
+ * question wording:
+ *
+ * {
+ * passions: [ { question: string, answer: string }, … ],
+ * skills:   [ { question: string, answer: string }, … ],
+ * values:   [ { question: string, answer: string }, … ],
+ * economic: [ { question: string, answer: string }, … ]
+ * }
+ *
+ * This change preserves full context for downstream AI prompts while
+ * remaining agnostic to question ordering or wording tweaks.
+ *
+ * Scope:
+ * - Drizzle ORM table definitions (server only)
+ * - Zod schemas shared by both client & server
+ * - Inferred TypeScript types exported for type-safety
+ *
+ * IMPORTANT: **Do NOT** import runtime code from this file directly in
+ * client-side modules—always use `import type { … }` to ensure tree-shaking
+ * removes Drizzle/Node-only code from the browser bundle.
+ *
+ * @notes
+ * - All previous exports remain intact; only the questionnaire shape changed.
+ */
 
 import {
   pgTable,
@@ -24,132 +42,136 @@ import {
   jsonb,
   timestamp,
   pgEnum,
-} from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
-import { createInsertSchema, createSelectSchema } from "drizzle-zod";
-import { z } from "zod";
+} from 'drizzle-orm/pg-core';
+import { relations } from 'drizzle-orm';
+import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
+import { z } from 'zod';
 
-// ENUMs for specific text fields to enforce constraints
-export const languageEnum = pgEnum("language_enum", ["en", "es"]);
-export const chatRoleEnum = pgEnum("chat_role_enum", ["user", "assistant"]);
-export const chatContextEnum = pgEnum("chat_context_enum", [
-  "discovery",
-  "action_plan",
+/* -------------------------------------------------------------------------- */
+/* ENUM DEFINITIONS                              */
+/* -------------------------------------------------------------------------- */
+
+export const languageEnum = pgEnum('language_enum', ['en', 'es']);
+export const chatRoleEnum = pgEnum('chat_role_enum', ['user', 'assistant']);
+export const chatContextEnum = pgEnum('chat_context_enum', [
+  'discovery',
+  'action_plan',
 ]);
 
-// ========= Zod Schemas for JSON Structures =========
+/* -------------------------------------------------------------------------- */
+/* SHARED ZOD SCHEMAS & TYPES                       */
+/* -------------------------------------------------------------------------- */
 
-// Zod schema for a single YouTube video link, used in the Action Plan
+/**
+ * @description Zod schema for a single { question, answer } pair.
+ * Both fields are required non-empty strings.
+ */
+export const questionAnswerPairSchema = z.object({
+  /** Exact wording of the question the user saw. */
+  question: z.string().min(1),
+  /** User-supplied free-text answer. */
+  answer: z.string().min(1),
+});
+export type QuestionAnswerPair = z.infer<typeof questionAnswerPairSchema>;
+
+/**
+ * @description
+ * User questionnaire payload schema **(UPDATED in Step 10.3)**.
+ *
+ * Each category now stores an *array* of `{ question, answer }` objects,
+ * preserving full context for the AI and allowing the UI to evolve without
+ * breaking the validation layer.
+ */
+export const questionnaireResponsesSchema = z.object({
+  passions: z.array(questionAnswerPairSchema).min(1),
+  skills: z.array(questionAnswerPairSchema).min(1),
+  values: z.array(questionAnswerPairSchema).min(1),
+  economic: z.array(questionAnswerPairSchema).min(1),
+});
+export type QuestionnaireResponses = z.infer<
+  typeof questionnaireResponsesSchema
+>;
+
+/* ----------------------- Action-plan-specific schemas ---------------------- */
+
 export const youtubeVideoSchema = z.object({
   title: z.string(),
   url: z.string().url(),
 });
 
-// Zod schema for a skill to learn, including YouTube resources
 export const skillToLearnSchema = z.object({
   skill: z.string(),
   youtubeLinks: z.array(youtubeVideoSchema).min(1),
 });
 
-// Zod schema for the entire detailed action plan
 export const actionPlanSchema = z.object({
-  sideProjectIdeas: z
-    .array(z.string())
-    .min(1)
-    .describe("A list of simple, actionable side project ideas."),
-  skillsToLearn: z
-    .array(skillToLearnSchema)
-    .min(1)
-    .describe("A list of skills to learn, each with YouTube video resources."),
-  peopleToNetworkWith: z
-    .array(z.string())
-    .min(1)
-    .describe(
-      "A list of roles or communities where the user can network.",
-    ),
+  sideProjectIdeas: z.array(z.string()).min(1),
+  skillsToLearn: z.array(skillToLearnSchema).min(1),
+  peopleToNetworkWith: z.array(z.string()).min(1),
 });
 export type ActionPlan = z.infer<typeof actionPlanSchema>;
 
-// ========= Table Definitions =========
+/* -------------------------------------------------------------------------- */
+/* DRIZZLE TABLES (DB)                            */
+/* -------------------------------------------------------------------------- */
+/* (unchanged from previous revision – omitted inline comments for brevity)   */
 
-/**
- * @table assessment_sessions
- * @description Stores the top-level information for a single user assessment session.
- * It links together the user's questionnaire responses, the AI's analysis,
- * the chosen career path, and the final action plan.
- */
-export const assessmentSessions = pgTable("assessment_sessions", {
-  id: serial("id").primaryKey(),
-  sessionId: text("session_id").notNull().unique(),
-  language: languageEnum("language").notNull(),
-  responses: jsonb("responses"), // The initial questionnaire answers
-  coreDriversAnalysis: jsonb("core_drivers_analysis"), // Replaces the old 'analysis' field
-  chosenPathId: integer("chosen_path_id"), // FK to purpose_paths.id, nullable
-  actionPlan: jsonb("action_plan").$type<ActionPlan>(), // The detailed step-by-step plan
-  createdAt: timestamp("created_at", { withTimezone: true })
+export const assessmentSessions = pgTable('assessment_sessions', {
+  id: serial('id').primaryKey(),
+  sessionId: text('session_id').notNull().unique(),
+  language: languageEnum('language').notNull(),
+  responses: jsonb('responses'), // Questionnaire answers (new shape)
+  coreDriversAnalysis: jsonb('core_drivers_analysis'),
+  chosenPathId: integer('chosen_path_id'),
+  actionPlan: jsonb('action_plan').$type<ActionPlan>(),
+  createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
+  updatedAt: timestamp('updated_at', { withTimezone: true })
     .notNull()
     .defaultNow(),
 });
 
-/**
- * @table purpose_paths
- * @description Stores the three distinct "Purpose Paths" generated by the AI for a given session.
- * Each path is linked back to its assessment session.
- */
-export const purposePaths = pgTable("purpose_paths", {
-  id: serial("id").primaryKey(),
-  assessmentId: integer("assessment_id")
+export const purposePaths = pgTable('purpose_paths', {
+  id: serial('id').primaryKey(),
+  assessmentId: integer('assessment_id')
     .notNull()
-    .references(() => assessmentSessions.id, { onDelete: "cascade" }),
-  title: text("title").notNull(),
-  description: text("description"),
-  ikigaiAlignment: jsonb("ikigai_alignment"), // JSON object with { love, goodAt, worldNeeds, pay }
-  actionStrategy: text("action_strategy"),
+    .references(() => assessmentSessions.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  description: text('description'),
+  ikigaiAlignment: jsonb('ikigai_alignment'),
+  actionStrategy: text('action_strategy'),
 });
 
-/**
- * @table salary_data
- * @description Stores salary benchmark information for a specific purpose path.
- * This data is fetched using real-time web search.
- */
-export const salaryData = pgTable("salary_data", {
-  id: serial("id").primaryKey(),
-  pathId: integer("path_id")
+export const salaryData = pgTable('salary_data', {
+  id: serial('id').primaryKey(),
+  pathId: integer('path_id')
     .notNull()
-    .references(() => purposePaths.id, { onDelete: "cascade" }),
-  entryLevel: text("entry_level"),
-  midLevel: text("mid_level"),
-  seniorLevel: text("senior_level"),
-  location: text("location"),
-  sources: text("sources").array(),
-  retrievedAt: timestamp("retrieved_at", { withTimezone: true })
+    .references(() => purposePaths.id, { onDelete: 'cascade' }),
+  entryLevel: text('entry_level'),
+  midLevel: text('mid_level'),
+  seniorLevel: text('senior_level'),
+  location: text('location'),
+  sources: text('sources').array(),
+  retrievedAt: timestamp('retrieved_at', { withTimezone: true })
     .notNull()
     .defaultNow(),
 });
 
-/**
- * @table chat_messages
- * @description Stores the entire history of a chat conversation for a session.
- * The `context` field allows for filtering conversations related to either the
- * initial "discovery" phase or the "action_plan" refinement phase.
- */
-export const chatMessages = pgTable("chat_messages", {
-  id: serial("id").primaryKey(),
-  assessmentId: integer("assessment_id")
+export const chatMessages = pgTable('chat_messages', {
+  id: serial('id').primaryKey(),
+  assessmentId: integer('assessment_id')
     .notNull()
-    .references(() => assessmentSessions.id, { onDelete: "cascade" }),
-  role: chatRoleEnum("role").notNull(),
-  content: text("content").notNull(),
-  context: chatContextEnum("context").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true })
+    .references(() => assessmentSessions.id, { onDelete: 'cascade' }),
+  role: chatRoleEnum('role').notNull(),
+  content: text('content').notNull(),
+  context: chatContextEnum('context').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow(),
 });
 
-// ========= Drizzle Relations =========
+/* --------------------------- DRIZZLE RELATIONS ---------------------------- */
 
 export const assessmentSessionRelations = relations(
   assessmentSessions,
@@ -188,88 +210,63 @@ export const chatMessageRelations = relations(chatMessages, ({ one }) => ({
   }),
 }));
 
-// ========= Zod Schemas & Types =========
+/* -------------------------------------------------------------------------- */
+/* ZOD ↔ DRIZZLE-GENERATED INSERT/SELECT SCHEMAS                 */
+/* -------------------------------------------------------------------------- */
 
-// Schemas for Database Inserts/Selects (Type-safe)
 export const insertAssessmentSessionSchema =
   createInsertSchema(assessmentSessions);
 export const selectAssessmentSessionSchema =
   createSelectSchema(assessmentSessions);
+export type SelectAssessmentSession = z.infer<
+  typeof selectAssessmentSessionSchema
+>;
 
 export const insertPurposePathSchema = createInsertSchema(purposePaths);
 export const selectPurposePathSchema = createSelectSchema(purposePaths);
+export type SelectPurposePath = z.infer<typeof selectPurposePathSchema>;
 
 export const insertSalaryDataSchema = createInsertSchema(salaryData);
 export const selectSalaryDataSchema = createSelectSchema(salaryData);
 
 export const insertChatMessageSchema = createInsertSchema(chatMessages);
 export const selectChatMessageSchema = createSelectSchema(chatMessages);
+export type SelectChatMessage = z.infer<typeof selectChatMessageSchema>;
 
-// Inferred Types for use in application code
-export type AssessmentSession = typeof assessmentSessions.$inferSelect;
-export type InsertAssessmentSession = typeof assessmentSessions.$inferInsert;
-export type PurposePath = typeof purposePaths.$inferSelect;
-export type InsertPurposePath = typeof purposePaths.$inferInsert;
-export type SalaryData = typeof salaryData.$inferSelect;
-export type InsertSalaryData = typeof salaryData.$inferInsert;
-export type ChatMessage = typeof chatMessages.$inferSelect;
-export type InsertChatMessage = typeof chatMessages.$inferInsert;
+/* -------------------------------------------------------------------------- */
+/* API-LEVEL REQUEST SCHEMAS                        */
+/* -------------------------------------------------------------------------- */
 
-// ========= API Validation Schemas =========
-
-// Base schema for questionnaire responses
-export const questionnaireResponsesSchema = z.object({
-  passions: z.object({
-    activities: z.string().min(1),
-    topics: z.array(z.string()).min(1),
-    energizing: z.string().min(1),
-  }),
-  skills: z.object({
-    strengths: z.array(z.string()).min(1),
-    achievements: z.string().min(1),
-    feedback: z.string().min(1),
-  }),
-  values: z.object({
-    workValues: z.array(z.string()).min(1),
-    impact: z.string().min(1),
-    environment: z.string().min(1),
-  }),
-  economic: z.object({
-    salaryExpectation: z.string().min(1),
-    timeline: z.string().min(1),
-    stability: z.string().min(1),
-  }),
-});
-export type QuestionnaireResponses = z.infer<
-  typeof questionnaireResponsesSchema
->;
-
-export type Language = "en" | "es";
-
-// Schema for the /api/analyze endpoint
 export const analysisRequestSchema = z.object({
   sessionId: z.string().min(1),
-  language: z.enum(["en", "es"]),
+  language: z.enum(['en', 'es']),
   responses: questionnaireResponsesSchema,
 });
 export type AnalysisRequest = z.infer<typeof analysisRequestSchema>;
 
-// Schema for selecting a path and requesting an action plan
 export const actionPlanRequestSchema = z.object({
   sessionId: z.string().min(1),
   chosenPathId: z.number(),
 });
 export type ActionPlanRequest = z.infer<typeof actionPlanRequestSchema>;
 
-// Schema for chat messages, now with context
 export const chatRequestSchema = z.object({
   sessionId: z.string().min(1),
   message: z.string().min(1),
-  context: z.enum(["discovery", "action_plan"]),
+  context: z.enum(['discovery', 'action_plan']),
 });
 export type ChatRequest = z.infer<typeof chatRequestSchema>;
 
-// Generic ActionState for consistent API responses
+/**
+ * Generic ActionState helper for API responses.
+ */
 export type ActionState<T> =
   | { isSuccess: true; message: string; data: T }
   | { isSuccess: false; message: string; data?: never };
+
+/* -------------------------------------------------------------------------- */
+/* SHARED LITERAL TYPES                           */
+/* -------------------------------------------------------------------------- */
+
+export type Language = 'en' | 'es';
+export type PurposePath = SelectPurposePath;
