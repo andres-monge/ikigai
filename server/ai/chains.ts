@@ -745,7 +745,7 @@ export async function getPurposeDiscoveryChain(
       const reasoningResponse2 = await generateContent(
         GEMINI_REASONING_MODEL,
         fullConversation,
-        [getSalaryDataTool],
+        undefined,
         {
           responseMimeType: 'application/json',
           responseSchema: purposeDiscoveryOpenApiSchema,
@@ -845,7 +845,7 @@ export async function getActionPlanChain(
       const reasoningResponse2 = await generateContent(
         GEMINI_REASONING_MODEL,
         fullConversation,
-        [getYoutubeVideosForSkillsTool],
+        undefined,
         {
           responseMimeType: 'application/json',
           responseSchema: actionPlanOpenApiSchema,
