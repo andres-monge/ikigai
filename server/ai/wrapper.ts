@@ -143,9 +143,6 @@ async function _generateWithRetry(
 
   // The `model` variable now correctly contains the full path e.g., "models/gemini-2.5-flash"
   const url = `${BASE_URL}/${model}:generateContent?key=${GEMINI_API_KEY}`;
-  
-  // === ADDED: Logging for debugging ===
-  console.log(`[AI WRAPPER] Fetching Gemini API URL: ${url}`);
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
