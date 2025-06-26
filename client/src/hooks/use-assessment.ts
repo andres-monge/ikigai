@@ -4,36 +4,38 @@
  * @description
  * React-Query hooks for the Assessment / Purpose-Discovery workflow.
  * Step 19 introduces `useCreateAssessment`, which encapsulates the POST
- * request to `/api/analyze`. Step 21 adds `useCreateActionPlan` for the
- * next phase of the user journey.
+ * request to `/api/analyze`. Later steps (21+) will add more hooks
+ * (`useCreateActionPlan`, `useGetActionPlan`, …) in this same module.
  *
- * The hooks:
- * • Accept the caller’s anonymous `sessionId` plus optional `onSuccess`
- * and `onError` callbacks so calling components can react to outcomes
- * (e.g. navigate, toast, write to storage) without duplicating the
- * fetch logic itself.
- * • Use the `apiRequest` helper (centralised fetch wrapper) to ensure
- * consistent headers / error handling across the SPA.
- * • Return a `mutate` function and an `isPending` status.
+ * The hook:
+ *   • Accepts the caller’s anonymous `sessionId` plus optional `onSuccess`
+ *     and `onError` callbacks so calling components can react to outcomes
+ *     (e.g. navigate, toast, write to storage) without duplicating the
+ *     fetch logic itself.
+ *   • Uses the `apiRequest` helper (centralised fetch wrapper) to ensure
+ *     consistent headers / error handling across the SPA.
+ *   • Returns only the `createAssessment` mutate function and the
+ *     `isPending` status, matching the Step 19 acceptance criteria.
  *
  * @dependencies
  * - @tanstack/react-query v5: data-fetching & mutations
  * - apiRequest (client/src/lib/queryClient.ts): shared fetch helper
  *
  * @notes
- * - The hooks are intentionally minimal: they do not persist results or
- * navigate. That flexibility is left to the consumer via callbacks.
+ * - The hook is intentionally minimal: it does not persist results or
+ *   navigate. That flexibility is left to the consumer via callbacks.
+ * - Future hooks will follow the same pattern for consistency.
  */
 
 import { useMutation } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import type {
   QuestionnaireResponses,
-  AssessmentResults,
+  AssessmentResults
 } from '@/types/assessment';
 
 /* -------------------------------------------------------------------------- */
-/* USE CREATE ASSESSMENT                           */
+/*                              Hook Definition                               */
 /* -------------------------------------------------------------------------- */
 
 /**
@@ -66,108 +68,57 @@ export interface UseCreateAssessmentOptions {
  * @returns
  * ```ts
  * {
- * createAssessment: (payload: QuestionnaireResponses) => void;
- * isPending: boolean;
+ *   createAssessment: (payload: QuestionnaireResponses) => void;
+ *   isPending: boolean;
  * }
+ * ```
+ *
+ * @example
+ * ```tsx
+ * const { createAssessment, isPending } = useCreateAssessment({
+ *   sessionId,
+ *   onSuccess: (data) => {
+ *     setResults(data);
+ *     navigate('/results');
+ *   }
+ * });
+ *
+ * // …
+ * createAssessment(questionnairePayload);
  * ```
  */
 export function useCreateAssessment({
   sessionId,
   onSuccess,
-  onError,
+  onError
 }: UseCreateAssessmentOptions) {
+  /**
+   * Single source-of-truth mutation for the Purpose Discovery “analyze” call.
+   * Handles POST, JSON parsing, and error propagation.
+   */
   const mutation = useMutation({
     mutationFn: async (payload: QuestionnaireResponses) => {
       const res = await apiRequest('POST', '/api/analyze', {
         sessionId,
-        responses: payload,
+        responses: payload
       });
+
+      // If the server returns non-2xx, apiRequest throws; otherwise parse JSON.
       return (await res.json()) as AssessmentResults;
     },
     onSuccess,
-    onError,
-  });
-
-  return {
-    createAssessment: mutation.mutate,
-    isPending: mutation.isPending,
-  };
-}
-
-/* -------------------------------------------------------------------------- */
-/* USE CREATE ACTION PLAN                          */
-/* -------------------------------------------------------------------------- */
-
-/**
- * Payload for creating an action plan.
- */
-export interface CreateActionPlanPayload {
-  /**
-   * The database ID of the user's chosen Purpose Path.
-   */
-  chosenPathId: number;
-}
-
-/**
- * Options accepted by {@link useCreateActionPlan}.
- */
-export interface UseCreateActionPlanOptions {
-  /**
-   * Anonymous session identifier generated at app start-up.
-   */
-  sessionId: string;
-  /**
-   * Callback invoked when the backend successfully generates and returns
-   * the action plan.
-   */
-  onSuccess?: (data: AssessmentResults) => void;
-  /**
-   * Callback invoked when the request or backend processing fails.
-   */
-  onError?: (error: unknown) => void;
-}
-
-/**
- * @function useCreateActionPlan
- *
- * @description
- * React hook that exposes a mutation for generating a detailed Action Plan
- * for a user's chosen Purpose Path. Internally posts the chosen path ID
- * to `/api/action-plan`.
- *
- * @returns
- * ```ts
- * {
- * createActionPlan: (payload: CreateActionPlanPayload) => void;
- * isPending: boolean;
- * }
- * ```
- */
-export function useCreateActionPlan({
-  sessionId,
-  onSuccess,
-  onError,
-}: UseCreateActionPlanOptions) {
-  const mutation = useMutation({
-    mutationFn: async (payload: CreateActionPlanPayload) => {
-      const res = await apiRequest('POST', '/api/action-plan', {
-        sessionId,
-        chosenPathId: payload.chosenPathId,
-      });
-      return (await res.json()) as AssessmentResults;
-    },
-    onSuccess,
-    onError,
+    onError
   });
 
   return {
     /**
-     * Triggers the backend action plan generation.
+     * Triggers the backend analysis. Accepts the full questionnaire payload.
      */
-    createActionPlan: mutation.mutate,
+    createAssessment: mutation.mutate,
     /**
      * Boolean flag the UI can use to show spinners / disable buttons.
      */
-    isPending: mutation.isPending,
+    isPending: mutation.isPending
   };
 }
+
