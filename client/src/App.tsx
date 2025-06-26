@@ -131,10 +131,15 @@ function App() {
             )}
           />
 
-          {/* Action Plan (placeholder – fleshed out in later steps) */}
+          {/* Action Plan */}
           <Route
             path="/action-plan"
-            component={() => <ActionPlan language={language} />}
+            component={() => (
+              <ActionPlan 
+                language={language} 
+                onOpenChat={handleOpenChat}
+              />
+            )}
           />
 
           {/* 404 */}
