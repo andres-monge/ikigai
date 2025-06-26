@@ -1,17 +1,20 @@
 /**
  * @description
- * This file provides the data storage layer for the application. For the MVP, it uses
- * an in-memory storage solution (`MemStorage`) to simulate a database. This allows for
- * rapid development without requiring a live database connection.
+ * In-memory storage layer for the Purpose Finder MVP.
  *
- * The `IStorage` interface defines the contract that any storage implementation must follow,
- * making it easy to swap `MemStorage` with a real Postgres implementation in the future.
- * All backend services should interact with this module through the exported `storage`
- * singleton, not by instantiating `MemStorage` directly.
+ *  ✨ New in Step 20 ✨
+ *  ──────────────────
+ *  • Introduced `HydratedAssessmentSession`, a superset of `AssessmentSession`
+ *    that eagerly loads (joins) all related `purposePaths` and their `salaryData`.
+ *  • Updated the `IStorage` contract and every relevant `MemStorage` method so
+ *    callers always get fully-hydrated objects and never need to cast to `any`.
  *
  * @dependencies
- * - @shared/schema: Provides Drizzle schema types (`AssessmentSession`, `PurposePath`, etc.)
- * for data consistency across the application.
+ * - @shared/schema for the table-level Drizzle types.
+ *
+ * @notes
+ * - This file remains a drop-in replacement for a future Postgres version;
+ *   only the internal implementation will change.
  */
 
 import {
@@ -25,25 +28,49 @@ import {
   type InsertChatMessage,
 } from "@shared/schema";
 
+/* ------------------------------------------------------------------ */
+/*                          Helper - New Types                        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * @interface HydratedAssessmentSession
+ * A fully-resolved session that contains:
+ *  • the base `AssessmentSession` columns
+ *  • an array of all `PurposePath` rows belonging to the session
+ *      – each path already has its `salaryData` array attached
+ */
+export interface HydratedAssessmentSession extends AssessmentSession {
+  /** All purpose paths + their salary data for this session */
+  purposePaths: (PurposePath & { salaryData: SalaryData[] })[];
+}
+
+/* ------------------------------------------------------------------ */
+/*                         Storage Interface                          */
+/* ------------------------------------------------------------------ */
+
 /**
  * @interface IStorage
- * @description Defines the contract for all storage operations. Any storage implementation,
- * whether in-memory or a persistent database, must adhere to this interface. This ensures
- * that the application's business logic is decoupled from the storage implementation.
+ * Contract all storage back-ends must follow.
+ *
+ *  • Return types that previously pointed to `AssessmentSession` are now
+ *    `HydratedAssessmentSession` so the caller always receives the
+ *    fully-joined data graph.
  */
 export interface IStorage {
   // === Assessment Session Methods ===
-  getAssessmentSessionById(id: number): Promise<AssessmentSession | undefined>;
+  getAssessmentSessionById(
+    id: number,
+  ): Promise<HydratedAssessmentSession | undefined>;
   getAssessmentSessionBySessionId(
     sessionId: string,
-  ): Promise<AssessmentSession | undefined>;
+  ): Promise<HydratedAssessmentSession | undefined>;
   createAssessmentSession(
     session: Omit<InsertAssessmentSession, "id">,
-  ): Promise<AssessmentSession>;
+  ): Promise<HydratedAssessmentSession>;
   updateAssessmentSession(
     sessionId: string,
     updates: Partial<InsertAssessmentSession>,
-  ): Promise<AssessmentSession | undefined>;
+  ): Promise<HydratedAssessmentSession | undefined>;
 
   // === Purpose Path Methods ===
   createPurposePath(path: Omit<InsertPurposePath, "id">): Promise<PurposePath>;
@@ -59,80 +86,55 @@ export interface IStorage {
   ): Promise<ChatMessage>;
 }
 
-/**
- * @class MemStorage
- * @description An in-memory implementation of the IStorage interface.
- * It uses TypeScript Maps to simulate database tables.
- *
- * @notes
- * - This is for development and MVP purposes only. Data is not persisted
- * across server restarts.
- * - It uses a simple auto-incrementing number for primary keys.
- * - It includes a `sessionIdIndex` for efficient lookups by the non-PK `sessionId`.
- * - The `hydrateSession` method simulates a relational database `JOIN` operation.
- */
+/* ------------------------------------------------------------------ */
+/*                           MemStorage MVP                           */
+/* ------------------------------------------------------------------ */
+
 export class MemStorage implements IStorage {
-  // Simulate database tables using Maps
+  /* … unchanged property declarations … */
   private assessmentSessions: Map<number, AssessmentSession> = new Map();
   private purposePaths: Map<number, PurposePath> = new Map();
   private salaryData: Map<number, SalaryData> = new Map();
   private chatMessages: Map<number, ChatMessage> = new Map();
 
-  // Simple auto-incrementing ID counters to simulate `serial` primary keys
   private nextSessionId = 1;
   private nextPathId = 1;
   private nextSalaryId = 1;
   private nextMessageId = 1;
 
-  // Index for quick lookup of session's internal ID by the public sessionId string
   private sessionIdIndex: Map<string, number> = new Map();
 
-  /**
-   * Retrieves a full assessment session by its internal numeric ID.
-   * @param id The numeric ID of the session.
-   * @returns A promise resolving to the full, hydrated session object or undefined if not found.
-   */
+  /* ---------------- Assessment Session CRUD ---------------- */
+
   async getAssessmentSessionById(
     id: number,
-  ): Promise<AssessmentSession | undefined> {
+  ): Promise<HydratedAssessmentSession | undefined> {
     const session = this.assessmentSessions.get(id);
-    if (!session) return undefined;
-    // Hydrate with related data before returning
-    return this.hydrateSession(session);
+    return session ? this.hydrateSession(session) : undefined;
   }
 
-  /**
-   * Retrieves a full assessment session by its public string `sessionId`.
-   * @param sessionId The public session ID string.
-   * @returns A promise resolving to the full, hydrated session object or undefined if not found.
-   */
   async getAssessmentSessionBySessionId(
     sessionId: string,
-  ): Promise<AssessmentSession | undefined> {
+  ): Promise<HydratedAssessmentSession | undefined> {
     const internalId = this.sessionIdIndex.get(sessionId);
     if (internalId === undefined) return undefined;
     const session = this.assessmentSessions.get(internalId);
     return session ? this.hydrateSession(session) : undefined;
   }
 
-  /**
-   * Creates a new assessment session.
-   * @param insertSession - The session data to insert, excluding the 'id'.
-   * @returns A promise resolving to the newly created, hydrated session object.
-   */
   async createAssessmentSession(
     insertSession: Omit<InsertAssessmentSession, "id">,
-  ): Promise<AssessmentSession> {
+  ): Promise<HydratedAssessmentSession> {
     const id = this.nextSessionId++;
     const now = new Date();
     const session: AssessmentSession = {
       id,
-      sessionId: insertSession.sessionId!, // `sessionId` is required by the logic
-      language: insertSession.language || "en",
-      responses: insertSession.responses || null,
-      coreDriversAnalysis: insertSession.coreDriversAnalysis || null,
-      chosenPathId: insertSession.chosenPathId || null,
-      actionPlan: insertSession.actionPlan || null,
+      sessionId: insertSession.sessionId,
+      language: insertSession.language ?? "en",
+      responses: insertSession.responses ?? null,
+      coreDriversAnalysis: insertSession.coreDriversAnalysis ?? null,
+      chosenPathId: insertSession.chosenPathId ?? null,
+      actionPlan: insertSession.actionPlan ?? null,
       createdAt: now,
       updatedAt: now,
     };
@@ -141,16 +143,10 @@ export class MemStorage implements IStorage {
     return this.hydrateSession(session);
   }
 
-  /**
-   * Updates an existing assessment session identified by its public `sessionId`.
-   * @param sessionId The public session ID of the session to update.
-   * @param updates A partial object of session fields to update.
-   * @returns The updated, hydrated session object, or undefined if not found.
-   */
   async updateAssessmentSession(
     sessionId: string,
     updates: Partial<InsertAssessmentSession>,
-  ): Promise<AssessmentSession | undefined> {
+  ): Promise<HydratedAssessmentSession | undefined> {
     const internalId = this.sessionIdIndex.get(sessionId);
     if (internalId === undefined) return undefined;
 
@@ -166,11 +162,8 @@ export class MemStorage implements IStorage {
     return this.hydrateSession(updated);
   }
 
-  /**
-   * Creates a new purpose path linked to an assessment.
-   * @param insertPath - The path data to insert, excluding the 'id'.
-   * @returns A promise resolving to the newly created path object.
-   */
+  /* ---------------- Purpose Path CRUD ---------------- */
+
   async createPurposePath(
     insertPath: Omit<InsertPurposePath, "id">,
   ): Promise<PurposePath> {
@@ -180,38 +173,23 @@ export class MemStorage implements IStorage {
     return path;
   }
 
-  /**
-   * Deletes all purpose paths (and their associated salary data) for a given assessment ID.
-   * This is used to clear old results before generating new ones.
-   * @param assessmentId - The ID of the parent assessment session.
-   */
   async deletePurposePathsByAssessmentId(assessmentId: number): Promise<void> {
     const pathsToDelete: number[] = [];
     for (const path of this.purposePaths.values()) {
-      if (path.assessmentId === assessmentId) {
-        pathsToDelete.push(path.id);
-      }
+      if (path.assessmentId === assessmentId) pathsToDelete.push(path.id);
     }
 
-    // Cascade delete to salary data first
     for (const pathId of pathsToDelete) {
-      const salariesToDelete: number[] = [];
-      for (const salary of this.salaryData.values()) {
-        if (salary.pathId === pathId) {
-          salariesToDelete.push(salary.id);
-        }
+      // Cascade delete salary rows
+      for (const [salaryId, salary] of this.salaryData) {
+        if (salary.pathId === pathId) this.salaryData.delete(salaryId);
       }
-      salariesToDelete.forEach((id) => this.salaryData.delete(id));
-      // Then delete the path itself
       this.purposePaths.delete(pathId);
     }
   }
 
-  /**
-   * Creates new salary data linked to a purpose path.
-   * @param insertData - The salary data to insert, excluding the 'id'.
-   * @returns A promise resolving to the newly created salary data object.
-   */
+  /* ---------------- Salary Data CRUD ---------------- */
+
   async createSalaryData(
     insertData: Omit<InsertSalaryData, "id">,
   ): Promise<SalaryData> {
@@ -220,86 +198,64 @@ export class MemStorage implements IStorage {
       id,
       retrievedAt: new Date(),
       ...insertData,
-      sources: insertData.sources || [],
+      sources: insertData.sources ?? [],
     };
     this.salaryData.set(id, data);
     return data;
   }
 
-  /**
-   * Retrieves all chat messages for a specific assessment, ordered by creation time.
-   * @param assessmentId - The ID of the assessment session.
-   * @returns A promise resolving to an array of chat messages.
-   */
+  /* ---------------- Chat Message CRUD ---------------- */
+
   async getChatMessages(assessmentId: number): Promise<ChatMessage[]> {
-    const messages: ChatMessage[] = [];
-    for (const msg of this.chatMessages.values()) {
-      if (msg.assessmentId === assessmentId) {
-        messages.push(msg);
-      }
-    }
-    // Sort messages chronologically to reconstruct the conversation
-    return messages.sort(
-      (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+    const msgs = [...this.chatMessages.values()].filter(
+      (m) => m.assessmentId === assessmentId,
     );
+    return msgs.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   }
 
-  /**
-   * Creates a new chat message.
-   * @param insertMessage - The message data to insert, excluding the 'id'.
-   * @returns A promise resolving to the newly created chat message object.
-   */
   async createChatMessage(
     insertMessage: Omit<InsertChatMessage, "id">,
   ): Promise<ChatMessage> {
     const id = this.nextMessageId++;
-    const message: ChatMessage = {
-      id,
-      createdAt: new Date(),
-      ...insertMessage,
-    };
-    this.chatMessages.set(id, message);
-    return message;
+    const msg: ChatMessage = { id, createdAt: new Date(), ...insertMessage };
+    this.chatMessages.set(id, msg);
+    return msg;
   }
+
+  /* ------------------------------------------------------------------ */
+  /*                         Private Helper Method                      */
+  /* ------------------------------------------------------------------ */
 
   /**
    * @private
-   * Simulates a relational query (JOIN) to assemble a complete session object
-   * with its related purpose paths and salary data. This mimics what Drizzle-ORM's
-   * relational queries will do with a real database.
-   * @param session The base session object to hydrate.
-   * @returns A promise that resolves to the fully populated session object.
+   * Simulates a relational join to attach all paths + salaries
+   * to the base session object.
    */
   private async hydrateSession(
     session: AssessmentSession,
-  ): Promise<AssessmentSession> {
+  ): Promise<HydratedAssessmentSession> {
     const purposePaths: (PurposePath & { salaryData: SalaryData[] })[] = [];
-    // Find all paths related to this session
+
     for (const path of this.purposePaths.values()) {
-      if (path.assessmentId === session.id) {
-        const salaries: SalaryData[] = [];
-        // Find all salaries related to this path
-        for (const salary of this.salaryData.values()) {
-          if (salary.pathId === path.id) {
-            salaries.push(salary);
-          }
-        }
-        // Attach the salaries to the path
-        purposePaths.push({
-          ...path,
-          salaryData: salaries,
-        } as PurposePath & { salaryData: SalaryData[] });
+      if (path.assessmentId !== session.id) continue;
+
+      const salaryData: SalaryData[] = [];
+      for (const salary of this.salaryData.values()) {
+        if (salary.pathId === path.id) salaryData.push(salary);
       }
+
+      purposePaths.push({ ...path, salaryData });
     }
-    // Attach the hydrated paths to the session and return
-    return { ...session, purposePaths } as AssessmentSession & {
-      purposePaths: (PurposePath & { salaryData: SalaryData[] })[];
+
+    return {
+      ...session,
+      purposePaths,
     };
   }
 }
 
-/**
- * Singleton instance of the storage class.
- * All parts of the application should use this instance to interact with storage.
- */
+/* ------------------------------------------------------------------ */
+/*                         Export Singleton Store                      */
+/* ------------------------------------------------------------------ */
+
 export const storage: IStorage = new MemStorage();
