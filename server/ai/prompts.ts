@@ -162,7 +162,7 @@ Step 1: **Plan the Approach**:
     - Think about relevant communities and networking opportunities
 
 Step 2: **MANDATORY Function Call**:
-    - You MUST immediately call the 'getYoutubeVideosForSkills' function
+    - You MUST immediately call the getYoutubeVideosForSkills function
     - Provide the critical skills you identified for learning resources
     - Do NOT attempt to generate any final response until you receive video data
     - The function call is required - there is no alternative
