@@ -511,7 +511,7 @@ export async function* getChatRefinementChain(
     contextString,
   );
 
-  const history = await storage.getChatMessages(session.id, context);
+  const history = await storage.getChatMessages(session.id);
   const conversationHistory: GeminiContent[] = history.map(
     (msg: SelectChatMessage) => ({
       role: msg.role === 'user' ? 'user' : 'model',
