@@ -1,3 +1,15 @@
+/**
+ * @file results.tsx
+ *
+ * @description
+ * Displays the Purpose Discovery outcome.  After Step 18 the component no
+ * longer expects the heavy `results` prop; instead it reads the data from
+ * `sessionStorage`.  If the user refreshes or lands on this route without a
+ * valid `results` object, we redirect to `/questionnaire`.
+ */
+
+import { useEffect } from 'react';
+import { useLocation } from 'wouter';
 import { Sparkles, Download, MessageCircle, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CoreDriversSummary } from '@/components/results/core-drivers-summary';
@@ -5,19 +17,34 @@ import { PurposePaths } from '@/components/results/purpose-paths';
 import { SalaryBenchmarks } from '@/components/results/salary-benchmarks';
 import { t, type Language } from '@/lib/i18n';
 import { exportToPDF } from '@/lib/pdf-export';
+import { useSessionStorage } from '@/hooks/use-session-storage';
 import type { AssessmentResults } from '@/types/assessment';
 
 interface ResultsProps {
-  results: AssessmentResults;
   onOpenChat: () => void;
   onStartOver: () => void;
   language: Language;
 }
 
-export function Results({ results, onOpenChat, onStartOver, language }: ResultsProps) {
-  const handleExportPDF = () => {
-    exportToPDF(results, language);
-  };
+export function Results({
+  onOpenChat,
+  onStartOver,
+  language
+}: ResultsProps) {
+  const [results] = useSessionStorage<AssessmentResults | null>('results', null);
+  const [, navigate] = useLocation();
+
+  /* Redirect guard */
+  useEffect(() => {
+    if (!results) navigate('/questionnaire');
+  }, [results, navigate]);
+
+  if (!results) {
+    // Small fallback while redirect effect runs
+    return null;
+  }
+
+  const handleExportPDF = () => exportToPDF(results, language);
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -29,9 +56,7 @@ export function Results({ results, onOpenChat, onStartOver, language }: ResultsP
         <h2 className="text-3xl font-bold text-slate-900 mb-4">
           {t('results.title', language)}
         </h2>
-        <p className="text-lg text-slate-600">
-          {t('results.subtitle', language)}
-        </p>
+        <p className="text-lg text-slate-600">{t('results.subtitle', language)}</p>
       </div>
 
       {/* Core Drivers Summary */}
@@ -52,7 +77,7 @@ export function Results({ results, onOpenChat, onStartOver, language }: ResultsP
           <Download className="w-4 h-4 mr-2" />
           {t('results.exportPdf', language)}
         </Button>
-        
+
         <Button
           onClick={onOpenChat}
           variant="outline"
@@ -61,7 +86,7 @@ export function Results({ results, onOpenChat, onStartOver, language }: ResultsP
           <MessageCircle className="w-4 h-4 mr-2" />
           {t('results.refineWithNami', language)}
         </Button>
-        
+
         <Button
           onClick={onStartOver}
           variant="outline"
