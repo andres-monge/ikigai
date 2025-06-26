@@ -73,23 +73,6 @@ export const translations = {
     'loading.analyzing':
       'Analyzing your responses to discover your unique ikigai paths',
 
-    // Action Plan
-    'actionPlan.title': 'Your Action Plan',
-    'actionPlan.subtitle': 'A detailed roadmap for your chosen career path',
-    'actionPlan.exportPdf': 'Export to PDF',
-    'actionPlan.refineWithNami': 'Refine with Nami',
-    'actionPlan.backToResults': 'Back to Results',
-    'actionPlan.sideProjects.title': 'Side Project Ideas',
-    'actionPlan.sideProjects.description': 'Build these projects to practice your skills and demonstrate your capabilities',
-    'actionPlan.skills.title': 'Skills to Learn',
-    'actionPlan.skills.description': 'Master these essential skills for your chosen path',
-    'actionPlan.networking.title': 'People to Network With',
-    'actionPlan.networking.description': 'Connect with these professionals to learn and grow in your field',
-    'actionPlan.comingSoonTitle': 'Action Plan Coming Soon',
-    'actionPlan.comingSoonBody': 'This feature is being developed and will be available soon.',
-    'actionPlan.noActionPlan': 'No action plan found. Please go back and select a path first.',
-    'actionPlan.loading': 'Loading your action plan...',
-
     // Common
     'common.loading': 'Loading...',
     'common.error': 'Something went wrong. Please try again.',
@@ -167,23 +150,6 @@ export const translations = {
     'loading.thinking': 'Nami está pensando...',
     'loading.analyzing':
       'Analizando tus respuestas para descubrir tus caminos únicos de ikigai',
-
-    // Action Plan
-    'actionPlan.title': 'Tu Plan de Acción',
-    'actionPlan.subtitle': 'Una hoja de ruta detallada para tu trayectoria profesional elegida',
-    'actionPlan.exportPdf': 'Exportar a PDF',
-    'actionPlan.refineWithNami': 'Refinar con Nami',
-    'actionPlan.backToResults': 'Volver a Resultados',
-    'actionPlan.sideProjects.title': 'Ideas de Proyectos Paralelos',
-    'actionPlan.sideProjects.description': 'Construye estos proyectos para practicar tus habilidades y demostrar tus capacidades',
-    'actionPlan.skills.title': 'Habilidades a Aprender',
-    'actionPlan.skills.description': 'Domina estas habilidades esenciales para tu camino elegido',
-    'actionPlan.networking.title': 'Personas con las que Conectar',
-    'actionPlan.networking.description': 'Conéctate con estos profesionales para aprender y crecer en tu campo',
-    'actionPlan.comingSoonTitle': 'Plan de Acción Próximamente',
-    'actionPlan.comingSoonBody': 'Esta función se está desarrollando y estará disponible pronto.',
-    'actionPlan.noActionPlan': 'No se encontró plan de acción. Por favor regresa y selecciona un camino primero.',
-    'actionPlan.loading': 'Cargando tu plan de acción...',
 
     // Common
     'common.loading': 'Cargando...',

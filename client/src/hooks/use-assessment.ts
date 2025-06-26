@@ -19,7 +19,7 @@
  * - @/types/assessment: For custom frontend data types.
  */
 
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import type {
   QuestionnaireResponses,
@@ -152,28 +152,4 @@ export function useCreateActionPlan({
      */
     isPending: mutation.isPending,
   };
-}
-
-/* -------------------------------------------------------------------------- */
-/* useGetActionPlan                               */
-/* -------------------------------------------------------------------------- */
-
-/**
- * @function useGetActionPlan
- * @description React hook that fetches the current session data including
- * the action plan if it exists. Used by the action plan page to display
- * the generated plan.
- *
- * @param sessionId - The session identifier to fetch data for
- * @returns Query object with session data and loading states
- */
-export function useGetActionPlan(sessionId: string) {
-  return useQuery({
-    queryKey: ['/api/session', sessionId],
-    queryFn: async () => {
-      const res = await apiRequest('GET', `/api/session/${sessionId}`);
-      return (await res.json()) as FullAssessment;
-    },
-    enabled: !!sessionId,
-  });
 }
