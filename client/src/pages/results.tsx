@@ -1,14 +1,26 @@
 /**
  * @file results.tsx
+ * @description Displays the Purpose Discovery outcome and allows the user to
+ * choose a path to generate a detailed action plan.
  *
- * @description
- * Displays the Purpose Discovery outcome.  After Step 18 the component no
- * longer expects the heavy `results` prop; instead it reads the data from
- * `sessionStorage`.  If the user refreshes or lands on this route without a
- * valid `results` object, we redirect to `/questionnaire`.
+ * ✨ **Updates in Step 21** ✨
+ * - Integrated the `useCreateActionPlan` hook to trigger action plan generation.
+ * - The component now reads the full session object (`FullAssessment`) from
+ * session storage under the key 'session'.
+ * - A handler function (`handleChoosePath`) is passed to `PurposePaths`.
+ * - On successful action plan creation, it updates the session data and
+ * navigates the user to `/action-plan`.
+ * - Added `useMemo` to flatten salary data for the `SalaryBenchmarks` component.
+ *
+ * @dependencies
+ * - wouter: For navigation.
+ * - lucide-react: For icons.
+ * - @/hooks/use-session-storage: To persist/retrieve session data.
+ * - @/hooks/use-assessment: For the `useCreateActionPlan` mutation.
+ * - @/types/assessment: For the `FullAssessment` type.
  */
 
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useLocation } from 'wouter';
 import { Sparkles, Download, MessageCircle, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -18,7 +30,9 @@ import { SalaryBenchmarks } from '@/components/results/salary-benchmarks';
 import { t, type Language } from '@/lib/i18n';
 import { exportToPDF } from '@/lib/pdf-export';
 import { useSessionStorage } from '@/hooks/use-session-storage';
-import type { AssessmentResults } from '@/types/assessment';
+import { useCreateActionPlan } from '@/hooks/use-assessment';
+import { useToast } from '@/hooks/use-toast';
+import type { FullAssessment, SalaryData } from '@/types/assessment';
 
 interface ResultsProps {
   onOpenChat: () => void;
@@ -26,25 +40,69 @@ interface ResultsProps {
   language: Language;
 }
 
-export function Results({
-  onOpenChat,
-  onStartOver,
-  language
-}: ResultsProps) {
-  const [results] = useSessionStorage<AssessmentResults | null>('results', null);
+export function Results({ onOpenChat, onStartOver, language }: ResultsProps) {
+  const [session, setSession] = useSessionStorage<FullAssessment | null>(
+    'session',
+    null,
+  );
   const [, navigate] = useLocation();
+  const { toast } = useToast();
+
+  const { createActionPlan, isPending: isActionPlanPending } =
+    useCreateActionPlan({
+      sessionId: session?.sessionId ?? '',
+      onSuccess: (updatedSession) => {
+        setSession(updatedSession);
+        navigate('/action-plan');
+      },
+      onError: (error) => {
+        console.error('Action plan generation failed:', error);
+        toast({
+          title: t('common.error', language),
+          description: 'Could not generate an action plan. Please try again.',
+          variant: 'destructive',
+        });
+      },
+    });
 
   /* Redirect guard */
   useEffect(() => {
-    if (!results) navigate('/questionnaire');
-  }, [results, navigate]);
+    if (!session || !session.purposePaths || !session.coreDriversAnalysis) {
+      navigate('/questionnaire');
+    }
+  }, [session, navigate]);
 
-  if (!results) {
-    // Small fallback while redirect effect runs
+  const handleChoosePath = (pathId: number) => {
+    if (typeof pathId === 'number') {
+      createActionPlan(pathId);
+    }
+  };
+
+  // Flatten the salary data for the SalaryBenchmarks component, adding the path title.
+  const salaryDataForTable = useMemo((): SalaryData[] => {
+    if (!session?.purposePaths) return [];
+    return session.purposePaths.flatMap((path) =>
+      path.salaryData.map((sd) => ({
+        ...sd,
+        title: path.title, // Add title for the benchmark table rows
+      })),
+    );
+  }, [session]);
+
+  if (!session || !session.coreDriversAnalysis) {
+    // Small fallback while redirect effect runs or for invalid state
     return null;
   }
 
-  const handleExportPDF = () => exportToPDF(results, language);
+  // The PDF export will need the flattened salary data as well.
+  const handleExportPDF = () => {
+    const resultsForPdf = {
+      coreDriversAnalysis: session.coreDriversAnalysis!,
+      purposePaths: session.purposePaths,
+      salaryData: salaryDataForTable,
+    };
+    exportToPDF(resultsForPdf, language);
+  };
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -56,17 +114,30 @@ export function Results({
         <h2 className="text-3xl font-bold text-slate-900 mb-4">
           {t('results.title', language)}
         </h2>
-        <p className="text-lg text-slate-600">{t('results.subtitle', language)}</p>
+        <p className="text-lg text-slate-600">
+          {t('results.subtitle', language)}
+        </p>
       </div>
 
       {/* Core Drivers Summary */}
-      <CoreDriversSummary analysis={results.analysis} language={language} />
+      <CoreDriversSummary
+        analysis={session.coreDriversAnalysis}
+        language={language}
+      />
 
       {/* Purpose Paths */}
-      <PurposePaths purposePaths={results.purposePaths} language={language} />
+      <PurposePaths
+        purposePaths={session.purposePaths}
+        language={language}
+        onChoosePath={handleChoosePath}
+        isChoosing={isActionPlanPending}
+      />
 
       {/* Salary Benchmarks */}
-      <SalaryBenchmarks salaryData={results.salaryData} language={language} />
+      <SalaryBenchmarks
+        salaryData={salaryDataForTable}
+        language={language}
+      />
 
       {/* Export and Actions */}
       <div className="flex flex-col sm:flex-row gap-4 justify-center">

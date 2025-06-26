@@ -3,15 +3,20 @@
  *
  * @description
  * Front-end TypeScript types used throughout the Purpose Finder React SPA.
- * All complex, canonical types (e.g. `QuestionnaireResponses`) are re-exported
- * **type-only** from `@shared/schema` so the browser bundle is not forced to
- * include server-side Drizzle code.  Keep any *pure-frontend* helper interfaces
- * in this file.
+ * This file defines the shape of data used for rendering and state management.
  *
- * ⚠️  IMPORTANT:
- *   Always import from this file inside client code.  Do **NOT** import
- *   from `@shared/schema` directly except with `import type …` for type-only
- *   references, to avoid accidental runtime imports.
+ * ✨ **Updates in Step 21** ✨
+ * - Replaced the incomplete `AssessmentResults` type with the comprehensive
+ * `FullAssessment` type, which mirrors the backend's hydrated session object.
+ * - Added `ActionPlan` and its related types (`YoutubeVideo`, `SkillToLearn`)
+ * to strongly type the action plan data.
+ * - Added `PurposePathWithSalary` to represent the nested data structure from
+ * the server.
+ * - Updated `SalaryData` to include a `title` and reflect nullable fields
+ * from the database schema.
+ *
+ * @dependencies
+ * - @shared/schema: For re-exporting canonical types like `QuestionnaireResponses`.
  */
 
 import type {
@@ -19,19 +24,18 @@ import type {
 } from '@shared/schema';
 
 /* -------------------------------------------------------------------------- */
-/*                           RE-EXPORTED SHARED TYPES                         */
+/* RE-EXPORTED SHARED TYPES                           */
 /* -------------------------------------------------------------------------- */
 
 /**
- * @description
- * User questionnaire payload – now an object whose categories contain arrays
- * of `{ question, answer }` pairs.  Sourced from the shared schema to avoid
- * duplication and guarantee consistency across the stack.
+ * @description User questionnaire payload.
+ * Sourced from the shared schema to guarantee consistency.
  */
 export type QuestionnaireResponses = SharedQuestionnaireResponses;
+export type Language = 'en' | 'es';
 
 /* -------------------------------------------------------------------------- */
-/*                    FRONT-END-ONLY RENDER / UI DATA TYPES                   */
+/* FRONT-END-ONLY RENDER / UI DATA TYPES                    */
 /* -------------------------------------------------------------------------- */
 
 export interface CoreDrivers {
@@ -49,26 +53,68 @@ export interface IkigaiAlignment {
 }
 
 export interface PurposePath {
-  id?: number; // Becomes defined when persisted by the backend
+  id: number; // Is always defined when coming from the server
   title: string;
   description: string;
   ikigaiAlignment: IkigaiAlignment;
   actionStrategy: string;
 }
 
+/**
+ * Represents salary data as stored in the DB (with nullable fields)
+ * plus a `title` field added by the client for rendering tables.
+ */
 export interface SalaryData {
   title: string;
-  entryLevel: string;
-  midLevel: string;
-  seniorLevel: string;
-  location: string;
-  sources: string[];
+  entryLevel: string | null;
+  midLevel: string | null;
+  seniorLevel: string | null;
+  location: string | null;
+  sources: string[] | null;
 }
 
-export interface AssessmentResults {
-  coreDriversAnalysis: CoreDrivers;
-  purposePaths: PurposePath[];
-  salaryData: SalaryData[];
+export interface YoutubeVideo {
+  title: string;
+  url: string;
+}
+
+export interface SkillToLearn {
+  skill: string;
+  youtubeLinks: YoutubeVideo[];
+}
+
+export interface ActionPlan {
+  sideProjectIdeas: string[];
+  skillsToLearn: SkillToLearn[];
+  peopleToNetworkWith: string[];
+}
+
+/**
+ * Helper type representing the nested structure of a purpose path
+ * with its associated salary data, as returned by the backend.
+ */
+export interface PurposePathWithSalary extends PurposePath {
+  // Omit 'title' as it's already on the parent PurposePath
+  salaryData: Omit<SalaryData, 'title'>[];
+}
+
+/**
+ * @type FullAssessment
+ * @description The canonical client-side representation of the entire user
+ * session. This type matches the `HydratedAssessmentSession` object sent
+ * by the backend and is the data stored in `sessionStorage`.
+ */
+export interface FullAssessment {
+  id: number;
+  sessionId: string;
+  language: Language;
+  responses: QuestionnaireResponses | null;
+  coreDriversAnalysis: CoreDrivers | null;
+  chosenPathId: number | null;
+  actionPlan: ActionPlan | null;
+  createdAt: string;
+  updatedAt: string;
+  purposePaths: PurposePathWithSalary[];
 }
 
 export interface ChatMessage {
@@ -77,7 +123,6 @@ export interface ChatMessage {
   content: string;
   /**
    * ISO timestamp string supplied by the backend.
-   * Renderers should convert to local time for display.
    */
   createdAt: string;
 }
