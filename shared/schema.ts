@@ -270,3 +270,10 @@ export type ActionState<T> =
 
 export type Language = 'en' | 'es';
 export type PurposePath = SelectPurposePath;
+export type AssessmentSession = SelectAssessmentSession;
+export type SalaryData = z.infer<typeof selectSalaryDataSchema>;
+export type ChatMessage = SelectChatMessage;
+export type InsertAssessmentSession = z.infer<typeof insertAssessmentSessionSchema>;
+export type InsertPurposePath = z.infer<typeof insertPurposePathSchema>;
+export type InsertSalaryData = z.infer<typeof insertSalaryDataSchema>;
+export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;

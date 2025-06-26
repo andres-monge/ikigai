@@ -476,7 +476,7 @@ export async function* getChatRefinementChain(
 
   if (context === 'discovery') {
     // In MemStorage, purposePaths are hydrated directly onto the session object.
-    const purposePaths = (session as any).purposePaths ?? [];
+    const purposePaths = session.purposePaths ?? [];
     contextData = {
       coreDriversAnalysis: session.coreDriversAnalysis,
       purposePaths: purposePaths,
