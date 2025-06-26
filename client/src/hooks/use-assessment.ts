@@ -1,155 +1,193 @@
 /**
- * @file use-assessment.ts
- *
- * @description
- * React-Query hooks for the Assessment / Purpose-Discovery workflow.
- * This module encapsulates all mutations related to creating and updating an
- * assessment session, including the initial analysis and the subsequent
- * action plan generation.
- *
- * ✨ **Updates in Step 21** ✨
- * - Added the `useCreateActionPlan` hook to handle the "Choose Path" flow.
- * - Updated `useCreateAssessment` to expect the full `FullAssessment`
- * object from the backend, ensuring complete session data is handled.
- * - Added `UseCreateActionPlanOptions` type for the new hook.
- *
- * @dependencies
- * - @tanstack/react-query v5: For data-fetching & mutations.
- * - apiRequest (client/src/lib/queryClient.ts): A shared fetch helper.
- * - @/types/assessment: For custom frontend data types.
- */
+* @file use-assessment.ts
+*
+* @description
+* React-Query hooks for the Assessment / Purpose-Discovery workflow.
+* This module encapsulates all mutations related to creating and updating an
+* assessment session, including the initial analysis and the subsequent
+* action plan generation.
+*
+* ✨ **Updates in Step 22** ✨
+* - Added the `useGetActionPlan` hook to fetch the full session data,
+*   which is expected to contain the generated action plan. It uses `useQuery`
+*   but sources its data from `sessionStorage` to align with the current MVP
+*   architecture.
+*
+* @dependencies
+* - @tanstack/react-query v5: For data-fetching & mutations.
+* - apiRequest (client/src/lib/queryClient.ts): A shared fetch helper.
+* - @/types/assessment: For custom frontend data types.
+*/
 
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import type {
-  QuestionnaireResponses,
-  FullAssessment,
+QuestionnaireResponses,
+FullAssessment,
 } from '@/types/assessment';
 
 /* -------------------------------------------------------------------------- */
-/* useCreateAssessment                             */
+/* useCreateAssessment                             */
 /* -------------------------------------------------------------------------- */
 
 /**
- * Options accepted by {@link useCreateAssessment}.
- */
+* Options accepted by {@link useCreateAssessment}.
+*/
 export interface UseCreateAssessmentOptions {
-  /**
-   * Anonymous session identifier generated at app start-up.
-   */
-  sessionId: string;
-  /**
-   * The UI language, passed to the AI for generating localized content.
-   */
-  language: 'en' | 'es';
-  /**
-   * Callback invoked when the backend successfully returns the full
-   * Purpose-Discovery result object.
-   */
-  onSuccess?: (data: FullAssessment) => void;
-  /**
-   * Callback invoked when the request or backend processing fails.
-   */
-  onError?: (error: unknown) => void;
+/**
+* Anonymous session identifier generated at app start-up.
+*/
+sessionId: string;
+/**
+* The UI language, passed to the AI for generating localized content.
+*/
+language: 'en' | 'es';
+/**
+* Callback invoked when the backend successfully returns the full
+* Purpose-Discovery result object.
+*/
+onSuccess?: (data: FullAssessment) => void;
+/**
+* Callback invoked when the request or backend processing fails.
+*/
+onError?: (error: unknown) => void;
 }
 
 /**
- * @function useCreateAssessment
- * @description React hook that exposes a mutation for creating a new assessment session.
- * It posts the user’s questionnaire responses to `/api/analyze` and resolves
- * with the full, structured AI output and session data.
- *
- * @returns An object with the `createAssessment` mutate function and `isPending` status.
- */
+* @function useCreateAssessment
+* @description React hook that exposes a mutation for creating a new assessment session.
+* It posts the user’s questionnaire responses to `/api/analyze` and resolves
+* with the full, structured AI output and session data.
+*
+* @returns An object with the `createAssessment` mutate function and `isPending` status.
+*/
 export function useCreateAssessment({
-  sessionId,
-  language,
-  onSuccess,
-  onError,
+sessionId,
+language,
+onSuccess,
+onError,
 }: UseCreateAssessmentOptions) {
-  const mutation = useMutation({
-    mutationFn: async (payload: QuestionnaireResponses) => {
-      const res = await apiRequest('POST', '/api/analyze', {
-        sessionId,
-        language,
-        responses: payload,
-      });
-      // The backend returns the entire hydrated session object.
-      return (await res.json()) as FullAssessment;
-    },
-    onSuccess,
-    onError,
-  });
+const mutation = useMutation({
+mutationFn: async (payload: QuestionnaireResponses) => {
+const res = await apiRequest('POST', '/api/analyze', {
+sessionId,
+language,
+responses: payload,
+});
+// The backend returns the entire hydrated session object.
+return (await res.json()) as FullAssessment;
+},
+onSuccess,
+onError,
+});
 
-  return {
-    /**
-     * Triggers the backend analysis. Accepts the full questionnaire payload.
-     */
-    createAssessment: mutation.mutate,
-    /**
-     * Boolean flag the UI can use to show spinners / disable buttons.
-     */
-    isPending: mutation.isPending,
-  };
+return {
+/**
+* Triggers the backend analysis. Accepts the full questionnaire payload.
+*/
+createAssessment: mutation.mutate,
+/**
+* Boolean flag the UI can use to show spinners / disable buttons.
+*/
+isPending: mutation.isPending,
+};
 }
 
 /* -------------------------------------------------------------------------- */
-/* useCreateActionPlan                            */
+/* useCreateActionPlan                            */
 /* -------------------------------------------------------------------------- */
 
 /**
- * Options accepted by {@link useCreateActionPlan}.
- */
+* Options accepted by {@link useCreateActionPlan}.
+*/
 export interface UseCreateActionPlanOptions {
-  /**
-   * Anonymous session identifier.
-   */
-  sessionId: string;
-  /**
-   * Callback invoked when the backend successfully returns the session
-   * object now containing the generated action plan.
-   */
-  onSuccess?: (data: FullAssessment) => void;
-  /**
-   * Callback invoked when the request or action plan generation fails.
-   */
-  onError?: (error: unknown) => void;
+/**
+* Anonymous session identifier.
+*/
+sessionId: string;
+/**
+* Callback invoked when the backend successfully returns the session
+* object now containing the generated action plan.
+*/
+onSuccess?: (data: FullAssessment) => void;
+/**
+* Callback invoked when the request or action plan generation fails.
+*/
+onError?: (error: unknown) => void;
 }
 
 /**
- * @function useCreateActionPlan
- * @description React hook that exposes a mutation for generating an action plan.
- * It posts the chosen `pathId` to `/api/action-plan`.
- *
- * @returns An object with the `createActionPlan` mutate function and `isPending` status.
- */
+* @function useCreateActionPlan
+* @description React hook that exposes a mutation for generating an action plan.
+* It posts the chosen `pathId` to `/api/action-plan`.
+*
+* @returns An object with the `createActionPlan` mutate function and `isPending` status.
+*/
 export function useCreateActionPlan({
-  sessionId,
-  onSuccess,
-  onError,
+sessionId,
+onSuccess,
+onError,
 }: UseCreateActionPlanOptions) {
-  const mutation = useMutation({
-    mutationFn: async (chosenPathId: number) => {
-      const res = await apiRequest('POST', '/api/action-plan', {
-        sessionId,
-        chosenPathId,
-      });
-      // The backend returns the updated session, now with an action plan.
-      return (await res.json()) as FullAssessment;
-    },
-    onSuccess,
-    onError,
-  });
+const mutation = useMutation({
+mutationFn: async (chosenPathId: number) => {
+const res = await apiRequest('POST', '/api/action-plan', {
+sessionId,
+chosenPathId,
+});
+// The backend returns the updated session, now with an action plan.
+return (await res.json()) as FullAssessment;
+},
+onSuccess,
+onError,
+});
 
-  return {
-    /**
-     * Triggers the backend action plan generation.
-     * @param chosenPathId The numeric ID of the user's selected purpose path.
-     */
-    createActionPlan: mutation.mutate,
-    /**
-     * Boolean flag for showing loading states in the UI.
-     */
-    isPending: mutation.isPending,
-  };
+return {
+/**
+* Triggers the backend action plan generation.
+* @param chosenPathId The numeric ID of the user's selected purpose path.
+*/
+createActionPlan: mutation.mutate,
+/**
+* Boolean flag for showing loading states in the UI.
+*/
+isPending: mutation.isPending,
+};
+}
+
+/* -------------------------------------------------------------------------- */
+/* useGetActionPlan                                */
+/* -------------------------------------------------------------------------- */
+
+/**
+* @function useGetActionPlan
+* @description React hook that uses React-Query to fetch the current assessment
+* session data, which should contain the action plan.
+*
+* For the MVP, this hook reads directly from `sessionStorage`, where the full
+* assessment object (including the action plan) is stored after generation.
+* This provides a consistent, query-based interface for components to get
+* session data, while aligning with the project's current data flow, and
+* allows for an easy swap to a true API endpoint fetch in the future.
+*
+* @param {string} sessionId The active session ID to ensure data consistency.
+* @returns A standard React-Query result object containing the `FullAssessment` data.
+*/
+export function useGetActionPlan(sessionId: string) {
+return useQuery({
+queryKey: ['actionPlan', sessionId],
+queryFn: async (): Promise<FullAssessment | null> => {
+const storedSession = sessionStorage.getItem('session');
+if (storedSession) {
+const session = JSON.parse(storedSession) as FullAssessment;
+// Ensure the session in storage belongs to the current sessionId and
+// actually contains an action plan.
+if (session.sessionId === sessionId && session.actionPlan) {
+return session;
+}
+}
+return null;
+},
+staleTime: Infinity, // Data is static until a new action is performed
+gcTime: 1000 * 60 * 60, // Keep in cache for 1 hour
+});
 }

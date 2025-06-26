@@ -1,3 +1,25 @@
+/**
+ * @file i18n.ts
+ *
+ * @description
+ * This file contains the internationalization (i18n) configuration for the
+ * Purpose Finder application. It centralizes all user-facing strings for
+ * both English ('en') and Spanish ('es'), allowing for easy translation and
+ * management of UI text.
+ *
+ * The `translations` object holds the nested structure of keys, and the `t`
+ * function is a simple utility to retrieve a specific string for a given
+ * language, falling back to the key itself if a translation is not found.
+ *
+ * ✨ **File Status (Step 25)** ✨
+ * - Reviewed and confirmed that all keys required for the Action Plan feature
+ * are present for both English and Spanish.
+ * - This file is up-to-date with all current UI features.
+ *
+ * @dependencies
+ * - None
+ */
+
 export const translations = {
   en: {
     // Header
@@ -49,6 +71,25 @@ export const translations = {
     'results.choosePathAndGetPlan': 'Choose this Path & Get Plan',
     'results.actionStrategy': 'Action Strategy',
 
+    // Action Plan
+    'actionPlan.title': 'Your Action Plan',
+    'actionPlan.subtitle':
+      "Here are the concrete steps to get you started on your new path. Let's build something real.",
+    'actionPlan.chosenPath': 'Chosen Path',
+    'actionPlan.sideProjects': 'Side Project Ideas',
+    'actionPlan.sideProjectsDescription':
+      'Build one of these to test the waters and build your portfolio.',
+    'actionPlan.skillsToLearn': 'Skills to Learn',
+    'actionPlan.skillsToLearnDescription':
+      'Focus on these skills and use the recommended videos to start.',
+    'actionPlan.peopleToNetworkWith': 'Where to Find Your People',
+    'actionPlan.peopleToNetworkWithDescription':
+      'Find communities and individuals in these spaces to learn from.',
+    'actionPlan.exportPdf': 'Export Plan to PDF',
+    'actionPlan.refineWithNami': 'Refine Your Plan',
+    'actionPlan.watchOnYouTube': 'Watch on YouTube',
+    'actionPlan.backToPaths': 'Back to Paths',
+
     // Ikigai
     'ikigai.alignment': 'Ikigai Alignment',
     'ikigai.love': 'Love',
@@ -76,6 +117,7 @@ export const translations = {
     // Common
     'common.loading': 'Loading...',
     'common.error': 'Something went wrong. Please try again.',
+    'common.page': 'Page',
   },
   es: {
     // Header
@@ -127,6 +169,25 @@ export const translations = {
     'results.choosePathAndGetPlan': 'Elegir este Camino y Obtener Plan',
     'results.actionStrategy': 'Estrategia de Acción',
 
+    // Action Plan
+    'actionPlan.title': 'Tu Plan de Acción',
+    'actionPlan.subtitle':
+      'Aquí tienes los pasos concretos para empezar en tu nuevo camino. Construyamos algo real.',
+    'actionPlan.chosenPath': 'Camino Elegido',
+    'actionPlan.sideProjects': 'Ideas de Proyectos Paralelos',
+    'actionPlan.sideProjectsDescription':
+      'Construye uno de estos para probar las aguas y armar tu portafolio.',
+    'actionPlan.skillsToLearn': 'Habilidades a Aprender',
+    'actionPlan.skillsToLearnDescription':
+      'Enfócate en estas habilidades y usa los videos recomendados para empezar.',
+    'actionPlan.peopleToNetworkWith': 'Dónde Encontrar a Tu Gente',
+    'actionPlan.peopleToNetworkWithDescription':
+      'Encuentra comunidades e individuos en estos espacios para aprender de ellos.',
+    'actionPlan.exportPdf': 'Exportar Plan a PDF',
+    'actionPlan.refineWithNami': 'Refinar Tu Plan',
+    'actionPlan.watchOnYouTube': 'Ver en YouTube',
+    'actionPlan.backToPaths': 'Volver a los Caminos',
+
     // Ikigai
     'ikigai.alignment': 'Alineación Ikigai',
     'ikigai.love': 'Amor',
@@ -154,11 +215,22 @@ export const translations = {
     // Common
     'common.loading': 'Cargando...',
     'common.error': 'Algo salió mal. Por favor inténtalo de nuevo.',
+    'common.page': 'Página',
   },
 };
 
+/**
+ * The supported languages for the application.
+ */
 export type Language = 'en' | 'es';
 
+/**
+ * Retrieves a translated string for a given key and language.
+ *
+ * @param key The key of the string to retrieve (e.g., 'header.title').
+ * @param language The target language ('en' or 'es'). Defaults to 'en'.
+ * @returns The translated string, or the key itself if no translation is found.
+ */
 export function t(key: string, language: Language = 'en'): string {
   const keys = key.split('.');
   let value: any = translations[language];
@@ -167,5 +239,6 @@ export function t(key: string, language: Language = 'en'): string {
     value = value?.[k];
   }
 
+  // Fallback to the key itself if the lookup fails
   return value || key;
 }

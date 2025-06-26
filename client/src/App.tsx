@@ -1,31 +1,25 @@
 /**
- * @file App.tsx
- *
- * @description
- * Top-level React component for the Purpose Finder SPA.  After Step 18 the
- * application flow is URL-driven instead of a local “state machine”.  The
- * component now:
- *   • Configures <wouter> routes for "/", "/questionnaire", "/results",
- *     and "/action-plan".
- *   • Keeps global UI state that must outlive route changes
- *       – selected language
- *       – anonymous sessionId
- *       – Chat drawer visibility
- *   • Exposes utility callbacks (openChat, startOver) to child routes
- *     through render-prop routes so pages can invoke global behaviours
- *     without context boilerplate.
- *
- * @dependencies
- * - Wouter: lightweight router for React
- * - TanStack Query: no longer imported here; queries/mutations live inside pages
- * - Shared UI primitives: Header, ChatInterface, Toaster, TooltipProvider
- *
- * @notes
- * - Generating a sessionId at first load remains here so *all* pages see a
- *   valid id (used by Questionnaire when calling /api/analyze).
- * - Loading overlays are now handled by individual pages that actually need
- *   them (currently only Questionnaire).
- */
+* @file App.tsx
+*
+* @description
+* Top-level React component for the Purpose Finder SPA. After Step 18 the
+* application flow is URL-driven instead of a local “state machine”.
+*
+* ✨ **Updates in Step 22** ✨
+* - Added `chatContext` state to differentiate between 'discovery' and
+*   'action_plan' refinement conversations.
+* - `handleOpenChat` now accepts a context parameter.
+* - The `<Route>` for `/action-plan` now passes `onOpenChat` and `onStartOver`
+*   props, just like the `/results` route, allowing for a consistent user experience.
+*
+* @dependencies
+* - Wouter: lightweight router for React
+* - Shared UI primitives: Header, ChatInterface, Toaster, TooltipProvider
+*
+* @notes
+* - The `ChatInterface` component is now passed the `chatContext` prop,
+*   which is crucial for the backend to load the correct prompt.
+*/
 
 import { useState, useEffect } from 'react';
 import { Route, Switch, useLocation } from 'wouter';
@@ -40,119 +34,134 @@ import { ActionPlan } from '@/pages/action-plan';
 import { NotFound } from '@/pages/not-found';
 import { useSessionStorage } from '@/hooks/use-session-storage';
 import type { Language } from '@/lib/i18n';
-import type { AssessmentResults } from '@/types/assessment';
+import type { FullAssessment } from '@/types/assessment';
 
 function App() {
-  /* ------------------------------------------------------------------------ */
-  /*                       GLOBAL (CROSS-PAGE) STATE                          */
-  /* ------------------------------------------------------------------------ */
-  const [language, setLanguage] = useSessionStorage<Language>('language', 'en');
+/* ------------------------------------------------------------------------ */
+/*                       GLOBAL (CROSS-PAGE) STATE                          */
+/* ------------------------------------------------------------------------ */
+const [language, setLanguage] = useSessionStorage<Language>('language', 'en');
 
-  /** Anonymous session identifier trusted by the backend */
-  const [sessionId, setSessionId] = useSessionStorage<string>('sessionId', '');
+/** Anonymous session identifier trusted by the backend */
+const [sessionId, setSessionId] = useSessionStorage<string>('sessionId', '');
 
-  /** Chat drawer is controlled at the top level so any page can open it. */
-  const [isChatOpen, setIsChatOpen] = useState(false);
+/** Chat drawer is controlled at the top level so any page can open it. */
+const [isChatOpen, setIsChatOpen] = useState(false);
+const [chatContext, setChatContext] = useState<'discovery' | 'action_plan'>(
+'discovery',
+);
 
-  /** Persisted results used by both Results and Action-Plan pages. */
-  const [, setResults] = useSessionStorage<AssessmentResults | null>(
-    'results',
-    null
-  );
+/** Persisted results used by both Results and Action-Plan pages. */
+const [, setSession] = useSessionStorage<FullAssessment | null>(
+'session',
+null,
+);
 
-  const [, navigate] = useLocation();
+const [, navigate] = useLocation();
 
-  /* ------------------------------------------------------------------------ */
-  /*                                EFFECTS                                   */
-  /* ------------------------------------------------------------------------ */
+/* ------------------------------------------------------------------------ */
+/*                                EFFECTS                                   */
+/* ------------------------------------------------------------------------ */
 
-  /** Ensure we always have a sessionId available for API calls. */
-  useEffect(() => {
-    if (!sessionId) {
-      const newId =
-        Math.random().toString(36).slice(2) + Date.now().toString(36);
-      setSessionId(newId);
-    }
-  }, [sessionId, setSessionId]);
+/** Ensure we always have a sessionId available for API calls. */
+useEffect(() => {
+if (!sessionId) {
+const newId =
+Math.random().toString(36).slice(2) + Date.now().toString(36);
+setSessionId(newId);
+}
+}, [sessionId, setSessionId]);
 
-  /* ------------------------------------------------------------------------ */
-  /*                          GLOBAL EVENT HANDLERS                           */
-  /* ------------------------------------------------------------------------ */
+/* ------------------------------------------------------------------------ */
+/*                          GLOBAL EVENT HANDLERS                           */
+/* ------------------------------------------------------------------------ */
 
-  const handleOpenChat = () => setIsChatOpen(true);
-  const handleCloseChat = () => setIsChatOpen(false);
+const handleOpenChat = (context: 'discovery' | 'action_plan') => {
+setChatContext(context);
+setIsChatOpen(true);
+};
 
-  /**
-   * Clears current session data and kicks the user back to the landing page.
-   * Used by the Results page’s "Start Over" button.
-   */
-  const handleStartOver = () => {
-    setResults(null);
-    // Generate a brand-new session id to avoid contaminating a new run
-    const newId =
-      Math.random().toString(36).slice(2) + Date.now().toString(36);
-    setSessionId(newId);
-    navigate('/');
-  };
+const handleCloseChat = () => setIsChatOpen(false);
 
-  /* ------------------------------------------------------------------------ */
-  /*                               RENDER                                     */
-  /* ------------------------------------------------------------------------ */
+/**
+* Clears current session data and kicks the user back to the landing page.
+* Used by the Results page’s "Start Over" button.
+*/
+const handleStartOver = () => {
+setSession(null);
+// Generate a brand-new session id to avoid contaminating a new run
+const newId =
+Math.random().toString(36).slice(2) + Date.now().toString(36);
+setSessionId(newId);
+navigate('/');
+};
 
-  return (
-    <TooltipProvider>
-      <Header language={language} onLanguageChange={setLanguage} />
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Switch>
-          {/* Landing */}
-          <Route path="/" component={() => <Home language={language} />} />
+/* ------------------------------------------------------------------------ */
+/*                               RENDER                                     */
+/* ------------------------------------------------------------------------ */
 
-          {/* Questionnaire */}
-          <Route
-            path="/questionnaire"
-            component={() => (
-              <Questionnaire
-                language={language}
-                sessionId={sessionId}
-                onNavigate={navigate}
-              />
-            )}
-          />
+return (
+<TooltipProvider>
+<Header language={language} onLanguageChange={setLanguage} />
+<main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+<Switch>
+{/* Landing */}
+<Route path="/" component={() => <Home language={language} />} />
 
-          {/* Results */}
-          <Route
-            path="/results"
-            component={() => (
-              <Results
-                language={language}
-                onOpenChat={handleOpenChat}
-                onStartOver={handleStartOver}
-              />
-            )}
-          />
+{/* Questionnaire */}
+<Route
+path="/questionnaire"
+component={() => (
+<Questionnaire
+language={language}
+sessionId={sessionId}
+onNavigate={navigate}
+/>
+)}
+/>
 
-          {/* Action Plan (placeholder – fleshed out in later steps) */}
-          <Route
-            path="/action-plan"
-            component={() => <ActionPlan language={language} />}
-          />
+{/* Results */}
+<Route
+path="/results"
+component={() => (
+<Results
+language={language}
+onOpenChat={() => handleOpenChat('discovery')}
+onStartOver={handleStartOver}
+/>
+)}
+/>
 
-          {/* 404 */}
-          <Route component={NotFound} />
-        </Switch>
-      </main>
+{/* Action Plan */}
+<Route
+path="/action-plan"
+component={() => (
+<ActionPlan
+language={language}
+sessionId={sessionId}
+onOpenChat={() => handleOpenChat('action_plan')}
+onStartOver={handleStartOver}
+/>
+)}
+/>
 
-      {/* Global Chat overlay */}
-      <ChatInterface
-        isOpen={isChatOpen}
-        onClose={handleCloseChat}
-        sessionId={sessionId}
-        language={language}
-      />
+{/* 404 */}
+<Route component={NotFound} />
+</Switch>
+</main>
 
-      <Toaster />
-    </TooltipProvider>
-  );
+{/* Global Chat overlay */}
+<ChatInterface
+isOpen={isChatOpen}
+onClose={handleCloseChat}
+sessionId={sessionId}
+language={language}
+context={chatContext}
+/>
+
+<Toaster />
+</TooltipProvider>
+);
 }
 
 export default App;

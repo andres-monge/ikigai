@@ -1,176 +1,272 @@
-import { useState, useRef, useEffect } from 'react';
-import { X, Bot, Send, Shield } from 'lucide-react';
+/**
+ * @file chat-interface.tsx
+ *
+ * @description
+ * A reusable chat component that provides a conversational interface with Nami,
+ * the AI assistant. It is displayed in a side sheet and manages the state
+ * of the conversation, including message history and user input.
+ *
+ * ✨ **2025-06-26 CORRECTION (Step 23)** ✨
+ * - **FIX 1: Module Path:** Corrected the import path for shared types from
+ * `@/shared/schema` to `@shared/schema` to align with the project's
+ * tsconfig path aliases.
+ * - **FIX 2: ScrollArea Ref:** Removed the invalid `viewportRef` prop. The component
+ * now uses a `ref` on the `<ScrollArea>` root and a `querySelector` to find the
+ * underlying Radix UI viewport. This is the correct, robust way to programmatically
+ * scroll the component.
+ * - **FIX 3: Type Safety & Logic:**
+ * - New `ChatMessage` objects created on the client now include all required
+ * fields (`id`, `assessmentId`, `createdAt`) with client-side-appropriate
+ * values, satisfying the strict `ChatMessage` type and fixing a potential
+ * TypeScript error.
+ * - The streaming logic now updates the assistant's message by its unique `id`
+ * instead of relying on its position in the array, making the state updates
+ * more robust.
+ * - The `handleSubmit` function still uses the `fetch` API's `ReadableStream` to
+ * provide a real-time "typing" effect for the AI's response.
+ *
+ * @dependencies
+ * - lucide-react: For icons.
+ * - Shadcn UI components: Sheet, Button, Input, ScrollArea.
+ * - @shared/schema: For shared TypeScript types like `ChatMessage`.
+ * - @/lib/i18n for translations.
+ * - @/hooks/use-session-storage for persisting chat history.
+ */
+import { useState, useEffect, useRef } from 'react';
+import { Send, Sparkles } from 'lucide-react';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { t, type Language } from '@/lib/i18n';
-import type { ChatMessage } from '@/types/assessment';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiRequest } from '@/lib/queryClient';
+import { useSessionStorage } from '@/hooks/use-session-storage';
+import { cn } from '@/lib/utils';
+import type { ChatMessage } from '@shared/schema';
 
-interface ChatInterfaceProps {
+export interface ChatInterfaceProps {
   isOpen: boolean;
   onClose: () => void;
   sessionId: string;
   language: Language;
+  /** Determines the conversational context for the AI. */
+  context: 'discovery' | 'action_plan';
 }
 
-export function ChatInterface({ isOpen, onClose, sessionId, language }: ChatInterfaceProps) {
-  const [message, setMessage] = useState('');
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const queryClient = useQueryClient();
+export function ChatInterface({
+  isOpen,
+  onClose,
+  sessionId,
+  language,
+  context,
+}: ChatInterfaceProps) {
+  const [inputValue, setInputValue] = useState('');
+  const [isSending, setIsSending] = useState(false);
 
-  const { data: messages = [] } = useQuery<ChatMessage[]>({
-    queryKey: [`/api/chat/${sessionId}`],
-    enabled: isOpen && !!sessionId,
-  });
+  // Chat history is persisted in session storage, keyed by context
+  const storageKey = `chatHistory_${context}`;
+  const [messages, setMessages] = useSessionStorage<ChatMessage[]>(
+    storageKey,
+    [],
+  );
 
-  const sendMessageMutation = useMutation({
-    mutationFn: async (content: string) => {
-      const response = await apiRequest('POST', '/api/chat', {
-        sessionId,
-        message: content
-      });
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/chat/${sessionId}`] });
-    }
-  });
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
 
-  const handleSendMessage = async () => {
-    if (!message.trim()) return;
-    
-    const userMessage = message;
-    setMessage('');
-    
-    // Add user message to local state immediately
-    queryClient.setQueryData([`/api/chat/${sessionId}`], (old: ChatMessage[] = []) => [
-      ...old,
-      {
-        role: 'user' as const,
-        content: userMessage,
-        timestamp: new Date().toISOString()
-      }
-    ]);
-
-    await sendMessageMutation.mutateAsync(userMessage);
-  };
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage();
-    }
-  };
-
+  // Auto-scroll to bottom on new message
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    // The viewport is a child of the root element we get from the ref.
+    // Radix UI adds a specific data attribute to the viewport element.
+    const viewport = scrollAreaRef.current?.querySelector<HTMLDivElement>(
+      'div[data-radix-scroll-area-viewport]',
+    );
+    if (viewport) {
+      viewport.scrollTo({
+        top: viewport.scrollHeight,
+        behavior: 'smooth',
+      });
+    }
+  }, [messages, isSending]); // Also trigger on isSending to scroll for the placeholder
 
-  if (!isOpen) return null;
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputValue.trim() || isSending) return;
+
+    const userMessageContent = inputValue;
+    setInputValue('');
+    setIsSending(true);
+
+    const assistantMessageId = Date.now() + 1;
+
+    // 1. Create fully-typed user message and assistant placeholder
+    const userMessage: ChatMessage = {
+      id: Date.now(),
+      assessmentId: 0, // Not used on client, but required by type
+      role: 'user',
+      content: userMessageContent,
+      context: context,
+      createdAt: new Date(),
+    };
+    const assistantPlaceholder: ChatMessage = {
+      id: assistantMessageId,
+      assessmentId: 0, // Not used on client, but required by type
+      role: 'assistant',
+      content: '', // Starts empty, will be populated by stream
+      context: context,
+      createdAt: new Date(),
+    };
+
+    // 2. Add both to state immediately for a responsive UI
+    setMessages((prev) => [...prev, userMessage, assistantPlaceholder]);
+
+    try {
+      // 3. Initiate the streaming fetch call to the SSE endpoint
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sessionId,
+          message: userMessageContent,
+          context,
+        }),
+      });
+
+      if (!response.body || !response.ok) {
+        throw new Error(
+          response.statusText || 'Failed to connect to the server.',
+        );
+      }
+
+      // 4. Process the stream
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) {
+          break; // Stream finished
+        }
+
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split('\n\n');
+        buffer = parts.pop() || ''; // Keep any incomplete message part
+
+        for (const part of parts) {
+          if (part.startsWith('data: ')) {
+            const dataString = part.substring(6).trim();
+            if (dataString === '[DONE]') continue;
+
+            try {
+              const jsonData = JSON.parse(dataString);
+              if (jsonData.content) {
+                // Find placeholder by ID and append content
+                setMessages((prev) =>
+                  prev.map((msg) =>
+                    msg.id === assistantMessageId
+                      ? { ...msg, content: msg.content + jsonData.content }
+                      : msg,
+                  ),
+                );
+              }
+            } catch (error) {
+              console.error('Failed to parse SSE JSON data:', dataString, error);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Chat stream error:', error);
+      // Update placeholder with an error message
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === assistantMessageId
+            ? { ...msg, content: t('common.error', language) }
+            : msg,
+        ),
+      );
+    } finally {
+      setIsSending(false);
+    }
+  };
 
   return (
-    <div className="fixed bottom-4 right-4 w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 z-40" style={{ maxHeight: '500px' }}>
-      {/* Chat Header */}
-      <div className="gradient-primary p-4 rounded-t-2xl text-white">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center">
-            <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center mr-3">
-              <Bot className="w-4 h-4" />
-            </div>
-            <div>
-              <h4 className="font-semibold">{t('chat.title', language)}</h4>
-              <p className="text-xs opacity-75">{t('chat.subtitle', language)}</p>
-            </div>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onClose}
-            className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center hover:bg-white/30 transition-colors text-white p-0"
-          >
-            <X className="w-3 h-3" />
-          </Button>
-        </div>
-      </div>
-
-      {/* Chat Messages */}
-      <div className="h-80 overflow-y-auto p-4 space-y-4">
-        {messages.length === 0 && (
-          <div className="flex items-start space-x-3">
-            <div className="w-8 h-8 gradient-primary rounded-full flex items-center justify-center flex-shrink-0">
-              <Bot className="text-white w-4 h-4" />
-            </div>
-            <div className="bg-slate-100 rounded-lg p-3 max-w-xs">
-              <p className="text-sm text-slate-900">
-                {language === 'en' 
-                  ? "Hi! I see you've completed your ikigai assessment. I'm here to help you refine these results or explore any questions you might have about your purpose paths. What would you like to discuss?"
-                  : "¡Hola! Veo que has completado tu evaluación ikigai. Estoy aquí para ayudarte a refinar estos resultados o explorar cualquier pregunta que puedas tener sobre tus caminos de propósito. ¿Qué te gustaría discutir?"
-                }
-              </p>
-            </div>
-          </div>
-        )}
-
-        {messages.map((msg, index) => (
-          <div key={index} className={`flex items-start space-x-3 ${msg.role === 'user' ? 'flex-row-reverse space-x-reverse' : ''}`}>
-            {msg.role === 'assistant' && (
-              <div className="w-8 h-8 gradient-primary rounded-full flex items-center justify-center flex-shrink-0">
-                <Bot className="text-white w-4 h-4" />
+    <Sheet open={isOpen} onOpenChange={onClose}>
+      <SheetContent className="w-full sm:max-w-lg flex flex-col">
+        <SheetHeader className="text-left">
+          <SheetTitle>{t('chat.title', language)}</SheetTitle>
+          <SheetDescription>
+            {t('chat.subtitle', language)}
+          </SheetDescription>
+        </SheetHeader>
+        <ScrollArea className="flex-grow my-4 -mx-6" ref={scrollAreaRef}>
+          <div className="px-6 space-y-6">
+            {messages.map((msg) => (
+              <div
+                key={msg.id}
+                className={cn(
+                  'flex items-start gap-4',
+                  msg.role === 'user' && 'flex-row-reverse',
+                )}
+              >
+                <Avatar
+                  className={cn(
+                    'w-8 h-8',
+                    msg.role === 'assistant' && 'gradient-primary text-white',
+                  )}
+                >
+                  {msg.role === 'assistant' && (
+                    <AvatarImage src="/nami-avatar.png" alt="Nami" />
+                  )}
+                  <AvatarFallback
+                    className={cn(
+                      msg.role === 'assistant' &&
+                        'bg-transparent text-white font-bold',
+                    )}
+                  >
+                    {msg.role === 'user' ? 'U' : <Sparkles size={18} />}
+                  </AvatarFallback>
+                </Avatar>
+                <div
+                  className={cn(
+                    'p-3 rounded-lg max-w-[80%]',
+                    msg.role === 'user'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-slate-100 text-slate-800',
+                  )}
+                >
+                  {/* Show pulsing for empty assistant message during stream */}
+                  {msg.role === 'assistant' && msg.content === '' && isSending ? (
+                    <Sparkles size={18} className="animate-pulse" />
+                  ) : (
+                    <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                  )}
+                </div>
               </div>
-            )}
-            <div className={`rounded-lg p-3 max-w-xs ${
-              msg.role === 'user' 
-                ? 'bg-primary text-primary-foreground ml-auto' 
-                : 'bg-slate-100 text-slate-900'
-            }`}>
-              <p className="text-sm">{msg.content}</p>
-            </div>
+            ))}
           </div>
-        ))}
-
-        {sendMessageMutation.isPending && (
-          <div className="flex items-start space-x-3">
-            <div className="w-8 h-8 gradient-primary rounded-full flex items-center justify-center flex-shrink-0">
-              <Bot className="text-white w-4 h-4" />
-            </div>
-            <div className="bg-slate-100 rounded-lg p-3 max-w-xs">
-              <div className="flex space-x-1">
-                <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></div>
-                <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-              </div>
-            </div>
-          </div>
-        )}
-        
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* Chat Input */}
-      <div className="p-4 border-t border-slate-200">
-        <div className="flex space-x-2">
+        </ScrollArea>
+        <form onSubmit={handleSubmit} className="flex gap-2 p-1 border rounded-lg">
           <Input
-            type="text"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
             placeholder={t('chat.placeholder', language)}
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyPress={handleKeyPress}
-            className="flex-1 text-sm"
+            className="flex-grow border-none focus-visible:ring-0"
+            disabled={isSending}
+            autoFocus
           />
-          <Button
-            onClick={handleSendMessage}
-            disabled={!message.trim() || sendMessageMutation.isPending}
-            className="gradient-primary text-white p-3 hover:shadow-lg transition-all duration-200"
-          >
-            <Send className="w-4 h-4" />
+          <Button type="submit" disabled={isSending || !inputValue.trim()}>
+            <Send size={16} />
           </Button>
-        </div>
-        <div className="flex items-center mt-2 text-xs text-slate-500">
-          <Shield className="w-3 h-3 mr-1" />
-          <span>{t('chat.poweredBy', language)}</span>
-        </div>
-      </div>
-    </div>
+        </form>
+      </SheetContent>
+    </Sheet>
   );
 }
