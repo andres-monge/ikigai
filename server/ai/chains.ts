@@ -26,13 +26,14 @@
  * - zod: For defining the validation schemas.
  */
 
+import { z } from 'zod';
 import {
   generateContent,
   generateContentWithSearch,
   generateContentStream, // Import the new streaming function
   GEMINI_REASONING_MODEL,
-  type GeminiContent,
 } from './wrapper';
+import type { GeminiContent } from './types';
 import {
   salaryCache,
   SALARY_CACHE_TTL_MS,

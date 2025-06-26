@@ -98,7 +98,12 @@ The application uses Drizzle ORM with PostgreSQL-compatible schema:
 
 ## Changelog
 
-- June 26, 2025. Initial setup
+- June 26, 2025: Completed AI module refactoring (Steps 14-17)
+  - Extracted schemas to `server/ai/schemas.ts`
+  - Moved prompts to `server/ai/prompts.ts` 
+  - Separated tools to `server/ai/tools.ts`
+  - Decoupled types to `server/ai/types.ts`
+- June 26, 2025: Initial setup
 
 ## User Preferences
 
