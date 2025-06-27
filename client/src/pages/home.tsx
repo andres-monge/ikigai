@@ -51,7 +51,8 @@ export function Home({ language }: HomeProps) {
 
         <Button
           onClick={handleStart}
-          className="gradient-primary text-white px-8 py-4 rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-200"
+          variant="secondary"
+          className="px-8 py-4 rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-200"
         >
           <PlayCircle className="w-5 h-5 mr-2" />
           {t('welcome.startButton', language)}
