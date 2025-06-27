@@ -48,7 +48,7 @@ export function PurposePaths({
     const gradients = [
       'from-primary to-blue-600',
       'from-secondary to-purple-600',
-      'from-success to-teal-600',
+      'from-accent to-orange-600',
     ];
     return gradients[index] || gradients[0];
   };
