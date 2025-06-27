@@ -20,7 +20,7 @@
  * - None
  */
 
-export const translations = {
+export const translations: Record<string, Record<string, string>> = {
   en: {
     // Header
     'header.title': 'Purpose Finder',
@@ -232,22 +232,9 @@ export type Language = 'en' | 'es';
  * @returns The translated string, or the key itself if no translation is found.
  */
 export function t(key: string, language: Language = 'en'): string {
-  const keys = key.split('.');
-  let value: any = translations[language];
+  // Use the provided language, but default to 'en' if it's null or undefined.
+  const lang = language || 'en';
 
-  console.log(`--- Debugging t() ---`);
-  console.log(`1. Key: "${key}", Language: "${language}"`);
-  console.log(`2. Initial lookup for language:`, value ? 'Found' : 'NOT FOUND');
-
-  for (const k of keys) {
-    console.log(`3. Traversing with sub-key: "${k}"`);
-    value = value?.[k];
-    console.log(`4. Value is now:`, value);
-    if (value === undefined) break; // Stop if we fail
-  }
-
-  console.log(`5. Final value before fallback:`, value);
-  console.log(`---------------------`);
-
-  return value || key;
+  // Directly look up the flat key (e.g., 'header.title') and return the key itself on failure.
+  return translations[lang]?.[key] ?? key;
 }
