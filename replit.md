@@ -98,6 +98,11 @@ The application uses Drizzle ORM with PostgreSQL-compatible schema:
 
 ## Changelog
 
+- June 27, 2025: Fixed critical i18n translation bug
+  - Corrected `t()` function to work with flat translation key structure
+  - Added proper TypeScript typing for translation objects
+  - Implemented comprehensive unit tests to prevent regression
+  - Users now see actual translated text instead of translation keys
 - June 26, 2025: Completed AI module refactoring (Steps 14-17)
   - Extracted schemas to `server/ai/schemas.ts`
   - Moved prompts to `server/ai/prompts.ts` 
