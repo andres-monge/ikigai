@@ -1,0 +1,58 @@
+Step 1: Confirm the Root Cause in 30 Seconds
+Before changing any code, prove that the lookup logic is the problem. This confirms the diagnosis beyond any doubt.
+
+Open client/src/lib/i18n.ts.
+
+Temporarily add a console.log inside the t() function like this:
+
+TypeScript
+
+export function t(key: string, language: Language = 'en'): string {
+  const keys = key.split('.');
+  let value: any = translations[language];
+
+  console.log(`--- Debugging t() ---`);
+  console.log(`1. Key: "${key}", Language: "${language}"`);
+  console.log(`2. Initial lookup for language:`, value ? 'Found' : 'NOT FOUND');
+
+  for (const k of keys) {
+    console.log(`3. Traversing with sub-key: "${k}"`);
+    value = value?.[k];
+    console.log(`4. Value is now:`, value);
+    if (value === undefined) break; // Stop if we fail
+  }
+
+  console.log(`5. Final value before fallback:`, value);
+  console.log(`---------------------`);
+
+  return value || key;
+}
+Refresh your app and look at the browser's developer console. You will see definitive proof that value becomes undefined inside the loop.
+
+Step 2: Implement the Immediate Fix (The One-Liner)
+Now, fix the bug with the simplest possible change. This is Option A from ChatGPT's analysis.
+
+Remove the temporary console.logs you just added.
+
+Replace the entire t() function with this corrected, flat-aware version:
+
+TypeScript
+
+// In client/src/lib/i18n.ts
+
+export function t(key: string, language: Language = 'en'): string {
+  // Use the provided language, but default to 'en' if it's null or undefined.
+  const lang = language || 'en';
+
+  // Directly look up the flat key (e.g., 'header.title') and return the key itself on failure.
+  return translations[lang]?.[key] ?? key;
+}
+💡 Why this is the optimal version:
+
+translations[lang]?.[key]: It correctly performs a direct lookup on the flat object.
+
+const lang = language || 'en': It fixes the primary bug and makes the function robust against the potential undefined language prop issue I initially suspected. It handles both problems in one go.
+
+?? key: The nullish coalescing operator is slightly cleaner for providing a fallback.
+
+Hard-refresh your browser (Cmd+Shift+R or Ctrl+Shift+R). The correct text should now appear on your site. ✅
