@@ -235,10 +235,19 @@ export function t(key: string, language: Language = 'en'): string {
   const keys = key.split('.');
   let value: any = translations[language];
 
+  console.log(`--- Debugging t() ---`);
+  console.log(`1. Key: "${key}", Language: "${language}"`);
+  console.log(`2. Initial lookup for language:`, value ? 'Found' : 'NOT FOUND');
+
   for (const k of keys) {
+    console.log(`3. Traversing with sub-key: "${k}"`);
     value = value?.[k];
+    console.log(`4. Value is now:`, value);
+    if (value === undefined) break; // Stop if we fail
   }
 
-  // Fallback to the key itself if the lookup fails
+  console.log(`5. Final value before fallback:`, value);
+  console.log(`---------------------`);
+
   return value || key;
 }
