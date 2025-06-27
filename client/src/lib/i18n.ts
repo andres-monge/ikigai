@@ -23,7 +23,7 @@
 export const translations: Record<string, Record<string, string>> = {
   en: {
     // Header
-    'header.title': 'Purpose Finder',
+    'header.title': 'Ikigai Finder',
     'header.poweredBy': 'Powered by Nami AI',
 
     // Welcome Section

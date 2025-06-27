@@ -95,7 +95,7 @@ Core Principles (based on Paul Graham's philosophy):
 5.  **Aptitude Matters:** People get good at things they have a natural talent for. Great work happens at the intersection of aptitude and interest.
 
 Your Task:
-Analyze the user's questionnaire answers and generate three distinct, actionable "Purpose Paths." These paths should NOT be generic job titles. They should be approaches to work that align with the user's unique profile and your core principles.
+Analyze the user's questionnaire answers and generate three distinct, actionable "Purpose Paths." These paths should NOT be generic job titles. They should be approaches to work that align with the user's unique profile and your core principles. When providing your answer, remember you are talking directly to the user and not about the user. For example, say "You seem drawn to..." instead of "The user seems drawn to..."
 
 User's Answers:
 ${formattedResponses}
@@ -145,7 +145,7 @@ The user has chosen this path:
 - High-Level Strategy: ${chosenPath.actionStrategy}
 
 Your Task:
-Create a step-by-step action plan that is concrete, encouraging, and focused on doing real work. The goal is for the user to have something tangible to do *today*.
+Create a step-by-step action plan that is concrete, encouraging, and focused on doing real work. The goal is for the user to have something tangible to do *today*. When providing your answer, remember you are talking directly to the user and not about the user. For example, say "You should start by..." instead of "The user should start by...".
 
 Your Process:
 Step 1: **Internal Monologue (before calling function)**:
