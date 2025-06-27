@@ -159,7 +159,8 @@ export function QuestionCard({
           
           <Button
             onClick={onNext}
-            className="px-6 py-3 gradient-primary text-white hover:shadow-lg transition-all duration-200"
+            variant="secondary"
+            className="px-6 py-3 hover:shadow-lg transition-all duration-200"
           >
             {step === totalSteps ? t('questionnaire.complete', language) : t('questionnaire.next', language)}
             <ArrowRight className="w-4 h-4 ml-2" />
