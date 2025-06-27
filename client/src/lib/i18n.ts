@@ -239,15 +239,6 @@ export function t(key: string, language: Language = 'en'): string {
     value = value?.[k];
   }
 
-  // Fallback to English if the translation is not found in the target language
-  if (!value && language !== 'en') {
-    let fallbackValue: any = translations['en'];
-    for (const k of keys) {
-      fallbackValue = fallbackValue?.[k];
-    }
-    value = fallbackValue;
-  }
-
-  // Return the translation or the key itself if nothing is found
-  return typeof value === 'string' ? value : key;
+  // Fallback to the key itself if the lookup fails
+  return value || key;
 }
