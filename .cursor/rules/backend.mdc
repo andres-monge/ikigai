@@ -1,0 +1,29 @@
+---
+description: Backend Rules
+globs: 
+alwaysApply: false
+---
+|Area|Actual Stack|
+|---|---|
+|**Backend API**|**Express 4** (`server/`), Routes registered in `server/routes.ts`|
+|**Deployment**|Replit (dev) → single Express server running on **port 5000**; Vite builds the static client into `dist/public`|
+
+---
+
+## Backend Rules (Express)
+
+### Folder Layout
+
+- All route handlers must stay in `server/routes.ts`.
+- Heavy logic can be split into separate files, but export functions and import them back into the main routes file.
+
+### Error Handling
+
+- Throw or forward errors to the Express error middleware.
+- API responses must use the `{ error: string }` JSON shape for errors.
+- All `/api/*` requests are logged (instrumented in `server/index.ts`).
+
+### "Server Actions" Pattern
+
+- We mimic "server actions" by creating dedicated `/api/<path>` endpoints that are called from the client.
+- **All** mutation logic (insert/update/delete) must be kept in the Express layer – never in the browser.

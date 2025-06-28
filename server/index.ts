@@ -1,3 +1,5 @@
+// Environment variables are now loaded by env-loader.js before this file runs
+
 /**
  * @description
  * This is the main entry point for the Express server. It sets up the Express application,

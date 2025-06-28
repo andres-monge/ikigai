@@ -1,11 +1,62 @@
 # Purpose Finder Technical Specification
 
-## 1. System Overview
+## 1. System & Project Overview
+
+# Project Name
+Purpose Finder
+
+## Project Description
+An AI-powered web application designed to help career-switchers and students find their *ikigai* (a reason for being) and navigate their career path. The application, guided by an AI persona named Nami, will go beyond simple skills-matching to incorporate a user's core values, personality, and life priorities. The MVP will focus on delivering three distinct and actionable ikigai-aligned career paths based on a comprehensive user assessment. The user will select one and then the app will deliver an action plan for that path. The platform will be fully bilingual (English and Spanish) from launch.
+
+## Target Audience
+- Career-switchers and students, treated as a unified group for the MVP.
+
+## Desired Features
+### Purpose Discovery
+- [ ] User completes a structured, multi-part questionnaire to identify their passions, skills, values, and economic needs.
+- [ ] The AI (Nami) analyzes the user's input.
+- [ ] The system generates and displays a summary of the user's core drivers (Passion, Ability, Positive Impact, Economics).
+- [ ] The system presents three distinct "Purpose Paths" for the user to choose from.
+    - [ ] Each path includes a title, a short description, and a breakdown of how it aligns with the four ikigai dimensions (Passion, Ability, Positive Impact, Economics).
+    - [ ] Each path includes a high-level action plan or strategy (e.g., "Bootstrapped MVP in 6 mo").
+- [ ] The system provides a comparative table with estimated salary ranges for the suggested paths, generated using real-time web search to ensure data is current and localized.
+    - [ ] The AI must cite the URLs of its sources for the salary data.
+- [ ] User can initiate a chat-based conversation with Nami to refine or request changes to the generated suggestions.
+- [ ] User can export their results page to a PDF document.
+
+### Action Plan & Guidance 
+- [ ] Once a user selects a path, the AI generates a detailed, step-by-step action plan with a timeline.
+- [ ] The action plan MUST include the following sections: Side project ideas, Skills to learn, Where to find the people that can tell you more about that path).
+- [ ] For each skill in the Skills section, the system recommends the 3 most relevant YouTube videos to learn that skill.
+- [ ] User can initiate a chat-based conversation with Nami to refine or request changes to the action plan.
+- [ ] User can export their action plan page to a PDF document.
+
+### Personality and Reasoning
+- [ ] AI persona "Nami" personality and writing will mimic that of Paul Graham. It will use the principles outlined in these Paul Graham essays to decide which Purpose Paths it should present to the user. It will also use the essays to encourage and explain the why behind every suggestion made to the user in all interactions.
+	- What to Do
+	- How to Do What You Love
+	- When To Do What You Love
+	- How to Do Great Work
+	- What You'll Wish You'd Known
+	- How to Be an Expert in a Changing World
+- [ ] The web application will be built and deployed using Replit.
+
+### General
+- [ ] No user accounts will be required for the MVP; user session data will be stored temporarily in the browser.
+- [ ] Full bilingual support for English and Spanish across the entire user interface and AI interactions from day one.
+
+## Design Requests
+- [ ] Sleek and modern UI. Responsive and mobile-friendly.
+- [ ] The output of the ikigai analysis should be clearly structured and presented in a format similar to the user's example.
+    - [ ] A summary section ("What's popping out of your answers").
+    - [ ] A clear, table-based comparison of the three ikigai options.
+    - [ ] A secondary table providing salary benchmarks.
+- [ ] A clean, intuitive chat interface for interacting with Nami for refinements.
 
 - **Core Purpose and Value Proposition:** An AI-powered web application to help users find their _ikigai_. It provides three actionable career paths based on a user's profile, and upon selection of a path, generates a detailed, step-by-step action plan. The entire experience is bilingual (English/Spanish).
-
+    
 - **Key Workflows:**
-
+    
     1. **Assessment & Discovery:** The user completes a questionnaire. The system initiates a two-call AI process: a fast, lightweight call (`Flash-Lite`) retrieves real-time salary data, while a parallel, more powerful call (`Flash`) performs the core analysis, consuming the salary data via function calling to produce the final "Core Drivers" summary and three "Purpose Paths".
     2. **Salary Caching:** To optimize cost and latency, retrieved salary data is cached for 24 hours. Subsequent requests for the same career/location will use the cache, skipping the salary fact-finding call.
     3. **Discovery Refinement (Optional):** The user can chat with "Nami" to refine the three generated paths.
@@ -13,7 +64,7 @@
     5. **Action Plan Refinement (Optional):** The user can chat with "Nami" again to refine the detailed action plan.
     6. **Export:** The user can export their results or action plan to PDF.
 - **System Architecture:**
-
+    
     - **Frontend:** React SPA (Vite, TypeScript), using TanStack Query for server state. UI built with shadcn/ui and Tailwind CSS.
     - **Backend:** Node.js server (Express), orchestrating a parallel two-call AI strategy.
     - **AI & Data:** A dual-model strategy using `models/gemini-2.5-flash-lite-preview-06-17` for search-grounded fact retrieval and `models/gemini-2.5-flash` for JSON-structured reasoning.
@@ -56,35 +107,41 @@ The project will be organized with a clear separation of concerns, adding more g
 
 ```
 My_Directory_Structure/
-├── client/                      # Frontend React SPA
-├── scripts/                     # Database migration scripts
-│   └── migrate.ts
-├── server/                      # Backend Node.js/Express server
-│   ├── routes/                  # Feature-based API route handlers
-│   │   ├── assessment.ts        # Handles /analyze and /action-plan
-│   │   └── chat.ts              # Handles /chat
-│   ├── ai/                      # Modular AI logic directory
-│   │   ├── chains.ts            # Orchestrates the multi-call AI sequences
-│   │   ├── prompts.ts           # Manages system prompt generation & persona
-│   │   ├── schemas.ts           # Zod/OpenAPI schemas for AI validation
-│   │   ├── tools.ts             # Function-calling tool definitions
-│   │   ├── types.ts             # TypeScript types for the Gemini API
-│   │   └── wrapper.ts           # Low-level Gemini API client wrapper
-│   ├── cache.ts                 # In-memory cache implementation for salaries
-│   └── storage.ts               # In-memory session storage
-├── shared/                      # Isomorphic code shared between client & server
-│   └── schema.ts                # Drizzle/Zod schemas
-└── .env.example                 # Environment variable definitions
+├── client/                          # Frontend React SPA
+│   └── src/
+│       ├── components/
+│       ├── hooks/                   # React Query hooks (split by feature)
+│       ├── lib/
+│       └── pages/
+├── server/                          # Backend Node.js/Express server
+│   ├── ai/                          # Modular AI logic directory
+│   │   ├── chains/                  # Orchestrates multi-call AI sequences
+│   │   │   ├── action-plan.chain.ts
+│   │   │   ├── chat-refinement.chain.ts
+│   │   │   └── purpose-discovery.chain.ts
+│   │   ├── prompts.ts               # Manages system prompt generation & persona
+│   │   ├── schemas.ts               # Zod/OpenAPI schemas for AI validation
+│   │   ├── tools.ts                 # Function-calling tool definitions
+│   │   ├── types.ts                 # TypeScript types for the Gemini API
+│   │   └── wrapper.ts               # Low-level Gemini API client wrapper
+│   ├── routes/                      # Feature-based API route handlers
+│   │   ├── assessment.ts            # Handles /analyze and /action-plan
+│   │   └── chat.ts                  # Handles /chat
+│   ├── cache.ts                     # In-memory cache implementation
+│   └── storage.ts                   # In-memory session storage
+├── shared/                          # Isomorphic code
+│   └── schema.ts                    # Drizzle/Zod schemas
+└── .env.example
 ```
 
 ## 3. Feature Specification
 
 ### 3.1 Purpose Discovery & Refinement
 
-- **User Story:** As a user, I want to answer a questionnaire and receive three personalized career paths. I then want the ability to chat with an AI assistant to adjust these paths before making my final choice.
+- **User Story:** As a user, I want to answer a questionnaire and receive three personalized career paths. I then want the ability to chat with an AI assistant to adjust each path before making my final choice.
 - **Implementation Steps (The Two-Call Chain):**
     1. The client sends a `POST` request to `/api/analyze`.
-    2. The server's orchestrator in `server/ai/chains.ts` receives the request.
+    2. The server's orchestrator in `server/ai/chains/purpose-discovery.chain.ts` receives the request.
     3. It first checks the `server/cache.ts` for salary data for career titles relevant to the user's profile.
     4. **At the same time**, it initiates **Call 2** (`models/gemini-2.5-flash`) with forced JSON output. The prompt includes the user's full questionnaire and a `tool` definition for a function like `getSalaryDataForCareers(titles: string[])`. The model will begin its reasoning process but pause when it needs salary data.
     5. If the cache misses for any career title, the orchestrator triggers **Call 1** (`models/gemini-2.5-flash-lite`) with the search tool enabled to fetch only the missing salary data. The results are stored in the cache for 24 hours.
@@ -116,7 +173,7 @@ The normalized schema supports the distinct stages of the user journey.
 ### 4.1 Tables
 
 - **`assessment_sessions`**: Stores the top-level session information.
-
+    
     - `id`: `serial` (PK)
     - `session_id`: `text` (UNIQUE, NOT NULL)
     - `language`: `text` (NOT NULL, 'en' or 'es')
@@ -127,7 +184,7 @@ The normalized schema supports the distinct stages of the user journey.
     - `created_at`: `timestamptz` (DEFAULT `now()`)
     - `updated_at`: `timestamptz` (DEFAULT `now()`)
 - **`purpose_paths`**: Stores the three (potentially refined) paths.
-
+    
     - `id`: `serial` (PK)
     - `session_id`: `integer` (FK to `assessment_sessions.id` ON DELETE CASCADE)
     - `title`: `text` (NOT NULL)
@@ -135,7 +192,7 @@ The normalized schema supports the distinct stages of the user journey.
     - `ikigai_alignment`: `jsonb`
     - `action_strategy`: `text` (High-level strategy)
 - **`salary_data`**: Stores salary info linked to a specific path.
-
+    
     - `id`: `serial` (PK)
     - `path_id`: `integer` (FK to `purpose_paths.id` ON DELETE CASCADE)
     - `entry_level`, `mid_level`, `senior_level`: `text`
@@ -143,7 +200,7 @@ The normalized schema supports the distinct stages of the user journey.
     - `sources`: `text[]` (Array of strings)
     - `retrieved_at`: `timestamptz` (DEFAULT `now()`)
 - **`chat_messages`**: Stores all chat history, regardless of context.
-
+    
     - `id`: `serial` (PK)
     - `session_id`: `integer` (FK to `assessment_sessions.id` ON DELETE CASCADE)
     - `role`: `text` (NOT NULL)
@@ -183,9 +240,10 @@ The core of the application relies on a dual-model, two-call chain to achieve bo
 
 ### 5.3 Chain Orchestrator (`server/ai/chains.ts`)
 
-- **Description:** Contains the high-level business logic for executing the multi-call sequences.
-- **`getPurposeDiscoveryChain(userInput)`**: Implements the parallel execution, caching, and function-calling logic described in the Feature Specification.
-- **`getActionPlanChain(chosenPath)`**: A similar chain for generating the detailed action plan.
+- **Description:** Contains the high-level business logic for executing the multi-call sequences. This logic is broken down into separate files by feature within the `server/ai/chains/` directory for modularity.
+- `purpose-discovery.chain.ts`: Implements the parallel execution, caching, and function-calling logic for the initial analysis.
+- `action-plan.chain.ts`: A similar chain for generating the detailed action plan for a chosen path.
+- `chat-refinement.chain.ts`: Handles both general and path-specific chat conversations, modifying the AI prompt based on the context provided.
 
 ## 6. Design System
 
@@ -194,22 +252,18 @@ The core of the application relies on a dual-model, two-call chain to achieve bo
 ## 7. Component Architecture
 
 - **`ChatInterface.tsx` Component:**
-    - This component is now fully reusable.
+    - This component is now fully reusable for different chat contexts.
     - **Props:**
-
-        TypeScript
-
-        ```
-        interface ChatInterfaceProps {
-          isOpen: boolean;
-          onClose: () => void;
-          sessionId: string;
-          language: Language;
-          // New prop to determine the chat's purpose
-          context: 'discovery' | 'action_plan';
-        }
-        ```
-
+		interface ChatInterfaceProps {
+		  isOpen: boolean;
+		  onClose: () => void;
+		  sessionId: string;
+		  language: Language;
+		  // Determines the general conversational context for the AI.
+		  context: 'discovery' | 'action_plan';
+		  // NEW: Optional ID for refining a single purpose path.
+		  pathId?: number | null;
+		}
 - **Error Handling:** Components will be wrapped in a React `<ErrorBoundary>` to gracefully handle rendering errors without crashing the application.
 
 ## 8. Authentication & Authorization

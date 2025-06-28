@@ -12,6 +12,11 @@
  * navigates the user to `/action-plan`.
  * - Added `useMemo` to flatten salary data for the `SalaryBenchmarks` component.
  *
+ * ✨ **Updates in Step 23** ✨
+ * - Added `sessionId` prop to ensure a non-empty identifier is always sent
+ *   to the backend when generating an action plan, resolving the bug where an
+ *   empty `sessionId` caused a 404 error.
+ *
  * @dependencies
  * - wouter: For navigation.
  * - lucide-react: For icons.
@@ -38,9 +43,11 @@ interface ResultsProps {
   onOpenChat: () => void;
   onStartOver: () => void;
   language: Language;
+  /** Anonymous session identifier passed from the top-level App component */
+  sessionId: string;
 }
 
-export function Results({ onOpenChat, onStartOver, language }: ResultsProps) {
+export function Results({ onOpenChat, onStartOver, language, sessionId }: ResultsProps) {
   const [session, setSession] = useSessionStorage<FullAssessment | null>(
     'session',
     null,
@@ -50,7 +57,7 @@ export function Results({ onOpenChat, onStartOver, language }: ResultsProps) {
 
   const { createActionPlan, isPending: isActionPlanPending } =
     useCreateActionPlan({
-      sessionId: session?.sessionId ?? '',
+      sessionId,
       onSuccess: (updatedSession) => {
         setSession(updatedSession);
         navigate('/action-plan');

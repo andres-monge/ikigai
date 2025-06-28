@@ -1,0 +1,67 @@
+---
+description: Type Rules, “Action State” Helper Pattern, Naming and import conventions, Environment Variables
+globs: 
+alwaysApply: false
+---
+## Project Structure (required)
+
+
+My_Directory_Structure/
+├── client/                          # Frontend React SPA
+│   └── src/
+│       ├── components/
+│       ├── hooks/                   # React Query hooks (split by feature)
+│       ├── lib/
+│       └── pages/
+├── server/                          # Backend Node.js/Express server
+│   ├── ai/                          # Modular AI logic directory
+│   │   ├── chains/                  # Orchestrates multi-call AI sequences
+│   │   │   ├── action-plan.chain.ts
+│   │   │   ├── chat-refinement.chain.ts
+│   │   │   └── purpose-discovery.chain.ts
+│   │   ├── prompts.ts               # Manages system prompt generation & persona
+│   │   ├── schemas.ts               # Zod/OpenAPI schemas for AI validation
+│   │   ├── tools.ts                 # Function-calling tool definitions
+│   │   ├── types.ts                 # TypeScript types for the Gemini API
+│   │   └── wrapper.ts               # Low-level Gemini API client wrapper
+│   ├── routes/                      # Feature-based API route handlers
+│   │   ├── assessment.ts            # Handles /analyze and /action-plan
+│   │   └── chat.ts                  # Handles /chat
+│   ├── cache.ts                     # In-memory cache implementation
+│   └── storage.ts                   # In-memory session storage
+├── shared/                          # Isomorphic code
+│   └── schema.ts                    # Drizzle/Zod schemas
+└── .env.example
+
+
+> **Naming convention:** Keep **kebab-case** for all files & folders (e.g., `question-card.tsx`).
+> Use absolute imports with the `@` alias (already configured in `vite.config.ts`).
+
+---
+
+## Environment Variables
+
+- **Backend-only** variables live in `.env.local` (never commit to VCS).
+- **No values are exposed to the browser** because the client is a pure SPA hitting our own Express API.
+- If you must expose a variable to the client, prefix it with `VITE_` (Vite's convention) – but avoid this when possible.
+- Update `.env.example` whenever you add or rename a variable.
+
+---
+
+## Type Rules
+
+- All global/shared types go in `shared/` or `client/src/types/`.
+- Use barrel files (`index.ts`) for exporting, following the existing project pattern.
+- Prefer **interfaces** for defining object shapes.
+
+---
+
+## “Action State” Helper Pattern
+
+We use a generic type for consistent API function results:
+
+```ts
+export type ActionState<T> =
+  | { isSuccess: true; message: string; data: T }
+  | { isSuccess: false; message: string; data?: never }
+This should be returned from any helper functions you add under server/ or future storage helpers.

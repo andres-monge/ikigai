@@ -1,0 +1,22 @@
+---
+description: Database & Storage Rules
+globs: 
+alwaysApply: false
+---
+|Area|Actual Stack|
+|---|---|
+|**Database**|Postgres (Neon in dev), **Drizzle ORM** (`shared/schema.ts`, `drizzle.config.ts`)|
+|**Storage**|In-memory via `MemStorage` for the MVP; Postgres tables already defined for future persistence|
+
+---
+
+## Database & Storage Rules
+
+1.  **Drizzle ORM is the source of truth.**
+    - Schemas live in `shared/schema.ts`.
+    - Do **not** generate migrations in the template – manual SQL or Drizzle-Kit is outside the current scope.
+
+2.  **In-memory `MemStorage` is used for the MVP** until the Postgres connection is ready.
+    - When switching to Postgres, replace the implementation calls in `server/storage.ts`.
+
+3.  Database-derived types come from Drizzle (`$inferSelect`, `$inferInsert`) and are re-exported from `shared/schema.ts`.

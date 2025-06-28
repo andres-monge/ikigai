@@ -1,0 +1,51 @@
+---
+description: Frontend Rules
+globs: 
+alwaysApply: false
+---
+|Area|Actual Stack|
+|---|---|
+|**Frontend**|**Vite + React 18**, Tailwind CSS, Shadcn UI, Framer Motion, Wouter (SPA routing), Lucide-React icons|
+|**State / Data Fetching**|React-Query v5 (`client/src/lib/queryClient.ts`)|
+
+---
+
+## Frontend Rules
+
+### General
+
+- **No `"use server"` or `"use client"` pragmas** – they are Next.js-specific and do not apply here.
+- Keep components pure-client; data arrives via React-Query calls to the Express `/api/...` endpoints.
+
+### Routing
+
+- Use **Wouter** (`<Switch>` + `<Route>`) for all SPA routing, located directly inside `client/src/App.tsx`.
+- Do **not** add Next.js or React-Router code.
+
+### Component Conventions
+
+- Shared, reusable components go in `client/src/components/`.
+- One-off components used by a single route should be collocated within that route's folder, e.g., `.../my-page/_components/`.
+- Stick to Tailwind CSS and Shadcn UI primitives. Extend only when necessary.
+- Import all icons from `lucide-react`.
+
+### Styling
+
+- Custom utility classes should be added to `client/src/index.css` under the `@layer utilities` directive.
+- Keep custom colors synced with the CSS variables declared in `client/src/index.css`.
+
+### Data Fetching
+
+- **All data fetching must be done inside React-Query hooks or mutations** (see `App.tsx` for an example).
+- API call logic should be kept in `client/src/lib/queryClient.ts` (using the `apiRequest` helper).
+- Avoid global `fetch` calls outside of the React-Query context.
+
+### PDF / Exports
+
+- **All PDF generation logic is client-side** using `jspdf`.
+- PDFs should be saved or downloaded directly in the browser; the server must not store generated files.
+
+### Internationalisation (i18n)
+
+- Add new translation keys to `client/src/lib/i18n.ts`.
+- **Never** hard-code user-facing strings in JSX – always call the `t('key', language)` function.

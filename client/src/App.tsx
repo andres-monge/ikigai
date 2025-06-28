@@ -3,14 +3,14 @@
 *
 * @description
 * Top-level React component for the Purpose Finder SPA. After Step 18 the
-* application flow is URL-driven instead of a local “state machine”.
+* application flow is URL-driven instead of a local "state machine".
 *
 * ✨ **Updates in Step 22** ✨
 * - Added `chatContext` state to differentiate between 'discovery' and
-*   'action_plan' refinement conversations.
+*   'action_plan' refinement conversations.
 * - `handleOpenChat` now accepts a context parameter.
 * - The `<Route>` for `/action-plan` now passes `onOpenChat` and `onStartOver`
-*   props, just like the `/results` route, allowing for a consistent user experience.
+*   props, just like the `/results` route, allowing for a consistent user experience.
 *
 * @dependencies
 * - Wouter: lightweight router for React
@@ -18,7 +18,7 @@
 *
 * @notes
 * - The `ChatInterface` component is now passed the `chatContext` prop,
-*   which is crucial for the backend to load the correct prompt.
+*   which is crucial for the backend to load the correct prompt.
 */
 
 import { useState, useEffect } from 'react';
@@ -38,7 +38,7 @@ import type { FullAssessment } from '@/types/assessment';
 
 function App() {
 /* ------------------------------------------------------------------------ */
-/*                       GLOBAL (CROSS-PAGE) STATE                          */
+/*      Global (CROSS-PAGE) STATE      */
 /* ------------------------------------------------------------------------ */
 const [language, setLanguage] = useSessionStorage<Language>('language', 'en');
 
@@ -60,7 +60,7 @@ null,
 const [, navigate] = useLocation();
 
 /* ------------------------------------------------------------------------ */
-/*                                EFFECTS                                   */
+/*      EFFECTS      */
 /* ------------------------------------------------------------------------ */
 
 /** Ensure we always have a sessionId available for API calls. */
@@ -73,7 +73,7 @@ setSessionId(newId);
 }, [sessionId, setSessionId]);
 
 /* ------------------------------------------------------------------------ */
-/*                          GLOBAL EVENT HANDLERS                           */
+/*      GLOBAL EVENT HANDLERS      */
 /* ------------------------------------------------------------------------ */
 
 const handleOpenChat = (context: 'discovery' | 'action_plan') => {
@@ -85,7 +85,7 @@ const handleCloseChat = () => setIsChatOpen(false);
 
 /**
 * Clears current session data and kicks the user back to the landing page.
-* Used by the Results page’s "Start Over" button.
+* Used by the Results page's "Start Over" button.
 */
 const handleStartOver = () => {
 setSession(null);
@@ -97,7 +97,7 @@ navigate('/');
 };
 
 /* ------------------------------------------------------------------------ */
-/*                               RENDER                                     */
+/*      RENDER      */
 /* ------------------------------------------------------------------------ */
 
 return (
@@ -126,6 +126,7 @@ path="/results"
 component={() => (
 <Results
 language={language}
+sessionId={sessionId}
 onOpenChat={() => handleOpenChat('discovery')}
 onStartOver={handleStartOver}
 />
