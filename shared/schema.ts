@@ -254,6 +254,8 @@ export const chatRequestSchema = z.object({
   sessionId: z.string().min(1),
   message: z.string().min(1),
   context: z.enum(['discovery', 'action_plan']),
+  /** When present, the chat should focus on a single Purpose Path. */
+  pathId: z.number().optional(),
 });
 export type ChatRequest = z.infer<typeof chatRequestSchema>;
 

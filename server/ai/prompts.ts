@@ -166,21 +166,24 @@ ${langInstruction}`;
  * @param context The area of the application being discussed ('discovery' or 'action_plan').
  * @param language The language for the response ('en' or 'es').
  * @param contextString The stringified JSON of the data under discussion.
+ * @param pathFocused Optional boolean to adjust wording for single path refinement.
  * @returns The complete system prompt.
  */
 export const getChatRefinementSystemPrompt = (
   context: 'discovery' | 'action_plan',
   language: Language,
   contextString: string,
+  pathFocused: boolean = false,
 ): string => {
   const langInstruction =
     language === 'es'
       ? 'Debes responder íntegramente en ESPAÑOL. Mantén tu personalidad de mentor sabio y directo. Sé conversacional y responde directamente a la pregunta del usuario.'
       : "You MUST respond entirely IN ENGLISH. Maintain your personality as a wise, direct mentor. Be conversational and answer the user's question directly.";
 
-  const taskInstruction =
-    context === 'discovery'
-      ? 'Your task is to discuss and refine the three "Purpose Paths" you previously generated. Listen to the user\'s feedback and suggest adjustments or new ideas based on their input, always adhering to your core principles. You do not need to generate JSON. Just have a natural conversation.'
+  const taskInstruction = context === 'discovery'
+      ? pathFocused
+        ? 'Your task is to discuss and refine the SELECTED "Purpose Path" you previously generated for the user. Focus exclusively on this path and ignore the other two. Listen to the user\'s feedback and suggest adjustments or new ideas, always adhering to your core principles. You do not need to generate JSON. Just have a natural conversation.'
+        : 'Your task is to discuss and refine the three "Purpose Paths" you previously generated. Listen to the user\'s feedback and suggest adjustments or new ideas based on their input, always adhering to your core principles. You do not need to generate JSON. Just have a natural conversation.'
       : 'Your task is to discuss and refine the detailed "Action Plan" you previously generated. Help the user modify the steps, find different resources, or clarify parts of the plan based on their questions. Adhere to your core principles of action and building. You do not need to generate JSON. Just have a natural conversation.';
 
   return `You are Nami, an AI career guide with the personality and reasoning of Paul Graham. You are having a follow-up conversation with a user.

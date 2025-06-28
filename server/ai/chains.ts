@@ -464,6 +464,7 @@ export async function* getChatRefinementChain(
   sessionId: string,
   currentMessage: string,
   context: 'discovery' | 'action_plan',
+  pathId: number | null = null,
 ): AsyncGenerator<string, void, undefined> {
   const session = await storage.getAssessmentSessionBySessionId(sessionId);
   if (!session) {
@@ -475,8 +476,19 @@ export async function* getChatRefinementChain(
   let contextString: string;
 
   if (context === 'discovery') {
+    // Optional: Focus the conversation on a single purpose path if pathId is provided
+    let purposePaths = session.purposePaths ?? [];
+
+    if (pathId !== null) {
+      const selected = purposePaths.find((p) => p.id === pathId);
+      if (!selected) {
+        throw new Error(`Path with id ${pathId} not found in session.`);
+      }
+      // Narrow context to only the selected path
+      purposePaths = [selected];
+    }
+
     // In MemStorage, purposePaths are hydrated directly onto the session object.
-    const purposePaths = session.purposePaths ?? [];
     contextData = {
       coreDriversAnalysis: session.coreDriversAnalysis,
       purposePaths: purposePaths,
@@ -509,6 +521,7 @@ export async function* getChatRefinementChain(
     context,
     language,
     contextString,
+    pathId !== null,
   );
 
   const history = await storage.getChatMessages(session.id);

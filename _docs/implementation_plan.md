@@ -103,23 +103,37 @@
         
     - **User Instructions**: The main "Refine with Nami" button on the results page has been removed. Each Purpose Path card now contains its own "Refine" button that opens the chat drawer focused on that specific path.
         
-- [ ] Step 5: Implement Path-Specific Chat Refinement (Backend)
+- [x] Step 5: Implement Path-Specific Chat Refinement (Backend)
     
-    - **Task**: Update the backend to process the `pathId` from the client, allowing the AI to generate a focused response based on the specific path the user wants to refine.
+    - **Task**: Update the backend to process the optional `pathId` from the client, allowing the AI to generate a response focused on a single Purpose Path when refining discovery results.
         
     - **Files**:
         
-        - `shared/schema.ts`: Add `pathId: z.number().optional()` to the `chatRequestSchema`.
+        - `shared/schema.ts`: Added `pathId?: number` to `chatRequestSchema` and regenerated `ChatRequest` type.
             
-        - `server/routes/chat.ts`: In the `POST /api/chat` handler, extract the optional `pathId` and pass it to `getChatRefinementChain`.
+        - `server/routes/chat.ts`: Extracts `pathId` from validated body and forwards it to `getChatRefinementChain`.
             
-        - `server/ai/chains.ts`: Modify `getChatRefinementChain` to accept the optional `pathId`. If an ID is provided, alter the `contextString` to contain data from only that specific path, creating a more focused prompt.
+        - `server/ai/chains.ts`: `getChatRefinementChain` now accepts an optional `pathId`. When present (and the context is `discovery`), the chain narrows `contextString` to only the selected path and throws a descriptive error if the path is not found.
             
-        - `server/ai/prompts.ts`: Update `getChatRefinementSystemPrompt` to reflect the more focused context when a single path is being discussed.
+        - `server/ai/prompts.ts`: `getChatRefinementSystemPrompt` now receives a fourth `pathFocused` boolean. When `true`, the task instructions reference the "selected Purpose Path" rather than "three Purpose Paths" to make the prompt more precise.
             
-    - **Step Dependencies**: Step 4.
+    - **✅ COMPLETED**:
+        - **Decision**: Enabled back-end awareness of `pathId` to support per-path chat refinement without breaking existing chats. Maintained backwards compatibility by making `pathId` optional and defaulting to the previous multi-path behaviour when omitted.
         
-    - **User Instructions**: Clicking the new "Refine" button on a path card and asking a question like "Tell me more" should result in an AI response focused only on that path.
+        - **Files Updated**:
+            - `shared/schema.ts` – schema and type update with exhaustive JSDoc.
+            - `server/routes/chat.ts` – body parsing, validation, and chain call updated.
+            - `server/ai/chains.ts` – added path filtering logic, enhanced error handling, updated system prompt call.
+            - `server/ai/prompts.ts` – added `pathFocused` param and dynamic task wording.
+
+        - **Edge Cases Considered**: 
+            - Invalid or missing `pathId` now triggers a `400` error from validation or a descriptive server error if the ID does not belong to the current session.
+            - `pathId` is ignored for `action_plan` chats to avoid ambiguity.
+            - Existing clients that do not send a `pathId` continue to receive the previous multi-path behaviour.
+        
+        - **Follow-up**: No further backend changes required. Front-end work completed in Step 4 now interacts seamlessly with the updated endpoints.
+
+    - **User Instructions**: Click a "Refine" button inside any Purpose Path card and ask a question like "Tell me more about salaries". The AI response should reference only that specific path.
         
 
 ## Phase 2: Code Structure & Modularity

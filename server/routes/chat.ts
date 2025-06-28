@@ -71,7 +71,7 @@ chatRouter.post('/chat', async (req, res, next) => {
       });
     }
 
-    const { sessionId, message, context } = validation.data;
+    const { sessionId, message, context, pathId } = validation.data;
 
     // 2. Retrieve the session from storage
     const session = await storage.getAssessmentSessionBySessionId(sessionId);
@@ -94,7 +94,7 @@ chatRouter.post('/chat', async (req, res, next) => {
     res.flushHeaders(); // Send headers to the client to establish the connection
 
     // 5. Get the streaming response from the AI chain
-    const stream = getChatRefinementChain(sessionId, message, context);
+    const stream = getChatRefinementChain(sessionId, message, context, pathId ?? null);
 
     let fullAiResponse = '';
 
