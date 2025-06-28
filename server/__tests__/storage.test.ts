@@ -85,6 +85,9 @@ describe('MemStorage', () => {
 
       const created = await storage.createAssessmentSession(sessionData);
       
+      // Small delay to ensure different timestamps
+      await new Promise(resolve => setTimeout(resolve, 1));
+      
       const updates = {
         responses: { updated: 'data' },
         coreDriversAnalysis: 'Updated analysis'

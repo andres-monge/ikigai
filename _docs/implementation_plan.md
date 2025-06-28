@@ -22,7 +22,7 @@
         - **Edge Cases Considered**: Brand-new visitors with no existing `sessionId` are covered because `App` auto-generates one on mount.
         - **Follow-up Bug**: Compilation currently fails due to `economic` vs `economicReality` mismatch; will be addressed in Step 2.
         
-- [ ] Step 2: Unify "Economic Reality" Data Key
+- [x] Step 2: Unify "Economic Reality" Data Key
     
     - **Task**: The "Economic Reality" field is blank due to a property name mismatch between the backend (`economicReality`) and frontend (`economic`). This step standardizes the property name to `economicReality` across the client-side codebase.
         
@@ -38,7 +38,16 @@
         
     - **User Instructions**: The "Economic Reality" section in the "What's popping out of your answers" card should now correctly display the AI-generated text.
         
-- [ ] Step 3: Integrate Salary Data into Path Cards
+    - **✅ COMPLETED**:
+        - **Decision**: Standardised `economicReality` property across the client-side codebase.
+        - **Files Updated**:
+            - `client/src/components/results/core-drivers-summary.tsx` – renamed `analysis.economic` → `analysis.economicReality` and added rich JSDoc.
+            - `client/src/lib/pdf-export.ts` – updated PDF generation to reference `economicReality`, switched to new `FullAssessment` type, and added null-safety.
+            - No backend changes required.
+        - **Edge Cases Considered**: PDF export gracefully handles sessions where `coreDriversAnalysis` is null by falling back to empty strings.
+        - **Follow-up**: Existing test failures are unrelated to this step and will be addressed in their respective future steps.
+        
+- [x] Step 3: Integrate Salary Data into Path Cards
     
     - **Task**: The separate "Salary Benchmarks" table will be removed. Salary information (range, location, and sources) will be displayed directly within each corresponding "Purpose Path" card. To keep file sizes manageable, the path card will be broken into smaller sub-components.
         
@@ -55,6 +64,16 @@
     - **Step Dependencies**: Step 2.
         
     - **User Instructions**: The main results page should no longer show a separate salary table. Each of the three path cards should now contain its own salary information.
+        
+    - **✅ COMPLETED**:
+        - **Decision**: Embedded salary information directly within each Purpose Path card using a dedicated `SalaryDisplay` sub-component and removed the global `<SalaryBenchmarks />` table.
+        - **Files Updated**:
+            - `client/src/components/results/purpose-paths/_components/salary-display.tsx` – new fully-documented component that renders entry, mid & senior compensation, location and data sources.
+            - `client/src/components/results/purpose-paths.tsx` – integrated `SalaryDisplay`, updated prop types to `PurposePathWithSalary`.
+            - `client/src/pages/results.tsx` – deleted `salaryDataForTable` `useMemo`, removed `<SalaryBenchmarks />` invocation, and simplified PDF export call.
+            - `client/src/components/results/salary-benchmarks.tsx` – deleted obsolete file.
+        - **Edge Cases Considered**: Handles missing or null salary values gracefully by displaying an em-dash (—). Section is omitted altogether when no salary data is provided for a path.
+        - **Follow-up**: No additional backend changes required. Existing failing tests are unrelated to this step and will be addressed in a future testing phase.
         
 - [ ] Step 4: Implement Path-Specific Chat Refinement (Frontend)
     

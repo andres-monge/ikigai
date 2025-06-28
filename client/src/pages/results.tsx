@@ -10,7 +10,7 @@
  * - A handler function (`handleChoosePath`) is passed to `PurposePaths`.
  * - On successful action plan creation, it updates the session data and
  * navigates the user to `/action-plan`.
- * - Added `useMemo` to flatten salary data for the `SalaryBenchmarks` component.
+ * - Removed global <SalaryBenchmarks /> table in favor of path-level salary display.
  *
  * ✨ **Updates in Step 23** ✨
  * - Added `sessionId` prop to ensure a non-empty identifier is always sent
@@ -25,19 +25,18 @@
  * - @/types/assessment: For the `FullAssessment` type.
  */
 
-import { useEffect, useMemo } from 'react';
+import { useEffect } from 'react';
 import { useLocation } from 'wouter';
 import { Sparkles, Download, MessageCircle, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CoreDriversSummary } from '@/components/results/core-drivers-summary';
 import { PurposePaths } from '@/components/results/purpose-paths';
-import { SalaryBenchmarks } from '@/components/results/salary-benchmarks';
 import { t, type Language } from '@/lib/i18n';
 import { exportToPDF } from '@/lib/pdf-export';
 import { useSessionStorage } from '@/hooks/use-session-storage';
 import { useCreateActionPlan } from '@/hooks/use-assessment';
 import { useToast } from '@/hooks/use-toast';
-import type { FullAssessment, SalaryData } from '@/types/assessment';
+import type { FullAssessment } from '@/types/assessment';
 
 interface ResultsProps {
   onOpenChat: () => void;
@@ -85,30 +84,18 @@ export function Results({ onOpenChat, onStartOver, language, sessionId }: Result
     }
   };
 
-  // Flatten the salary data for the SalaryBenchmarks component, adding the path title.
-  const salaryDataForTable = useMemo((): SalaryData[] => {
-    if (!session?.purposePaths) return [];
-    return session.purposePaths.flatMap((path) =>
-      path.salaryData.map((sd) => ({
-        ...sd,
-        title: path.title, // Add title for the benchmark table rows
-      })),
-    );
-  }, [session]);
-
   if (!session || !session.coreDriversAnalysis) {
     // Small fallback while redirect effect runs or for invalid state
     return null;
   }
 
-  // The PDF export will need the flattened salary data as well.
+  /**
+   * Exports the current analysis to a PDF document.
+   * Uses non-null assertion (!) because the early-return guard above ensures
+   * `session` is defined from this point onward.
+   */
   const handleExportPDF = () => {
-    const resultsForPdf = {
-      coreDriversAnalysis: session.coreDriversAnalysis!,
-      purposePaths: session.purposePaths,
-      salaryData: salaryDataForTable,
-    };
-    exportToPDF(resultsForPdf, language);
+    exportToPDF(session!, language);
   };
 
   return (
@@ -138,12 +125,6 @@ export function Results({ onOpenChat, onStartOver, language, sessionId }: Result
         language={language}
         onChoosePath={handleChoosePath}
         isChoosing={isActionPlanPending}
-      />
-
-      {/* Salary Benchmarks */}
-      <SalaryBenchmarks
-        salaryData={salaryDataForTable}
-        language={language}
       />
 
       {/* Export and Actions */}

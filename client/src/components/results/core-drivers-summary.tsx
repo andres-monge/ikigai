@@ -7,6 +7,27 @@ interface CoreDriversSummaryProps {
   language: Language;
 }
 
+/**
+ * @file core-drivers-summary.tsx
+ *
+ * @description
+ * React component that renders the four "Core Drivers" paragraphs (Energy, Edge,
+ * Impact, and Economic Reality) derived from the AI-generated assessment
+ * analysis. The component is **presentational only** – it receives the
+ * `CoreDrivers` analysis object and currently selected `language` string via
+ * props and displays the localised section headers with the associated text.
+ *
+ * Inputs:
+ *  - `analysis` (`CoreDrivers`): The object containing the four driver
+ *    explanations returned by the backend. Note that the economic driver field
+ *    is now standardised to `economicReality` across the entire codebase.
+ *  - `language` (`Language`): ISO language code used by the i18n helper `t` to
+ *    translate static labels.
+ *
+ * There is purposely *no* business logic or side-effects in this component so
+ * it remains easily testable and reusable.
+ */
+
 export function CoreDriversSummary({ analysis, language }: CoreDriversSummaryProps) {
   return (
     <div className="bg-white rounded-2xl shadow-lg p-8 mb-8">
@@ -48,7 +69,7 @@ export function CoreDriversSummary({ analysis, language }: CoreDriversSummaryPro
             <h4 className="font-semibold text-slate-900 mb-2">
               💰 {t('drivers.economic', language)}
             </h4>
-            <p className="text-slate-600">{analysis.economic}</p>
+            <p className="text-slate-600">{analysis.economicReality}</p>
           </div>
         </div>
       </div>

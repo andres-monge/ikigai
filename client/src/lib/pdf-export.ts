@@ -21,12 +21,12 @@
  * - @/lib/i18n: For the translation function `t` and `Language` type.
  */
 import jsPDF from 'jspdf';
-import type { AssessmentResults } from '@/types/assessment';
-import type { ActionPlan } from '@/shared/schema';
+import type { FullAssessment, PurposePathWithSalary } from '@/types/assessment';
+import type { ActionPlan } from '@/types/assessment';
 import { t, type Language } from '@/lib/i18n';
 
 export function exportToPDF(
-  results: AssessmentResults,
+  results: FullAssessment,
   language: 'en' | 'es' = 'en',
 ) {
   const pdf = new jsPDF();
@@ -59,6 +59,17 @@ export function exportToPDF(
   pdf.text(driversTitle, 20, currentY);
   currentY += 15;
 
+  // Safely handle potential null value returned from the backend for
+  // `coreDriversAnalysis` by falling back to empty strings. This guarantees
+  // the PDF generation never crashes and still renders the rest of the
+  // document.
+  const drivers = results.coreDriversAnalysis ?? {
+    energy: '',
+    edge: '',
+    impact: '',
+    economicReality: '',
+  };
+
   // Energy
   pdf.setFontSize(14);
   pdf.setTextColor(37, 99, 235);
@@ -70,7 +81,7 @@ export function exportToPDF(
   pdf.setFontSize(10);
   pdf.setTextColor(60, 60, 60);
   const energyText = pdf.splitTextToSize(
-    results.analysis.energy,
+    drivers.energy,
     pageWidth - 40,
   );
   pdf.text(energyText, 20, currentY);
@@ -88,7 +99,7 @@ export function exportToPDF(
 
   pdf.setFontSize(10);
   pdf.setTextColor(60, 60, 60);
-  const edgeText = pdf.splitTextToSize(results.analysis.edge, pageWidth - 40);
+  const edgeText = pdf.splitTextToSize(drivers.edge, pageWidth - 40);
   pdf.text(edgeText, 20, currentY);
   currentY += edgeText.length * 5 + 10;
 
@@ -105,13 +116,13 @@ export function exportToPDF(
   pdf.setFontSize(10);
   pdf.setTextColor(60, 60, 60);
   const impactText = pdf.splitTextToSize(
-    results.analysis.impact,
+    drivers.impact,
     pageWidth - 40,
   );
   pdf.text(impactText, 20, currentY);
   currentY += impactText.length * 5 + 10;
 
-  // Economic
+  // Economic Reality
   pdf.setFontSize(14);
   pdf.setTextColor(245, 158, 11); // Accent color
   const economicTitle =
@@ -122,7 +133,7 @@ export function exportToPDF(
   pdf.setFontSize(10);
   pdf.setTextColor(60, 60, 60);
   const economicText = pdf.splitTextToSize(
-    results.analysis.economic,
+    drivers.economicReality,
     pageWidth - 40,
   );
   pdf.text(economicText, 20, currentY);
@@ -142,7 +153,7 @@ export function exportToPDF(
   pdf.text(pathsTitle, 20, currentY);
   currentY += 15;
 
-  results.purposePaths.forEach((path, index) => {
+  results.purposePaths.forEach((path: PurposePathWithSalary, index: number) => {
     // Check if we need a new page
     if (currentY > pageHeight - 80) {
       pdf.addPage();
