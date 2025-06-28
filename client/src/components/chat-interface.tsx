@@ -57,6 +57,8 @@ export interface ChatInterfaceProps {
   language: Language;
   /** Determines the conversational context for the AI. */
   context: 'discovery' | 'action_plan';
+  /** Optional ID for refining a specific Purpose Path. */
+  pathId?: number | null;
 }
 
 export function ChatInterface({
@@ -65,6 +67,7 @@ export function ChatInterface({
   sessionId,
   language,
   context,
+  pathId = null,
 }: ChatInterfaceProps) {
   const [inputValue, setInputValue] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -135,6 +138,8 @@ export function ChatInterface({
           sessionId,
           message: userMessageContent,
           context,
+          // Only include pathId if refining a single path
+          ...(pathId !== null ? { pathId } : {}),
         }),
       });
 

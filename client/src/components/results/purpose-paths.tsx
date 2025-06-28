@@ -24,10 +24,13 @@ interface PurposePathsProps {
   purposePaths: PurposePathWithSalary[];
   language: Language;
   /**
-   * Callback function invoked when the user selects a path.
-   * @param pathId The ID of the chosen path.
+   * Callback invoked when the user selects a path to generate an action plan.
    */
   onChoosePath: (pathId: number) => void;
+  /**
+   * Callback invoked when the user wants to refine a specific path via chat.
+   */
+  onOpenChat: (pathId: number) => void;
   /**
    * If true, indicates the action plan is being generated, and disables buttons.
    */
@@ -38,6 +41,7 @@ export function PurposePaths({
   purposePaths,
   language,
   onChoosePath,
+  onOpenChat,
   isChoosing,
 }: PurposePathsProps) {
   const getIcon = (index: number) => {
@@ -142,13 +146,24 @@ export function PurposePaths({
                 {typeof path.id === 'number' && (
                   <Button
                     onClick={() => onChoosePath(path.id!)}
-                    className="w-full gradient-primary text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-200"
+                    className="w-full gradient-primary text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-200 mb-3"
                     disabled={isChoosing}
                   >
                     {isChoosing ? (
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                     ) : null}
                     {t('results.choosePathAndGetPlan', language)}
+                  </Button>
+                )}
+
+                {/* Refine Button */}
+                {typeof path.id === 'number' && (
+                  <Button
+                    onClick={() => onOpenChat(path.id!)}
+                    variant="outline"
+                    className="w-full border-primary text-primary font-semibold hover:bg-primary hover:text-white transition-all duration-200"
+                  >
+                    {t('results.refine', language)}
                   </Button>
                 )}
               </div>

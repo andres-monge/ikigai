@@ -27,7 +27,7 @@
 
 import { useEffect } from 'react';
 import { useLocation } from 'wouter';
-import { Sparkles, Download, MessageCircle, RotateCcw } from 'lucide-react';
+import { Sparkles, Download, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CoreDriversSummary } from '@/components/results/core-drivers-summary';
 import { PurposePaths } from '@/components/results/purpose-paths';
@@ -39,7 +39,8 @@ import { useToast } from '@/hooks/use-toast';
 import type { FullAssessment } from '@/types/assessment';
 
 interface ResultsProps {
-  onOpenChat: () => void;
+  /** Opens the chat drawer for refining a specific path */
+  onOpenChat: (pathId: number) => void;
   onStartOver: () => void;
   language: Language;
   /** Anonymous session identifier passed from the top-level App component */
@@ -124,10 +125,11 @@ export function Results({ onOpenChat, onStartOver, language, sessionId }: Result
         purposePaths={session.purposePaths}
         language={language}
         onChoosePath={handleChoosePath}
+        onOpenChat={onOpenChat}
         isChoosing={isActionPlanPending}
       />
 
-      {/* Export and Actions */}
+      {/* Export and Start Over Actions */}
       <div className="flex flex-col sm:flex-row gap-4 justify-center">
         <Button
           onClick={handleExportPDF}
@@ -135,15 +137,6 @@ export function Results({ onOpenChat, onStartOver, language, sessionId }: Result
         >
           <Download className="w-4 h-4 mr-2" />
           {t('results.exportPdf', language)}
-        </Button>
-
-        <Button
-          onClick={onOpenChat}
-          variant="outline"
-          className="border-2 border-primary text-primary px-8 py-4 rounded-xl font-semibold hover:bg-primary hover:text-white transition-all duration-200"
-        >
-          <MessageCircle className="w-4 h-4 mr-2" />
-          {t('results.refineWithNami', language)}
         </Button>
 
         <Button

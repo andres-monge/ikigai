@@ -70,6 +70,7 @@ export const translations: Record<string, Record<string, string>> = {
     'results.startOver': 'Start Over',
     'results.choosePathAndGetPlan': 'Choose this Path & Get Plan',
     'results.actionStrategy': 'Action Strategy',
+    'results.refine': 'Refine',
 
     // Action Plan
     'actionPlan.title': 'Your Action Plan',
@@ -168,6 +169,7 @@ export const translations: Record<string, Record<string, string>> = {
     'results.startOver': 'Comenzar de Nuevo',
     'results.choosePathAndGetPlan': 'Elegir este Camino y Obtener Plan',
     'results.actionStrategy': 'Estrategia de Acción',
+    'results.refine': 'Refinar',
 
     // Action Plan
     'actionPlan.title': 'Tu Plan de Acción',

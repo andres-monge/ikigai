@@ -75,7 +75,7 @@
         - **Edge Cases Considered**: Handles missing or null salary values gracefully by displaying an em-dash (—). Section is omitted altogether when no salary data is provided for a path.
         - **Follow-up**: No additional backend changes required. Existing failing tests are unrelated to this step and will be addressed in a future testing phase.
         
-- [ ] Step 4: Implement Path-Specific Chat Refinement (Frontend)
+- [x] Step 4: Implement Path-Specific Chat Refinement (Frontend)
     
     - **Task**: Enable chat refinement for individual paths by moving the "Refine" button into each path card and updating the app's state management to track which path is being discussed.
         
@@ -89,9 +89,19 @@
             
         - `client/src/components/chat-interface.tsx`: Update `ChatInterfaceProps` to accept the optional `pathId`. In `handleSubmit`, include the `pathId` in the body of the `POST /api/chat` request if it's present.
             
+    - **✅ COMPLETED**:
+        - **Decision**: Introduced per-path chat refinement by adding `chatPathId` state at the app level and moving the "Refine" entrypoint into each individual Purpose Path card. This enables focused conversations tied to a single path while retaining full-page context for other chat types.
+        - **Files Updated**:
+            - `client/src/App.tsx` – added `chatPathId` state, enhanced `handleOpenChat` to accept optional `pathId`, passed `chatPathId` to `<ChatInterface />` and wired new handler to `<Results />` route.
+            - `client/src/pages/results.tsx` – removed global "Refine with Nami" button, updated prop types, and forwarded `onOpenChat` with the relevant `pathId` to `<PurposePaths />`.
+            - `client/src/components/results/purpose-paths.tsx` – added a secondary "Refine" button to each card, updated props interface, and invoked `onOpenChat(path.id)`.
+            - `client/src/components/chat-interface.tsx` – accepted new optional `pathId` prop and conditionally included it in the `/api/chat` POST body.
+            - `client/src/lib/i18n.ts` – added new translation key `results.refine` for both English and Spanish.
+        - **Edge Cases Considered**: When `pathId` is `null`, chats default to the broader discovery or action-plan context. Chat history persists per context, not per path, to avoid excessive storage usage; future steps may expand this if needed.
+        - **Follow-up**: Backend must now accept the optional `pathId` (handled in Step 5).
     - **Step Dependencies**: None.
         
-    - **User Instructions**: The main "Refine with Nami" button on the results page will be gone, replaced by a "Refine" button on each of the three path cards.
+    - **User Instructions**: The main "Refine with Nami" button on the results page has been removed. Each Purpose Path card now contains its own "Refine" button that opens the chat drawer focused on that specific path.
         
 - [ ] Step 5: Implement Path-Specific Chat Refinement (Backend)
     
