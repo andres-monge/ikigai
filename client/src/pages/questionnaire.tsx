@@ -16,7 +16,7 @@
  * @dependencies
  * - wouter: For navigation.
  * - @/hooks/use-session-storage: To persist session data.
- * - @/hooks/use-assessment: For the `useCreateAssessment` mutation.
+ * - @/hooks/use-create-assessment: For the `useCreateAssessment` mutation.
  * - @/hooks/use-toast: For displaying notifications.
  */
 
@@ -25,7 +25,7 @@ import { useLocation } from 'wouter';
 import { QuestionCard } from '@/components/questionnaire/question-card';
 import { LoadingOverlay } from '@/components/loading-overlay';
 import { useSessionStorage } from '@/hooks/use-session-storage';
-import { useCreateAssessment } from '@/hooks/use-assessment';
+import { useCreateAssessment } from '@/hooks/use-create-assessment';
 import { useToast } from '@/hooks/use-toast';
 import { t, type Language } from '@/lib/i18n';
 import type {
@@ -76,12 +76,12 @@ const QUESTIONS = {
   passions: [
     {
       id: 'passions.q1',
-      en: 'What specific activities make you forget to check the clock because you’re so into them?',
+      en: "What specific activities make you forget to check the clock because you're so into them?",
       es: '¿Qué actividades te absorben tanto que pierdes la noción del tiempo?',
     },
     {
       id: 'passions.q2',
-      en: 'What topics or problems get you excited enough to talk someone’s ear off?',
+      en: "What topics or problems get you excited enough to talk someone's ear off?",
       es: '¿Qué temas o problemas te entusiasman tanto que podrías hablar sin parar de ellos?',
     },
   ],
@@ -100,7 +100,7 @@ const QUESTIONS = {
   values: [
     {
       id: 'values.q1',
-      en: 'What issues in your community, industry, or the planet frustrate you so much you’d gladly tackle them?',
+      en: "What issues in your community, industry, or the planet frustrate you so much you'd gladly tackle them?",
       es: '¿Qué problemas en tu comunidad, industria o el planeta te frustran tanto que estarías dispuesto a abordarlos?',
     },
     {

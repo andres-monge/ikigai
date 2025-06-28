@@ -260,7 +260,10 @@ export async function* generateContentStream(
   const stream = _generateStreamWithRetry(model, requestBody);
 
   for await (const chunk of stream) {
-    const text = chunk.candidates?.[0]?.content?.parts?.[0]?.text;
+    const candidate = chunk.candidates?.[0] as any;
+    const text =
+      candidate?.content?.parts?.[0]?.text ??
+      candidate?.delta?.parts?.[0]?.text;
     if (text) {
       yield text;
     }

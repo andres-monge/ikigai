@@ -21,7 +21,7 @@
  * - wouter: For navigation.
  * - lucide-react: For icons.
  * - @/hooks/use-session-storage: To persist/retrieve session data.
- * - @/hooks/use-assessment: For the `useCreateActionPlan` mutation.
+ * - @/hooks/use-create-action-plan: For the `useCreateActionPlan` mutation.
  * - @/types/assessment: For the `FullAssessment` type.
  */
 
@@ -34,7 +34,7 @@ import { PurposePaths } from '@/components/results/purpose-paths';
 import { t, type Language } from '@/lib/i18n';
 import { exportToPDF } from '@/lib/pdf-export';
 import { useSessionStorage } from '@/hooks/use-session-storage';
-import { useCreateActionPlan } from '@/hooks/use-assessment';
+import { useCreateActionPlan } from '@/hooks/use-create-action-plan';
 import { useToast } from '@/hooks/use-toast';
 import type { FullAssessment } from '@/types/assessment';
 

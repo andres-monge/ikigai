@@ -138,34 +138,29 @@
 
 ## Phase 2: Code Structure & Modularity
 
-- [ ] Step 6: Split Monolithic Hooks and Server Files
+- [x] Step 6: Split Monolithic Hooks and Server Files
     
-    - **Task**: To improve maintainability and adhere to the "AI-first" principle of smaller, focused files, the large hook and AI chain files will be split into separate, feature-specific modules.
+    - **Task**: To improve maintainability and adhere to the "AI-first" principle of smaller, focused files, the large hook and AI chain files were split into separate, feature-specific modules.
         
     - **Files**:
         
-        - `client/src/hooks/use-create-assessment.ts` (New File): Move the `useCreateAssessment` logic here.
-            
-        - `client/src/hooks/use-create-action-plan.ts` (New File): Move the `useCreateActionPlan` logic here.
-            
-        - `client/src/hooks/use-get-action-plan.ts` (New File): Move the `useGetActionPlan` logic here.
-            
-        - `client/src/hooks/use-assessment.ts`: Delete this file after its contents have been moved. Update all imports in `client/pages/`.
-            
-        - `server/ai/chains/purpose-discovery.chain.ts` (New File): Move the `getPurposeDiscoveryChain` and its related helpers.
-            
-        - `server/ai/chains/action-plan.chain.ts` (New File): Move the `getActionPlanChain` and its related helpers.
-            
-        - `server/ai/chains/chat-refinement.chain.ts` (New File): Move the `getChatRefinementChain`.
-            
-        - `server/ai/chains/index.ts` (New File): Create a barrel file to export all the chain functions.
-            
-        - `server/ai/chains.ts`: Delete the original monolithic file. Update imports in `server/routes/`.
-            
-    - **Step Dependencies**: Phase 1.
+        - `client/src/hooks/use-create-assessment.ts` – **new**: contains `useCreateAssessment` mutation.
+        - `client/src/hooks/use-create-action-plan.ts` – **new**: contains `useCreateActionPlan` mutation.
+        - `client/src/hooks/use-get-action-plan.ts` – **new**: contains `useGetActionPlan` query hook.
+        - `client/src/hooks/use-assessment.ts` – **deleted**.
+        - `client/src/pages/questionnaire.tsx`, `results.tsx`, `action-plan.tsx` – **imports updated**.
         
-    - **User Instructions**: The application's functionality should remain unchanged after this major refactoring.
+        - `server/ai/chains/purpose-discovery.chain.ts` – **new**: holds `getPurposeDiscoveryChain` and salary helpers.
+        - `server/ai/chains/action-plan.chain.ts` – **new**: holds `getActionPlanChain` and YouTube helpers.
+        - `server/ai/chains/chat-refinement.chain.ts` – **new**: holds `getChatRefinementChain` async generator.
+        - `server/ai/chains/index.ts` – **new** barrel file exporting all chain functions.
+        - `server/ai/chains.ts` – **deleted**.
+        - `server/routes/*` – kept identical import path (`../ai/chains`) and therefore required **no edits**.
         
+    - **✅ COMPLETED**:
+        - **Decision**: Adopted a one-file-per-concern structure which dramatically improves navigability and paves the way for fine-grained tests in Phase 3.
+        - **Edge Cases Considered**: Ensured barrel file preserves import path backward-compatibility; verified a full `npm run build` succeeds post-refactor.
+        - **Follow-up**: None – ready to proceed with testing expansion in Step 7.
 
 ## Phase 3: Testing & Documentation
 

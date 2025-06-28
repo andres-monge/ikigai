@@ -42,7 +42,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
-import { useGetActionPlan } from '@/hooks/use-assessment';
+import { useGetActionPlan } from '@/hooks/use-get-action-plan';
 import { t, type Language } from '@/lib/i18n';
 import { Skeleton } from '@/components/ui/skeleton';
 import { exportActionPlanToPDF } from '@/lib/pdf-export';
