@@ -53,7 +53,9 @@ export function useCreateActionPlan({
       });
       return (await res.json()) as FullAssessment;
     },
-    onSuccess,
+    onSuccess: (data) => {
+      onSuccess?.(data);
+    },
     onError,
   });
 

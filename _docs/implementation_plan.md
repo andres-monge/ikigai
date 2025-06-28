@@ -164,16 +164,27 @@
 
 ## Phase 3: Testing & Documentation
 
-- [ ] Step 7: Expand Test Coverage
+- [x] Step 7: Expand Test Coverage
     
     - **Task**: Increase confidence in the codebase by adding unit tests for critical hooks and integration tests for the primary API endpoint.
         
     - **Files**:
         
-        - `client/src/hooks/__tests__/use-create-action-plan.test.ts` (New File): Add a new Vitest/Jest test file. Write a test that mocks the `apiRequest` and verifies that the `onSuccess` callback is triggered with the expected payload.
+        - `client/src/hooks/__tests__/use-create-action-plan.test.tsx` (New File): Add a new Vitest/Jest test file. Write a test that mocks the `apiRequest` and verifies that the `onSuccess` callback is triggered with the expected payload.
             
         - `server/__tests__/assessment.test.ts` (New File): Add a new `supertest` integration test. Write a test that sends a valid payload to `/api/action-plan` and asserts that it receives a `200 OK` response with a valid JSON body.
             
     - **Step Dependencies**: None.
         
+    - **✅ COMPLETED**:
+        - **Decision**: Added fully-isolated test suites to validate both the front-end mutation hook and the back-end `/api/action-plan` route without hitting real network or AI services.
+        - **Files Added**:
+            - `client/src/hooks/__tests__/use-create-action-plan.test.tsx` – mocks `apiRequest`, renders the hook under a `QueryClientProvider`, and asserts the `onSuccess` callback fires with the expected payload and that the helper is invoked with the correct arguments.
+            - `server/__tests__/assessment.test.ts` – spins up an in-memory Express app, stubs `getActionPlanChain`, seeds `MemStorage`, sends a `POST /api/action-plan` request with `supertest`, and asserts a `200` response containing the stubbed action plan and chosen path ID.
+        - **Other Files Updated**:
+            - `tsconfig.json` – excluded `**/*.test.tsx` from production type-checking.
+            - `package.json` – added dev dependencies `@testing-library/react` and `supertest`.
+        - **Edge Cases Considered**: Hook test runs in a `jsdom` environment to satisfy React; server test mocks the heavy AI chain to keep the test fast and deterministic.
+        - **Follow-up**: CI pipeline requires `npm run check` to skip test files; the tsconfig adjustment covers this.
+
     - **User Instructions**: Run `npm test` from the root directory. All new and existing tests should pass.
