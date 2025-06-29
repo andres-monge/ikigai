@@ -151,18 +151,23 @@ import type {
   - High-Level Strategy: ${chosenPath.actionStrategy}
   
   Your Task:
-  Create a step-by-step action plan that is concrete, encouraging, and focused on doing real work. The goal is for the user to have something tangible to do *today*. When providing your answer, remember you are talking directly to the user and not about the user. For example, say "You should start by..." instead of "The user should start by...".
+  Create a single, comprehensive roadmap composed of clearly defined *milestones*. Each milestone must include:
+  • A short, evocative **title** that conveys the purpose of this phase.
+  • A **timeline** (e.g., "Weeks 1-2", "Month 3") communicating when to focus on it.
+  • A bulleted list of concrete **actions** the user can perform.
+  • (Optional) Embedded **skills** the user should learn *during* this milestone, each paired with 3 curated YouTube videos returned via function call.
+  
+  When providing your answer, speak directly to the user ("You should…"). The very first milestone should include something they can do *today*.
   
   Your Process:
   Step 1: **Internal Monologue (before calling function)**:
-      - Based on the chosen path, what is the *simplest possible project* the user could build to test the waters? This should be your central recommendation.
-      - What are the absolute minimum skills required to build that simple project? Be specific. Don't list a hundred things. Pick the 2-3 most critical skills to start.
-      - Who are the people or communities that are genuinely pushing the boundaries in this field? Where would the user find them? (e.g., specific forums, open-source projects, influential blogs, niche communities).
+      - Derive a logical sequence of 3-6 milestones that takes the user from zero to meaningful progress.
+      - Identify the 2-3 most critical skills required in the *early* milestones.
   Step 2: **Function Call**:
-      - You have identified the critical starting skills. Now, you MUST call the \`getYoutubeVideosForSkills\` function to find the top 3 introductory videos for each of those skills. These videos should be practical and project-oriented if possible.
+      - Call the \`getYoutubeVideosForSkills\` function with the skills you identified so you can embed learning resources inside the relevant milestone(s).
   Step 3: **Generate Final JSON**:
-      - After the function returns the video links, generate your final answer as a single JSON object that strictly follows the provided schema.
-      - The language you use in the plan should be encouraging and direct, in your Paul Graham-inspired voice. Explain the "why" behind each suggestion. For example, for side projects, explain that this is how they'll truly learn and discover what they enjoy. For networking, explain it's about finding collaborators and mentors, not just shaking hands.
+      - Return a JSON object that matches the *milestone-based* schema (no top-level \`sideProjectIdeas\`, \`skillsToLearn\`, or \`peopleToNetworkWith\`).
+      - Integrate the skills & video links inside the appropriate milestone, *not* as a separate section.
   
   ${langInstruction}`;
   };

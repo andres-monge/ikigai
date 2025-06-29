@@ -104,10 +104,22 @@ export const skillToLearnSchema = z.object({
   youtubeLinks: z.array(youtubeVideoSchema).min(1),
 });
 
+// === NEW ▶ Milestone-based Action-Plan schema (Step 3) ===
+export const milestoneSchema = z.object({
+  /** A short, evocative headline for this phase of the plan. */
+  title: z.string(),
+  /** Human-readable timeframe, e.g. "Weeks 1-2" or "Q4 2025". */
+  timeline: z.string(),
+  /** Concrete, atomic tasks the user must complete. */
+  actions: z.array(z.string()).min(1),
+  /** Optional skills (with learning resources) relevant to this milestone. */
+  skills: z.array(skillToLearnSchema).optional().default([]),
+});
+export type Milestone = z.infer<typeof milestoneSchema>;
+
 export const actionPlanSchema = z.object({
-  sideProjectIdeas: z.array(z.string()).min(1),
-  skillsToLearn: z.array(skillToLearnSchema).min(1),
-  peopleToNetworkWith: z.array(z.string()).min(1),
+  /** Ordered list of milestones forming a coherent roadmap. */
+  milestones: z.array(milestoneSchema).min(1),
 });
 export type ActionPlan = z.infer<typeof actionPlanSchema>;
 

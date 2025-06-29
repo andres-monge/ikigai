@@ -24,19 +24,24 @@ import { describe, it, expect, beforeAll, vi } from 'vitest';
 
 vi.mock('../ai/chains', () => {
   const stubActionPlan = {
-    sideProjectIdeas: ['Start a technical blog about the field'],
-    skillsToLearn: [
+    milestones: [
       {
-        skill: 'TypeScript',
-        youtubeLinks: [
+        title: 'Foundational Setup',
+        timeline: 'Weeks 1-2',
+        actions: ['Install Node.js', 'Initialise repository'],
+        skills: [
           {
-            title: 'TypeScript in 100 Seconds',
-            url: 'https://www.youtube.com/watch?v=BCg4U1FzODs',
+            skill: 'TypeScript',
+            youtubeLinks: [
+              {
+                title: 'TypeScript in 100 Seconds',
+                url: 'https://www.youtube.com/watch?v=BCg4U1FzODs',
+              },
+            ],
           },
         ],
       },
     ],
-    peopleToNetworkWith: ['Local JS meetup'],
   } as const;
 
   return {
@@ -59,19 +64,24 @@ import { registerRoutes } from '../routes';
 // the object (rather than importing from the mock) to avoid TypeScript
 // complaining about missing exports on the real module.
 const expectedActionPlan = {
-  sideProjectIdeas: ['Start a technical blog about the field'],
-  skillsToLearn: [
+  milestones: [
     {
-      skill: 'TypeScript',
-      youtubeLinks: [
+      title: 'Foundational Setup',
+      timeline: 'Weeks 1-2',
+      actions: ['Install Node.js', 'Initialise repository'],
+      skills: [
         {
-          title: 'TypeScript in 100 Seconds',
-          url: 'https://www.youtube.com/watch?v=BCg4U1FzODs',
+          skill: 'TypeScript',
+          youtubeLinks: [
+            {
+              title: 'TypeScript in 100 Seconds',
+              url: 'https://www.youtube.com/watch?v=BCg4U1FzODs',
+            },
+          ],
         },
       ],
     },
   ],
-  peopleToNetworkWith: ['Local JS meetup'],
 } as const;
 
 // ────────────────────────────────────────────────────────────────────────────

@@ -90,6 +90,8 @@ export const translations: Record<string, Record<string, string>> = {
     'actionPlan.refineWithNami': 'Refine Your Plan',
     'actionPlan.watchOnYouTube': 'Watch on YouTube',
     'actionPlan.backToPaths': 'Back to Paths',
+    'actionPlan.actions': 'Actions',
+    'actionPlan.skills': 'Skills & Resources',
 
     // Ikigai
     'ikigai.alignment': 'Ikigai Alignment',
@@ -189,6 +191,8 @@ export const translations: Record<string, Record<string, string>> = {
     'actionPlan.refineWithNami': 'Refinar Tu Plan',
     'actionPlan.watchOnYouTube': 'Ver en YouTube',
     'actionPlan.backToPaths': 'Volver a los Caminos',
+    'actionPlan.actions': 'Acciones',
+    'actionPlan.skills': 'Habilidades y Recursos',
 
     // Ikigai
     'ikigai.alignment': 'Alineación Ikigai',

@@ -294,10 +294,61 @@ export function exportActionPlanToPDF(
     currentY += 10; // Space after section
   };
 
-  // --- Render Sections ---
-  drawSection('actionPlan.sideProjects', actionPlan.sideProjectIdeas);
-  drawSection('actionPlan.skillsToLearn', actionPlan.skillsToLearn);
-  drawSection('actionPlan.peopleToNetworkWith', actionPlan.peopleToNetworkWith);
+  // --- Render Milestones ---
+  actionPlan.milestones.forEach((ms, idx) => {
+    if (currentY > pageHeight - 40) {
+      pdf.addPage();
+      currentY = pageMargin;
+    }
+
+    // Milestone Header
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(14);
+    pdf.setTextColor('#1e293b'); // slate-800
+    pdf.text(`${idx + 1}. ${ms.title}  (${ms.timeline})`, pageMargin, currentY);
+    currentY += 8;
+
+    // Actions
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(11);
+    pdf.setTextColor('#334155');
+    ms.actions.forEach((act) => {
+      const lines = pdf.splitTextToSize(`• ${act}`, contentWidth - 5);
+      pdf.text(lines, pageMargin + 5, currentY);
+      currentY += lines.length * 4 + 2;
+    });
+
+    // Skills
+    if (ms.skills && ms.skills.length > 0) {
+      currentY += 2;
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(12);
+      pdf.setTextColor('#1e293b');
+      pdf.text(t('actionPlan.skills', language), pageMargin + 2, currentY);
+      currentY += 6;
+
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(10);
+      pdf.setTextColor('#334155');
+      ms.skills.forEach((skill) => {
+        const skillLines = pdf.splitTextToSize(`- ${skill.skill}`, contentWidth - 10);
+        pdf.text(skillLines, pageMargin + 8, currentY);
+        currentY += skillLines.length * 4 + 2;
+
+        skill.youtubeLinks.forEach((link) => {
+          const linkLines = pdf.splitTextToSize(`   • ${link.title}`, contentWidth - 12);
+          pdf.text(linkLines, pageMargin + 12, currentY);
+          currentY += linkLines.length * 3 + 1;
+          pdf.setTextColor('#2563eb');
+          pdf.textWithLink(link.url, pageMargin + 12, currentY, { url: link.url });
+          pdf.setTextColor('#334155');
+          currentY += 6;
+        });
+      });
+    }
+
+    currentY += 8; // spacing after milestone
+  });
 
   // --- Footer ---
   const pageCount = (pdf.internal as any).getNumberOfPages();

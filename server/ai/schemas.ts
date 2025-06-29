@@ -160,43 +160,54 @@ export const purposeDiscoveryOpenApiSchema = {
 export const actionPlanOpenApiSchema = {
   type: 'OBJECT',
   properties: {
-    sideProjectIdeas: {
+    milestones: {
       type: 'ARRAY',
       description:
-        'A list of 2-3 simple, actionable side project ideas a beginner can build to practice their new skills.',
-      items: { type: 'STRING' },
-    },
-    skillsToLearn: {
-      type: 'ARRAY',
-      description:
-        'A list of the most important skills to learn for this path.',
+        'An ordered list of milestones that together form a coherent roadmap toward the chosen path.',
       items: {
         type: 'OBJECT',
         properties: {
-          skill: { type: 'STRING', description: 'The name of the skill.' },
-          youtubeLinks: {
+          title: {
+            type: 'STRING',
+            description: 'A short, compelling milestone headline.',
+          },
+          timeline: {
+            type: 'STRING',
+            description:
+              'Human-readable timeframe for this milestone (e.g., "Weeks 1-2").',
+          },
+          actions: {
+            type: 'ARRAY',
+            description: 'Concrete, atomic tasks to complete in this milestone.',
+            items: { type: 'STRING' },
+          },
+          skills: {
             type: 'ARRAY',
             description:
-              'The exact, unmodified YouTube video data received from the function call for this skill.',
+              'Optional list of skills relevant to this milestone, each with embedded YouTube resources.',
             items: {
               type: 'OBJECT',
               properties: {
-                title: { type: 'STRING' },
-                url: { type: 'STRING' },
+                skill: { type: 'STRING' },
+                youtubeLinks: {
+                  type: 'ARRAY',
+                  items: {
+                    type: 'OBJECT',
+                    properties: {
+                      title: { type: 'STRING' },
+                      url: { type: 'STRING' },
+                    },
+                    required: ['title', 'url'],
+                  },
+                },
               },
-              required: ['title', 'url'],
+              required: ['skill', 'youtubeLinks'],
             },
           },
         },
-        required: ['skill', 'youtubeLinks'],
+        required: ['title', 'timeline', 'actions'],
       },
     },
-    peopleToNetworkWith: {
-      type: 'ARRAY',
-      description:
-        'A list of 2-3 types of people, roles, or communities the user should connect with to learn more.',
-      items: { type: 'STRING' },
-    },
   },
-  required: ['sideProjectIdeas', 'skillsToLearn', 'peopleToNetworkWith'],
-};
+  required: ['milestones'],
+} as const;

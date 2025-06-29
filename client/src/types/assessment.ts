@@ -83,10 +83,23 @@ export interface SkillToLearn {
   youtubeLinks: YoutubeVideo[];
 }
 
+/**
+ * One milestone – a phase in the roadmap with its own set of tasks and
+ * optionally embedded skills + learning resources.
+ */
+export interface Milestone {
+  title: string;
+  timeline: string;
+  actions: string[];
+  skills?: SkillToLearn[];
+}
+
+/**
+ * The complete Action Plan returned by the backend, now a single array of
+ * ordered milestones rather than three separate top-level lists.
+ */
 export interface ActionPlan {
-  sideProjectIdeas: string[];
-  skillsToLearn: SkillToLearn[];
-  peopleToNetworkWith: string[];
+  milestones: Milestone[];
 }
 
 /**

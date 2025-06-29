@@ -75,7 +75,7 @@ This phase overhauls the core AI-generated content to meet quality standards and
 
 - [ ] **Step 3: Overhaul Action Plan Generation**
     
-    - **Task:** Transform the Action Plan from three brief ideas into a single, detailed, step-by-step roadmap with a timeline, as per your "AI Pathfinder" example. This involves a major prompt and schema overhaul and deprecating the "Where to find your people" section.
+    - **Task:** Transform the Action Plan from three brief ideas into a single, detailed, step-by-step roadmap with a timeline, guided by the action_plan_example in @prompt_examples.md and the @prompting_guide.md provided,. This involves a major prompt and schema overhaul and deprecating the "Where to find your people" section.
         
     - **Files:**
         

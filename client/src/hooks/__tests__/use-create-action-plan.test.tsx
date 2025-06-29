@@ -77,19 +77,24 @@ describe('useCreateActionPlan', () => {
       coreDriversAnalysis: null,
       chosenPathId,
       actionPlan: {
-        sideProjectIdeas: ['Build a tiny SaaS app'],
-        skillsToLearn: [
+        milestones: [
           {
-            skill: 'React',
-            youtubeLinks: [
+            title: 'Kick-off Project',
+            timeline: 'Week 1',
+            actions: ['Set up development environment', 'Create repo'],
+            skills: [
               {
-                title: 'React Tutorial for Beginners',
-                url: 'https://www.youtube.com/watch?v=dGcsHMXbSOA',
+                skill: 'React',
+                youtubeLinks: [
+                  {
+                    title: 'React Tutorial for Beginners',
+                    url: 'https://www.youtube.com/watch?v=dGcsHMXbSOA',
+                  },
+                ],
               },
             ],
           },
         ],
-        peopleToNetworkWith: ['Local React meetup'],
       },
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

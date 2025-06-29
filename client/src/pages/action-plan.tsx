@@ -21,7 +21,6 @@ import { useLocation } from 'wouter';
 import {
   Lightbulb,
   GraduationCap,
-  Users2,
   Download,
   MessageCircle,
   ArrowLeft,
@@ -36,12 +35,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '@/components/ui/accordion';
 import { useGetActionPlan } from '@/hooks/use-get-action-plan';
 import { t, type Language } from '@/lib/i18n';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -114,89 +107,72 @@ export function ActionPlan({
         </div>
       </div>
 
+      {/* Milestones Section */}
       <div className="space-y-8">
-        {/* Section 1: Side Project Ideas */}
-        <Card>
-          <CardHeader className="flex flex-row items-center gap-4">
-            <Lightbulb className="w-8 h-8 text-amber-500" />
-            <div>
-              <CardTitle>{t('actionPlan.sideProjects', language)}</CardTitle>
-              <CardDescription>
-                {t('actionPlan.sideProjectsDescription', language)}
-              </CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <ul className="list-disc list-inside space-y-2 text-slate-700">
-              {actionPlan.sideProjectIdeas.map((idea, i) => (
-                <li key={i}>{idea}</li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
+        {actionPlan.milestones.map((ms, idx) => (
+          <Card key={idx}>
+            <CardHeader className="flex flex-row gap-4 items-start">
+              {/* Icon rotation for variety */}
+              {idx % 2 === 0 ? (
+                <Lightbulb className="w-8 h-8 text-amber-500 shrink-0" />
+              ) : (
+                <GraduationCap className="w-8 h-8 text-blue-600 shrink-0" />
+              )}
+              <div className="flex-1">
+                <CardTitle className="flex justify-between items-center">
+                  <span>{ms.title}</span>
+                  <span className="text-sm font-normal text-slate-500">{ms.timeline}</span>
+                </CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Actions */}
+              <div>
+                <h4 className="font-semibold text-slate-800 mb-2 flex items-center gap-2">
+                  <ClipboardCheck className="w-4 h-4" />
+                  {t('actionPlan.actions', language)}
+                </h4>
+                <ul className="list-disc list-inside space-y-2 text-slate-700">
+                  {ms.actions.map((act, i) => (
+                    <li key={i}>{act}</li>
+                  ))}
+                </ul>
+              </div>
 
-        {/* Section 2: Skills to Learn */}
-        <Card>
-          <CardHeader className="flex flex-row items-center gap-4">
-            <GraduationCap className="w-8 h-8 text-blue-600" />
-            <div>
-              <CardTitle>{t('actionPlan.skillsToLearn', language)}</CardTitle>
-              <CardDescription>
-                {t('actionPlan.skillsToLearnDescription', language)}
-              </CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <Accordion type="single" collapsible className="w-full">
-              {actionPlan.skillsToLearn.map((skillItem, i) => (
-                <AccordionItem value={`item-${i}`} key={i}>
-                  <AccordionTrigger className="font-semibold text-base">
-                    {skillItem.skill}
-                  </AccordionTrigger>
-                  <AccordionContent>
-                    <ul className="space-y-3 pt-2">
-                      {skillItem.youtubeLinks.map((video, j) => (
-                        <li key={j} className="flex items-start gap-3">
-                          <Youtube className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
-                          <a
-                            href={video.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-slate-700 hover:text-primary hover:underline underline-offset-2 transition-colors"
-                          >
-                            {video.title}
-                          </a>
-                        </li>
-                      ))}
-                    </ul>
-                  </AccordionContent>
-                </AccordionItem>
-              ))}
-            </Accordion>
-          </CardContent>
-        </Card>
-
-        {/* Section 3: People to Network With */}
-        <Card>
-          <CardHeader className="flex flex-row items-center gap-4">
-            <Users2 className="w-8 h-8 text-emerald-600" />
-            <div>
-              <CardTitle>
-                {t('actionPlan.peopleToNetworkWith', language)}
-              </CardTitle>
-              <CardDescription>
-                {t('actionPlan.peopleToNetworkWithDescription', language)}
-              </CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <ul className="list-disc list-inside space-y-2 text-slate-700">
-              {actionPlan.peopleToNetworkWith.map((person, i) => (
-                <li key={i}>{person}</li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
+              {/* Skills (if any) */}
+              {ms.skills && ms.skills.length > 0 && (
+                <div>
+                  <h4 className="font-semibold text-slate-800 mb-2 flex items-center gap-2">
+                    <GraduationCap className="w-4 h-4" />
+                    {t('actionPlan.skills', language)}
+                  </h4>
+                  <div className="space-y-3">
+                    {ms.skills.map((skill, i) => (
+                      <div key={i}>
+                        <p className="font-medium text-slate-700 mb-1">{skill.skill}</p>
+                        <ul className="space-y-2 pl-4">
+                          {skill.youtubeLinks.map((video, j) => (
+                            <li key={j} className="flex items-start gap-2">
+                              <Youtube className="w-4 h-4 text-red-600 mt-0.5" />
+                              <a
+                                href={video.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-slate-700 hover:text-primary hover:underline underline-offset-2 transition-colors"
+                              >
+                                {video.title}
+                              </a>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
       {/* Action Buttons */}
