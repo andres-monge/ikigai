@@ -30,9 +30,7 @@ export type SalaryFunctionArgs = z.infer<typeof salaryFunctionArgSchema>;
 export const rawSalaryDataSchema = z.object({
   title: z.string(),
   location: z.string(),
-  entryLevel: z.string(),
-  midLevel: z.string(),
-  seniorLevel: z.string(),
+  salaryRange: z.string(),
   sources: z.array(z.string().url()),
 });
 export type RawSalaryData = z.infer<typeof rawSalaryDataSchema>;
@@ -59,7 +57,6 @@ export const purposeDiscoveryResultSchema = z.object({
       }),
     )
     .length(3, 'The AI must generate exactly 3 purpose paths.'),
-  salaryData: z.array(rawSalaryDataSchema),
 });
 export type PurposeDiscoveryResult = z.infer<
   typeof purposeDiscoveryResultSchema
@@ -156,32 +153,8 @@ export const purposeDiscoveryOpenApiSchema = {
         ],
       },
     },
-    salaryData: {
-      type: 'ARRAY',
-      description:
-        'The exact, unmodified salary data array received from the function call.',
-      items: {
-        type: 'OBJECT',
-        properties: {
-          title: { type: 'STRING' },
-          location: { type: 'STRING' },
-          entryLevel: { type: 'STRING' },
-          midLevel: { type: 'STRING' },
-          seniorLevel: { type: 'STRING' },
-          sources: { type: 'ARRAY', items: { type: 'STRING' } },
-        },
-        required: [
-          'title',
-          'location',
-          'entryLevel',
-          'midLevel',
-          'seniorLevel',
-          'sources',
-        ],
-      },
-    },
   },
-  required: ['coreDriversAnalysis', 'purposePaths', 'salaryData'],
+  required: ['coreDriversAnalysis', 'purposePaths'],
 };
 
 export const actionPlanOpenApiSchema = {

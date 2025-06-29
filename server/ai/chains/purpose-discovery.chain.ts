@@ -15,10 +15,6 @@ import {
   GEMINI_REASONING_MODEL,
 } from '../wrapper';
 import type { GeminiContent } from '../types';
-import {
-  salaryCache,
-  SALARY_CACHE_TTL_MS,
-} from '../../cache';
 import type {
   Language,
   QuestionnaireResponses,
@@ -65,7 +61,6 @@ const _parseSalaryResponse = (
     const sourcesMatch = block.match(/SOURCES:\s*\[([^\]]+)\]/i);
     if (!salaryMatch || !sourcesMatch) continue;
 
-    const salaries = salaryMatch[1].split(',').map((s) => s.trim());
     const sources = sourcesMatch[1]
       .split(',')
       .map((s) => s.trim().replace(/"/g, ''));
@@ -73,9 +68,7 @@ const _parseSalaryResponse = (
     results.push({
       title: career.title,
       location: career.location,
-      entryLevel: salaries[0] || 'N/A',
-      midLevel: salaries[1] || 'N/A',
-      seniorLevel: salaries[2] || 'N/A',
+      salaryRange: salaryMatch ? salaryMatch[1].trim() : 'N/A',
       sources: sources.filter((s) => s.startsWith('http')),
     });
   }
@@ -86,27 +79,12 @@ const _parseSalaryResponse = (
  * Retrieves salary data from cache or, on a miss, calls the Search model and
  * populates the cache for future requests.
  */
-async function _fetchAndCacheSalaries(
+async function _fetchSalaries(
   careers: SalaryFunctionArgs['careers'],
   language: Language,
 ): Promise<RawSalaryData[]> {
-  const results: RawSalaryData[] = [];
-  const misses: SalaryFunctionArgs['careers'] = [];
-
-  for (const career of careers) {
-    const cacheKey = `${career.title.toLowerCase()}:${career.location.toLowerCase()}:${language}`;
-    const cached = salaryCache.get<RawSalaryData>(cacheKey);
-    if (cached) {
-      results.push(cached);
-    } else {
-      misses.push(career);
-    }
-  }
-
-  if (misses.length === 0) return results;
-
   const langInstruction = language === 'es' ? 'en español' : 'in English';
-  const prompt = `For each career, find salary ranges (entry, mid, senior) and two source URLs. Respond ${langInstruction}. Use this exact format:\nCAREER: [Title]\nLOCATION: [Location]\nSALARY: [Entry Range], [Mid Range], [Senior Range]\nSOURCES: ["URL1", "URL2"]\n\nCareers:\n${misses
+  const prompt = `For each career, find a single broad salary range (e.g., €40-60k) and two source URLs. If the title is too niche, find the closest standard job title. Respond ${langInstruction}. Use this exact format:\nCAREER: [Title]\nLOCATION: [Location]\nSALARY: [Broad Range]\nSOURCES: [\"URL1\", \"URL2\"]\n\nCareers:\n${careers
     .map((c) => `- ${c.title} in ${c.location}`)
     .join('\n')}`;
 
@@ -118,13 +96,7 @@ async function _fetchAndCacheSalaries(
   if (!responseText)
     throw new Error('Facts model (search) returned no content for salaries.');
 
-  const newSalaries = _parseSalaryResponse(responseText, misses);
-  for (const salary of newSalaries) {
-    const cacheKey = `${salary.title.toLowerCase()}:${salary.location.toLowerCase()}:${language}`;
-    salaryCache.set(cacheKey, salary, SALARY_CACHE_TTL_MS);
-    results.push(salary);
-  }
-  return results;
+  return _parseSalaryResponse(responseText, careers);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -169,7 +141,7 @@ export async function getPurposeDiscoveryChain(
         );
       }
 
-      const salaryData = await _fetchAndCacheSalaries(
+      const salaryData = await _fetchSalaries(
         validation.data.careers,
         language,
       );

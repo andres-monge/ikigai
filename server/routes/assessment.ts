@@ -63,20 +63,6 @@ assessmentRouter.post("/analyze", async (req, res, next) => {
         ikigaiAlignment: path.ikigaiAlignment,
         actionStrategy: path.actionStrategy,
       });
-
-      const pathSalaryData = analysisResult.salaryData.find(
-        (s) => s.title.toLowerCase() === path.title.toLowerCase(),
-      );
-      if (pathSalaryData) {
-        await storage.createSalaryData({
-          pathId: createdPath.id,
-          entryLevel: pathSalaryData.entryLevel,
-          midLevel: pathSalaryData.midLevel,
-          seniorLevel: pathSalaryData.seniorLevel,
-          location: pathSalaryData.location,
-          sources: pathSalaryData.sources,
-        });
-      }
     }
 
     // Save core-driver summary

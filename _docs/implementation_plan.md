@@ -1,190 +1,286 @@
-# Implementation Plan
 
-## Phase 1: Critical Bug Fixes & Feature Updates
+## **Phase 1: Foundational AI & Core Experience**
 
-- [x] Step 1: Correct Session ID Propagation for Action Plan
+This phase overhauls the core AI-generated content to meet quality standards and fixes the most significant UX issues.
+
+- [x] **Step 1: Upgrade AI Model & Improve Core Drivers Analysis**
     
-    - **Task**: The "Choose this path" button fails because an empty `sessionId` is sent to the backend. This step ensures the correct `sessionId` is passed from the application's root to the `Results` page and used when generating the action plan.
+    - **Task:** The current analysis in the "What's popping out of your answers" section merely summarizes user input. This step will refine the system prompt as detailed below.
         
-    - **Files**:
+    - **Files:**
         
-        - `client/src/App.tsx`: Pass the `sessionId` state variable as a prop to the `Results` component within its `<Route>` definition.
+        - `server/ai/prompts.ts`: In `getPurposeDiscoverySystemPrompt`, refine the prompt, guided by the purpose_example and the prompting_guide provided, to: 
             
-        - `client/src/pages/results.tsx`: Update the `ResultsProps` interface to accept the `sessionId`. Pass this prop to the `useCreateActionPlan` hook, ensuring it's initialized with a valid ID.
-            
-    - **Step Dependencies**: None.
+            - explicitly  identify and convey the threads that connect what the user has answered, and not to just summarize the user's answer for the desired tone and format for the `coreDriversAnalysis`.
+            - Give each path a compelling name that is evocative and inspiring.
+                
+    - **Step Dependencies:** None. This is the foundational first step.
         
-    - **User Instructions**: After the changes, running through the questionnaire and clicking "Choose this path & Get plan" should successfully navigate to the action plan page without a 404 error.
+    - **User Instructions:** None.
         
-    - **✅ COMPLETED**: 
-        - **Decision**: Propagated `sessionId` from top-level `App` component down to `Results` via props rather than relying on the persisted session object, guaranteeing a non-empty identifier for the `useCreateActionPlan` mutation.
-        - **Files Updated**: `client/src/App.tsx` (passed `sessionId` to `<Results />` route), `client/src/pages/results.tsx` (added `sessionId` prop to `ResultsProps` and forwarded to `useCreateActionPlan`).
-        - **Edge Cases Considered**: Brand-new visitors with no existing `sessionId` are covered because `App` auto-generates one on mount.
-        - **Follow-up Bug**: Compilation currently fails due to `economic` vs `economicReality` mismatch; will be addressed in Step 2.
-        
-- [x] Step 2: Unify "Economic Reality" Data Key
+
+---
+
+- [x] **Step 2: Revamp Salary Data Generation and Display** *(Completed – 2025-06-29)*
     
-    - **Task**: The "Economic Reality" field is blank due to a property name mismatch between the backend (`economicReality`) and frontend (`economic`). This step standardizes the property name to `economicReality` across the client-side codebase.
+    - **Decisions & Notes:**
+        - Removed salary caching and switched to fresh per-request salary look-ups via the "Facts" model.
+        - Simplified salary schema to a single `salaryRange` string plus source URLs.
+        - Top-level `salaryData` omitted from final JSON; salary facts are embedded directly in `ikigaiAlignment.pay`.
+        - Front-end `SalaryDisplay` component and supporting types deleted; pay narrative now covers compensation info.
+        - All unit tests pass after refactor (`npm test`).
         
-    - **Files**:
+    - **Task:** Simplify the salary benchmark feature. Guided by the purpose_example in @prompt_examples.md and the @prompting_guide.md provided, the AI will be prompted to find a single, broad salary range for an analogous, standard job title. This data will be integrated directly into the `pay` section of the Ikigai Alignment, removing the separate salary table and the need for a separate `salaryData` object in the JSON. The misleading "updated hourly" text and its associated caching will be removed.
         
-        - `client/src/types/assessment.ts`: In the `CoreDrivers` interface, rename the `economic` property to `economicReality`.
+    - **Files:**
+        
+        - `server/ai/chains/purpose-discovery.chain.ts`:
             
-        - `client/src/components/results/core-drivers-summary.tsx`: Update the JSX to access `analysis.economicReality` instead of `analysis.economic`.
+            - In `_fetchAndCacheSalaries`, modify the prompt to the "Facts" model. Instruct it to find a **single broad salary range** for the given career. Add the instruction: "If the title is too niche, find the range for the closest standard job title."
+                
+            - In `_parseSalaryResponse`, update the logic to parse a single salary range instead of three levels.
+                
+            - Remove all interaction with `salaryCache`. The function will now fetch fresh data on every call.
+                
+        - `server/ai/schemas.ts`:
             
-        - `client/src/lib/pdf-export.ts`: In the `exportToPDF` function, update the reference from `results.analysis.economic` to `results.analysis.economicReality`.
+            - In `rawSalaryDataSchema`, simplify the fields to just `title`, `location`, `salaryRange`, and `sources`.
+                
+            - In `purposeDiscoveryResultSchema`, **remove** the `salaryData: z.array(rawSalaryDataSchema)` field entirely.
+                
+            - Update `purposeDiscoveryOpenApiSchema` to reflect the removal of the top-level `salaryData` property.
+                
+        - `server/ai/prompts.ts`:
             
-    - **Step Dependencies**: None.
+            - In `getPurposeDiscoverySystemPrompt`, update the instructions for Step 3. The AI must now integrate the fetched salary data (and its sources) into the `ikigaiAlignment.pay` string, rather than passing it through the top-level `salaryData` field.
+                
+        - `server/routes/assessment.ts`:
+            
+            - Update the `/api/analyze` route logic to no longer create `salaryData` records in storage. The data from the "Facts" model will only be passed back to the "Reasoning" model.
+                
+        - `client/components/results/purpose-paths.tsx`:
+            
+            - Remove the `<SalaryDisplay />` component and its import.
+                
+        - `server/cache.ts`:
+            
+            - Remove the `salaryCache` export and the `SALARY_CACHE_TTL_MS` constant.
+                
+    - **Step Dependencies:** Step 1.
         
-    - **User Instructions**: The "Economic Reality" section in the "What's popping out of your answers" card should now correctly display the AI-generated text.
+    - **User Instructions:** Delete the file `client/components/results/purpose-paths/_components/salary-display.tsx`.
         
-    - **✅ COMPLETED**:
-        - **Decision**: Standardised `economicReality` property across the client-side codebase.
-        - **Files Updated**:
-            - `client/src/components/results/core-drivers-summary.tsx` – renamed `analysis.economic` → `analysis.economicReality` and added rich JSDoc.
-            - `client/src/lib/pdf-export.ts` – updated PDF generation to reference `economicReality`, switched to new `FullAssessment` type, and added null-safety.
-            - No backend changes required.
-        - **Edge Cases Considered**: PDF export gracefully handles sessions where `coreDriversAnalysis` is null by falling back to empty strings.
-        - **Follow-up**: Existing test failures are unrelated to this step and will be addressed in their respective future steps.
-        
-- [x] Step 3: Integrate Salary Data into Path Cards
+
+---
+
+- [ ] **Step 3: Overhaul Action Plan Generation**
     
-    - **Task**: The separate "Salary Benchmarks" table will be removed. Salary information (range, location, and sources) will be displayed directly within each corresponding "Purpose Path" card. To keep file sizes manageable, the path card will be broken into smaller sub-components.
+    - **Task:** Transform the Action Plan from three brief ideas into a single, detailed, step-by-step roadmap with a timeline, as per your "AI Pathfinder" example. This involves a major prompt and schema overhaul and deprecating the "Where to find your people" section.
         
-    - **Files**:
+    - **Files:**
         
-        - `client/src/pages/results.tsx`: Remove the `useMemo` hook for `salaryDataForTable` and delete the `<SalaryBenchmarks />` component invocation.
+        - `server/ai/prompts.ts`:
             
-        - `client/src/components/results/purpose-paths/_components/salary-display.tsx` (New File): Create a new component dedicated to rendering the salary grid (Entry, Mid, Senior), location, and sources for a single path.
+            - Completely rewrite `getActionPlanSystemPrompt`. The new prompt will instruct the AI to generate a single, comprehensive plan with numbered milestones, concrete actions, and timelines. It will be guided by a one-shot example based on your provided text.
+                
+            - The prompt will instruct the AI to integrate "Skills to Learn" and their YouTube links into the relevant steps of the plan, not as a separate section.
+                
+        - `shared/schema.ts`:
             
-        - `client/src/components/results/purpose-paths.tsx`: Import and use the new `SalaryDisplay` component within the card layout. Pass the `path.salaryData` to it.
+            - Redefine `actionPlanSchema` to support the new structured format (e.g., an array of `milestones`, where each milestone has `title`, `timeline`, and an array of `actions`). Remove `peopleToNetworkWith`.
+                
+        - `server/ai/schemas.ts`:
             
-        - `client/src/components/results/salary-benchmarks.tsx`: Delete this file.
+            - Update `actionPlanOpenApiSchema` to match the new, detailed structure from `actionPlanSchema`. Remove `peopleToNetworkWith`.
+                
+        - `client/pages/action-plan.tsx`:
             
-    - **Step Dependencies**: Step 2.
+            - Completely redesign the component's render logic to display the new milestone-based action plan.
+                
+            - Remove the card/section for "Where to Find Your People".
+                
+            - The accordion for skills will be removed; skills and videos will now be rendered inline within the plan's steps.
+                
+        - `client/types/assessment.ts`:
+            
+            - Update the `ActionPlan` type to match the new schema from `shared/schema.ts`.
+                
+    - **Step Dependencies:** Step 1.
         
-    - **User Instructions**: The main results page should no longer show a separate salary table. Each of the three path cards should now contain its own salary information.
+    - **User Instructions:** None.
         
-    - **✅ COMPLETED**:
-        - **Decision**: Embedded salary information directly within each Purpose Path card using a dedicated `SalaryDisplay` sub-component and removed the global `<SalaryBenchmarks />` table.
-        - **Files Updated**:
-            - `client/src/components/results/purpose-paths/_components/salary-display.tsx` – new fully-documented component that renders entry, mid & senior compensation, location and data sources.
-            - `client/src/components/results/purpose-paths.tsx` – integrated `SalaryDisplay`, updated prop types to `PurposePathWithSalary`.
-            - `client/src/pages/results.tsx` – deleted `salaryDataForTable` `useMemo`, removed `<SalaryBenchmarks />` invocation, and simplified PDF export call.
-            - `client/src/components/results/salary-benchmarks.tsx` – deleted obsolete file.
-        - **Edge Cases Considered**: Handles missing or null salary values gracefully by displaying an em-dash (—). Section is omitted altogether when no salary data is provided for a path.
-        - **Follow-up**: No additional backend changes required. Existing failing tests are unrelated to this step and will be addressed in a future testing phase.
-        
-- [x] Step 4: Implement Path-Specific Chat Refinement (Frontend)
+
+---
+
+- [ ] **Step 4: Fix Action Plan Loading & Navigation UX**
     
-    - **Task**: Enable chat refinement for individual paths by moving the "Refine" button into each path card and updating the app's state management to track which path is being discussed.
+    - **Task:** Prevent the UI from freezing on the Results page while the Action Plan is being generated. The app should navigate to the `/action-plan` route immediately and display a loading state there.
         
-    - **Files**:
+    - **Files:**
         
-        - `client/src/App.tsx`: Add new state, `chatPathId: number | null`. Update `handleOpenChat` to accept an optional `pathId` and set this state. Pass `chatPathId` to the `ChatInterface` component.
+        - `client/pages/results.tsx`:
             
-        - `client/src/pages/results.tsx`: Remove the global "Refine with Nami" button. Update the `onOpenChat` prop passed to `PurposePaths` to handle the new `pathId` argument.
+            - In the `handleChoosePath` function, call `Maps('/action-plan')` _before_ calling `createActionPlan(pathId)`.
+                
+        - `client/pages/action-plan.tsx`:
             
-        - `client/src/components/results/purpose-paths.tsx`: Add a new, smaller "Refine" button to each path card. This button will invoke the `onOpenChat` prop with the `path.id`.
+            - The component already has a `isLoading` state from `useGetActionPlan`. Ensure the `ActionPlanSkeleton` it renders is visually prominent and provides clear feedback that the plan is being generated. No functional change is needed here, as the component will correctly display the skeleton until the data is loaded.
+                
+        - `client/hooks/use-create-action-plan.ts`:
             
-        - `client/src/components/chat-interface.tsx`: Update `ChatInterfaceProps` to accept the optional `pathId`. In `handleSubmit`, include the `pathId` in the body of the `POST /api/chat` request if it's present.
+            - In the `onSuccess` callback provided by `useMutation`, add a call to `queryClient.invalidateQueries({ queryKey: ['actionPlan', sessionId] })`. This ensures that after the mutation succeeds, the query on the action plan page is marked as stale and refetches the new data.
+                
+        - `client/lib/queryClient.ts`:
             
-    - **✅ COMPLETED**:
-        - **Decision**: Introduced per-path chat refinement by adding `chatPathId` state at the app level and moving the "Refine" entrypoint into each individual Purpose Path card. This enables focused conversations tied to a single path while retaining full-page context for other chat types.
-        - **Files Updated**:
-            - `client/src/App.tsx` – added `chatPathId` state, enhanced `handleOpenChat` to accept optional `pathId`, passed `chatPathId` to `<ChatInterface />` and wired new handler to `<Results />` route.
-            - `client/src/pages/results.tsx` – removed global "Refine with Nami" button, updated prop types, and forwarded `onOpenChat` with the relevant `pathId` to `<PurposePaths />`.
-            - `client/src/components/results/purpose-paths.tsx` – added a secondary "Refine" button to each card, updated props interface, and invoked `onOpenChat(path.id)`.
-            - `client/src/components/chat-interface.tsx` – accepted new optional `pathId` prop and conditionally included it in the `/api/chat` POST body.
-            - `client/src/lib/i18n.ts` – added new translation key `results.refine` for both English and Spanish.
-        - **Edge Cases Considered**: When `pathId` is `null`, chats default to the broader discovery or action-plan context. Chat history persists per context, not per path, to avoid excessive storage usage; future steps may expand this if needed.
-        - **Follow-up**: Backend must now accept the optional `pathId` (handled in Step 5).
-    - **Step Dependencies**: None.
+            - Export `queryClient` so it can be imported and used in the hook.
+                
+    - **Step Dependencies:** Step 3.
         
-    - **User Instructions**: The main "Refine with Nami" button on the results page has been removed. Each Purpose Path card now contains its own "Refine" button that opens the chat drawer focused on that specific path.
+    - **User Instructions:** None.
         
-- [x] Step 5: Implement Path-Specific Chat Refinement (Backend)
+
+---
+
+## **Phase 2: Reliability & Polish**
+
+This phase focuses on improving the reliability of external data and polishing the UI/UX with smaller, high-impact changes.
+
+- [ ] **Step 5: Fix Broken YouTube Links with YouTube's API**
     
-    - **Task**: Update the backend to process the optional `pathId` from the client, allowing the AI to generate a response focused on a single Purpose Path when refining discovery results.
+    - **Task:** Replace the unreliable web search for YouTube videos with direct calls to the YouTube Data API v3. This will ensure video links are valid and allows for displaying thumbnails.
         
-    - **Files**:
+    - **Files:**
         
-        - `shared/schema.ts`: Added `pathId?: number` to `chatRequestSchema` and regenerated `ChatRequest` type.
+        - `server/ai/chains/action-plan.chain.ts`:
             
-        - `server/routes/chat.ts`: Extracts `pathId` from validated body and forwards it to `getChatRefinementChain`.
+            - In `_fetchAndCacheYoutubeVideos` (which should be renamed to `_fetchYoutubeVideos`), remove the call to `generateContentWithSearch`.
+                
+            - Instead, use `node-fetch` to call the YouTube Data API v3 `search.list` endpoint. You will need to construct the URL with the `key`, `part`, `q` (the skill), `type`, and `maxResults` parameters.
+                
+            - Parse the JSON response from the YouTube API to extract video titles, URLs, and thumbnail URLs.
+                
+            - The data returned by the function and stored in the cache should now be an array of objects, each containing `{ title, url, thumbnailUrl }`.
+                
+        - `server/ai/prompts.ts`:
             
-        - `server/ai/chains.ts`: `getChatRefinementChain` now accepts an optional `pathId`. When present (and the context is `discovery`), the chain narrows `contextString` to only the selected path and throws a descriptive error if the path is not found.
+            - In `getActionPlanSystemPrompt`, modify the function-calling step. The AI no longer needs to find videos itself; it just needs to identify the key skills. Update the `getYoutubeVideosForSkills` tool definition to reflect this if necessary, though the existing one should work.
+                
+        - `client/pages/action-plan.tsx`:
             
-        - `server/ai/prompts.ts`: `getChatRefinementSystemPrompt` now receives a fourth `pathFocused` boolean. When `true`, the task instructions reference the "selected Purpose Path" rather than "three Purpose Paths" to make the prompt more precise.
+            - In the render logic for the action plan, where a YouTube link is present, render an `<img>` tag using the new `thumbnailUrl` field. Wrap it in an `<a>` tag pointing to the `url`.
+                
+            - Remove the accordion wrapper around the video links. Display all three recommended videos directly.
+                
+    - **Step Dependencies:** Step 3.
+        
+    - **User Instructions:**
+        
+        1. Go to the Google Cloud Console, enable the "YouTube Data API v3", and generate an API key.
             
-    - **✅ COMPLETED**:
-        - **Decision**: Enabled back-end awareness of `pathId` to support per-path chat refinement without breaking existing chats. Maintained backwards compatibility by making `pathId` optional and defaulting to the previous multi-path behaviour when omitted.
-        
-        - **Files Updated**:
-            - `shared/schema.ts` – schema and type update with exhaustive JSDoc.
-            - `server/routes/chat.ts` – body parsing, validation, and chain call updated.
-            - `server/ai/chains.ts` – added path filtering logic, enhanced error handling, updated system prompt call.
-            - `server/ai/prompts.ts` – added `pathFocused` param and dynamic task wording.
+        2. Add the new key to your `.env.local` file as `YOUTUBE_API_KEY=...`.
+            
+        3. Update `.env.example` with `YOUTUBE_API_KEY=`.
+            
 
-        - **Edge Cases Considered**: 
-            - Invalid or missing `pathId` now triggers a `400` error from validation or a descriptive server error if the ID does not belong to the current session.
-            - `pathId` is ignored for `action_plan` chats to avoid ambiguity.
-            - Existing clients that do not send a `pathId` continue to receive the previous multi-path behaviour.
-        
-        - **Follow-up**: No further backend changes required. Front-end work completed in Step 4 now interacts seamlessly with the updated endpoints.
+---
 
-    - **User Instructions**: Click a "Refine" button inside any Purpose Path card and ask a question like "Tell me more about salaries". The AI response should reference only that specific path.
-        
-
-## Phase 2: Code Structure & Modularity
-
-- [x] Step 6: Split Monolithic Hooks and Server Files
+- [ ] **Step 6: Refine UI Text and Wording**
     
-    - **Task**: To improve maintainability and adhere to the "AI-first" principle of smaller, focused files, the large hook and AI chain files were split into separate, feature-specific modules.
+    - **Task:** Update various UI strings across the application to better match the desired tone and persona.
         
-    - **Files**:
+    - **Files:**
         
-        - `client/src/hooks/use-create-assessment.ts` – **new**: contains `useCreateAssessment` mutation.
-        - `client/src/hooks/use-create-action-plan.ts` – **new**: contains `useCreateActionPlan` mutation.
-        - `client/src/hooks/use-get-action-plan.ts` – **new**: contains `useGetActionPlan` query hook.
-        - `client/src/hooks/use-assessment.ts` – **deleted**.
-        - `client/src/pages/questionnaire.tsx`, `results.tsx`, `action-plan.tsx` – **imports updated**.
+        - `client/lib/i18n.ts`:
+            
+            - Update `welcome.title` to "Find fulfilling work." and `welcome.description` to "Work doesn't have to suck. Stop waiting for the weekend to get here."
+                
+            - Update `results.subtitle` to "These are the paths I think you'd find fulfilling."
+                
+            - Update `results.purposePaths` to "Your Three Paths".
+                
+            - Update `loading.thinking` to "Let me cook...".
+                
+    - **Step Dependencies:** None.
         
-        - `server/ai/chains/purpose-discovery.chain.ts` – **new**: holds `getPurposeDiscoveryChain` and salary helpers.
-        - `server/ai/chains/action-plan.chain.ts` – **new**: holds `getActionPlanChain` and YouTube helpers.
-        - `server/ai/chains/chat-refinement.chain.ts` – **new**: holds `getChatRefinementChain` async generator.
-        - `server/ai/chains/index.ts` – **new** barrel file exporting all chain functions.
-        - `server/ai/chains.ts` – **deleted**.
-        - `server/routes/*` – kept identical import path (`../ai/chains`) and therefore required **no edits**.
+    - **User Instructions:** None.
         
-    - **✅ COMPLETED**:
-        - **Decision**: Adopted a one-file-per-concern structure which dramatically improves navigability and paves the way for fine-grained tests in Phase 3.
-        - **Edge Cases Considered**: Ensured barrel file preserves import path backward-compatibility; verified a full `npm run build` succeeds post-refactor.
-        - **Follow-up**: None – ready to proceed with testing expansion in Step 7.
 
-## Phase 3: Testing & Documentation
+---
 
-- [x] Step 7: Expand Test Coverage
+- [ ] **Step 7: Implement Auto-Resizing Textareas**
     
-    - **Task**: Increase confidence in the codebase by adding unit tests for critical hooks and integration tests for the primary API endpoint.
+    - **Task:** Enhance the user input experience by making the text areas in the questionnaire and chat interface auto-resizing.
         
-    - **Files**:
+    - **Task Details:**
         
-        - `client/src/hooks/__tests__/use-create-action-plan.test.tsx` (New File): Add a new Vitest/Jest test file. Write a test that mocks the `apiRequest` and verifies that the `onSuccess` callback is triggered with the expected payload.
+        - Install the `react-textarea-autosize` package: `npm install react-textarea-autosize`.
             
-        - `server/__tests__/assessment.test.ts` (New File): Add a new `supertest` integration test. Write a test that sends a valid payload to `/api/action-plan` and asserts that it receives a `200 OK` response with a valid JSON body.
+        - Replace the `<Textarea />` component from shadcn with the new `TextareaAutosize` component in the specified files.
             
-    - **Step Dependencies**: None.
+    - **Files:**
         
-    - **✅ COMPLETED**:
-        - **Decision**: Added fully-isolated test suites to validate both the front-end mutation hook and the back-end `/api/action-plan` route without hitting real network or AI services.
-        - **Files Added**:
-            - `client/src/hooks/__tests__/use-create-action-plan.test.tsx` – mocks `apiRequest`, renders the hook under a `QueryClientProvider`, and asserts the `onSuccess` callback fires with the expected payload and that the helper is invoked with the correct arguments.
-            - `server/__tests__/assessment.test.ts` – spins up an in-memory Express app, stubs `getActionPlanChain`, seeds `MemStorage`, sends a `POST /api/action-plan` request with `supertest`, and asserts a `200` response containing the stubbed action plan and chosen path ID.
-        - **Other Files Updated**:
-            - `tsconfig.json` – excluded `**/*.test.tsx` from production type-checking.
-            - `package.json` – added dev dependencies `@testing-library/react` and `supertest`.
-        - **Edge Cases Considered**: Hook test runs in a `jsdom` environment to satisfy React; server test mocks the heavy AI chain to keep the test fast and deterministic.
-        - **Follow-up**: CI pipeline requires `npm run check` to skip test files; the tsconfig adjustment covers this.
+        - `client/components/questionnaire/question-card.tsx`:
+            
+            - Import `TextareaAutosize` and use it for the question inputs. Apply the same base styling as the original `<Textarea>`.
+                
+        - `client/components/chat-interface.tsx`:
+            
+            - Import `TextareaAutosize` and replace the `<Input />` component used for chat messages with it to allow for multi-line, auto-expanding input. You may need to adjust the surrounding form styles.
+                
+    - **Step Dependencies:** None.
+        
+    - **User Instructions:** None.
+        
 
-    - **User Instructions**: Run `npm test` from the root directory. All new and existing tests should pass.
+---
+
+- [ ] **Step 8: Simplify Chat Workflow**
+    
+    - **Task:** As requested, remove the streaming implementation for the chat refinement feature due to bugginess. Revert to a simpler, non-streaming request-response model.
+        
+    - **Files:**
+        
+        - `server/routes/chat.ts`:
+            
+            - Rewrite the `POST /api/chat` handler. Remove all SSE headers (`text/event-stream`).
+                
+            - It should now `await` the full response from the chain, then save the user and assistant messages to storage, and finally send the complete AI response back as a single JSON object.
+                
+        - `server/ai/chains/chat-refinement.chain.ts`:
+            
+            - Change the `getChatRefinementChain` function from an `async function*` (generator) to a standard `async function` that returns `Promise<string>`.
+                
+            - It should call `generateContent` (not `generateContentStream`) and return the complete text response from the AI.
+                
+        - `client/components/chat-interface.tsx`:
+            
+            - In the `handleSubmit` function, remove the `ReadableStream` processing logic.
+                
+            - Use a standard `await fetch(...)` call and `await response.json()` to get the complete message.
+                
+            - Update the `setMessages` logic to add the user message and a temporary "thinking" placeholder, then update the placeholder with the full response once it arrives.
+                
+    - **Step Dependencies:** None.
+        
+    - **User Instructions:** None.
+        
+
+---
+
+- [ ] **Step 9: Minor Style Cleanup**
+    
+    - **Task:** Remove the red asterisks indicating required fields in the questionnaire for a cleaner look.
+        
+    - **Files:**
+        
+        - `client/components/questionnaire/question-card.tsx`:
+            
+            - In the JSX for the question `Label`, remove the conditional render: `{question.required && <span className="text-red-500 ml-1">*</span>}`.
+                
+    - **Step Dependencies:** None.
+        
+    - **User Instructions:** None.
+
+
+Your answers for this were very good. I want to use the same format for my AI Pathfinder project. 
+

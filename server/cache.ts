@@ -84,13 +84,6 @@ class Cache {
 }
 
 /**
- * Singleton instance of the Cache class specifically for salary data.
- * The technical specification requires a 24-hour cache for salaries.
- */
-export const salaryCache = new Cache();
-export const SALARY_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
-
-/**
  * Singleton instance of the Cache class specifically for YouTube video search results.
  * A longer TTL is used as these results are less time-sensitive than salaries.
  */

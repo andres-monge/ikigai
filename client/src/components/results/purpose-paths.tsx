@@ -18,7 +18,6 @@ import { Rocket, Users, Code, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { t, type Language } from '@/lib/i18n';
 import type { PurposePathWithSalary } from '@/types/assessment';
-import { SalaryDisplay } from './purpose-paths/_components/salary-display';
 
 interface PurposePathsProps {
   purposePaths: PurposePathWithSalary[];
@@ -132,12 +131,6 @@ export function PurposePaths({
                       {path.actionStrategy}
                     </p>
                   </div>
-
-                  {/* Embedded Salary Information */}
-                  <SalaryDisplay
-                    salaryData={path.salaryData}
-                    language={language}
-                  />
                 </div>
               </div>
 
