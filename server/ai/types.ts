@@ -81,3 +81,15 @@ export interface GeminiGenerateContentResponse {
   candidates: GeminiCandidate[];
   promptFeedback?: any;
 }
+
+/**
+ * @description The validated and structured data for the "Core Drivers" analysis.
+ */
+export interface CoreDrivers {
+  statementSentence: string;
+  coreThreads: string;
+}
+
+/**
+ * @description The validated and structured data for the entire Purpose Discovery phase.
+ */

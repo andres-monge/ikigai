@@ -37,10 +37,8 @@ export type RawSalaryData = z.infer<typeof rawSalaryDataSchema>;
 
 export const purposeDiscoveryResultSchema = z.object({
   coreDriversAnalysis: z.object({
-    energy: z.string(),
-    edge: z.string(),
-    impact: z.string(),
-    economicReality: z.string(),
+    statementSentence: z.string(),
+    coreThreads: z.string(),
   }),
   purposePaths: z
     .array(
@@ -81,26 +79,18 @@ export const purposeDiscoveryOpenApiSchema = {
     coreDriversAnalysis: {
       type: 'OBJECT',
       properties: {
-        energy: {
-          type: 'STRING',
-          description: 'A summary of what energizes the user.',
-        },
-        edge: {
-          type: 'STRING',
-          description: "A summary of the user's unique skills and strengths.",
-        },
-        impact: {
+        statementSentence: {
           type: 'STRING',
           description:
-            'A summary of the kind of impact the user wants to make.',
+            'A single, insightful statement sentence that presents the core threads and culminates in a summary of their core ikigai or "reason for being".',
         },
-        economicReality: {
+        coreThreads: {
           type: 'STRING',
           description:
-            "A summary of the user's financial needs and timeline.",
+            'A detailed explanation of the 2-3 core "threads" that connect their passions, skills, and values. It should start with an intro, then a markdown-formatted list of threads, and a conclusion. For example: "The threads that connect almost everything you\'ve listed are:\\n\\n1. **Thread 1.**\\n2. **Thread 2.**\\n\\nConclusion about other points."',
         },
       },
-      required: ['energy', 'edge', 'impact', 'economicReality'],
+      required: ['statementSentence', 'coreThreads'],
     },
     purposePaths: {
       type: 'ARRAY',

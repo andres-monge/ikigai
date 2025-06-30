@@ -84,7 +84,8 @@ async function _generateWithRetry(
   }
 
   // The `model` variable now correctly contains the full path e.g., "models/gemini-2.5-flash"
-  const url = `${BASE_URL}/${model}:generateContent?key=${GEMINI_API_KEY}`;
+  const finalModel = model.startsWith('models/') ? model : `models/${model}`;
+  const url = `${BASE_URL}/${finalModel}:generateContent?key=${GEMINI_API_KEY}`;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -135,7 +136,8 @@ async function* _generateStreamWithRetry(
     throw new Error('GEMINI_API_KEY is not configured in environment variables.');
   }
 
-  const url = `${BASE_URL}/${model}:streamGenerateContent?key=${GEMINI_API_KEY}`;
+  const finalModel = model.startsWith('models/') ? model : `models/${model}`;
+  const url = `${BASE_URL}/${finalModel}:streamGenerateContent?key=${GEMINI_API_KEY}`;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {

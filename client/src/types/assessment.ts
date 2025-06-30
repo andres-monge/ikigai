@@ -39,10 +39,8 @@ export type Language = 'en' | 'es';
 /* -------------------------------------------------------------------------- */
 
 export interface CoreDrivers {
-  energy: string;
-  edge: string;
-  impact: string;
-  economicReality: string;
+  statementSentence: string;
+  coreThreads: string;
 }
 
 export interface IkigaiAlignment {

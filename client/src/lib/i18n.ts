@@ -63,6 +63,7 @@ export const translations: Record<string, Record<string, string>> = {
     'results.subtitle':
       'Nami has analyzed your responses and discovered your unique purpose paths',
     'results.coreDrivers': "What's Popping Out of Your Answers",
+    'results.yourIkigai': 'Your Ikigai',
     'results.purposePaths': 'Your Three Purpose Paths',
     'results.salaryBenchmarks': 'Salary Benchmarks',
     'results.exportPdf': 'Export to PDF',
@@ -164,6 +165,7 @@ export const translations: Record<string, Record<string, string>> = {
     'results.subtitle':
       'Nami ha analizado tus respuestas y descubierto tus caminos únicos de propósito',
     'results.coreDrivers': 'Lo Que Destaca de Tus Respuestas',
+    'results.yourIkigai': 'Tu Ikigai',
     'results.purposePaths': 'Tus Tres Caminos de Propósito',
     'results.salaryBenchmarks': 'Referencias Salariales',
     'results.exportPdf': 'Exportar a PDF',

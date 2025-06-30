@@ -1,4 +1,5 @@
 import { Lightbulb } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 import { t, type Language } from '@/lib/i18n';
 import type { CoreDrivers } from '@/types/assessment';
 
@@ -28,7 +29,10 @@ interface CoreDriversSummaryProps {
  * it remains easily testable and reusable.
  */
 
-export function CoreDriversSummary({ analysis, language }: CoreDriversSummaryProps) {
+export function CoreDriversSummary({
+  analysis,
+  language,
+}: CoreDriversSummaryProps) {
   return (
     <div className="bg-white rounded-2xl shadow-lg p-8 mb-8">
       <div className="flex items-center mb-6">
@@ -36,41 +40,30 @@ export function CoreDriversSummary({ analysis, language }: CoreDriversSummaryPro
           <Lightbulb className="text-white w-4 h-4" />
         </div>
         <h3 className="text-xl font-bold text-slate-900">
-          {t('results.coreDrivers', language)}
+          {t('results.yourIkigai', language) || 'Your Ikigai'}
         </h3>
       </div>
-      
-      <div className="grid md:grid-cols-2 gap-8">
-        <div className="space-y-6">
-          <div className="border-l-4 border-primary pl-4">
-            <h4 className="font-semibold text-slate-900 mb-2">
-              🌟 {t('drivers.energy', language)}
-            </h4>
-            <p className="text-slate-600">{analysis.energy}</p>
-          </div>
-          
-          <div className="border-l-4 border-secondary pl-4">
-            <h4 className="font-semibold text-slate-900 mb-2">
-              ⚡ {t('drivers.edge', language)}
-            </h4>
-            <p className="text-slate-600">{analysis.edge}</p>
-          </div>
-        </div>
-        
-        <div className="space-y-6">
-          <div className="border-l-4 border-success pl-4">
-            <h4 className="font-semibold text-slate-900 mb-2">
-              🌍 {t('drivers.impact', language)}
-            </h4>
-            <p className="text-slate-600">{analysis.impact}</p>
-          </div>
-          
-          <div className="border-l-4 border-accent pl-4">
-            <h4 className="font-semibold text-slate-900 mb-2">
-              💰 {t('drivers.economic', language)}
-            </h4>
-            <p className="text-slate-600">{analysis.economicReality}</p>
-          </div>
+
+      <div className="space-y-6">
+        <p className="text-center font-bold text-slate-800 text-lg">
+          {analysis.statementSentence}
+        </p>
+        <div className="prose prose-slate max-w-none">
+          <ReactMarkdown
+            components={{
+              p: ({ node, ...props }) => (
+                <p className="text-slate-600" {...props} />
+              ),
+              ol: ({ node, ...props }) => (
+                <ol className="list-decimal list-inside space-y-2" {...props} />
+              ),
+              li: ({ node, ...props }) => (
+                <li className="text-slate-600" {...props} />
+              ),
+            }}
+          >
+            {analysis.coreThreads}
+          </ReactMarkdown>
         </div>
       </div>
     </div>

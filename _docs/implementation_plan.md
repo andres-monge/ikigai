@@ -58,7 +58,7 @@ This phase overhauls the core AI-generated content to meet quality standards and
             
             - Update the `/api/analyze` route logic to no longer create `salaryData` records in storage. The data from the "Facts" model will only be passed back to the "Reasoning" model.
                 
-        - `client/components/results/purpose-paths.tsx`:
+        - `client/src/components/results/purpose-paths.tsx`:
             
             - Remove the `<SalaryDisplay />` component and its import.
                 
@@ -68,7 +68,7 @@ This phase overhauls the core AI-generated content to meet quality standards and
                 
     - **Step Dependencies:** Step 1.
         
-    - **User Instructions:** Delete the file `client/components/results/purpose-paths/_components/salary-display.tsx`.
+    - **User Instructions:** Delete the file `client/src/components/results/purpose-paths/_components/salary-display.tsx`.
         
 
 ---
@@ -93,7 +93,7 @@ This phase overhauls the core AI-generated content to meet quality standards and
             
             - Update `actionPlanOpenApiSchema` to match the new, detailed structure from `actionPlanSchema`. Remove `peopleToNetworkWith`.
                 
-        - `client/pages/action-plan.tsx`:
+        - `client/src/pages/action-plan.tsx`:
             
             - Completely redesign the component's render logic to display the new milestone-based action plan.
                 
@@ -101,7 +101,7 @@ This phase overhauls the core AI-generated content to meet quality standards and
                 
             - The accordion for skills will be removed; skills and videos will now be rendered inline within the plan's steps.
                 
-        - `client/types/assessment.ts`:
+        - `client/src/types/assessment.ts`:
             
             - Update the `ActionPlan` type to match the new schema from `shared/schema.ts`.
                 
@@ -118,19 +118,19 @@ This phase overhauls the core AI-generated content to meet quality standards and
         
     - **Files:**
         
-        - `client/pages/results.tsx`:
+        - `client/src/pages/results.tsx`:
             
             - In the `handleChoosePath` function, call `Maps('/action-plan')` _before_ calling `createActionPlan(pathId)`.
                 
-        - `client/pages/action-plan.tsx`:
+        - `client/src/pages/action-plan.tsx`:
             
             - The component already has a `isLoading` state from `useGetActionPlan`. Ensure the `ActionPlanSkeleton` it renders is visually prominent and provides clear feedback that the plan is being generated. No functional change is needed here, as the component will correctly display the skeleton until the data is loaded.
                 
-        - `client/hooks/use-create-action-plan.ts`:
+        - `client/src/hooks/use-create-action-plan.ts`:
             
             - In the `onSuccess` callback provided by `useMutation`, add a call to `queryClient.invalidateQueries({ queryKey: ['actionPlan', sessionId] })`. This ensures that after the mutation succeeds, the query on the action plan page is marked as stale and refetches the new data.
                 
-        - `client/lib/queryClient.ts`:
+        - `client/src/lib/queryClient.ts`:
             
             - Export `queryClient` so it can be imported and used in the hook.
                 
@@ -165,7 +165,7 @@ This phase focuses on improving the reliability of external data and polishing t
             
             - In `getActionPlanSystemPrompt`, modify the function-calling step. The AI no longer needs to find videos itself; it just needs to identify the key skills. Update the `getYoutubeVideosForSkills` tool definition to reflect this if necessary, though the existing one should work.
                 
-        - `client/pages/action-plan.tsx`:
+        - `client/src/pages/action-plan.tsx`:
             
             - In the render logic for the action plan, where a YouTube link is present, render an `<img>` tag using the new `thumbnailUrl` field. Wrap it in an `<a>` tag pointing to the `url`.
                 
@@ -190,7 +190,7 @@ This phase focuses on improving the reliability of external data and polishing t
         
     - **Files:**
         
-        - `client/lib/i18n.ts`:
+        - `client/src/lib/i18n.ts`:
             
             - Update `welcome.title` to "Find fulfilling work." and `welcome.description` to "Work doesn't have to suck. Stop waiting for the weekend to get here."
                 
@@ -219,11 +219,11 @@ This phase focuses on improving the reliability of external data and polishing t
             
     - **Files:**
         
-        - `client/components/questionnaire/question-card.tsx`:
+        - `client/src/components/questionnaire/question-card.tsx`:
             
             - Import `TextareaAutosize` and use it for the question inputs. Apply the same base styling as the original `<Textarea>`.
                 
-        - `client/components/chat-interface.tsx`:
+        - `client/src/components/chat-interface.tsx`:
             
             - Import `TextareaAutosize` and replace the `<Input />` component used for chat messages with it to allow for multi-line, auto-expanding input. You may need to adjust the surrounding form styles.
                 
@@ -252,7 +252,7 @@ This phase focuses on improving the reliability of external data and polishing t
                 
             - It should call `generateContent` (not `generateContentStream`) and return the complete text response from the AI.
                 
-        - `client/components/chat-interface.tsx`:
+        - `client/src/components/chat-interface.tsx`:
             
             - In the `handleSubmit` function, remove the `ReadableStream` processing logic.
                 
@@ -273,14 +273,10 @@ This phase focuses on improving the reliability of external data and polishing t
         
     - **Files:**
         
-        - `client/components/questionnaire/question-card.tsx`:
+        - `client/src/components/questionnaire/question-card.tsx`:
             
             - In the JSX for the question `Label`, remove the conditional render: `{question.required && <span className="text-red-500 ml-1">*</span>}`.
                 
     - **Step Dependencies:** None.
         
     - **User Instructions:** None.
-
-
-Your answers for this were very good. I want to use the same format for my AI Pathfinder project. 
-

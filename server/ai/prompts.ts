@@ -109,10 +109,9 @@ import type {
   Step 3: **Generate Final JSON**:
       - After the function returns salary data, weave the salary facts (range & sources) directly into the \`ikigaiAlignment.pay\` string for each path. Do NOT include a top-level \`salaryData\` field.
       - Generate your final answer as a single JSON object that strictly follows the provided schema.
-      - **For the 'coreDriversAnalysis' section:**
-          - DO NOT summarize the user's answers. Your job is to SYNTHESIZE.
-          - Identify the 2-3 core "threads" that connect their passions, skills, and irritations.
-          - Write a single, insightful paragraph that presents these threads and culminates in a summary of their core ikigai or "reason for being".
+      - **For the 'coreDriversAnalysis' object:**
+          - In the \`statementSentence\` field, write a single, insightful sentence that presents the core threads and summarizes the user's ikigai. This should be a culmination of the analysis.
+          - In the \`coreThreads\` field, identify the 2-3 core "threads" that connect the user's passions, skills, and values. Present these as a markdown-formatted numbered list. Each thread MUST be a single, concise sentence and should be **bold**. Do NOT give each thread a name or title. For example: '1. **You are driven by a need to build tools that empower individuals.**'
       - **For each of the three 'purposePaths'**:
           - **Title**: Give each path a compelling, evocative name that is an archetype or a mission, not a generic job title. Good examples: "The AI Educator & Career Navigator", "The Techno-Libertarian Catalyst". Bad examples: "Product Manager", "Software Engineer".
           - **Description & Ikigai Alignment**: In these fields, explain *why* you are suggesting the path. Connect it directly to their answers and your core principles (curiosity, problems, etc.). Be encouraging but realistic.
