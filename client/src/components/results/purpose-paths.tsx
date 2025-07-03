@@ -139,7 +139,8 @@ export function PurposePaths({
                 {typeof path.id === 'number' && (
                   <Button
                     onClick={() => onChoosePath(path.id!)}
-                    className="w-full gradient-primary text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-200 mb-3"
+                    variant="secondary"
+                    className="w-full font-semibold shadow-lg hover:shadow-xl transition-all duration-200 mb-3"
                     disabled={isChoosing}
                   >
                     {isChoosing ? (

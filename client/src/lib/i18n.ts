@@ -72,6 +72,11 @@ export const translations: Record<string, Record<string, string>> = {
     'results.choosePathAndGetPlan': 'Choose this Path & Get Plan',
     'results.actionStrategy': 'Action Strategy',
     'results.refine': 'Refine',
+    'results.generatingPlanTitle': 'Generating your plan...',
+    'results.generatingPlanDescription':
+      "Nami is crafting a detailed, step-by-step guide for your new path. This might take a moment.",
+    'results.actionPlanError':
+      'Could not generate an action plan. Please try again.',
 
     // Action Plan
     'actionPlan.title': 'Your Action Plan',
@@ -174,6 +179,11 @@ export const translations: Record<string, Record<string, string>> = {
     'results.choosePathAndGetPlan': 'Elegir este Camino y Obtener Plan',
     'results.actionStrategy': 'Estrategia de Acción',
     'results.refine': 'Refinar',
+    'results.generatingPlanTitle': 'Generando tu plan...',
+    'results.generatingPlanDescription':
+      'Nami está elaborando una guía detallada paso a paso para tu nuevo camino. Esto podría tomar un momento.',
+    'results.actionPlanError':
+      'No se pudo generar un plan de acción. Por favor, inténtalo de nuevo.',
 
     // Action Plan
     'actionPlan.title': 'Tu Plan de Acción',

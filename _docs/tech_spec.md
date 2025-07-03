@@ -162,9 +162,9 @@ My_Directory_Structure/
         
     2. The server's orchestrator in `server/ai/chains/purpose-discovery.chain.ts` initiates two parallel processes.
         
-    3. **Call 1 (`models/gemini-2.5-flash-lite`):** A prompt is sent with search enabled to find a **single, broad salary range** for an analogous, standard job title related to the user's profile, along with source URLs.
+    3. **Call 1 (`GEMINI_FACTS_MODEL`):** A prompt is sent with search enabled to find a **single, broad salary range** for an analogous, standard job title related to the user's profile, along with source URLs.
         
-    4. **Call 2 (`models/gemini-1.5-pro-latest`):** The main reasoning process begins. The prompt includes the user's questionnaire, the Nami persona, and a tool definition for `getSalaryDataForCareers`.
+    4. **Call 2 (`GEMINI_REASONING_MODEL`):** The main reasoning process begins. The prompt includes the user's questionnaire, the Nami persona, and a tool definition for `getSalaryDataForCareers`.
         
     5. Once Call 1 returns the salary data, the orchestrator uses it to resolve the function call for Call 2.
         
@@ -178,13 +178,13 @@ My_Directory_Structure/
     
 - **Implementation Steps:**
     
-    1. **Selection & Navigation:** Clicking "Choose this Path & Get Plan" on a `PurposePath` card immediately navigates the user to the `/action-plan` page, where a loading skeleton is displayed. The click triggers a React Query mutation that sends a `POST` request to `/api/action-plan`.
+    1. **Selection & Navigation:** When the user clicks "Choose this Path & Get Plan" on a `PurposePath` card the **Results** page enters a full-page "Generating your plan…" state (overlay + spinner) and fires a React Query mutation (`POST /api/action-plan`).  Once the server responds and the updated session (now containing the `actionPlan`) is written to storage, the app programmatically navigates to `/action-plan`, where the plan renders instantly.  The overlay is removed only after successful navigation.
         
     2. **Generation:**
         
         - The server receives the request and calls the **`getActionPlanChain`**.
             
-        - This chain uses a single call to **`gemini-1.5-pro-latest`** with a highly detailed prompt instructing it to generate a comprehensive plan structured with milestones, timelines, and concrete actions.
+        - This chain uses a single call to **`GEMINI_REASONING_MODEL`** with a highly detailed prompt instructing it to generate a comprehensive plan structured with milestones, timelines, and concrete actions.
             
         - During generation, if the AI identifies a skill to learn, it invokes the `getYoutubeVideosForSkills` function. This backend function queries the **YouTube Data API** for 3 relevant videos, returning their titles, URLs, and **thumbnail URLs**.
             
@@ -258,14 +258,14 @@ The strategy is updated to leverage the best model for each task while simplifyi
 
 |Call|Purpose|Model|Why this is the best fit|
 |---|---|---|---|
-|**Call 1 – “Facts”**|• Use **Search tool** to fetch a **single, broad salary range** + citation URL for an analogous job title.  <br>• Free-form text output is sufficient.|**`models/gemini-2.5-flash-lite`**|_Cost/speed first._ A cheap, fast model is perfect for this simple, single-purpose fact-retrieval task. Grounding ensures reliability.|
-|**Call 2 – “Reasoning + JSON”**|• Combine user questionnaire + salary facts.  <br>• Perform high-level synthesis and reasoning.  <br>• **Embed salary facts into a narrative** within the final JSON.  <br>• Return strict JSON adhering to the `purposeDiscoveryOpenApiSchema`.|**`models/gemini-1.5-pro-latest`**|_Quality first._ We need the best possible reasoning to synthesize the user's answers into novel insights and to elegantly weave the factual data into the final output. This model provides that capability.|
+|**Call 1 – "Facts"**|• Use **Search tool** to fetch a **single, broad salary range** + citation URL for an analogous job title.  <br>• Free-form text output is sufficient.|**`GEMINI_FACTS_MODEL`**|_Cost/speed first._ A cheap, fast model is perfect for this simple, single-purpose fact-retrieval task. Grounding ensures reliability.|
+|**Call 2 – "Reasoning + JSON"**|• Combine user questionnaire + salary facts.  <br>• Perform high-level synthesis and reasoning.  <br>• **Embed salary facts into a narrative** within the final JSON.  <br>• Return strict JSON adhering to the `purposeDiscoveryOpenApiSchema`.|**`GEMINI_REASONING_MODEL`**|_Quality first._ We need the best possible reasoning to synthesize the user's answers into novel insights and to elegantly weave the factual data into the final output. This model provides that capability.|
 
 Export to Sheets
 
 #### **Strategy for Action Plan Generation**
 
-- **Single, Powerful Call:** The entire action plan is generated in a single call to **`models/gemini-1.5-pro-latest`** to ensure coherence and maintain a consistent narrative throughout the detailed plan.
+- **Single, Powerful Call:** The entire action plan is generated in a single call to **`GEMINI_REASONING_MODEL`** to ensure coherence and maintain a consistent narrative throughout the detailed plan.
     
 - **Tool-Augmented, Not Search-Reliant:** The AI's primary job is reasoning. It offloads specific data lookups to a more reliable tool.
     

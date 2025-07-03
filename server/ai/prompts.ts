@@ -111,7 +111,7 @@ import type {
       - Generate your final answer as a single JSON object that strictly follows the provided schema.
       - **For the 'coreDriversAnalysis' object:**
           - In the \`statementSentence\` field, write a single, insightful sentence that presents the core threads and summarizes the user's ikigai. This should be a culmination of the analysis.
-          - In the \`coreThreads\` field, identify the 2-3 core "threads" that connect the user's passions, skills, and values. Present these as a markdown-formatted numbered list. Each thread MUST be a single, concise sentence and should be **bold**. Do NOT give each thread a name or title. For example: '1. **You are driven by a need to build tools that empower individuals.**'
+          - In the \`coreThreads\` field, identify the 2-3 core "threads" that connect the user's passions, skills, and values. Present these as a markdown-formatted numbered list. Each thread MUST be a single, concise sentence. Do NOT give each thread a name or title. For example: '1. **You are driven by a need to build tools that empower individuals.**'
       - **For each of the three 'purposePaths'**:
           - **Title**: Give each path a compelling, evocative name that is an archetype or a mission, not a generic job title. Good examples: "The AI Educator & Career Navigator", "The Techno-Libertarian Catalyst". Bad examples: "Product Manager", "Software Engineer".
           - **Description & Ikigai Alignment**: In these fields, explain *why* you are suggesting the path. Connect it directly to their answers and your core principles (curiosity, problems, etc.). Be encouraging but realistic.
@@ -150,7 +150,7 @@ import type {
   - High-Level Strategy: ${chosenPath.actionStrategy}
   
   Your Task:
-  Create a single, comprehensive roadmap composed of clearly defined *milestones*. Each milestone must include:
+  Create a single, comprehensive 3 month roadmap composed of clearly defined *milestones*. Each milestone must include:
   • A short, evocative **title** that conveys the purpose of this phase.
   • A **timeline** (e.g., "Weeks 1-2", "Month 3") communicating when to focus on it.
   • A bulleted list of concrete **actions** the user can perform.

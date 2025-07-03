@@ -4,9 +4,18 @@ import { t, type Language } from '@/lib/i18n';
 interface LoadingOverlayProps {
   isVisible: boolean;
   language: Language;
+  /** Optional title to display. Falls back to a default "Thinking..." */
+  title?: string;
+  /** Optional description to display. Falls back to a default "Analyzing your answers..." */
+  description?: string;
 }
 
-export function LoadingOverlay({ isVisible, language }: LoadingOverlayProps) {
+export function LoadingOverlay({
+  isVisible,
+  language,
+  title,
+  description,
+}: LoadingOverlayProps) {
   if (!isVisible) return null;
 
   return (
@@ -16,10 +25,10 @@ export function LoadingOverlay({ isVisible, language }: LoadingOverlayProps) {
           <Sparkles className="text-white text-xl animate-pulse" />
         </div>
         <h3 className="text-xl font-bold text-slate-900 mb-2">
-          {t('loading.thinking', language)}
+          {title || t('loading.thinking', language)}
         </h3>
         <p className="text-slate-600 mb-4">
-          {t('loading.analyzing', language)}
+          {description || t('loading.analyzing', language)}
         </p>
         <div className="w-full bg-slate-200 rounded-full h-2">
           <div className="gradient-primary h-2 rounded-full animate-pulse w-3/5"></div>
