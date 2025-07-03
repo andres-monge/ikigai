@@ -89,6 +89,7 @@ describe('useCreateActionPlan', () => {
                   {
                     title: 'React Tutorial for Beginners',
                     url: 'https://www.youtube.com/watch?v=dGcsHMXbSOA',
+                    thumbnailUrl: 'https://img.youtube.com/vi/dGcsHMXbSOA/mqdefault.jpg',
                   },
                 ],
               },

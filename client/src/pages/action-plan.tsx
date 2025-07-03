@@ -24,7 +24,6 @@ import {
   Download,
   MessageCircle,
   ArrowLeft,
-  Youtube,
   ClipboardCheck,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -150,21 +149,26 @@ export function ActionPlan({
                     {ms.skills.map((skill, i) => (
                       <div key={i}>
                         <p className="font-medium text-slate-700 mb-1">{skill.skill}</p>
-                        <ul className="space-y-2 pl-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                           {skill.youtubeLinks.map((video, j) => (
-                            <li key={j} className="flex items-start gap-2">
-                              <Youtube className="w-4 h-4 text-red-600 mt-0.5" />
-                              <a
-                                href={video.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-slate-700 hover:text-primary hover:underline underline-offset-2 transition-colors"
-                              >
+                            <a
+                              key={j}
+                              href={video.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="block group"
+                            >
+                              <img
+                                src={video.thumbnailUrl}
+                                alt={video.title}
+                                className="w-full h-32 object-cover rounded-lg shadow-sm group-hover:opacity-90 transition-opacity"
+                              />
+                              <p className="mt-1 text-sm text-slate-700 group-hover:text-primary transition-colors">
                                 {video.title}
-                              </a>
-                            </li>
+                              </p>
+                            </a>
                           ))}
-                        </ul>
+                        </div>
                       </div>
                     ))}
                   </div>

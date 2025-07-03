@@ -74,6 +74,7 @@ export interface SalaryData {
 export interface YoutubeVideo {
   title: string;
   url: string;
+  thumbnailUrl: string;
 }
 
 export interface SkillToLearn {

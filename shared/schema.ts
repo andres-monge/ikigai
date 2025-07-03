@@ -97,6 +97,8 @@ export type QuestionnaireResponses = z.infer<
 export const youtubeVideoSchema = z.object({
   title: z.string(),
   url: z.string().url(),
+  /** Medium-quality thumbnail URL for display purposes. */
+  thumbnailUrl: z.string().url(),
 });
 
 export const skillToLearnSchema = z.object({

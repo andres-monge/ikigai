@@ -36,6 +36,7 @@ vi.mock('../ai/chains', () => {
               {
                 title: 'TypeScript in 100 Seconds',
                 url: 'https://www.youtube.com/watch?v=BCg4U1FzODs',
+                thumbnailUrl: 'https://img.youtube.com/vi/BCg4U1FzODs/mqdefault.jpg',
               },
             ],
           },
@@ -76,6 +77,7 @@ const expectedActionPlan = {
             {
               title: 'TypeScript in 100 Seconds',
               url: 'https://www.youtube.com/watch?v=BCg4U1FzODs',
+              thumbnailUrl: 'https://img.youtube.com/vi/BCg4U1FzODs/mqdefault.jpg',
             },
           ],
         },

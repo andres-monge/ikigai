@@ -9,7 +9,6 @@
 import { z } from 'zod';
 import {
   generateContent,
-  generateContentWithSearch,
   GEMINI_REASONING_MODEL,
 } from '../wrapper';
 import type { GeminiContent } from '../types';
@@ -28,37 +27,69 @@ import {
 import { youtubeVideoSchema } from '@shared/schema';
 import { getActionPlanSystemPrompt } from '../prompts';
 import { getYoutubeVideosForSkillsTool } from '../tools';
+import fetch from 'node-fetch'; // YouTube Data API call
 
 /* -------------------------------------------------------------------------- */
 /* Private helpers                                                            */
 /* -------------------------------------------------------------------------- */
 
 /**
- * Parses the free-text response from the Search model into a list of validated
- * video objects.
+ * Calls the YouTube Data API v3 `search.list` endpoint to retrieve up to 3
+ * relevant videos for a given skill. Falls back to the standard thumbnail if
+ * higher-quality sizes are missing.
  */
-const _parseYoutubeResponse = (
-  text: string,
-): z.infer<typeof youtubeVideoSchema>[] => {
-  const videos: z.infer<typeof youtubeVideoSchema>[] = [];
-  const videoBlockRegex =
-    /VIDEO_TITLE:\s*(.*?)\s*\n\s*VIDEO_URL:\s*(https?:\/\/[^\s]+)/g;
-  let match;
-  while ((match = videoBlockRegex.exec(text)) !== null) {
-    const validation = youtubeVideoSchema.safeParse({
-      title: match[1].trim(),
-      url: match[2].trim(),
-    });
-    if (validation.success) videos.push(validation.data);
+async function _fetchYoutubeVideosForSkill(
+  skill: string,
+  language: Language,
+): Promise<z.infer<typeof youtubeVideoSchema>[]> {
+  const apiKey = process.env.YOUTUBE_API_KEY;
+  if (!apiKey) {
+    throw new Error('Missing YOUTUBE_API_KEY environment variable.');
   }
-  return videos;
-};
+
+  const url = new URL('https://www.googleapis.com/youtube/v3/search');
+  url.searchParams.set('key', apiKey);
+  url.searchParams.set('part', 'snippet');
+  url.searchParams.set('q', skill);
+  url.searchParams.set('type', 'video');
+  url.searchParams.set('maxResults', '3');
+  url.searchParams.set('relevanceLanguage', language);
+
+  const res = await fetch(url.toString());
+  if (!res.ok) {
+    throw new Error(`YouTube API request failed: ${res.status} ${res.statusText}`);
+  }
+
+  const data: any = await res.json();
+  const items = Array.isArray(data.items) ? data.items : [];
+
+  return items
+    .map((item: any) => {
+      const videoId = item.id?.videoId;
+      const snippet = item.snippet;
+      if (!videoId || !snippet) return null;
+
+      const thumbnail =
+        snippet.thumbnails?.medium?.url ||
+        snippet.thumbnails?.high?.url ||
+        snippet.thumbnails?.default?.url;
+
+      const video = {
+        title: snippet.title as string,
+        url: `https://www.youtube.com/watch?v=${videoId}`,
+        thumbnailUrl: thumbnail as string,
+      };
+
+      const validation = youtubeVideoSchema.safeParse(video);
+      return validation.success ? validation.data : null;
+    })
+    .filter(Boolean) as z.infer<typeof youtubeVideoSchema>[];
+}
 
 /**
- * Attempts to retrieve cached videos for each skill, otherwise calls the
- * Search model and persists the results.
+ * Retrieves (and caches) YouTube videos for each requested skill.
  */
-async function _fetchAndCacheYoutubeVideos(
+async function _fetchYoutubeVideos(
   skills: string[],
   language: Language,
 ): Promise<{ skill: string; videos: z.infer<typeof youtubeVideoSchema>[] }[]> {
@@ -66,46 +97,18 @@ async function _fetchAndCacheYoutubeVideos(
     skill: string;
     videos: z.infer<typeof youtubeVideoSchema>[];
   }[] = [];
-  const misses: string[] = [];
 
   for (const skill of skills) {
     const cacheKey = `youtube:${skill.toLowerCase()}:${language}`;
     const cached = youtubeCache.get<z.infer<typeof youtubeVideoSchema>[]>(cacheKey);
     if (cached) {
       results.push({ skill, videos: cached });
-    } else {
-      misses.push(skill);
+      continue;
     }
-  }
 
-  if (misses.length === 0) return results;
-
-  const langInstruction = language === 'es' ? 'en español' : 'in English';
-  const prompt = `For each skill, find the 3 most relevant and high-quality YouTube videos for the user. The videos should be ${langInstruction}. Use this exact format, with "---" separating each video:\nSKILL: [Skill Name]\nVIDEO_TITLE: [Exact Video Title]\nVIDEO_URL: [Full Video URL]\n---\nVIDEO_TITLE: [Exact Video Title 2]\nVIDEO_URL: [Full Video URL 2]\n---\nVIDEO_TITLE: [Exact Video Title 3]\nVIDEO_URL: [Full Video URL 3]\n\nSkills to find videos for:\n${misses
-    .map((skill) => `- ${skill}`)
-    .join('\n')}`;
-
-  const searchResponse = await generateContentWithSearch([
-    { role: 'user', parts: [{ text: prompt }] },
-  ]);
-  const responseText =
-    searchResponse.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!responseText)
-    throw new Error('Facts model (search) returned no content for YouTube.');
-
-  for (const skill of misses) {
-    const skillBlockRegex = new RegExp(
-      `SKILL:\\s*${skill}([\\s\\S]*?)(?=SKILL:|$)`,
-      'i',
-    );
-    const blockMatch = responseText.match(skillBlockRegex);
-    if (!blockMatch) continue;
-
-    const skillBlock = blockMatch[1];
-    const newVideos = _parseYoutubeResponse(skillBlock);
-    const cacheKey = `youtube:${skill.toLowerCase()}:${language}`;
-    youtubeCache.set(cacheKey, newVideos, YOUTUBE_CACHE_TTL_MS);
-    results.push({ skill, videos: newVideos });
+    const fetched = await _fetchYoutubeVideosForSkill(skill, language);
+    youtubeCache.set(cacheKey, fetched, YOUTUBE_CACHE_TTL_MS);
+    results.push({ skill, videos: fetched });
   }
 
   return results;
@@ -152,7 +155,7 @@ export async function getActionPlanChain(
         );
       }
 
-      const youtubeData = await _fetchAndCacheYoutubeVideos(
+      const youtubeData = await _fetchYoutubeVideos(
         validation.data.skills,
         language,
       );

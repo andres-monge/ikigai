@@ -48,7 +48,7 @@ export const getYoutubeVideosForSkillsTool = {
     {
       name: 'getYoutubeVideosForSkills',
       description:
-        'Gets the top 3 most relevant YouTube video links for learning a list of specific skills. Must be called before returning the final action plan.',
+        'Gets the top 3 most relevant YouTube video links (including `thumbnailUrl`) for learning a list of specific skills. Must be called before returning the final action plan.',
       parameters: {
         type: 'OBJECT',
         properties: {

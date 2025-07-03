@@ -186,8 +186,9 @@ export const actionPlanOpenApiSchema = {
                     properties: {
                       title: { type: 'STRING' },
                       url: { type: 'STRING' },
+                      thumbnailUrl: { type: 'STRING' },
                     },
-                    required: ['title', 'url'],
+                    required: ['title', 'url', 'thumbnailUrl'],
                   },
                 },
               },

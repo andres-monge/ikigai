@@ -149,7 +149,14 @@ This phase overhauls the core AI-generated content to meet quality standards and
 
 This phase focuses on improving the reliability of external data and polishing the UI/UX with smaller, high-impact changes.
 
-- [ ] **Step 5: Fix Broken YouTube Links with YouTube's API**
+- [x] **Step 5: Fix Broken YouTube Links with YouTube's API**
+    
+    - **Decisions & Notes:**
+        - Replaced the unreliable search-based scraping with direct calls to the **YouTube Data API v3** via `node-fetch`.  The new helper `_fetchYoutubeVideos` fetches three high-quality videos per skill with titles, URLs, and thumbnails.
+        - Added a required `thumbnailUrl` field across schemas (shared, OpenAPI, client types) and updated all tests & mocks.
+        - Removed the legacy `_fetchAndCacheYoutubeVideos` + `generateContentWithSearch` pathway.
+        - Updated the Action Plan UI to present resources as clickable thumbnail cards in a responsive grid.
+        - All tests pass (`npm test`).
     
     - **Task:** Replace the unreliable web search for YouTube videos with direct calls to the YouTube Data API v3. This will ensure video links are valid and allows for displaying thumbnails.
         
