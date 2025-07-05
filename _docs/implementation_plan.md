@@ -195,7 +195,39 @@ This phase focuses on improving the reliability of external data and polishing t
 
 ---
 
-- [ ] **Step 6: Refine UI Text and Wording**
+- [x] **Step 6: Improve YouTube Video Search Quality**
+    
+    - **Decisions & Notes:**
+        - Enriched the YouTube search query to `"${skill} tutorial"` so the API surfaces learning-oriented videos instead of generic content.
+        - Added stricter API filters (`videoCategoryId=27`, `safeSearch=none`, `publishedAfter=<1-year-ago ISO>`, `relevanceLanguage=<language>`).
+        - Updated `_fetchYoutubeVideosForSkill` in `action-plan.chain.ts` accordingly with full JSDoc explaining the change.
+        - All existing unit tests pass (`npm test`). No new tests were necessary because the change is isolated to the external API call which is already mocked in tests.
+    
+    - **Task:** Make the YouTube recommendations feel more relevant by (1) enriching the search query with learning-intent keywords and (2) tightening the `search.list` filters.
+        
+    - **Implementation Details:**
+        1. **Enriched Query** – Build the `q` parameter as `"${skill} tutorial"`. (No path title appended.)
+        2. **API Filters** – Add / update these query params:
+            - `videoCategoryId=27`  // Education
+            - `safeSearch=none`
+            - `publishedAfter=<ISO date one year ago>`
+            - `relevanceLanguage=<language>`
+        3. Keep `maxResults=3` and **do not** change the ordering.
+        
+    - **Files:**
+        
+        - `server/ai/chains/action-plan.chain.ts`:
+            
+            - Modify `_fetchYoutubeVideosForSkill` to build the enhanced `q` string and include the new filters (`videoCategoryId`, `safeSearch`, `publishedAfter`).
+            - Remove the domain-clue keywords from the query builder if present.
+            
+    - **Step Dependencies:** Step 5.
+        
+    - **User Instructions:** None.
+
+---
+
+- [ ] **Step 7: Refine UI Text and Wording**
     
     - **Task:** Update various UI strings across the application to better match the desired tone and persona.
         
@@ -217,7 +249,7 @@ This phase focuses on improving the reliability of external data and polishing t
 
 ---
 
-- [ ] **Step 7: Implement Auto-Resizing Textareas**
+- [ ] **Step 8: Implement Auto-Resizing Textareas**
     
     - **Task:** Enhance the user input experience by making the text areas in the questionnaire and chat interface auto-resizing.
         
@@ -243,7 +275,7 @@ This phase focuses on improving the reliability of external data and polishing t
 
 ---
 
-- [ ] **Step 8: Simplify Chat Workflow**
+- [ ] **Step 9: Simplify Chat Workflow**
     
     - **Task:** As requested, remove the streaming implementation for the chat refinement feature due to bugginess. Revert to a simpler, non-streaming request-response model.
         
@@ -275,7 +307,7 @@ This phase focuses on improving the reliability of external data and polishing t
 
 ---
 
-- [ ] **Step 9: Minor Style Cleanup**
+- [ ] **Step 10: Minor Style Cleanup**
     
     - **Task:** Remove the red asterisks indicating required fields in the questionnaire for a cleaner look.
         

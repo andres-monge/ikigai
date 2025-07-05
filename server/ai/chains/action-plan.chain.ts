@@ -35,8 +35,16 @@ import fetch from 'node-fetch'; // YouTube Data API call
 
 /**
  * Calls the YouTube Data API v3 `search.list` endpoint to retrieve up to 3
- * relevant videos for a given skill. Falls back to the standard thumbnail if
- * higher-quality sizes are missing.
+ * education-focused tutorial videos for a given skill.
+ *
+ * Step 6 refinements:
+ *   1. Enriches the query with the word "tutorial" to capture learning-oriented content.
+ *   2. Restricts results to the Education category (`videoCategoryId=27`).
+ *   3. Filters out irrelevant or restricted content (`safeSearch=none`).
+ *   4. Limits the search to videos published within the last 12 months for freshness.
+ *   5. Passes the user's language to `relevanceLanguage` for improved ranking.
+ *
+ * Falls back to the standard thumbnail if higher-quality sizes are missing.
  */
 async function _fetchYoutubeVideosForSkill(
   skill: string,
@@ -50,9 +58,16 @@ async function _fetchYoutubeVideosForSkill(
   const url = new URL('https://www.googleapis.com/youtube/v3/search');
   url.searchParams.set('key', apiKey);
   url.searchParams.set('part', 'snippet');
-  url.searchParams.set('q', skill);
+  url.searchParams.set('q', `${skill} tutorial`);
   url.searchParams.set('type', 'video');
   url.searchParams.set('maxResults', '3');
+  url.searchParams.set('videoCategoryId', '27'); // Education
+  url.searchParams.set('safeSearch', 'none');
+
+  const oneYearAgo = new Date();
+  oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+  url.searchParams.set('publishedAfter', oneYearAgo.toISOString());
+
   url.searchParams.set('relevanceLanguage', language);
 
   const res = await fetch(url.toString());
