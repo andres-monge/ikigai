@@ -160,6 +160,7 @@ onStartOver={handleStartOver}
 
 {/* Global Chat overlay */}
 <ChatInterface
+key={chatContext}
 isOpen={isChatOpen}
 onClose={handleCloseChat}
 sessionId={sessionId}

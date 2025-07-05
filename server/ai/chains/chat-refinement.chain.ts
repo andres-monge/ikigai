@@ -1,27 +1,26 @@
 /**
  * @file chat-refinement.chain.ts
  *
- * Streams AI responses for result or action-plan refinements using Gemini's
- * streaming API (`generateContentStream`).  The function is implemented as an
- * `async generator`, yielding chunks that the Express route immediately
- * forwards to the client as Server-Sent Events.
+ * Generates a complete AI response for result or action-plan refinements
+ * using Gemini's standard `generateContent` API (non-streaming).  This
+ * simplifies the chat workflow and avoids SSE complexities.
  */
 
-import { generateContentStream, GEMINI_REASONING_MODEL } from '../wrapper';
+import { generateContent, GEMINI_REASONING_MODEL } from '../wrapper';
 import type { GeminiContent } from '../types';
 import { storage } from '../../storage';
 import { getChatRefinementSystemPrompt } from '../prompts';
 import type { SelectChatMessage } from '@shared/schema';
 
 /**
- * Async generator that yields streaming chat responses chunk-by-chunk.
+ * Generates a complete AI response for result or action-plan refinements
  */
-export async function* getChatRefinementChain(
+export async function getChatRefinementChain(
   sessionId: string,
   currentMessage: string,
   context: 'discovery' | 'action_plan',
   pathId: number | null = null,
-): AsyncGenerator<string, void, undefined> {
+): Promise<string> {
   const session = await storage.getAssessmentSessionBySessionId(sessionId);
   if (!session) throw new Error(`Session not found for chat (id: ${sessionId})`);
 
@@ -85,12 +84,14 @@ export async function* getChatRefinementChain(
     { role: 'user', parts: [{ text: currentMessage }] },
   ];
 
-  const stream = generateContentStream(
+  const response = await generateContent(
     GEMINI_REASONING_MODEL,
     fullConversation,
   );
 
-  for await (const chunk of stream) {
-    yield chunk;
+  const text = response.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) {
+    throw new Error('AI response contained no content.');
   }
+  return text;
 } 

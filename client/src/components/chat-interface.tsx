@@ -6,25 +6,6 @@
  * the AI assistant. It is displayed in a side sheet and manages the state
  * of the conversation, including message history and user input.
  *
- * ✨ **2025-06-26 CORRECTION (Step 23)** ✨
- * - **FIX 1: Module Path:** Corrected the import path for shared types from
- * `@/shared/schema` to `@shared/schema` to align with the project's
- * tsconfig path aliases.
- * - **FIX 2: ScrollArea Ref:** Removed the invalid `viewportRef` prop. The component
- * now uses a `ref` on the `<ScrollArea>` root and a `querySelector` to find the
- * underlying Radix UI viewport. This is the correct, robust way to programmatically
- * scroll the component.
- * - **FIX 3: Type Safety & Logic:**
- * - New `ChatMessage` objects created on the client now include all required
- * fields (`id`, `assessmentId`, `createdAt`) with client-side-appropriate
- * values, satisfying the strict `ChatMessage` type and fixing a potential
- * TypeScript error.
- * - The streaming logic now updates the assistant's message by its unique `id`
- * instead of relying on its position in the array, making the state updates
- * more robust.
- * - The `handleSubmit` function still uses the `fetch` API's `ReadableStream` to
- * provide a real-time "typing" effect for the AI's response.
- *
  * @dependencies
  * - lucide-react: For icons.
  * - Shadcn UI components: Sheet, Button, Input, ScrollArea.
@@ -42,7 +23,7 @@ import {
   SheetDescription,
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import TextareaAutosize from 'react-textarea-autosize';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { t, type Language } from '@/lib/i18n';
@@ -72,8 +53,8 @@ export function ChatInterface({
   const [inputValue, setInputValue] = useState('');
   const [isSending, setIsSending] = useState(false);
 
-  // Chat history is persisted in session storage, keyed by context
-  const storageKey = `chatHistory_${context}`;
+  // Chat history is persisted in session storage, keyed by session + context
+  const storageKey = `chatHistory_${sessionId}_${context}`;
   const [messages, setMessages] = useSessionStorage<ChatMessage[]>(
     storageKey,
     [],
@@ -96,7 +77,7 @@ export function ChatInterface({
     }
   }, [messages, isSending]); // Also trigger on isSending to scroll for the placeholder
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!inputValue.trim() || isSending) return;
 
@@ -125,10 +106,13 @@ export function ChatInterface({
     };
 
     // 2. Add both to state immediately for a responsive UI
-    setMessages((prev) => [...prev, userMessage, assistantPlaceholder]);
+    setMessages((prev) => {
+      const updated = [...prev, userMessage, assistantPlaceholder];
+      return updated;
+    });
 
     try {
-      // 3. Initiate the streaming fetch call to the SSE endpoint
+      // 3. Send a standard POST request (non-streaming)
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
@@ -143,50 +127,19 @@ export function ChatInterface({
         }),
       });
 
-      if (!response.body || !response.ok) {
-        throw new Error(
-          response.statusText || 'Failed to connect to the server.',
-        );
+      if (!response.ok) {
+        throw new Error(response.statusText || 'Failed to connect to the server.');
       }
 
-      // 4. Process the stream
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
+      // 4. Parse the JSON response { content: string }
+      const data: { content: string } = await response.json();
 
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) {
-          break; // Stream finished
-        }
-
-        buffer += decoder.decode(value, { stream: true });
-        const parts = buffer.split('\n\n');
-        buffer = parts.pop() || ''; // Keep any incomplete message part
-
-        for (const part of parts) {
-          if (part.startsWith('data: ')) {
-            const dataString = part.substring(6).trim();
-            if (dataString === '[DONE]') continue;
-
-            try {
-              const jsonData = JSON.parse(dataString);
-              if (jsonData.content) {
-                // Find placeholder by ID and append content
-                setMessages((prev) =>
-                  prev.map((msg) =>
-                    msg.id === assistantMessageId
-                      ? { ...msg, content: msg.content + jsonData.content }
-                      : msg,
-                  ),
-                );
-              }
-            } catch (error) {
-              console.error('Failed to parse SSE JSON data:', dataString, error);
-            }
-          }
-        }
-      }
+      // 5. Update the assistant placeholder with the full response
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === assistantMessageId ? { ...msg, content: data.content } : msg,
+        ),
+      );
     } catch (error) {
       console.error('Chat stream error:', error);
       // Update placeholder with an error message
@@ -259,11 +212,13 @@ export function ChatInterface({
           </div>
         </ScrollArea>
         <form onSubmit={handleSubmit} className="flex gap-2 p-1 border rounded-lg">
-          <Input
+          <TextareaAutosize
             value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setInputValue(e.target.value)}
             placeholder={t('chat.placeholder', language)}
-            className="flex-grow border-none focus-visible:ring-0"
+            minRows={1}
+            maxRows={6}
+            className="flex-grow border-none resize-none focus-visible:ring-0 px-3 py-2 rounded-md"
             disabled={isSending}
             autoFocus
           />

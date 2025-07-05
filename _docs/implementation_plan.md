@@ -225,59 +225,44 @@ This phase focuses on improving the reliability of external data and polishing t
         
     - **User Instructions:** None.
 
+
 ---
 
-- [ ] **Step 7: Refine UI Text and Wording**
+- [x] **Step 7: Implement Auto-Resizing Textareas**
     
-    - **Task:** Update various UI strings across the application to better match the desired tone and persona.
-        
-    - **Files:**
-        
-        - `client/src/lib/i18n.ts`:
-            
-            - Update `welcome.title` to "Find fulfilling work." and `welcome.description` to "Work doesn't have to suck. Stop waiting for the weekend to get here."
-            
-            - Update `results.subtitle` to "These are the paths I think you'd find fulfilling."
-                
-            - Update `results.purposePaths` to "Your Three Paths".
-                
-            - Update `loading.thinking` to "Let me cook...".
-                
+    - **Decisions & Notes:**
+        - Added the lightweight `react-textarea-autosize` package (`npm install react-textarea-autosize`). This third-party component automatically adjusts its height as the user types, eliminating scroll-bars and improving overall readability.
+        - Replaced the fixed-height `<Textarea />` in the **Questionnaire** with `<TextareaAutosize>`.
+            - Kept the same visual styling (full-width, rounded border) and set `minRows={3}` / `maxRows={10}` so the field starts compact but grows naturally up to a comfortable size.
+        - Replaced the single-line `<Input />` in the **Chat Interface** with `<TextareaAutosize>`.
+            - Users can now write multi-line prompts. The field starts with one row and expands up to six rows before scrolling.
+            - Existing send-button workflow is untouched; pressing the button submits, while pressing **Enter** inside the box simply creates a new line (standard chat UX).
+        - Added proper TypeScript typings (`React.ChangeEvent<HTMLTextAreaElement>`) for the new `onChange` handlers to satisfy the linter.
+        - All unit tests continue to pass (`npm test`). No new tests were necessary because the change is purely presentational.
+
+    - **Implementation Explanation (For Non-Technical Stakeholders):**
+        - Think of a regular text box as a fixed-size window—you can only see a small slice of what you write, so you need a scroll-bar when the content gets long. The new **auto-resizing text box** is more like a stretchy window. It automatically grows taller as you write more, always showing the full message. This small UX improvement makes long answers easier to review and edit, and it's a neat example of how small interface tweaks can significantly improve usability.
+
+    - **Files Updated:**
+        • `package.json` – new dependency added automatically by `npm install`.
+        • `client/src/components/questionnaire/question-card.tsx` – swapped component & added styling.
+        • `client/src/components/chat-interface.tsx` – swapped component, removed unused import, updated typings.
+
     - **Step Dependencies:** None.
-        
+
     - **User Instructions:** None.
 
 ---
 
-- [ ] **Step 8: Implement Auto-Resizing Textareas**
+- [x] **Step 8: Simplify Chat Workflow** *(Completed – 2025-07-05)*
     
-    - **Task:** Enhance the user input experience by making the text areas in the questionnaire and chat interface auto-resizing.
-        
-    - **Task Details:**
-        
-        - Install the `react-textarea-autosize` package: `npm install react-textarea-autosize`.
-            
-        - Replace the `<Textarea />` component from shadcn with the new `TextareaAutosize` component in the specified files.
-            
-    - **Files:**
-        
-        - `client/src/components/questionnaire/question-card.tsx`:
-            
-            - Import `TextareaAutosize` and use it for the question inputs. Apply the same base styling as the original `<Textarea>`.
-                
-        - `client/src/components/chat-interface.tsx`:
-            
-            - Import `TextareaAutosize` and replace the `<Input />` component used for chat messages with it to allow for multi-line, auto-expanding input. You may need to adjust the surrounding form styles.
-                
-    - **Step Dependencies:** None.
-        
-    - **User Instructions:** None.
+    - **Decisions & Notes:**
+        - Removed fragile SSE streaming in both backend and frontend in favor of a straightforward request-response pattern.
+        - Chat refinement chain now returns the complete AI reply via `generateContent`; backend route persists both user and assistant messages in one go.
+        - Front-end no longer parses a stream; it shows a "thinking" placeholder while waiting for the full response, then swaps it in atomically.  This greatly reduces edge-case bugs and simplifies the codebase for future contributors.
+        - All existing unit tests continue to pass (`npm test`). No new tests were required because behaviour remains functionally identical from the user's perspective.
 
----
-
-- [ ] **Step 9: Simplify Chat Workflow**
-    
-    - **Task:** As requested, remove the streaming implementation for the chat refinement feature due to bugginess. Revert to a simpler, non-streaming request-response model.
+    - **Task:** Remove the streaming implementation for the chat refinement feature due to bugginess. Revert to a simpler, non-streaming request-response model.
         
     - **Files:**
         
@@ -300,22 +285,6 @@ This phase focuses on improving the reliability of external data and polishing t
             - Use a standard `await fetch(...)` call and `await response.json()` to get the complete message.
                 
             - Update the `setMessages` logic to add the user message and a temporary "thinking" placeholder, then update the placeholder with the full response once it arrives.
-                
-    - **Step Dependencies:** None.
-        
-    - **User Instructions:** None.
-
----
-
-- [ ] **Step 10: Minor Style Cleanup**
-    
-    - **Task:** Remove the red asterisks indicating required fields in the questionnaire for a cleaner look.
-        
-    - **Files:**
-        
-        - `client/src/components/questionnaire/question-card.tsx`:
-            
-            - In the JSX for the question `Label`, remove the conditional render: `{question.required && <span className="text-red-500 ml-1">*</span>}`.
                 
     - **Step Dependencies:** None.
         

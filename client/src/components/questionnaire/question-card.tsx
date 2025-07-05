@@ -1,7 +1,8 @@
 import { useState } from 'react';
+import type { ChangeEvent } from 'react';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
+import TextareaAutosize from 'react-textarea-autosize';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
@@ -97,11 +98,13 @@ export function QuestionCard({
               )}
 
               {question.type === 'textarea' && (
-                <Textarea
+                <TextareaAutosize
                   value={responses[question.id] || ''}
-                  onChange={(e) => onResponseChange(question.id, e.target.value)}
+                  onChange={(e: ChangeEvent<HTMLTextAreaElement>) => onResponseChange(question.id, e.target.value)}
                   placeholder={question.description}
-                  className="w-full resize-none h-32"
+                  minRows={3}
+                  maxRows={10}
+                  className="w-full resize-none border rounded-md p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 />
               )}
 

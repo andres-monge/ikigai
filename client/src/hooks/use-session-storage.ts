@@ -13,9 +13,11 @@ export function useSessionStorage<T>(key: string, initialValue: T) {
 
   const setValue = (value: T | ((val: T) => T)) => {
     try {
-      const valueToStore = value instanceof Function ? value(storedValue) : value;
-      setStoredValue(valueToStore);
-      window.sessionStorage.setItem(key, JSON.stringify(valueToStore));
+      setStoredValue(prevState => {
+        const valueToStore = value instanceof Function ? value(prevState) : value;
+        window.sessionStorage.setItem(key, JSON.stringify(valueToStore));
+        return valueToStore;
+      });
     } catch (error) {
       console.error(`Error setting sessionStorage key "${key}":`, error);
     }
