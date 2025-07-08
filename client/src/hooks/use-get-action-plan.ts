@@ -30,6 +30,7 @@ export function useGetActionPlan(sessionId: string) {
       if (!stored) return null;
 
       const session = JSON.parse(stored) as FullAssessment;
+      
       // Ensure the data belongs to the current session and contains a plan.
       return session.sessionId === sessionId && session.actionPlan
         ? session

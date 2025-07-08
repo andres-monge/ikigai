@@ -73,12 +73,34 @@ export function Results({
   const { createActionPlan } = useCreateActionPlan({
     sessionId,
     onSuccess: (updatedSession) => {
-      // The session is now updated with the action plan.
-      // Navigation is handled in `handleChoosePath` after the promise resolves.
+      // CRITICAL: The backend may have corrected the path ID during recovery.
+      // We need to update our local session with the corrected data.
       setSession(updatedSession);
+      
+      // Force sessionStorage to update immediately
+      sessionStorage.setItem('session', JSON.stringify(updatedSession));
     },
     onError: (error) => {
       console.error('Action plan generation failed:', error);
+      
+      // Handle session lost error specifically
+      if (error instanceof Error && error.message === 'SESSION_LOST') {
+        toast({
+          title: t('common.error', language),
+          description: language === 'es' 
+            ? 'Tu sesión se perdió. Por favor, vuelve a completar el cuestionario.' 
+            : 'Your session was lost. Please complete the questionnaire again.',
+          variant: 'destructive',
+        });
+        
+        // Redirect to questionnaire after a short delay
+        setTimeout(() => {
+          navigate('/questionnaire');
+        }, 2000);
+        
+        return;
+      }
+      
       toast({
         title: t('common.error', language),
         description: t('results.actionPlanError', language),
@@ -100,6 +122,7 @@ export function Results({
     setIsGenerating(true);
     try {
       await createActionPlan(pathId);
+      
       // Now that the mutation is complete and the session is updated,
       // it's safe to navigate.
       navigate('/action-plan');

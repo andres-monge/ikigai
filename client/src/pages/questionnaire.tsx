@@ -187,6 +187,9 @@ export function Questionnaire({
     sessionId,
     language,
     onSuccess: (data) => {
+      // Write directly to sessionStorage BEFORE navigation so Results page
+      // can read it on its first render even if this component unmounts
+      sessionStorage.setItem('session', JSON.stringify(data));
       setSession(data);
       onNavigate('/results');
     },

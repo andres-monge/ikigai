@@ -125,8 +125,21 @@ export async function getPurposeDiscoveryChain(
         [getSalaryDataTool],
       );
 
+      // SAFETY GUARD ✨  ------------------------------
+      const firstCandidate = reasoningResponse1.candidates?.[0];
+      if (!firstCandidate?.content?.parts) {
+        console.error('[PurposeDiscovery] Reasoning model returned no content. Full response ->');
+        try {
+          console.error(JSON.stringify(reasoningResponse1, null, 2));
+        } catch (jsonErr) {
+          console.error('[PurposeDiscovery] Failed to stringify response:', jsonErr);
+        }
+        throw new Error('Reasoning model returned no content. See previous log for raw response.');
+      }
+      // ----------------------------------------------
+
       // --- Function-calling logic ------------------------------------------------
-      const functionCall = reasoningResponse1.candidates?.[0]?.content?.parts.find(
+      const functionCall = firstCandidate.content.parts.find(
         (p) => !!p.functionCall,
       )?.functionCall;
 

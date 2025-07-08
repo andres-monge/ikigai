@@ -103,8 +103,10 @@ describe('useCreateActionPlan', () => {
     } as const;
 
     // A minimal mock that matches the subset of the Fetch `Response` interface
-    // consumed by the hook: only the async `json()` method is required.
+    // consumed by the hook: includes status, ok, and json() method.
     const mockedFetchResponse = {
+      status: 200,
+      ok: true,
       json: vi.fn().mockResolvedValue(mockedResponsePayload),
     } as unknown as Response;
 

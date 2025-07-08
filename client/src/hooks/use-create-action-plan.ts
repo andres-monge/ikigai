@@ -65,11 +65,32 @@ export function useCreateActionPlan({
         sessionId,
         chosenPathId,
       });
+      
+      // Handle session not found error (likely due to server hot-reload)
+      if (res.status === 404) {
+        const errorData = await res.json();
+        if (errorData.error === 'Session not found') {
+          // Clear the stale session data
+          sessionStorage.removeItem('session');
+          
+          // Throw a specific error that the UI can handle
+          throw new Error('SESSION_LOST');
+        }
+      }
+      
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      }
+      
       return (await res.json()) as FullAssessment;
     },
     onSuccess: (data) => {
-      // Invalidate the query to ensure freshness before navigation
+      // Set the query data directly first to ensure it's immediately available
+      queryClient.setQueryData(['actionPlan', sessionId], data);
+      
+      // Then invalidate to ensure any future queries are fresh
       queryClient.invalidateQueries({ queryKey: ['actionPlan', sessionId] });
+      
       onSuccess?.(data);
     },
     onError,

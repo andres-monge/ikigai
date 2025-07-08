@@ -28,7 +28,7 @@ import { youtubeVideoSchema } from '@shared/schema';
 import { getActionPlanSystemPrompt } from '../prompts';
 import { getYoutubeVideosForSkillsTool } from '../tools';
 import fetch from 'node-fetch'; // YouTube Data API call
-import { decode as decodeHtml } from 'he';
+import he from 'he'; // HTML entity decoding
 
 /* -------------------------------------------------------------------------- */
 /* Private helpers                                                            */
@@ -37,15 +37,6 @@ import { decode as decodeHtml } from 'he';
 /**
  * Calls the YouTube Data API v3 `search.list` endpoint to retrieve up to 3
  * education-focused tutorial videos for a given skill.
- *
- * Step 6 refinements:
- *   1. Enriches the query with the word "tutorial" to capture learning-oriented content.
- *   2. Restricts results to the Education category (`videoCategoryId=27`).
- *   3. Only returns long-form content (`videoDuration=long` → >20 min).
- *   4. Filters out restricted content (`safeSearch=none`).
- *   5. Limits the search to videos published within the last 12 months for freshness.
- *   6. Passes the user's language to `relevanceLanguage` for improved ranking.
- *
  * Falls back to the standard thumbnail if higher-quality sizes are missing.
  */
 async function _fetchYoutubeVideosForSkill(
@@ -66,6 +57,7 @@ async function _fetchYoutubeVideosForSkill(
   url.searchParams.set('videoCategoryId', '27'); // Education
   url.searchParams.set('videoDuration', 'long'); // Only videos >20 minutes
   url.searchParams.set('safeSearch', 'none');
+  url.searchParams.set('order', 'viewCount'); // Sort by most viewed
 
   const oneYearAgo = new Date();
   oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
@@ -93,7 +85,7 @@ async function _fetchYoutubeVideosForSkill(
         snippet.thumbnails?.default?.url;
 
       const video = {
-        title: decodeHtml(snippet.title as string),
+        title: he.decode(snippet.title as string),
         url: `https://www.youtube.com/watch?v=${videoId}`,
         thumbnailUrl: thumbnail as string,
       };
