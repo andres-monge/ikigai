@@ -1,3 +1,4 @@
+/** @deprecated – superseded by SinglePageQuestionnaire */
 /**
  * @file questionnaire.tsx
  *

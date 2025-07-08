@@ -28,7 +28,6 @@ import { Toaster } from '@/components/ui/toaster';
 import { Header } from '@/components/header';
 import { ChatInterface } from '@/components/chat-interface';
 import { Home } from '@/pages/home';
-import { Questionnaire } from '@/pages/questionnaire';
 import { Results } from '@/pages/results';
 import { ActionPlan } from '@/pages/action-plan';
 import { NotFound } from '@/pages/not-found';
@@ -112,20 +111,8 @@ return (
 <Header language={language} onLanguageChange={setLanguage} />
 <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 <Switch>
-{/* Landing */}
+{/* Landing + Inline Questionnaire (SinglePageQuestionnaire to be introduced in Step 2) */}
 <Route path="/" component={() => <Home language={language} />} />
-
-{/* Questionnaire */}
-<Route
-path="/questionnaire"
-component={() => (
-<Questionnaire
-language={language}
-sessionId={sessionId}
-onNavigate={navigate}
-/>
-)}
-/>
 
 {/* Results */}
 <Route

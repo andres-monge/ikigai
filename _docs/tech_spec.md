@@ -270,6 +270,14 @@ Export to Sheets
 - **Tool-Augmented, Not Search-Reliant:** The AI's primary job is reasoning. It offloads specific data lookups to a more reliable tool.
     
 - **YouTube Data API for Grounding:** For learning resources, the AI determines the _skill_, and a backend function calls the **YouTube Data API**. This provides valid links and rich metadata (like thumbnails), which is a significant quality improvement over general web search.
+
+#### **Strategy for Chat Refinement**
+
+- **Model Choice:** All chat refinement interactions use **`GEMINI_REASONING_MODEL`** to ensure high-quality conversational responses and the ability to synthesize user feedback into meaningful modifications.
+    
+- **Context-Aware:** The chat system maintains conversation history and provides full context about the user's current results or action plan to enable coherent refinement suggestions.
+    
+- **Non-Streaming:** Chat responses are generated as complete messages rather than streaming to improve reliability and simplify the implementation.
 ### 5.2 Gemini Wrapper (`server/ai/wrapper.ts`)
 
 - **Description:** A low-level client for the Gemini API.
