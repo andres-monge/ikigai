@@ -54,7 +54,7 @@ async function _fetchYoutubeVideosForSkill(
   url.searchParams.set('q', `${skill} tutorial`);
   url.searchParams.set('type', 'video');
   url.searchParams.set('maxResults', '3');
-  url.searchParams.set('videoCategoryId', '27'); // Education
+  url.searchParams.set('videoCategoryId', '26,27,28'); // Howto & Style, Education, Science & Technology
   url.searchParams.set('videoDuration', 'long'); // Only videos >20 minutes
   url.searchParams.set('safeSearch', 'none');
   url.searchParams.set('order', 'viewCount'); // Sort by most viewed
