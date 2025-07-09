@@ -63,15 +63,15 @@ export const translations: Record<string, Record<string, string>> = {
       "Let's discuss your financial goals and practical considerations for your career path.",
 
     // Results
-    'results.title': 'Your Ikigai Analysis',
+    'results.title': 'Your Ikigai',
     'results.subtitle':
       'Nami has analyzed your responses and discovered your unique purpose paths',
     'results.coreDrivers': "What's Popping Out of Your Answers",
     'results.yourIkigai': 'Your Ikigai',
     'results.purposePaths': 'Your Three Purpose Paths',
     'results.salaryBenchmarks': 'Salary Benchmarks',
-    'results.exportPdf': 'Export to PDF',
-    'results.refineWithNami': 'Refine with Nami',
+    'results.exportPdf': 'Export as PDF',
+    'results.refineWithNami': 'Ask Follow-Up',
     'results.startOver': 'Start Over',
     'results.choosePathAndGetPlan': 'Choose this Path & Get Plan',
     'results.actionStrategy': 'Action Strategy',
@@ -96,8 +96,8 @@ export const translations: Record<string, Record<string, string>> = {
     'actionPlan.peopleToNetworkWith': 'Where to Find Your People',
     'actionPlan.peopleToNetworkWithDescription':
       'Find communities and individuals in these spaces to learn from.',
-    'actionPlan.exportPdf': 'Export Plan to PDF',
-    'actionPlan.refineWithNami': 'Refine Your Plan',
+    'actionPlan.exportPdf': 'Export as PDF',
+    'actionPlan.refineWithNami': 'Ask Follow-Up',
     'actionPlan.watchOnYouTube': 'Watch on YouTube',
     'actionPlan.backToPaths': 'Back to Paths',
     'actionPlan.actions': 'Actions',
@@ -174,15 +174,15 @@ export const translations: Record<string, Record<string, string>> = {
       'Hablemos de tus objetivos financieros y consideraciones prácticas para tu trayectoria profesional.',
 
     // Results
-    'results.title': 'Tu Análisis Ikigai',
+    'results.title': 'Tu Ikigai',
     'results.subtitle':
       'Nami ha analizado tus respuestas y descubierto tus caminos únicos de propósito',
     'results.coreDrivers': 'Lo Que Destaca de Tus Respuestas',
     'results.yourIkigai': 'Tu Ikigai',
     'results.purposePaths': 'Tus Tres Caminos de Propósito',
     'results.salaryBenchmarks': 'Referencias Salariales',
-    'results.exportPdf': 'Exportar a PDF',
-    'results.refineWithNami': 'Refinar con Nami',
+    'results.exportPdf': 'Exportar como PDF',
+    'results.refineWithNami': 'Hacer Preguntas de Seguimiento',
     'results.startOver': 'Comenzar de Nuevo',
     'results.choosePathAndGetPlan': 'Elegir este Camino y Obtener Plan',
     'results.actionStrategy': 'Estrategia de Acción',
@@ -207,8 +207,8 @@ export const translations: Record<string, Record<string, string>> = {
     'actionPlan.peopleToNetworkWith': 'Dónde Encontrar a Tu Gente',
     'actionPlan.peopleToNetworkWithDescription':
       'Encuentra comunidades e individuos en estos espacios para aprender de ellos.',
-    'actionPlan.exportPdf': 'Exportar Plan a PDF',
-    'actionPlan.refineWithNami': 'Refinar Tu Plan',
+    'actionPlan.exportPdf': 'Exportar como PDF',
+    'actionPlan.refineWithNami': 'Hacer Preguntas de Seguimiento',
     'actionPlan.watchOnYouTube': 'Ver en YouTube',
     'actionPlan.backToPaths': 'Volver a los Caminos',
     'actionPlan.actions': 'Acciones',

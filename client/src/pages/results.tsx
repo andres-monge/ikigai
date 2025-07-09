@@ -35,7 +35,7 @@
 
 import { useEffect, useState } from 'react';
 import { useLocation } from 'wouter';
-import { Sparkles, Download, RotateCcw } from 'lucide-react';
+import { Download, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { LoadingOverlay } from '@/components/loading-overlay';
 import { CoreDriversSummary } from '@/components/results/core-drivers-summary';
@@ -160,15 +160,9 @@ export function Results({
       <div className="max-w-6xl mx-auto">
         {/* AI Analysis Header */}
         <div className="text-center mb-12">
-          <div className="inline-flex items-center justify-center w-16 h-16 gradient-primary rounded-full mb-4">
-            <Sparkles className="text-white text-xl" />
-          </div>
           <h2 className="text-3xl font-bold text-slate-900 mb-4">
             {t('results.title', language)}
           </h2>
-          <p className="text-lg text-slate-600">
-            {t('results.subtitle', language)}
-          </p>
         </div>
 
         {/* Core Drivers Summary */}
@@ -190,7 +184,7 @@ export function Results({
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
           <Button
             onClick={handleExportPDF}
-            className="gradient-primary text-white px-8 py-4 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200"
+            size="lg"
           >
             <Download className="w-4 h-4 mr-2" />
             {t('results.exportPdf', language)}

@@ -157,7 +157,7 @@ export function PurposePaths({
                     variant="outline"
                     className="w-full border-primary text-primary font-semibold hover:bg-primary hover:text-white transition-all duration-200"
                   >
-                    {t('results.refine', language)}
+                    {t('results.refineWithNami', language)}
                   </Button>
                 )}
               </div>

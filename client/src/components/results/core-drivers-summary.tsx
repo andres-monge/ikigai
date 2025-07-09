@@ -1,4 +1,4 @@
-import { Lightbulb } from 'lucide-react';
+
 import ReactMarkdown from 'react-markdown';
 import { t, type Language } from '@/lib/i18n';
 import type { CoreDrivers } from '@/types/assessment';
@@ -35,14 +35,7 @@ export function CoreDriversSummary({
 }: CoreDriversSummaryProps) {
   return (
     <div className="bg-white rounded-2xl shadow-lg p-8 mb-8">
-      <div className="flex items-center mb-6">
-        <div className="w-8 h-8 bg-accent rounded-full flex items-center justify-center mr-3">
-          <Lightbulb className="text-white w-4 h-4" />
-        </div>
-        <h3 className="text-xl font-bold text-slate-900">
-          {t('results.yourIkigai', language) || 'Your Ikigai'}
-        </h3>
-      </div>
+
 
       <div className="space-y-6">
         <p className="text-center font-bold text-slate-800 text-lg">

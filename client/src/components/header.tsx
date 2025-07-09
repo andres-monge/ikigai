@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Compass, Bot } from 'lucide-react';
+import { Compass } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { t, type Language } from '@/lib/i18n';
 
@@ -41,10 +41,7 @@ export function Header({ language, onLanguageChange }: HeaderProps) {
             </Button>
           </div>
           
-          <div className="flex items-center space-x-2 text-sm text-slate-600">
-            <Bot className="w-4 h-4" />
-            <span>{t('header.poweredBy', language)}</span>
-          </div>
+
         </div>
       </nav>
     </header>
