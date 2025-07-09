@@ -54,10 +54,10 @@ async function _fetchYoutubeVideosForSkill(
   url.searchParams.set('q', `${skill} tutorial`);
   url.searchParams.set('type', 'video');
   url.searchParams.set('maxResults', '3');
-  url.searchParams.set('videoCategoryId', '26,27,28'); // Howto & Style, Education, Science & Technology
+  url.searchParams.set('videoCategoryId', '27'); // Education
   url.searchParams.set('videoDuration', 'long'); // Only videos >20 minutes
   url.searchParams.set('safeSearch', 'none');
-  url.searchParams.set('order', 'viewCount'); // Sort by most viewed
+  url.searchParams.set('order', 'relevance'); // Use relevance instead of viewCount for better compatibility
 
   const oneYearAgo = new Date();
   oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
@@ -67,7 +67,14 @@ async function _fetchYoutubeVideosForSkill(
 
   const res = await fetch(url.toString());
   if (!res.ok) {
-    throw new Error(`YouTube API request failed: ${res.status} ${res.statusText}`);
+    const errorBody = await res.text();
+    console.error('YouTube API Error Details:', {
+      status: res.status,
+      statusText: res.statusText,
+      body: errorBody,
+      url: url.toString()
+    });
+    throw new Error(`YouTube API request failed: ${res.status} ${res.statusText} - ${errorBody}`);
   }
 
   const data: any = await res.json();

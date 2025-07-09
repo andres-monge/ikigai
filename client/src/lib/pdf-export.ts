@@ -32,112 +32,66 @@ export function exportToPDF(
   const pdf = new jsPDF();
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
-  let currentY = 20;
+  let currentY = 30;
+
+  // Add custom font if available (Inter)
+  pdf.setFont('helvetica');
+
+  // Header background
+  pdf.setFillColor(59, 130, 246); // Primary blue
+  pdf.rect(0, 0, pageWidth, 50, 'F');
 
   // Title
-  pdf.setFontSize(24);
-  pdf.setTextColor(37, 99, 235); // Primary color
+  pdf.setFontSize(28);
+  pdf.setTextColor(255, 255, 255); // White
+  pdf.setFont('helvetica', 'bold');
   const title = language === 'en' ? 'Your Ikigai Analysis' : 'Tu Análisis Ikigai';
-  pdf.text(title, pageWidth / 2, currentY, { align: 'center' });
-  currentY += 20;
+  pdf.text(title, pageWidth / 2, 25, { align: 'center' });
 
   // Subtitle
-  pdf.setFontSize(12);
-  pdf.setTextColor(100, 100, 100);
+  pdf.setFontSize(14);
+  pdf.setFont('helvetica', 'normal');
   const subtitle =
     language === 'en'
       ? 'Discover your reason for being with AI-powered career guidance'
       : 'Descubre tu razón de ser con orientación profesional impulsada por IA';
-  pdf.text(subtitle, pageWidth / 2, currentY, { align: 'center' });
-  currentY += 30;
+  pdf.text(subtitle, pageWidth / 2, 37, { align: 'center' });
+  
+  currentY = 70;
 
-  // Core Drivers Section
-  pdf.setFontSize(18);
-  pdf.setTextColor(0, 0, 0);
+  // Your Ikigai Section
+  pdf.setFontSize(20);
+  pdf.setTextColor(31, 41, 55); // Gray 800
+  pdf.setFont('helvetica', 'bold');
   const driversTitle =
-    language === 'en' ? 'Core Drivers' : 'Impulsores Principales';
+    language === 'en' ? 'Your Ikigai' : 'Tu Ikigai';
   pdf.text(driversTitle, 20, currentY);
-  currentY += 15;
+  
+  currentY += 20;
 
-  // Safely handle potential null value returned from the backend for
-  // `coreDriversAnalysis` by falling back to empty strings. This guarantees
-  // the PDF generation never crashes and still renders the rest of the
-  // document.
+  // Safely handle potential null value
   const drivers = results.coreDriversAnalysis ?? {
-    energy: '',
-    edge: '',
-    impact: '',
-    economicReality: '',
+    statementSentence: '',
+    coreThreads: '',
   };
 
-  // Energy
-  pdf.setFontSize(14);
-  pdf.setTextColor(37, 99, 235);
-  const energyTitle =
-    language === 'en' ? '🌟 Energy (What You Love)' : '🌟 Energía (Lo Que Amas)';
-  pdf.text(energyTitle, 20, currentY);
-  currentY += 8;
-
-  pdf.setFontSize(10);
-  pdf.setTextColor(60, 60, 60);
-  const energyText = pdf.splitTextToSize(
-    drivers.energy,
+  // Statement Sentence (Bold)
+  pdf.setFontSize(12);
+  pdf.setFont('helvetica', 'bold');
+  pdf.setTextColor(31, 41, 55);
+  const statementText = pdf.splitTextToSize(
+    drivers.statementSentence,
     pageWidth - 40,
   );
-  pdf.text(energyText, 20, currentY);
-  currentY += energyText.length * 5 + 10;
+  pdf.text(statementText, 20, currentY);
+  currentY += statementText.length * 6 + 15;
 
-  // Edge
-  pdf.setFontSize(14);
-  pdf.setTextColor(124, 58, 237); // Secondary color
-  const edgeTitle =
-    language === 'en'
-      ? "⚡ Edge (What You're Good At)"
-      : '⚡ Ventaja (En Lo Que Eres Bueno)';
-  pdf.text(edgeTitle, 20, currentY);
-  currentY += 8;
-
-  pdf.setFontSize(10);
-  pdf.setTextColor(60, 60, 60);
-  const edgeText = pdf.splitTextToSize(drivers.edge, pageWidth - 40);
-  pdf.text(edgeText, 20, currentY);
-  currentY += edgeText.length * 5 + 10;
-
-  // Impact
-  pdf.setFontSize(14);
-  pdf.setTextColor(16, 185, 129); // Success color
-  const impactTitle =
-    language === 'en'
-      ? '🌍 Impact (What the World Needs)'
-      : '🌍 Impacto (Lo Que El Mundo Necesita)';
-  pdf.text(impactTitle, 20, currentY);
-  currentY += 8;
-
-  pdf.setFontSize(10);
-  pdf.setTextColor(60, 60, 60);
-  const impactText = pdf.splitTextToSize(
-    drivers.impact,
-    pageWidth - 40,
-  );
-  pdf.text(impactText, 20, currentY);
-  currentY += impactText.length * 5 + 10;
-
-  // Economic Reality
-  pdf.setFontSize(14);
-  pdf.setTextColor(245, 158, 11); // Accent color
-  const economicTitle =
-    language === 'en' ? '💰 Economic Reality' : '💰 Realidad Económica';
-  pdf.text(economicTitle, 20, currentY);
-  currentY += 8;
-
-  pdf.setFontSize(10);
-  pdf.setTextColor(60, 60, 60);
-  const economicText = pdf.splitTextToSize(
-    drivers.economicReality,
-    pageWidth - 40,
-  );
-  pdf.text(economicText, 20, currentY);
-  currentY += economicText.length * 5 + 20;
+  // Core Threads (Regular)
+  pdf.setFont('helvetica', 'normal');
+  pdf.setTextColor(75, 85, 99); // Gray 600
+  const threadsText = pdf.splitTextToSize(drivers.coreThreads, pageWidth - 40);
+  pdf.text(threadsText, 20, currentY);
+  currentY += threadsText.length * 6 + 30;
 
   // Check if we need a new page
   if (currentY > pageHeight - 100) {
@@ -146,47 +100,97 @@ export function exportToPDF(
   }
 
   // Purpose Paths Section
-  pdf.setFontSize(18);
-  pdf.setTextColor(0, 0, 0);
+  pdf.setFontSize(20);
+  pdf.setTextColor(31, 41, 55);
+  pdf.setFont('helvetica', 'bold');
   const pathsTitle =
     language === 'en' ? 'Your Purpose Paths' : 'Tus Caminos de Propósito';
   pdf.text(pathsTitle, 20, currentY);
-  currentY += 15;
+  
+  currentY += 20;
 
   results.purposePaths.forEach((path: PurposePathWithSalary, index: number) => {
     // Check if we need a new page
-    if (currentY > pageHeight - 80) {
+    if (currentY > pageHeight - 120) {
       pdf.addPage();
       currentY = 20;
     }
 
-    pdf.setFontSize(14);
-    pdf.setTextColor(37, 99, 235);
+    // Path title
+    pdf.setFontSize(16);
+    pdf.setTextColor(31, 41, 55);
+    pdf.setFont('helvetica', 'bold');
     pdf.text(`${index + 1}. ${path.title}`, 20, currentY);
-    currentY += 10;
+    currentY += 15;
 
-    pdf.setFontSize(10);
-    pdf.setTextColor(60, 60, 60);
+    // Description
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(75, 85, 99);
     const descText = pdf.splitTextToSize(path.description, pageWidth - 40);
     pdf.text(descText, 20, currentY);
-    currentY += descText.length * 5 + 8;
+    currentY += descText.length * 5 + 15;
 
-    const strategyText = pdf.splitTextToSize(
-      `Action Strategy: ${path.actionStrategy}`,
-      pageWidth - 40,
-    );
+    // Ikigai Alignment - Simple list format
+    const columnWidth = (pageWidth - 40) / 2;
+    
+    // What You Love
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(59, 130, 246);
+    pdf.text(language === 'en' ? 'What You Love' : 'Lo Que Amas', 20, currentY);
+    currentY += 5;
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(75, 85, 99);
+    const loveText = pdf.splitTextToSize(path.ikigaiAlignment.love, pageWidth - 40);
+    pdf.text(loveText, 20, currentY);
+    currentY += loveText.length * 5 + 10;
+    
+    // What You're Good At
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(139, 92, 246); // Purple
+    pdf.text(language === 'en' ? "What You're Good At" : 'En Lo Que Eres Bueno', 20, currentY);
+    currentY += 5;
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(75, 85, 99);
+    const goodAtText = pdf.splitTextToSize(path.ikigaiAlignment.goodAt, pageWidth - 40);
+    pdf.text(goodAtText, 20, currentY);
+    currentY += goodAtText.length * 5 + 10;
+    
+    // What the World Needs
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(16, 185, 129); // Green
+    pdf.text(language === 'en' ? 'What the World Needs' : 'Lo Que El Mundo Necesita', 20, currentY);
+    currentY += 5;
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(75, 85, 99);
+    const worldNeedsText = pdf.splitTextToSize(path.ikigaiAlignment.worldNeeds, pageWidth - 40);
+    pdf.text(worldNeedsText, 20, currentY);
+    currentY += worldNeedsText.length * 5 + 10;
+
+    // What You Can Be Paid For
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(245, 158, 11); // Amber
+    pdf.text(language === 'en' ? 'What You Can Be Paid For' : 'Por Lo Que Te Pueden Pagar', 20, currentY);
+    currentY += 5;
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(75, 85, 99);
+    const payText = pdf.splitTextToSize(path.ikigaiAlignment.pay, pageWidth - 40);
+    pdf.text(payText, 20, currentY);
+    currentY += payText.length * 5 + 10;
+
+    // Action Strategy
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(31, 41, 55);
+    pdf.text(language === 'en' ? 'Action Strategy' : 'Estrategia de Acción', 20, currentY);
+    currentY += 5;
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(75, 85, 99);
+    const strategyText = pdf.splitTextToSize(path.actionStrategy, pageWidth - 40);
     pdf.text(strategyText, 20, currentY);
-    currentY += strategyText.length * 5 + 15;
+    currentY += strategyText.length * 5 + 25;
   });
-
-  // Footer
-  pdf.setFontSize(8);
-  pdf.setTextColor(150, 150, 150);
-  const footer =
-    language === 'en'
-      ? 'Generated by Purpose Finder - Powered by Nami AI'
-      : 'Generado por Buscador de Propósito - Desarrollado por Nami AI';
-  pdf.text(footer, pageWidth / 2, pageHeight - 10, { align: 'center' });
 
   // Save the PDF
   const filename =
@@ -210,166 +214,103 @@ export function exportActionPlanToPDF(
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
   const contentWidth = pageWidth - pageMargin * 2;
-  let currentY = 20;
+  let currentY = 30;
+
+  // Header background
+  pdf.setFillColor(59, 130, 246); // Primary blue
+  pdf.rect(0, 0, pageWidth, 50, 'F');
 
   // --- Title ---
   pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(22);
-  pdf.setTextColor('#0f172a'); // slate-900
-  pdf.text(t('actionPlan.title', language), pageWidth / 2, currentY, {
+  pdf.setFontSize(24);
+  pdf.setTextColor(255, 255, 255); // White
+  pdf.text(t('actionPlan.title', language), pageWidth / 2, 25, {
     align: 'center',
   });
-  currentY += 10;
 
   // --- Subtitle (Chosen Path) ---
   pdf.setFont('helvetica', 'normal');
-  pdf.setFontSize(12);
-  pdf.setTextColor('#475569'); // slate-600
+  pdf.setFontSize(14);
   const subtitle = `${t('actionPlan.chosenPath', language)}: ${chosenPathTitle}`;
-  pdf.text(subtitle, pageWidth / 2, currentY, { align: 'center' });
-  currentY += 20;
-
-  /**
-   * Helper function to draw a section with a title and a list of items.
-   * Handles page breaks automatically.
-   * @param {string} sectionKey - The i18n key for the section title.
-   * @param {Array<string | object>} items - The array of items to render.
-   */
-  const drawSection = (sectionKey: string, items: (string | any)[]) => {
-    if (currentY > pageHeight - 40) {
-      pdf.addPage();
-      currentY = pageMargin;
-    }
-    pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(16);
-    pdf.setTextColor('#1e293b'); // slate-800
-    pdf.text(t(sectionKey, language), pageMargin, currentY);
-    currentY += 10;
-    pdf.setFont('helvetica', 'normal');
-
-    items.forEach((item) => {
-      if (currentY > pageHeight - 25) {
-        pdf.addPage();
-        currentY = pageMargin;
-      }
-
-      if (typeof item === 'string') {
-        pdf.setFontSize(10);
-        pdf.setTextColor('#334155'); // slate-700
-        const itemText = pdf.splitTextToSize(`• ${item}`, contentWidth - 5);
-        pdf.text(itemText, pageMargin + 5, currentY);
-        currentY += itemText.length * 4 + 3;
-      } else {
-        // This is a skill item from the action plan
-        pdf.setFontSize(11);
-        pdf.setTextColor('#1e293b'); // slate-800
-        const skillText = pdf.splitTextToSize(item.skill, contentWidth - 5);
-        pdf.text(skillText, pageMargin + 5, currentY);
-        currentY += skillText.length * 4.5 + 4;
-
-        item.youtubeLinks.forEach((link: { title: string; url: string }) => {
-          if (currentY > pageHeight - 20) {
-            pdf.addPage();
-            currentY = pageMargin;
-          }
-          pdf.setFontSize(9);
-          pdf.setTextColor('#334155');
-          const linkTitleText = pdf.splitTextToSize(
-            `- ${link.title}`,
-            contentWidth - 10,
-          );
-          pdf.text(linkTitleText, pageMargin + 10, currentY);
-          currentY += linkTitleText.length * 3.5 + 2;
-
-          pdf.setFontSize(8);
-          pdf.setTextColor('#2563eb'); // blue-600
-          // Make the URL clickable
-          pdf.textWithLink(link.url, pageMargin + 10, currentY, {
-            url: link.url,
-          });
-          currentY += 8;
-        });
-      }
-    });
-    currentY += 10; // Space after section
-  };
+  pdf.text(subtitle, pageWidth / 2, 37, { align: 'center' });
+  
+  currentY = 70;
 
   // --- Render Milestones ---
   actionPlan.milestones.forEach((ms, idx) => {
-    if (currentY > pageHeight - 40) {
+    if (currentY > pageHeight - 60) {
       pdf.addPage();
       currentY = pageMargin;
     }
 
     // Milestone Header
     pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(14);
-    pdf.setTextColor('#1e293b'); // slate-800
-    pdf.text(`${idx + 1}. ${ms.title}  (${ms.timeline})`, pageMargin, currentY);
-    currentY += 8;
+    pdf.setFontSize(16);
+    pdf.setTextColor(31, 41, 55); // slate-800
+    pdf.text(`${idx + 1}. ${ms.title} (${ms.timeline})`, pageMargin, currentY);
+    
+    currentY += 15;
 
     // Actions
     pdf.setFont('helvetica', 'normal');
     pdf.setFontSize(11);
-    pdf.setTextColor('#334155');
+    pdf.setTextColor(75, 85, 99);
     ms.actions.forEach((act) => {
-      const lines = pdf.splitTextToSize(`• ${act}`, contentWidth - 5);
-      pdf.text(lines, pageMargin + 5, currentY);
-      currentY += lines.length * 4 + 2;
+      const lines = pdf.splitTextToSize(`• ${act}`, contentWidth);
+      pdf.text(lines, pageMargin, currentY);
+      currentY += lines.length * 5 + 3;
     });
 
     // Skills
     if (ms.skills && ms.skills.length > 0) {
-      currentY += 2;
+      currentY += 10;
+      
+      // Skills header
       pdf.setFont('helvetica', 'bold');
       pdf.setFontSize(12);
-      pdf.setTextColor('#1e293b');
-      pdf.text(t('actionPlan.skills', language), pageMargin + 2, currentY);
-      currentY += 6;
+      pdf.setTextColor(31, 41, 55);
+      pdf.text(t('actionPlan.skills', language), pageMargin, currentY);
+      
+      currentY += 10;
 
       pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(10);
-      pdf.setTextColor('#334155');
       ms.skills.forEach((skill) => {
-        const skillLines = pdf.splitTextToSize(`- ${skill.skill}`, contentWidth - 10);
-        pdf.text(skillLines, pageMargin + 8, currentY);
-        currentY += skillLines.length * 4 + 2;
+        // Skill name
+        pdf.setFontSize(11);
+        pdf.setTextColor(31, 41, 55);
+        pdf.setFont('helvetica', 'bold');
+        const skillLines = pdf.splitTextToSize(`• ${skill.skill}`, contentWidth);
+        pdf.text(skillLines, pageMargin + 5, currentY);
+        currentY += skillLines.length * 5 + 5;
 
+        // YouTube videos
         skill.youtubeLinks.forEach((link) => {
-          const linkLines = pdf.splitTextToSize(`   • ${link.title}`, contentWidth - 12);
-          pdf.text(linkLines, pageMargin + 12, currentY);
-          currentY += linkLines.length * 3 + 1;
-          pdf.setTextColor('#2563eb');
-          pdf.textWithLink(link.url, pageMargin + 12, currentY, { url: link.url });
-          pdf.setTextColor('#334155');
-          currentY += 6;
+          if (currentY > pageHeight - 30) {
+            pdf.addPage();
+            currentY = pageMargin;
+          }
+          
+          // Video title
+          pdf.setFont('helvetica', 'normal');
+          pdf.setFontSize(10);
+          pdf.setTextColor(75, 85, 99);
+          const linkLines = pdf.splitTextToSize(`  - ${link.title}`, contentWidth - 10);
+          pdf.text(linkLines, pageMargin + 10, currentY);
+          currentY += linkLines.length * 4 + 3;
+          
+          // Video URL as link
+          pdf.setTextColor(59, 130, 246); // Blue for links
+          pdf.setFontSize(9);
+          const urlText = link.url.length > 60 ? link.url.substring(0, 57) + '...' : link.url;
+          pdf.textWithLink(urlText, pageMargin + 15, currentY, { url: link.url });
+          currentY += 7;
         });
+        currentY += 3;
       });
     }
 
-    currentY += 8; // spacing after milestone
+    currentY += 15; // spacing after milestone
   });
-
-  // --- Footer ---
-  const pageCount = (pdf.internal as any).getNumberOfPages();
-  for (let i = 1; i <= pageCount; i++) {
-    pdf.setPage(i);
-    pdf.setFontSize(8);
-    pdf.setTextColor('#94a3b8'); // slate-400
-    const footerText = `${t('header.title', language)} - ${t('header.poweredBy', language)}`;
-    pdf.text(
-      footerText,
-      pageWidth / 2,
-      pageHeight - 10,
-      { align: 'center' },
-    );
-    pdf.text(
-      `${t('common.page', 'en')} ${i} / ${pageCount}`, // Using 'en' for "Page" to keep it simple
-      pageWidth - pageMargin,
-      pageHeight - 10,
-      { align: 'right' },
-    );
-  }
 
   // --- Save the PDF ---
   const filename =
