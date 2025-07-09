@@ -108,7 +108,7 @@ navigate('/');
 
 return (
 <TooltipProvider>
-<Header language={language} onLanguageChange={setLanguage} />
+<Header language={language} onLanguageChange={setLanguage} onStartOver={handleStartOver} />
 <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 <Switch>
 {/* Landing + Inline Questionnaire (SinglePageQuestionnaire to be introduced in Step 2) */}

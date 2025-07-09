@@ -6,20 +6,24 @@ import { t, type Language } from '@/lib/i18n';
 interface HeaderProps {
   language: Language;
   onLanguageChange: (lang: Language) => void;
+  onStartOver: () => void;
 }
 
-export function Header({ language, onLanguageChange }: HeaderProps) {
+export function Header({ language, onLanguageChange, onStartOver }: HeaderProps) {
   return (
     <header className="bg-white shadow-sm border-b border-slate-200">
       <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 gradient-primary rounded-lg flex items-center justify-center">
+        <button 
+          onClick={onStartOver}
+          className="flex items-center space-x-3 hover:opacity-80 transition-opacity cursor-pointer group"
+        >
+          <div className="w-8 h-8 gradient-primary rounded-lg flex items-center justify-center group-hover:scale-105 transition-transform">
             <Compass className="text-white text-sm" />
           </div>
-          <h1 className="text-xl font-semibold text-slate-900">
+          <h1 className="text-xl font-semibold text-slate-900 group-hover:text-primary transition-colors">
             {t('header.title', language)}
           </h1>
-        </div>
+        </button>
         
         <div className="flex items-center space-x-4">
           <div className="flex items-center bg-slate-100 rounded-lg p-1">
