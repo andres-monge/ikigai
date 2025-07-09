@@ -92,9 +92,6 @@ export function ActionPlan({
     <div className="max-w-4xl mx-auto py-8 px-4">
       {/* Header Section */}
       <div className="text-center mb-12">
-        <div className="inline-flex items-center justify-center w-16 h-16 gradient-primary rounded-full mb-4 shadow-lg">
-          <ClipboardCheck className="text-white w-8 h-8" />
-        </div>
         <h2 className="text-3xl font-bold text-slate-900 mb-2">
           {t('actionPlan.title', language)}
         </h2>

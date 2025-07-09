@@ -154,8 +154,6 @@ export function Results({
       <LoadingOverlay
         isVisible={isGenerating}
         language={language}
-        title={t('results.generatingPlanTitle', language)}
-        description={t('results.generatingPlanDescription', language)}
       />
       <div className="max-w-6xl mx-auto">
         {/* AI Analysis Header */}

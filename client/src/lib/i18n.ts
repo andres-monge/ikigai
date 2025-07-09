@@ -76,16 +76,13 @@ export const translations: Record<string, Record<string, string>> = {
     'results.choosePathAndGetPlan': 'Choose this Path & Get Plan',
     'results.actionStrategy': 'Action Strategy',
     'results.refine': 'Refine',
-    'results.generatingPlanTitle': 'Generating your plan...',
-    'results.generatingPlanDescription':
-      "Nami is crafting a detailed, step-by-step guide for your new path. This might take a moment.",
     'results.actionPlanError':
       'Could not generate an action plan. Please try again.',
 
     // Action Plan
     'actionPlan.title': 'Your Action Plan',
     'actionPlan.subtitle':
-      "Here are the concrete steps to get you started on your new path. Let's build something real.",
+      'Steps to get you started on your new path.',
     'actionPlan.chosenPath': 'Chosen Path',
     'actionPlan.sideProjects': 'Side Project Ideas',
     'actionPlan.sideProjectsDescription':
@@ -123,9 +120,8 @@ export const translations: Record<string, Record<string, string>> = {
     'chat.poweredBy': 'Powered by Gemini 2.5 Flash',
 
     // Loading
-    'loading.thinking': 'Nami is thinking...',
-    'loading.analyzing':
-      'Analyzing your responses to discover your unique ikigai paths',
+    'loading.title': 'AIs are cooking',
+    'loading.description': 'This will only take a minute.',
 
     // Common
     'common.loading': 'Loading...',
@@ -187,16 +183,13 @@ export const translations: Record<string, Record<string, string>> = {
     'results.choosePathAndGetPlan': 'Elegir este Camino y Obtener Plan',
     'results.actionStrategy': 'Estrategia de Acción',
     'results.refine': 'Refinar',
-    'results.generatingPlanTitle': 'Generando tu plan...',
-    'results.generatingPlanDescription':
-      'Nami está elaborando una guía detallada paso a paso para tu nuevo camino. Esto podría tomar un momento.',
     'results.actionPlanError':
       'No se pudo generar un plan de acción. Por favor, inténtalo de nuevo.',
 
     // Action Plan
     'actionPlan.title': 'Tu Plan de Acción',
     'actionPlan.subtitle':
-      'Aquí tienes los pasos concretos para empezar en tu nuevo camino. Construyamos algo real.',
+      'Pasos para empezar en tu nuevo camino.',
     'actionPlan.chosenPath': 'Camino Elegido',
     'actionPlan.sideProjects': 'Ideas de Proyectos Paralelos',
     'actionPlan.sideProjectsDescription':
@@ -234,9 +227,8 @@ export const translations: Record<string, Record<string, string>> = {
     'chat.poweredBy': 'Desarrollado por Gemini 2.5 Flash',
 
     // Loading
-    'loading.thinking': 'Nami está pensando...',
-    'loading.analyzing':
-      'Analizando tus respuestas para descubrir tus caminos únicos de ikigai',
+    'loading.title': 'Las IAs están cocinando',
+    'loading.description': 'Esto solo tomará un minuto.',
 
     // Common
     'common.loading': 'Cargando...',
