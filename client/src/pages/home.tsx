@@ -7,7 +7,7 @@
  * completely self-contained inside the router.
  */
 
-import { Clock, UserX, Download } from 'lucide-react';
+import { UserX } from 'lucide-react';
 import React from 'react';
 import { t, type Language } from '@/lib/i18n';
 import { SinglePageQuestionnaire } from '@/components/questionnaire/single-page-questionnaire';
@@ -26,27 +26,31 @@ export function Home({ language, sessionId }: HomeProps) {
       <div className="max-w-3xl mx-auto">
         {/* Hero */}
         <div
-          className="relative h-64 mb-8 rounded-2xl overflow-hidden shadow-xl"
+          className="relative mb-8 rounded-2xl overflow-hidden shadow-xl p-6"
           style={{
-            backgroundImage:
-              "url('https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=1200&h=400')",
-            backgroundSize: 'cover',
-            backgroundPosition: 'center'
+            backgroundColor: '#fff9f3'
           }}
         >
-          <div className="absolute inset-0 bg-gradient-to-r from-primary/80 to-secondary/80 flex items-center justify-center">
-            <div className="text-center text-white">
-              <h2 className="text-4xl md:text-5xl font-bold mb-4">
-                {t('welcome.title', language)}
-              </h2>
-              <p className="text-xl opacity-90">{t('welcome.subtitle', language)}</p>
+          <div className="text-center">
+            <h2 className="text-4xl md:text-5xl font-bold mb-4 text-gray-900">
+              {t('welcome.title', language)}
+            </h2>
+            
+            {/* Image container */}
+            <div className="mx-auto my-4 max-w-sm">
+              <img 
+                src="/assets/ikigai-circles-866.png" 
+                alt=""
+                className="w-full h-auto"
+              />
             </div>
+
+            {/* Subtitle */}
+            <p className="text-xl md:text-2xl font-bold text-gray-900 mt-4 opacity-70">
+              {t('welcome.description', language)}
+            </p>
           </div>
         </div>
-
-        <p className="text-lg text-slate-600 mb-8 leading-relaxed">
-          {t('welcome.description', language)}
-        </p>
 
         {/* Inline single-page questionnaire – introduced in Step 2 */}
         <div className="mt-12">
@@ -55,16 +59,8 @@ export function Home({ language, sessionId }: HomeProps) {
 
         <div className="flex justify-center mt-6 space-x-8 text-sm text-slate-500">
           <div className="flex items-center">
-            <Clock className="w-4 h-4 mr-2 text-accent" />
-            <span>{t('welcome.duration', language)}</span>
-          </div>
-          <div className="flex items-center">
             <UserX className="w-4 h-4 mr-2 text-accent" />
             <span>{t('welcome.noAccount', language)}</span>
-          </div>
-          <div className="flex items-center">
-            <Download className="w-4 h-4 mr-2 text-accent" />
-            <span>{t('welcome.pdfExport', language)}</span>
           </div>
         </div>
       </div>

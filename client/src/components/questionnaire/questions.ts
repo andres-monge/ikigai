@@ -58,8 +58,8 @@ export const QUESTIONS = {
     },
     {
       id: 'skills.q2',
-      en: 'Any track record of these skills — projects, jobs, experiences?',
-      es: '¿Tienes historial demostrable de estas habilidades — proyectos, empleos, experiencias?',
+      en: 'Any experience with these skills? What\'s your job or school?',
+      es: '¿Tienes experiencia con estas habilidades? ¿Cuál es tu trabajo o escuela?',
     },
   ],
   values: [

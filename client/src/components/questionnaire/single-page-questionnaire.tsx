@@ -143,8 +143,8 @@ export function SinglePageQuestionnaire({
   /* --------------------------------- Render ------------------------------ */
   return (
     <div className="bg-white rounded-2xl shadow-lg p-8">
-      <h2 className="text-2xl font-bold text-slate-900 mb-6">
-        {t('welcome.subtitle', language)}
+      <h2 className="text-2xl text-slate-600 mb-6 text-left">
+        {t('home.questionnaireTitle', language)}
       </h2>
 
       <div className="grid grid-cols-1 gap-6">
@@ -152,7 +152,6 @@ export function SinglePageQuestionnaire({
           <div key={id}>
             <Label htmlFor={id} className="block text-lg font-medium text-slate-900 mb-3 text-left">
               {title}
-              <span className="text-red-500 ml-1">*</span>
             </Label>
             <TextareaAutosize
               id={id}
@@ -171,7 +170,7 @@ export function SinglePageQuestionnaire({
 
       <Button
         onClick={handleSubmit}
-        className="mt-8 px-8 py-4 font-semibold shadow-lg hover:shadow-xl transition-all duration-200 gradient-primary text-primary-foreground"
+        className="mt-8 px-8 py-4 font-semibold shadow-lg hover:shadow-xl transition-all duration-200 bg-purple-600 hover:bg-purple-700 text-white"
       >
         {t('questionnaire.complete', language)}
       </Button>

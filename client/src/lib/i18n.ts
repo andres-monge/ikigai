@@ -11,11 +11,6 @@
  * function is a simple utility to retrieve a specific string for a given
  * language, falling back to the key itself if a translation is not found.
  *
- * ✨ **File Status (Step 25)** ✨
- * - Reviewed and confirmed that all keys required for the Action Plan feature
- * are present for both English and Spanish.
- * - This file is up-to-date with all current UI features.
- *
  * @dependencies
  * - None
  */
@@ -27,17 +22,18 @@ export const translations: Record<string, Record<string, string>> = {
     'header.poweredBy': 'Powered by Nami AI',
 
     // Welcome Section
-    'welcome.title': 'Find Your Ikigai',
+    'welcome.title': 'Find Your Purpose',
     'welcome.subtitle':
       'Discover your reason for being with AI-powered career guidance',
     'welcome.description':
-      "Join thousands who've discovered their perfect career path through our comprehensive assessment. Let Nami, our AI guide, help you uncover the intersection of what you love, what you're good at, what the world needs, and what you can be paid for.",
+      'Do something you love. Stop living for the weekend.',
     'welcome.duration': '10-15 minutes',
     'welcome.noAccount': 'No account required',
     'welcome.pdfExport': 'PDF export available',
 
     // Home
     'home.questionnaireIntro': 'Please answer the questions below',
+    'home.questionnaireTitle': 'Answer 8 questions, let our AI change your life.',
     'home.submit': 'Submit',
 
     // Questionnaire
@@ -134,17 +130,18 @@ export const translations: Record<string, Record<string, string>> = {
     'header.poweredBy': 'Desarrollado por Nami AI',
 
     // Welcome Section
-    'welcome.title': 'Encuentra Tu Ikigai',
+    'welcome.title': 'Encuentra Tu Propósito',
     'welcome.subtitle':
       'Descubre tu razón de ser con orientación profesional impulsada por IA',
     'welcome.description':
-      'Únete a miles que han descubierto su trayectoria profesional perfecta a través de nuestra evaluación integral. Deja que Nami, nuestra guía de IA, te ayude a descubrir la intersección de lo que amas, en lo que eres bueno, lo que el mundo necesita y por lo que te pueden pagar.',
+      'Haz algo que te encante. Deja de vivir esperando al finde.',
     'welcome.duration': '10-15 minutos',
     'welcome.noAccount': 'No se requiere cuenta',
     'welcome.pdfExport': 'Exportación PDF disponible',
 
     // Home
     'home.questionnaireIntro': 'Por favor responde las preguntas a continuación',
+    'home.questionnaireTitle': 'Responde 8 preguntas, deja que nuestra IA cambie tu vida.',
     'home.submit': 'Enviar',
 
     // Questionnaire
