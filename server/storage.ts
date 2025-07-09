@@ -153,10 +153,20 @@ export class MemStorage implements IStorage {
     const existing = this.assessmentSessions.get(internalId);
     if (!existing) return undefined;
 
+    // Guarantee monotonic `updatedAt` so that unit tests comparing strict
+    // inequality (`>` rather than `>=`) never fail due to clock resolution
+    // limits (particularly on fast CI runners where a 1 ms setTimeout may not
+    // advance the timestamp). If the newly generated timestamp happens to be
+    // equal to or behind the previous one, we manually bump it by 1 ms.
+    let nextUpdatedAt = new Date();
+    if (nextUpdatedAt.getTime() <= existing.updatedAt.getTime()) {
+      nextUpdatedAt = new Date(existing.updatedAt.getTime() + 1);
+    }
+
     const updated: AssessmentSession = {
       ...existing,
       ...updates,
-      updatedAt: new Date(),
+      updatedAt: nextUpdatedAt,
     };
     this.assessmentSessions.set(internalId, updated);
     return this.hydrateSession(updated);

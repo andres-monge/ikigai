@@ -7,20 +7,19 @@
  * completely self-contained inside the router.
  */
 
-import { PlayCircle, Clock, UserX, Download } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Clock, UserX, Download } from 'lucide-react';
+import React from 'react';
 import { t, type Language } from '@/lib/i18n';
-import { useLocation } from 'wouter';
+import { SinglePageQuestionnaire } from '@/components/questionnaire/single-page-questionnaire';
 
 interface HomeProps {
+  /** Current UI language */
   language: Language;
+  /** Anonymous session identifier used by backend API calls */
+  sessionId: string;
 }
 
-export function Home({ language }: HomeProps) {
-  const [, navigate] = useLocation();
-
-  /** Kick-off the questionnaire flow */
-  const handleStart = () => navigate('/questionnaire');
+export function Home({ language, sessionId }: HomeProps) {
 
   return (
     <div className="text-center mb-12">
@@ -49,14 +48,10 @@ export function Home({ language }: HomeProps) {
           {t('welcome.description', language)}
         </p>
 
-        <Button
-          onClick={handleStart}
-          variant="secondary"
-          className="px-8 py-4 rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-200"
-        >
-          <PlayCircle className="w-5 h-5 mr-2" />
-          {t('welcome.startButton', language)}
-        </Button>
+        {/* Inline single-page questionnaire – introduced in Step 2 */}
+        <div className="mt-12">
+          <SinglePageQuestionnaire language={language} sessionId={sessionId} />
+        </div>
 
         <div className="flex justify-center mt-6 space-x-8 text-sm text-slate-500">
           <div className="flex items-center">

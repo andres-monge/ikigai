@@ -32,10 +32,13 @@ export const translations: Record<string, Record<string, string>> = {
       'Discover your reason for being with AI-powered career guidance',
     'welcome.description':
       "Join thousands who've discovered their perfect career path through our comprehensive assessment. Let Nami, our AI guide, help you uncover the intersection of what you love, what you're good at, what the world needs, and what you can be paid for.",
-    'welcome.startButton': 'Start Your Journey',
     'welcome.duration': '10-15 minutes',
     'welcome.noAccount': 'No account required',
     'welcome.pdfExport': 'PDF export available',
+
+    // Home
+    'home.questionnaireIntro': 'Please answer the questions below',
+    'home.submit': 'Submit',
 
     // Questionnaire
     'questionnaire.progress': 'Progress',
@@ -44,6 +47,7 @@ export const translations: Record<string, Record<string, string>> = {
     'questionnaire.next': 'Next Step',
     'questionnaire.complete': 'Complete Assessment',
 
+    // TODO: remove step*.title keys when wizard is deleted
     // Questionnaire Steps
     'step1.title': 'Discover Your Passions',
     'step1.description':
@@ -139,10 +143,13 @@ export const translations: Record<string, Record<string, string>> = {
       'Descubre tu razón de ser con orientación profesional impulsada por IA',
     'welcome.description':
       'Únete a miles que han descubierto su trayectoria profesional perfecta a través de nuestra evaluación integral. Deja que Nami, nuestra guía de IA, te ayude a descubrir la intersección de lo que amas, en lo que eres bueno, lo que el mundo necesita y por lo que te pueden pagar.',
-    'welcome.startButton': 'Comienza Tu Viaje',
     'welcome.duration': '10-15 minutos',
     'welcome.noAccount': 'No se requiere cuenta',
     'welcome.pdfExport': 'Exportación PDF disponible',
+
+    // Home
+    'home.questionnaireIntro': 'Por favor responde las preguntas a continuación',
+    'home.submit': 'Enviar',
 
     // Questionnaire
     'questionnaire.progress': 'Progreso',
@@ -151,6 +158,7 @@ export const translations: Record<string, Record<string, string>> = {
     'questionnaire.next': 'Siguiente Paso',
     'questionnaire.complete': 'Completar Evaluación',
 
+    // TODO: remove step*.title keys when wizard is deleted
     // Questionnaire Steps
     'step1.title': 'Descubre Tus Pasiones',
     'step1.description':

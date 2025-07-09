@@ -1,3 +1,11 @@
+/** @deprecated – replace with SinglePageQuestionnaire
+ * @file question-card.tsx
+ *
+ * @description
+ * Legacy step-wizard card component retained temporarily for reference.
+ * This component is no longer used in production and will be removed once
+ * the non-wizard flow is fully validated.
+ */
 import { useState } from 'react';
 import type { ChangeEvent } from 'react';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
