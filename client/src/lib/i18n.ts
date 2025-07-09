@@ -19,59 +19,29 @@ export const translations: Record<string, Record<string, string>> = {
   en: {
     // Header
     'header.title': 'Ikigai Finder',
-    'header.poweredBy': 'Powered by Nami AI',
 
     // Welcome Section
     'welcome.title': 'Find Your Purpose',
-    'welcome.subtitle':
-      'Discover your reason for being with AI-powered career guidance',
     'welcome.description':
       'Do something you love. Stop living for the weekend.',
-    'welcome.duration': '10-15 minutes',
     'welcome.noAccount': 'No account required',
-    'welcome.pdfExport': 'PDF export available',
 
     // Home
-    'home.questionnaireIntro': 'Please answer the questions below',
     'home.questionnaireTitle': 'Answer 8 questions, let our AI change your life.',
-    'home.submit': 'Submit',
 
     // Questionnaire
-    'questionnaire.progress': 'Progress',
-    'questionnaire.stepOf': 'of',
-    'questionnaire.previous': 'Previous',
-    'questionnaire.next': 'Next Step',
-    'questionnaire.complete': 'Complete Assessment',
+    'questionnaire.complete': 'Show Me My Purpose',
 
-    // TODO: remove step*.title keys when wizard is deleted
-    // Questionnaire Steps
-    'step1.title': 'Discover Your Passions',
-    'step1.description':
-      "Let's start by understanding what truly energizes and excites you. Think about activities that make you lose track of time.",
-    'step2.title': 'Identify Your Skills',
-    'step2.description':
-      "Now let's explore your natural abilities and strengths. What do you excel at?",
-    'step3.title': 'Define Your Values',
-    'step3.description':
-      'Understanding your core values helps align your career with what matters most to you.',
-    'step4.title': 'Economic Considerations',
-    'step4.description':
-      "Let's discuss your financial goals and practical considerations for your career path.",
+
 
     // Results
     'results.title': 'Your Ikigai',
-    'results.subtitle':
-      'Nami has analyzed your responses and discovered your unique purpose paths',
-    'results.coreDrivers': "What's Popping Out of Your Answers",
-    'results.yourIkigai': 'Your Ikigai',
-    'results.purposePaths': 'Your Three Purpose Paths',
-    'results.salaryBenchmarks': 'Salary Benchmarks',
+    'results.purposePaths': 'Your 3 Purpose Paths',
     'results.exportPdf': 'Export as PDF',
     'results.refineWithNami': 'Ask Follow-Up',
     'results.startOver': 'Start Over',
-    'results.choosePathAndGetPlan': 'Choose this Path & Get Plan',
+    'results.choosePathAndGetPlan': 'Get Action Plan',
     'results.actionStrategy': 'Action Strategy',
-    'results.refine': 'Refine',
     'results.actionPlanError':
       'Could not generate an action plan. Please try again.',
 
@@ -80,157 +50,89 @@ export const translations: Record<string, Record<string, string>> = {
     'actionPlan.subtitle':
       'Steps to get you started on your new path.',
     'actionPlan.chosenPath': 'Chosen Path',
-    'actionPlan.sideProjects': 'Side Project Ideas',
-    'actionPlan.sideProjectsDescription':
-      'Build one of these to test the waters and build your portfolio.',
-    'actionPlan.skillsToLearn': 'Skills to Learn',
-    'actionPlan.skillsToLearnDescription':
-      'Focus on these skills and use the recommended videos to start.',
-    'actionPlan.peopleToNetworkWith': 'Where to Find Your People',
-    'actionPlan.peopleToNetworkWithDescription':
-      'Find communities and individuals in these spaces to learn from.',
     'actionPlan.exportPdf': 'Export as PDF',
     'actionPlan.refineWithNami': 'Ask Follow-Up',
-    'actionPlan.watchOnYouTube': 'Watch on YouTube',
     'actionPlan.backToPaths': 'Back to Paths',
     'actionPlan.actions': 'Actions',
-    'actionPlan.skills': 'Skills & Resources',
+    'actionPlan.skills': 'Learn What You Need',
 
     // Ikigai
     'ikigai.alignment': 'Ikigai Alignment',
     'ikigai.love': 'Love',
-    'ikigai.goodAt': 'Good at',
-    'ikigai.worldNeeds': 'World needs',
+    'ikigai.goodAt': 'Good At',
+    'ikigai.worldNeeds': 'Meaningful',
     'ikigai.pay': 'Pay',
-
-    // Core Drivers
-    'drivers.energy': 'Energy (What You Love)',
-    'drivers.edge': "Edge (What You're Good At)",
-    'drivers.impact': 'Impact (What the World Needs)',
-    'drivers.economic': 'Economic Reality (What You Can Be Paid For)',
 
     // Chat
     'chat.title': 'Nami',
-    'chat.subtitle': 'Your AI Career Guide',
-    'chat.placeholder': 'Ask Nami anything...',
-    'chat.poweredBy': 'Powered by Gemini 2.5 Flash',
+    'chat.subtitle': 'Your AI Life Navigator',
+    'chat.placeholder': 'Ask Nami anything :)',
 
     // Loading
-    'loading.title': 'AIs are cooking',
+    'loading.title': 'Our AIs are cooking',
     'loading.description': 'This will only take a minute.',
 
     // Common
-    'common.loading': 'Loading...',
     'common.error': 'Something went wrong. Please try again.',
-    'common.page': 'Page',
   },
   es: {
     // Header
-    'header.title': 'Buscador de Propósito',
-    'header.poweredBy': 'Desarrollado por Nami AI',
+    'header.title': 'Ikigai Finder',
 
     // Welcome Section
-    'welcome.title': 'Encuentra Tu Propósito',
-    'welcome.subtitle':
-      'Descubre tu razón de ser con orientación profesional impulsada por IA',
+    'welcome.title': 'Encuentra tu propósito',
     'welcome.description':
       'Haz algo que te encante. Deja de vivir esperando al finde.',
-    'welcome.duration': '10-15 minutos',
-    'welcome.noAccount': 'No se requiere cuenta',
-    'welcome.pdfExport': 'Exportación PDF disponible',
+    'welcome.noAccount': 'No requiere cuenta',
 
     // Home
-    'home.questionnaireIntro': 'Por favor responde las preguntas a continuación',
     'home.questionnaireTitle': 'Responde 8 preguntas, deja que nuestra IA cambie tu vida.',
-    'home.submit': 'Enviar',
 
     // Questionnaire
-    'questionnaire.progress': 'Progreso',
-    'questionnaire.stepOf': 'de',
-    'questionnaire.previous': 'Anterior',
-    'questionnaire.next': 'Siguiente Paso',
-    'questionnaire.complete': 'Completar Evaluación',
+    'questionnaire.complete': 'Enséñame mi propósito',
 
-    // TODO: remove step*.title keys when wizard is deleted
-    // Questionnaire Steps
-    'step1.title': 'Descubre Tus Pasiones',
-    'step1.description':
-      'Comencemos entendiendo qué te energiza y emociona realmente. Piensa en actividades que te hacen perder la noción del tiempo.',
-    'step2.title': 'Identifica Tus Habilidades',
-    'step2.description':
-      'Ahora exploremos tus habilidades naturales y fortalezas. ¿En qué sobresales?',
-    'step3.title': 'Define Tus Valores',
-    'step3.description':
-      'Entender tus valores fundamentales ayuda a alinear tu carrera con lo que más te importa.',
-    'step4.title': 'Consideraciones Económicas',
-    'step4.description':
-      'Hablemos de tus objetivos financieros y consideraciones prácticas para tu trayectoria profesional.',
+
 
     // Results
     'results.title': 'Tu Ikigai',
-    'results.subtitle':
-      'Nami ha analizado tus respuestas y descubierto tus caminos únicos de propósito',
-    'results.coreDrivers': 'Lo Que Destaca de Tus Respuestas',
-    'results.yourIkigai': 'Tu Ikigai',
-    'results.purposePaths': 'Tus Tres Caminos de Propósito',
-    'results.salaryBenchmarks': 'Referencias Salariales',
+    'results.purposePaths': 'Tus 3 Caminos',
     'results.exportPdf': 'Exportar como PDF',
-    'results.refineWithNami': 'Hacer Preguntas de Seguimiento',
-    'results.startOver': 'Comenzar de Nuevo',
-    'results.choosePathAndGetPlan': 'Elegir este Camino y Obtener Plan',
-    'results.actionStrategy': 'Estrategia de Acción',
-    'results.refine': 'Refinar',
+    'results.refineWithNami': 'Haz una pregunta',
+    'results.startOver': 'Volver al inicio',
+    'results.choosePathAndGetPlan': 'Ver Plan de acción',
+    'results.actionStrategy': 'Plan de acción',
     'results.actionPlanError':
       'No se pudo generar un plan de acción. Por favor, inténtalo de nuevo.',
 
     // Action Plan
-    'actionPlan.title': 'Tu Plan de Acción',
+    'actionPlan.title': 'Tu Plan de acción',
     'actionPlan.subtitle':
       'Pasos para empezar en tu nuevo camino.',
-    'actionPlan.chosenPath': 'Camino Elegido',
-    'actionPlan.sideProjects': 'Ideas de Proyectos Paralelos',
-    'actionPlan.sideProjectsDescription':
-      'Construye uno de estos para probar las aguas y armar tu portafolio.',
-    'actionPlan.skillsToLearn': 'Habilidades a Aprender',
-    'actionPlan.skillsToLearnDescription':
-      'Enfócate en estas habilidades y usa los videos recomendados para empezar.',
-    'actionPlan.peopleToNetworkWith': 'Dónde Encontrar a Tu Gente',
-    'actionPlan.peopleToNetworkWithDescription':
-      'Encuentra comunidades e individuos en estos espacios para aprender de ellos.',
+    'actionPlan.chosenPath': 'Camino elegido',
     'actionPlan.exportPdf': 'Exportar como PDF',
-    'actionPlan.refineWithNami': 'Hacer Preguntas de Seguimiento',
-    'actionPlan.watchOnYouTube': 'Ver en YouTube',
-    'actionPlan.backToPaths': 'Volver a los Caminos',
+    'actionPlan.refineWithNami': 'Haz una pregunta',
+    'actionPlan.backToPaths': 'Volver a los caminos',
     'actionPlan.actions': 'Acciones',
-    'actionPlan.skills': 'Habilidades y Recursos',
+    'actionPlan.skills': 'Aprende lo que necesitas',
 
     // Ikigai
-    'ikigai.alignment': 'Alineación Ikigai',
-    'ikigai.love': 'Amor',
-    'ikigai.goodAt': 'Bueno en',
-    'ikigai.worldNeeds': 'El mundo necesita',
-    'ikigai.pay': 'Pago',
-
-    // Core Drivers
-    'drivers.energy': 'Energía (Lo Que Amas)',
-    'drivers.edge': 'Ventaja (En Lo Que Eres Bueno)',
-    'drivers.impact': 'Impacto (Lo Que El Mundo Necesita)',
-    'drivers.economic': 'Realidad Económica (Por Lo Que Te Pueden Pagar)',
+    'ikigai.alignment': 'Encaje Ikigai',
+    'ikigai.love': 'Te encanta',
+    'ikigai.goodAt': 'Se te da bien',
+    'ikigai.worldNeeds': 'Gratificante',
+    'ikigai.pay': 'Paga',
 
     // Chat
     'chat.title': 'Nami',
-    'chat.subtitle': 'Tu Guía Profesional IA',
-    'chat.placeholder': 'Pregúntale cualquier cosa a Nami...',
-    'chat.poweredBy': 'Desarrollado por Gemini 2.5 Flash',
+    'chat.subtitle': 'Tu Guía IA',
+    'chat.placeholder': 'Pregúntale cualquier cosa a Nami :)',
 
     // Loading
     'loading.title': 'Las IAs están cocinando',
-    'loading.description': 'Esto solo tomará un minuto.',
+    'loading.description': 'Tardará un minuto.',
 
     // Common
-    'common.loading': 'Cargando...',
     'common.error': 'Algo salió mal. Por favor inténtalo de nuevo.',
-    'common.page': 'Página',
   },
 };
 
