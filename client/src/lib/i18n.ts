@@ -69,7 +69,7 @@ export const translations: Record<string, Record<string, string>> = {
     'chat.placeholder': 'Ask Nami anything :)',
 
     // Loading
-    'loading.title': 'Our AIs are cooking',
+    'loading.title': 'Our AIs are cooking.',
     'loading.description': 'This will only take a minute.',
 
     // Common

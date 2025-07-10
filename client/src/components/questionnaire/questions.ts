@@ -13,7 +13,7 @@
  *  • Group answers per section when building the API payload.  
  *  • Keep the order predictable when the array is flattened.
  *
- * @note This file is introduced in Step 2 of the Implementation Plan to avoid
+ * @note This file is introduced to avoid
  *       duplicating question strings across multiple components.
  */
 
@@ -41,13 +41,13 @@ export const QUESTIONS = {
   passions: [
     {
       id: 'passions.q1',
-      en: "What specific activities make you forget to check the clock because you're so into them?",
+      en: "What activities make you forget to check the clock because you're so into them?",
       es: '¿Qué actividades te absorben tanto que pierdes la noción del tiempo?',
     },
     {
       id: 'passions.q2',
-      en: "What topics or problems get you excited enough to talk someone's ear off?",
-      es: '¿Qué temas o problemas te entusiasman tanto que podrías hablar sin parar de ellos?',
+      en: "What topics get you excited enough to talk someone's ear off?",
+      es: '¿Qué temas te entusiasman tanto que podrías hablar sin parar de ellos?',
     },
   ],
   skills: [
@@ -58,32 +58,32 @@ export const QUESTIONS = {
     },
     {
       id: 'skills.q2',
-      en: 'Any experience with these skills? What\'s your job or school?',
-      es: '¿Tienes experiencia con estas habilidades? ¿Cuál es tu trabajo o escuela?',
+      en: 'Any experiences showing these skills? What\'s your job or school?',
+      es: '¿Has tenido experiencias que muestren estas habilidades? ¿Cuál es tu trabajo o qué estudias?',
     },
   ],
   values: [
     {
       id: 'values.q1',
-      en: "What issues in your community, industry, or the planet frustrate you so much you'd gladly tackle them?",
-      es: '¿Qué problemas en tu comunidad, industria o el planeta te frustran tanto que estarías dispuesto a abordarlos?',
+      en: "What issues in your community, industry or the country frustrate you so much you'd gladly tackle them?",
+      es: '¿Qué problemas en tu entorno, industria o país te frustran tanto que estarías dispuesto a abordarlos?',
     },
     {
       id: 'values.q2',
-      en: 'If you could fast-forward ten years, what meaningful change would you be proud you helped create?',
-      es: 'Si pudieras avanzar diez años, ¿de qué cambio significativo te enorgullecería haber formado parte?',
+      en: 'If you could fast-forward 10 years, what meaningful change would you be proud you helped create?',
+      es: 'Imagínate dentro de 10 años, ¿de qué cambio significativo te enorgullecería haber formado parte?',
     },
   ],
   economic: [
     {
       id: 'economic.q1',
       en: "What are your preferences on: where you'd like to live, hours of work per week, remote work, working for others versus being self-employed?",
-      es: '¿Cuáles son tus preferencias en cuanto a dónde vivir, horas de trabajo por semana, teletrabajo y trabajar por cuenta ajena versus ser autónomo?',
+      es: '¿Cuáles son tus preferencias en cuanto a dónde vivir, horas de trabajo por semana, teletrabajo y trabajar para alguien más versus ser autónomo?',
     },
     {
       id: 'economic.q2',
-      en: 'What are your main financial responsibilities or constraints we should consider? E.g. family, health, savings.',
-      es: '¿Cuáles son tus principales responsabilidades o limitaciones financieras que deberíamos considerar? Ej. familia, salud, ahorros.',
+      en: 'What are your main financial responsibilities or constraints we should consider?',
+      es: '¿Cuáles son tus principales responsabilidades o limitaciones financieras que deberíamos considerar?',
     },
   ],
 } as const;
