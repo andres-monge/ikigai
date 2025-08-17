@@ -7,5 +7,4 @@
  */
 
 export { getPurposeDiscoveryChain } from './purpose-discovery.chain';
-export { getActionPlanChain } from './action-plan.chain';
-export { getChatRefinementChain } from './chat-refinement.chain'; 
+export { getActionPlanChain } from './action-plan.chain'; 

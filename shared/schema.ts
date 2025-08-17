@@ -52,11 +52,6 @@ import { z } from 'zod';
 /* -------------------------------------------------------------------------- */
 
 export const languageEnum = pgEnum('language_enum', ['en', 'es']);
-export const chatRoleEnum = pgEnum('chat_role_enum', ['user', 'assistant']);
-export const chatContextEnum = pgEnum('chat_context_enum', [
-  'discovery',
-  'action_plan',
-]);
 
 /* -------------------------------------------------------------------------- */
 /* SHARED ZOD SCHEMAS & TYPES                       */
@@ -172,18 +167,7 @@ export const salaryData = pgTable('salary_data', {
     .defaultNow(),
 });
 
-export const chatMessages = pgTable('chat_messages', {
-  id: serial('id').primaryKey(),
-  assessmentId: integer('assessment_id')
-    .notNull()
-    .references(() => assessmentSessions.id, { onDelete: 'cascade' }),
-  role: chatRoleEnum('role').notNull(),
-  content: text('content').notNull(),
-  context: chatContextEnum('context').notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
+
 
 /* --------------------------- DRIZZLE RELATIONS ---------------------------- */
 
@@ -191,7 +175,6 @@ export const assessmentSessionRelations = relations(
   assessmentSessions,
   ({ one, many }) => ({
     purposePaths: many(purposePaths),
-    chatMessages: many(chatMessages),
     chosenPath: one(purposePaths, {
       fields: [assessmentSessions.chosenPathId],
       references: [purposePaths.id],
@@ -217,12 +200,7 @@ export const salaryDataRelations = relations(salaryData, ({ one }) => ({
   }),
 }));
 
-export const chatMessageRelations = relations(chatMessages, ({ one }) => ({
-  assessmentSession: one(assessmentSessions, {
-    fields: [chatMessages.assessmentId],
-    references: [assessmentSessions.id],
-  }),
-}));
+
 
 /* -------------------------------------------------------------------------- */
 /* ZOD ↔ DRIZZLE-GENERATED INSERT/SELECT SCHEMAS                 */
@@ -243,9 +221,7 @@ export type SelectPurposePath = z.infer<typeof selectPurposePathSchema>;
 export const insertSalaryDataSchema = createInsertSchema(salaryData);
 export const selectSalaryDataSchema = createSelectSchema(salaryData);
 
-export const insertChatMessageSchema = createInsertSchema(chatMessages);
-export const selectChatMessageSchema = createSelectSchema(chatMessages);
-export type SelectChatMessage = z.infer<typeof selectChatMessageSchema>;
+
 
 /* -------------------------------------------------------------------------- */
 /* API-LEVEL REQUEST SCHEMAS                        */
@@ -264,14 +240,7 @@ export const actionPlanRequestSchema = z.object({
 });
 export type ActionPlanRequest = z.infer<typeof actionPlanRequestSchema>;
 
-export const chatRequestSchema = z.object({
-  sessionId: z.string().min(1),
-  message: z.string().min(1),
-  context: z.enum(['discovery', 'action_plan']),
-  /** When present, the chat should focus on a single Purpose Path. */
-  pathId: z.number().optional(),
-});
-export type ChatRequest = z.infer<typeof chatRequestSchema>;
+
 
 /**
  * Generic ActionState helper for API responses.
@@ -288,8 +257,6 @@ export type Language = 'en' | 'es';
 export type PurposePath = SelectPurposePath;
 export type AssessmentSession = SelectAssessmentSession;
 export type SalaryData = z.infer<typeof selectSalaryDataSchema>;
-export type ChatMessage = SelectChatMessage;
 export type InsertAssessmentSession = z.infer<typeof insertAssessmentSessionSchema>;
 export type InsertPurposePath = z.infer<typeof insertPurposePathSchema>;
 export type InsertSalaryData = z.infer<typeof insertSalaryDataSchema>;
-export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;

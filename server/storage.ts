@@ -24,8 +24,6 @@ import {
   type InsertPurposePath,
   type SalaryData,
   type InsertSalaryData,
-  type ChatMessage,
-  type InsertChatMessage,
 } from "@shared/schema";
 
 /* ------------------------------------------------------------------ */
@@ -79,11 +77,7 @@ export interface IStorage {
   // === Salary Data Methods ===
   createSalaryData(data: Omit<InsertSalaryData, "id">): Promise<SalaryData>;
 
-  // === Chat Message Methods ===
-  getChatMessages(assessmentId: number): Promise<ChatMessage[]>;
-  createChatMessage(
-    message: Omit<InsertChatMessage, "id">,
-  ): Promise<ChatMessage>;
+
 }
 
 /* ------------------------------------------------------------------ */
@@ -95,12 +89,9 @@ export class MemStorage implements IStorage {
   private assessmentSessions: Map<number, AssessmentSession> = new Map();
   private purposePaths: Map<number, PurposePath> = new Map();
   private salaryData: Map<number, SalaryData> = new Map();
-  private chatMessages: Map<number, ChatMessage> = new Map();
-
   private nextSessionId = 1;
   private nextPathId = 1;
   private nextSalaryId = 1;
-  private nextMessageId = 1;
 
   private sessionIdIndex: Map<string, number> = new Map();
 
@@ -214,23 +205,7 @@ export class MemStorage implements IStorage {
     return data;
   }
 
-  /* ---------------- Chat Message CRUD ---------------- */
 
-  async getChatMessages(assessmentId: number): Promise<ChatMessage[]> {
-    const msgs = [...this.chatMessages.values()].filter(
-      (m) => m.assessmentId === assessmentId,
-    );
-    return msgs.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-  }
-
-  async createChatMessage(
-    insertMessage: Omit<InsertChatMessage, "id">,
-  ): Promise<ChatMessage> {
-    const id = this.nextMessageId++;
-    const msg: ChatMessage = { id, createdAt: new Date(), ...insertMessage };
-    this.chatMessages.set(id, msg);
-    return msg;
-  }
 
   /* ------------------------------------------------------------------ */
   /*                         Private Helper Method                      */
