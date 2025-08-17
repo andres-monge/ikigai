@@ -33,71 +33,7 @@ import {
   getPurposeDiscoverySystemPrompt,
 } from '../prompts';
 import { getSalaryDataTool } from '../tools';
-
-/* -------------------------------------------------------------------------- */
-/* Private helpers                                                            */
-/* -------------------------------------------------------------------------- */
-
-/**
- * Regex-based parser that converts the free-text salary response coming from
- * the Search-grounded model into an array of structured objects that passes
- * `rawSalaryDataSchema` validation.
- */
-const _parseSalaryResponse = (
-  text: string,
-  careers: SalaryFunctionArgs['careers'],
-): RawSalaryData[] => {
-  const results: RawSalaryData[] = [];
-  for (const career of careers) {
-    const careerBlockRegex = new RegExp(
-      `CAREER:\\s*${career.title}[\\s\\S]*?SOURCES:\\s*\\[([^\\]]+)\\]`,
-      'i',
-    );
-    const blockMatch = text.match(careerBlockRegex);
-    if (!blockMatch) continue;
-
-    const block = blockMatch[0];
-    const salaryMatch = block.match(/SALARY:\s*\[([^\]]+)\]/i);
-    const sourcesMatch = block.match(/SOURCES:\s*\[([^\]]+)\]/i);
-    if (!salaryMatch || !sourcesMatch) continue;
-
-    const sources = sourcesMatch[1]
-      .split(',')
-      .map((s) => s.trim().replace(/"/g, ''));
-
-    results.push({
-      title: career.title,
-      location: career.location,
-      salaryRange: salaryMatch ? salaryMatch[1].trim() : 'N/A',
-      sources: sources.filter((s) => s.startsWith('http')),
-    });
-  }
-  return results;
-};
-
-/**
- * Retrieves salary data from cache or, on a miss, calls the Search model and
- * populates the cache for future requests.
- */
-async function _fetchSalaries(
-  careers: SalaryFunctionArgs['careers'],
-  language: Language,
-): Promise<RawSalaryData[]> {
-  const langInstruction = language === 'es' ? 'en español' : 'in English';
-  const prompt = `For each career, find a single broad salary range (e.g., €40-60k) and two source URLs. If the title is too niche, find the closest standard job title. Respond ${langInstruction}. Use this exact format:\nCAREER: [Title]\nLOCATION: [Location]\nSALARY: [Broad Range]\nSOURCES: [\"URL1\", \"URL2\"]\n\nCareers:\n${careers
-    .map((c) => `- ${c.title} in ${c.location}`)
-    .join('\n')}`;
-
-  const searchResponse = await generateContentWithSearch([
-    { role: 'user', parts: [{ text: prompt }] },
-  ]);
-  const responseText =
-    searchResponse.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!responseText)
-    throw new Error('Facts model (search) returned no content for salaries.');
-
-  return _parseSalaryResponse(responseText, careers);
-}
+import { getSalaryDataForCareers } from '../../services';
 
 /* -------------------------------------------------------------------------- */
 /* Public Chain                                                               */
@@ -154,7 +90,7 @@ export async function getPurposeDiscoveryChain(
         );
       }
 
-      const salaryData = await _fetchSalaries(
+      const salaryData = await getSalaryDataForCareers(
         validation.data.careers,
         language,
       );
