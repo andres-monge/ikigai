@@ -19,14 +19,12 @@ An AI-powered web application designed to help career-switchers and students fin
     - [ ] Each path includes a high-level action plan or strategy (e.g., "Bootstrapped MVP in 6 mo").
 - [ ] The system provides a comparative table with estimated salary ranges for the suggested paths, generated using real-time web search to ensure data is current and localized.
     - [ ] The AI must cite the URLs of its sources for the salary data.
-- [ ] User can initiate a chat-based conversation with Nami to refine or request changes to the generated suggestions.
 - [ ] User can export their results page to a PDF document.
 
 ### Action Plan & Guidance 
 - [ ] Once a user selects a path, the AI generates a detailed, step-by-step action plan with a timeline.
 - [ ] The action plan MUST include the following sections: Side project ideas, Skills to learn, Where to find the people that can tell you more about that path).
 - [ ] For each skill in the Skills section, the system recommends the 3 most relevant YouTube videos to learn that skill.
-- [ ] User can initiate a chat-based conversation with Nami to refine or request changes to the action plan.
 - [ ] User can export their action plan page to a PDF document.
 
 ### Personality and Reasoning
@@ -49,7 +47,7 @@ An AI-powered web application designed to help career-switchers and students fin
     - [ ] A summary section ("What's popping out of your answers").
     - [ ] A clear, table-based comparison of the three ikigai options.
     - [ ] A secondary table providing salary benchmarks.
-- [ ] A clean, intuitive chat interface for interacting with Nami for refinements.
+
 
 ## 1. System Overview
 
@@ -63,9 +61,7 @@ An AI-powered web application designed to help career-switchers and students fin
         
     3. **Path Selection & Action Plan:** The user selects their preferred path, triggering a new AI generation step using GEMINI_REASONING_MODEL. This call generates a **single, comprehensive action plan** structured around milestones. As part of this process, the AI determines necessary skills and uses a function call to a backend tool that queries the **YouTube Data API** for relevant, valid learning resources.
         
-    4. **Action Plan Refinement (Optional):** The user can chat with "Nami" again to refine the detailed action plan.
-        
-    5. **Export:** The user can export their results or action plan to PDF.
+    4. **Export:** The user can export their results or action plan to PDF.
         
 - **System Architecture:**
     
@@ -133,7 +129,7 @@ My_Directory_Structure/
 │   ├── ai/                          # Modular AI logic directory
 │   │   ├── chains/                  # Orchestrates multi-call AI sequences
 │   │   │   ├── action-plan.chain.ts
-│   │   │   ├── chat-refinement.chain.ts
+│   │   │   ├── index.ts
 │   │   │   └── purpose-discovery.chain.ts
 │   │   ├── prompts.ts               # Manages system prompt generation & persona
 │   │   ├── schemas.ts               # Zod/OpenAPI schemas for AI validation
@@ -141,8 +137,11 @@ My_Directory_Structure/
 │   │   ├── types.ts                 # TypeScript types for the Gemini API
 │   │   └── wrapper.ts               # Low-level Gemini API client wrapper
 │   ├── routes/                      # Feature-based API route handlers
-│   │   ├── assessment.ts            # Handles /analyze and /action-plan
-│   │   └── chat.ts                  # Handles /chat
+│   │   └── assessment.ts            # Handles /analyze and /action-plan
+│   ├── services/                    # External API service abstractions
+│   │   ├── index.ts                 # Service exports
+│   │   ├── salary.ts                # Salary data fetching service
+│   │   └── youtube.ts               # YouTube API service
 │   ├── cache.ts                     # In-memory cache implementation
 │   └── storage.ts                   # In-memory session storage
 ├── shared/                          # Isomorphic code
@@ -314,7 +313,7 @@ Export to Sheets
 
 - **Layout:** `Header`, `Main Content`, `Footer` (implicit).
     
-- **Interactive:** `Button`, `QuestionCard`, `ChatInterface`, `PurposePaths` cards.
+- **Interactive:** `Button`, `QuestionCard`, `PurposePaths` cards.
     
 - **Display:** `CoreDriversSummary`, `SalaryBenchmarks` table, `ActionPlan` view.
     
@@ -322,19 +321,7 @@ Export to Sheets
 
 ## 7. Component Architecture
 
-- **`ChatInterface.tsx` Component:**
-    - This component is now fully reusable for different chat contexts.
-    - **Props:**
-		interface ChatInterfaceProps {
-		  isOpen: boolean;
-		  onClose: () => void;
-		  sessionId: string;
-		  language: Language;
-		  // Determines the general conversational context for the AI.
-		  context: 'discovery' | 'action_plan';
-		  // NEW: Optional ID for refining a single purpose path.
-		  pathId?: number | null;
-		}
+
 - **Error Handling:** Components will be wrapped in a React `<ErrorBoundary>` to gracefully handle rendering errors without crashing the application.
 
 ## 8. Authentication & Authorization
