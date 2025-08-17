@@ -42,14 +42,12 @@ import { exportActionPlanToPDF } from '@/lib/pdf-export';
 interface ActionPlanProps {
   language: Language;
   sessionId: string;
-  onOpenChat: () => void;
   onStartOver: () => void;
 }
 
 export function ActionPlan({
   language,
   sessionId,
-  onOpenChat,
 }: ActionPlanProps) {
   const [, navigate] = useLocation();
 
@@ -189,10 +187,6 @@ export function ActionPlan({
         <Button onClick={handleExportPDF} size="lg">
           <Download className="w-4 h-4 mr-2" />
           {t('actionPlan.exportPdf', language)}
-        </Button>
-        <Button onClick={onOpenChat} variant="secondary" size="lg">
-          <MessageCircle className="w-4 h-4 mr-2" />
-          {t('actionPlan.refineWithNami', language)}
         </Button>
       </div>
     </div>

@@ -2,23 +2,12 @@
 * @file App.tsx
 *
 * @description
-* Top-level React component for the Purpose Finder SPA. After Step 22 the
-* application flow is URL-driven instead of a local "state machine".
-*
-* ✨ **Updates in Step 22** ✨
-* - Added `chatContext` state to differentiate between 'discovery' and
-*   'action_plan' refinement conversations.
-* - `handleOpenChat` now accepts a context parameter.
-* - The `<Route>` for `/action-plan` now passes `onOpenChat` and `onStartOver`
-*   props, just like the `/results` route, allowing for a consistent user experience.
+* Top-level React component for the Purpose Finder SPA. The application
+* flow is URL-driven with routes for home, results, and action plan pages.
 *
 * @dependencies
 * - Wouter: lightweight router for React
-* - Shared UI primitives: Header, ChatInterface, Toaster, TooltipProvider
-*
-* @notes
-* - The `ChatInterface` component is now passed the `chatContext` prop,
-*   which is crucial for the backend to load the correct prompt.
+* - Shared UI primitives: Header, Toaster, TooltipProvider
 */
 
 import { useState, useEffect } from 'react';
@@ -26,7 +15,6 @@ import { Route, Switch, useLocation } from 'wouter';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Toaster } from '@/components/ui/toaster';
 import { Header } from '@/components/header';
-import { ChatInterface } from '@/components/chat-interface';
 import { Home } from '@/pages/home';
 import { Results } from '@/pages/results';
 import { ActionPlan } from '@/pages/action-plan';
@@ -43,14 +31,6 @@ const [language, setLanguage] = useSessionStorage<Language>('language', 'en');
 
 /** Anonymous session identifier trusted by the backend */
 const [sessionId, setSessionId] = useSessionStorage<string>('sessionId', '');
-
-/** Chat drawer is controlled at the top level so any page can open it. */
-const [isChatOpen, setIsChatOpen] = useState(false);
-const [chatContext, setChatContext] = useState<'discovery' | 'action_plan'>(
-'discovery',
-);
-/** When refining a single Purpose Path, this holds its ID, otherwise null */
-const [chatPathId, setChatPathId] = useState<number | null>(null);
 
 /** Persisted results used by both Results and Action-Plan pages. */
 const [, setSession] = useSessionStorage<FullAssessment | null>(
@@ -77,17 +57,7 @@ setSessionId(newId);
 /*      GLOBAL EVENT HANDLERS      */
 /* ------------------------------------------------------------------------ */
 
-const handleOpenChat = (
-  context: 'discovery' | 'action_plan',
-  /** Optional ID when refining an individual Purpose Path */
-  pathId: number | null = null,
-) => {
-  setChatContext(context);
-  setChatPathId(pathId);
-  setIsChatOpen(true);
-};
 
-const handleCloseChat = () => setIsChatOpen(false);
 
 /**
 * Clears current session data and kicks the user back to the landing page.
@@ -121,7 +91,6 @@ component={() => (
 <Results
 language={language}
 sessionId={sessionId}
-onOpenChat={(pathId: number) => handleOpenChat('discovery', pathId)}
 onStartOver={handleStartOver}
 />
 )}
@@ -134,7 +103,6 @@ component={() => (
 <ActionPlan
 language={language}
 sessionId={sessionId}
-onOpenChat={() => handleOpenChat('action_plan')}
 onStartOver={handleStartOver}
 />
 )}
@@ -145,16 +113,7 @@ onStartOver={handleStartOver}
 </Switch>
 </main>
 
-{/* Global Chat overlay */}
-<ChatInterface
-key={chatContext}
-isOpen={isChatOpen}
-onClose={handleCloseChat}
-sessionId={sessionId}
-language={language}
-context={chatContext}
-pathId={chatPathId}
-/>
+
 
 <Toaster />
 </TooltipProvider>

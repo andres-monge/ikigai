@@ -38,7 +38,6 @@ export const translations: Record<string, Record<string, string>> = {
     'results.title': 'Your Ikigai',
     'results.purposePaths': 'Your 3 Purpose Paths',
     'results.exportPdf': 'Export as PDF',
-    'results.refineWithNami': 'Ask Follow-Up',
     'results.startOver': 'Start Over',
     'results.choosePathAndGetPlan': 'Get Action Plan',
     'results.actionStrategy': 'Action Strategy',
@@ -51,7 +50,6 @@ export const translations: Record<string, Record<string, string>> = {
       'Steps to get you started on your new path.',
     'actionPlan.chosenPath': 'Chosen Path',
     'actionPlan.exportPdf': 'Export as PDF',
-    'actionPlan.refineWithNami': 'Ask Follow-Up',
     'actionPlan.backToPaths': 'Back to Paths',
     'actionPlan.actions': 'Actions',
     'actionPlan.skills': 'Learn What You Need',
@@ -63,10 +61,7 @@ export const translations: Record<string, Record<string, string>> = {
     'ikigai.worldNeeds': 'Meaningful',
     'ikigai.pay': 'Pay',
 
-    // Chat
-    'chat.title': 'Nami',
-    'chat.subtitle': 'Your AI Life Navigator',
-    'chat.placeholder': 'Ask Nami anything :)',
+
 
     // Loading
     'loading.title': 'Our AIs are cooking.',
@@ -97,7 +92,6 @@ export const translations: Record<string, Record<string, string>> = {
     'results.title': 'Tu Ikigai',
     'results.purposePaths': 'Tus 3 Caminos',
     'results.exportPdf': 'Exportar como PDF',
-    'results.refineWithNami': 'Haz una pregunta',
     'results.startOver': 'Volver al inicio',
     'results.choosePathAndGetPlan': 'Ver Plan de acción',
     'results.actionStrategy': 'Plan de acción',
@@ -110,7 +104,6 @@ export const translations: Record<string, Record<string, string>> = {
       'Pasos para empezar en tu nuevo camino.',
     'actionPlan.chosenPath': 'Camino elegido',
     'actionPlan.exportPdf': 'Exportar como PDF',
-    'actionPlan.refineWithNami': 'Haz una pregunta',
     'actionPlan.backToPaths': 'Volver a los caminos',
     'actionPlan.actions': 'Acciones',
     'actionPlan.skills': 'Aprende lo que necesitas',
@@ -122,10 +115,7 @@ export const translations: Record<string, Record<string, string>> = {
     'ikigai.worldNeeds': 'Gratificante',
     'ikigai.pay': 'Paga',
 
-    // Chat
-    'chat.title': 'Nami',
-    'chat.subtitle': 'Tu Guía IA',
-    'chat.placeholder': 'Pregúntale cualquier cosa a Nami :)',
+
 
     // Loading
     'loading.title': 'Las IAs están cocinando',

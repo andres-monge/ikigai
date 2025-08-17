@@ -27,10 +27,6 @@ interface PurposePathsProps {
    */
   onChoosePath: (pathId: number) => void;
   /**
-   * Callback invoked when the user wants to refine a specific path via chat.
-   */
-  onOpenChat: (pathId: number) => void;
-  /**
    * If true, indicates the action plan is being generated, and disables buttons.
    */
   isChoosing: boolean;
@@ -40,7 +36,6 @@ export function PurposePaths({
   purposePaths,
   language,
   onChoosePath,
-  onOpenChat,
   isChoosing,
 }: PurposePathsProps) {
   const getIcon = (index: number) => {
@@ -150,16 +145,7 @@ export function PurposePaths({
                   </Button>
                 )}
 
-                {/* Refine Button */}
-                {typeof path.id === 'number' && (
-                  <Button
-                    onClick={() => onOpenChat(path.id!)}
-                    variant="outline"
-                    className="w-full border-primary text-primary font-semibold hover:bg-primary hover:text-white transition-all duration-200"
-                  >
-                    {t('results.refineWithNami', language)}
-                  </Button>
-                )}
+
               </div>
             </div>
           );

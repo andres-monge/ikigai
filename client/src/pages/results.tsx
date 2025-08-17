@@ -48,8 +48,6 @@ import { useToast } from '@/hooks/use-toast';
 import type { FullAssessment } from '@/types/assessment';
 
 interface ResultsProps {
-  /** Opens the chat drawer for refining a specific path */
-  onOpenChat: (pathId: number) => void;
   onStartOver: () => void;
   language: Language;
   /** Anonymous session identifier passed from the top-level App component */
@@ -57,7 +55,6 @@ interface ResultsProps {
 }
 
 export function Results({
-  onOpenChat,
   onStartOver,
   language,
   sessionId,
@@ -174,7 +171,6 @@ export function Results({
           purposePaths={session.purposePaths}
           language={language}
           onChoosePath={handleChoosePath}
-          onOpenChat={onOpenChat}
           isChoosing={isGenerating}
         />
 
