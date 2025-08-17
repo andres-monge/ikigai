@@ -26,12 +26,18 @@
   - **User Instructions**: None
 
 ## Code Organization & Structure
-- [ ] Step 2.1: Abstract YouTube API Logic into a Service
+- [x] Step 2.1: Abstract YouTube API Logic into a Service ✅ **COMPLETED 2025-08-17**
   - **Task**: The logic for fetching data from the YouTube Data API is currently embedded within the `action-plan.chain.ts` file. To improve separation of concerns, this logic should be extracted into its own dedicated service file. The AI chain will then call this service, making the chain purely an orchestrator of business logic rather than an implementer of external API calls.
   - **Suggested Files for Context**:
     - `server/ai/chains/action-plan.chain.ts`
   - **Step Dependencies**: None
   - **User Instructions**: A new file will be created at `server/services/youtube.ts` to house the abstracted logic.
+  - **Implementation Notes**: 
+    - Created `server/services/youtube.ts` with `getYoutubeVideosForSkills()` public API
+    - Maintained all existing functionality: caching, error handling, validation
+    - Updated error logging with `[YouTubeService]` prefix for better debugging
+    - Removed 90+ lines of YouTube logic from action-plan chain
+    - Action plan chain now imports and uses the service cleanly
 
 - [ ] Step 2.2: Abstract Salary Fetching Logic into a Service
   - **Task**: Similar to the YouTube logic, the salary fetching and parsing code is currently inside the `purpose-discovery.chain.ts`. This step will move that functionality into a new, separate service file to better organize the code and delineate responsibilities.
