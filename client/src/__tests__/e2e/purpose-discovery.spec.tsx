@@ -261,7 +261,7 @@ describe('Purpose Discovery E2E Flow', () => {
         expect(screen.getByText('Full-Stack Developer at Tech Startup')).toBeInTheDocument();
       });
 
-      const choosePathButton = screen.getAllByText(/Choose this Path/i)[0];
+      const choosePathButton = screen.getAllByText(/get action plan/i)[0];
       await user.click(choosePathButton);
 
       // Verify action plan API call
@@ -324,11 +324,11 @@ describe('Purpose Discovery E2E Flow', () => {
 
       // Find and click the PDF export button
       await waitFor(() => {
-        const exportButton = screen.getByText(/Export to PDF/i);
+        const exportButton = screen.getByText(/export as pdf/i);
         expect(exportButton).toBeInTheDocument();
       });
 
-      const exportButton = screen.getByText(/Export to PDF/i);
+      const exportButton = screen.getByText(/export as pdf/i);
       await user.click(exportButton);
 
       // Verify PDF export was called
