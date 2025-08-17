@@ -169,7 +169,13 @@ export class MemStorage implements IStorage {
     insertPath: Omit<InsertPurposePath, "id">,
   ): Promise<PurposePath> {
     const id = this.nextPathId++;
-    const path: PurposePath = { id, ...insertPath };
+    const path: PurposePath = { 
+      id, 
+      ...insertPath,
+      description: insertPath.description ?? null,
+      actionStrategy: insertPath.actionStrategy ?? null,
+      ikigaiAlignment: insertPath.ikigaiAlignment ?? {},
+    };
     this.purposePaths.set(id, path);
     return path;
   }
@@ -199,7 +205,11 @@ export class MemStorage implements IStorage {
       id,
       retrievedAt: new Date(),
       ...insertData,
+      location: insertData.location ?? null,
       sources: insertData.sources ?? [],
+      entryLevel: insertData.entryLevel ?? null,
+      midLevel: insertData.midLevel ?? null,
+      seniorLevel: insertData.seniorLevel ?? null,
     };
     this.salaryData.set(id, data);
     return data;
