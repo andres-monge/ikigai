@@ -39,12 +39,21 @@
     - Removed 90+ lines of YouTube logic from action-plan chain
     - Action plan chain now imports and uses the service cleanly
 
-- [ ] Step 2.2: Abstract Salary Fetching Logic into a Service
+- [x] Step 2.2: Abstract Salary Fetching Logic into a Service ✅ **COMPLETED 2025-08-17**
   - **Task**: Similar to the YouTube logic, the salary fetching and parsing code is currently inside the `purpose-discovery.chain.ts`. This step will move that functionality into a new, separate service file to better organize the code and delineate responsibilities.
   - **Suggested Files for Context**:
     - `server/ai/chains/purpose-discovery.chain.ts`
   - **Step Dependencies**: None
   - **User Instructions**: A new file will be created at `server/services/salary.ts` for the abstracted logic.
+  - **Implementation Notes**:
+    - Created `server/services/salary.ts` with `getSalaryDataForCareers()` public API
+    - Implemented per-career caching strategy with 7-day TTL for optimal cache hit rates
+    - Added `salaryCache` instance to `server/cache.ts` with matching TTL constants
+    - Maintained all existing functionality: regex parsing, error handling, search integration
+    - Removed ~55 lines of salary logic from purpose-discovery chain  
+    - Updated services barrel export in `server/services/index.ts`
+    - Verified functionality with API testing - salary service working correctly
+    - Cache keys format: `salary:${title}:${location}:${language}` for granular caching
 
 ## Code Quality & Best Practices
 - [ ] Step 3.1: Harden Action Plan Route Logic
