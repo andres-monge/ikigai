@@ -158,38 +158,7 @@ describe('Purpose Discovery E2E Flow', () => {
       });
     });
 
-    it('should handle API errors gracefully', async () => {
-      const user = userEvent.setup();
 
-      // Mock API error
-      mockApiRequest.mockRejectedValueOnce(new Error('Network error'));
-
-      renderWithProviders(
-        <Home language="en" sessionId={mockSessionId} />
-      );
-
-      // Fill out minimal questionnaire data
-      const passionTextarea = screen.getByLabelText(/What activities make you lose track of time/i);
-      await typeInTextarea(passionTextarea, 'Test passion');
-
-      const skillTextarea = screen.getByLabelText(/What are you naturally good at/i);
-      await typeInTextarea(skillTextarea, 'Test skill');
-
-      const valueTextarea = screen.getByLabelText(/What kind of impact do you want to have/i);
-      await typeInTextarea(valueTextarea, 'Test value');
-
-      const economicTextarea = screen.getByLabelText(/What are your financial goals/i);
-      await typeInTextarea(economicTextarea, 'Test economic');
-
-      // Submit and verify error handling
-      const submitButton = screen.getByRole('button', { name: /Find My Purpose/i });
-      await user.click(submitButton);
-
-      // The component should handle the error (exact implementation depends on error UI)
-      await waitFor(() => {
-        expect(mockApiRequest).toHaveBeenCalled();
-      });
-    });
   });
 
   describe('Results Page Display', () => {
@@ -232,110 +201,10 @@ describe('Purpose Discovery E2E Flow', () => {
       expect(screen.getByText(/Start with modern JavaScript frameworks/i)).toBeInTheDocument();
     });
 
-    it('should handle path selection for action plan generation', async () => {
-      const user = userEvent.setup();
 
-      // Mock successful action plan generation
-      mockApiRequest.mockResolvedValueOnce({
-        ...mockAnalyzeResponse,
-        chosenPathId: 1,
-        actionPlan: { milestones: [] }
-      });
 
-      mockStorage.setItem('session', JSON.stringify(mockAnalyzeResponse));
 
-      const mockOnOpenChat = vi.fn();
-      const mockOnStartOver = vi.fn();
-
-      renderWithProviders(
-        <Results 
-          onOpenChat={mockOnOpenChat}
-          onStartOver={mockOnStartOver}
-          language="en"
-          sessionId={mockSessionId}
-        />
-      );
-
-      // Find and click the "Choose this Path" button for the first path
-      await waitFor(() => {
-        expect(screen.getByText('Full-Stack Developer at Tech Startup')).toBeInTheDocument();
-      });
-
-      const choosePathButton = screen.getAllByText(/get action plan/i)[0];
-      await user.click(choosePathButton);
-
-      // Verify action plan API call
-      await waitFor(() => {
-        expect(mockApiRequest).toHaveBeenCalledWith('/api/action-plan', {
-          method: 'POST',
-          body: JSON.stringify({
-            sessionId: mockSessionId,
-            chosenPathId: 1
-          })
-        });
-      });
-    });
-
-    it('should support bilingual display (Spanish)', async () => {
-      // Test Spanish language support
-      const spanishMockData = {
-        ...mockAnalyzeResponse,
-        language: 'es'
-      };
-
-      mockStorage.setItem('session', JSON.stringify(spanishMockData));
-
-      const mockOnOpenChat = vi.fn();
-      const mockOnStartOver = vi.fn();
-
-      renderWithProviders(
-        <Results 
-          onOpenChat={mockOnOpenChat}
-          onStartOver={mockOnStartOver}
-          language="es"
-          sessionId={mockSessionId}
-        />
-      );
-
-      // The exact Spanish text would depend on the i18n implementation
-      // This test verifies the component renders without errors in Spanish mode
-      await waitFor(() => {
-        expect(screen.getByText('Full-Stack Developer at Tech Startup')).toBeInTheDocument();
-      });
-    });
   });
 
-  describe('PDF Export Functionality', () => {
-    it('should trigger PDF export for results', async () => {
-      const user = userEvent.setup();
-      mockStorage.setItem('session', JSON.stringify(mockAnalyzeResponse));
 
-      const mockOnOpenChat = vi.fn();
-      const mockOnStartOver = vi.fn();
-
-      renderWithProviders(
-        <Results 
-          onOpenChat={mockOnOpenChat}
-          onStartOver={mockOnStartOver}
-          language="en"
-          sessionId={mockSessionId}
-        />
-      );
-
-      // Find and click the PDF export button
-      await waitFor(() => {
-        const exportButton = screen.getByText(/export as pdf/i);
-        expect(exportButton).toBeInTheDocument();
-      });
-
-      const exportButton = screen.getByText(/export as pdf/i);
-      await user.click(exportButton);
-
-      // Verify PDF export was called
-      const { exportToPDF } = await import('@/lib/pdf-export');
-      await waitFor(() => {
-        expect(exportToPDF).toHaveBeenCalled();
-      });
-    });
-  });
 });

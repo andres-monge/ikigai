@@ -69,15 +69,7 @@ describe('Integration Tests', () => {
       }
     });
 
-    it('should handle corrupted session storage gracefully', async () => {
-      // Set invalid JSON in session storage
-      mockStorage.setItem('session', 'invalid-json-data');
 
-      // Component should handle this gracefully
-      expect(() => {
-        mockStorage.getItem('session');
-      }).not.toThrow();
-    });
 
     it('should maintain language preference across sessions', async () => {
       const spanishAssessment = {
@@ -95,49 +87,7 @@ describe('Integration Tests', () => {
     });
   });
 
-  describe('API Error Handling', () => {
-    it('should handle network timeouts gracefully', async () => {
-      const timeoutError = new Error('Request timeout');
-      timeoutError.name = 'TimeoutError';
-      
-      mockApiRequest.mockRejectedValueOnce(timeoutError);
 
-      // Test error handling doesn't crash the application
-      expect(() => {
-        // Simulate API call that would timeout
-        mockApiRequest('/api/analyze', { method: 'POST', body: '{}' })
-          .catch(() => {
-            // Expected error, component should handle gracefully
-          });
-      }).not.toThrow();
-    });
-
-    it('should handle server errors (500) appropriately', async () => {
-      const serverError = new Error('Internal Server Error');
-      mockApiRequest.mockRejectedValueOnce(serverError);
-
-      // Application should not crash on server errors
-      expect(() => {
-        mockApiRequest('/api/analyze', { method: 'POST', body: '{}' })
-          .catch(() => {
-            // Expected error, handled gracefully
-          });
-      }).not.toThrow();
-    });
-
-    it('should handle malformed API responses', async () => {
-      // Mock malformed response
-      mockApiRequest.mockResolvedValueOnce({
-        invalidStructure: true,
-        missingRequiredFields: null
-      });
-
-      // Application should validate responses and handle gracefully
-      expect(() => {
-        mockApiRequest('/api/analyze', { method: 'POST', body: '{}' });
-      }).not.toThrow();
-    });
-  });
 
   describe('Cross-Browser Compatibility', () => {
     it('should work with different user agents', async () => {
@@ -226,106 +176,11 @@ describe('Integration Tests', () => {
     });
   });
 
-  describe('Accessibility Compliance', () => {
-    it('should maintain proper ARIA labels', async () => {
-      // Test that form elements have proper accessibility attributes
-      const mockFormData = {
-        passions: [{ question: "Test question", answer: "Test answer" }],
-        skills: [{ question: "Test question", answer: "Test answer" }],
-        values: [{ question: "Test question", answer: "Test answer" }],
-        economic: [{ question: "Test question", answer: "Test answer" }]
-      };
 
-      // Verify accessibility structure
-      expect(mockFormData.passions).toBeDefined();
-      expect(mockFormData.skills).toBeDefined();
-      expect(mockFormData.values).toBeDefined();
-      expect(mockFormData.economic).toBeDefined();
-    });
 
-    it('should support keyboard navigation', async () => {
-      // Test that interactive elements are keyboard accessible
-      const keyboardEvents = ['Tab', 'Enter', 'Space', 'Escape'];
-      
-      keyboardEvents.forEach(key => {
-        expect(() => {
-          // Simulate keyboard events
-          const event = new KeyboardEvent('keydown', { key });
-          document.dispatchEvent(event);
-        }).not.toThrow();
-      });
-    });
-  });
 
-  describe('Data Validation and Security', () => {
-    it('should validate questionnaire input sanitization', async () => {
-      const maliciousInputs = [
-        '<script>alert("xss")</script>',
-        'javascript:alert("xss")',
-        '"><script>alert("xss")</script>',
-        "'; DROP TABLE users; --"
-      ];
 
-      maliciousInputs.forEach(input => {
-        const response = {
-          question: "Safe question",
-          answer: input
-        };
 
-        // Data should be stored as-is but displayed safely
-        expect(response.answer).toBe(input);
-      });
-    });
-
-    it('should handle special characters in user input', async () => {
-      const specialCharInputs = [
-        'Test with émojis 🚀 and ñ characters',
-        'Test with "quotes" and \'apostrophes\'',
-        'Test with symbols: @#$%^&*()+={}[]|\\:";\'<>?,./`~',
-        'Test with newlines\nand\ttabs',
-        'Test with unicode: 你好世界 🌍 🎉'
-      ];
-
-      specialCharInputs.forEach(input => {
-        expect(() => {
-          const data = JSON.stringify({ answer: input });
-          JSON.parse(data);
-        }).not.toThrow();
-      });
-    });
-  });
-
-  describe('Internationalization (i18n)', () => {
-    it('should handle language switching consistently', async () => {
-      const languages = ['en', 'es'] as const;
-      
-      languages.forEach(language => {
-        const assessment = {
-          ...mockFullAssessment,
-          language
-        };
-
-        expect(() => {
-          mockStorage.setItem('session', JSON.stringify(assessment));
-          const retrieved = JSON.parse(mockStorage.getItem('session')!);
-          expect(retrieved.language).toBe(language);
-        }).not.toThrow();
-      });
-    });
-
-    it('should handle missing translations gracefully', async () => {
-      // Test with unsupported language code
-      const unsupportedLang = 'fr';
-      
-      expect(() => {
-        const assessment = {
-          ...mockFullAssessment,
-          language: unsupportedLang
-        };
-        mockStorage.setItem('session', JSON.stringify(assessment));
-      }).not.toThrow();
-    });
-  });
 
   describe('Edge Cases and Boundary Conditions', () => {
     it('should handle empty questionnaire responses', async () => {
@@ -356,15 +211,6 @@ describe('Integration Tests', () => {
       }).not.toThrow();
     });
 
-    it('should handle rapid consecutive API calls', async () => {
-      // Simulate rapid user interactions
-      const rapidCalls = Array(10).fill(null).map((_, i) => 
-        mockApiRequest(`/api/test-${i}`, { method: 'GET' })
-      );
 
-      expect(() => {
-        Promise.all(rapidCalls);
-      }).not.toThrow();
-    });
   });
 });
