@@ -6,12 +6,14 @@ export default defineConfig({
   plugins: [react()],
   test: {
     globals: true,
-    environment: 'node',
+    environment: 'jsdom',
+    setupFiles: ['./client/src/__tests__/setup.ts'],
   },
   resolve: {
     alias: {
       '@shared': path.resolve(__dirname, './shared'),
       '@': path.resolve(__dirname, './client/src'),
+      '@assets': path.resolve(__dirname, './client/public'),
     },
   },
 });

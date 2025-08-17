@@ -47,3 +47,28 @@
     - `server/routes/assessment.ts`
   - **Step Dependencies**: None
   - **User Instructions**: None
+
+## Testing & Quality Assurance
+- [✓] Step 4.1: Create Comprehensive E2E Test Suite
+  - **Task**: Implement end-to-end tests covering the complete user stories from section 3 of the tech spec. This includes testing the Purpose Discovery flow (questionnaire → results) and Action Plan Generation flow (path selection → detailed plan) with proper error handling, loading states, and bilingual support.
+  - **Completed Files**:
+    - `client/src/__tests__/e2e/utils/test-helpers.ts` - Testing utilities and helper functions
+    - `client/src/__tests__/e2e/utils/mock-data.ts` - Mock data matching application schemas
+    - `client/src/__tests__/e2e/purpose-discovery.spec.tsx` - Purpose discovery user story tests
+    - `client/src/__tests__/e2e/action-plan-generation.spec.tsx` - Action plan generation tests
+    - `client/src/__tests__/e2e/integration.spec.tsx` - Cross-feature integration tests
+    - `client/src/__tests__/e2e/home-questionnaire.spec.tsx` - Focused questionnaire tests
+    - `client/src/__tests__/setup.ts` - Vitest configuration for e2e testing
+    - Updated `vitest.config.ts` - Configured jsdom environment for e2e tests
+  - **Features Tested**:
+    - Complete questionnaire submission flow
+    - Purpose path generation and display
+    - Action plan creation with YouTube integration
+    - PDF export functionality
+    - Error handling and loading states
+    - Bilingual support (English/Spanish)
+    - Session persistence and navigation
+    - API interaction patterns
+  - **Dependencies Added**: @testing-library/user-event, @testing-library/jest-dom
+  - **User Instructions**: Run tests with `npm run test` to validate user stories
+  - **Date Completed**: 2025-01-17
