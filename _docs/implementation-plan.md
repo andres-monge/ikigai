@@ -56,9 +56,16 @@
     - Cache keys format: `salary:${title}:${location}:${language}` for granular caching
 
 ## Code Quality & Best Practices
-- [ ] Step 3.1: Harden Action Plan Route Logic
+- [x] Step 3.1: Harden Action Plan Route Logic ✅ **COMPLETED 2025-08-17**
   - **Task**: The `/api/action-plan` endpoint currently contains fallback logic to treat the `chosenPathId` as an array index if the path isn't found by its ID. This is brittle and can hide client-side bugs. This task is to remove this fallback and enforce that the client must always provide the correct database ID for the chosen path, making the API more robust and predictable.
   - **Suggested Files for Context**:
     - `server/routes/assessment.ts`
   - **Step Dependencies**: None
   - **User Instructions**: None.
+  - **Implementation Notes**:
+    - Removed fallback logic (lines 106-112) that treated `chosenPathId` as array index
+    - Simplified path lookup to strict database ID matching only: `session.purposePaths.find((p) => p.id === chosenPathId)`
+    - API now returns clear 404 errors for invalid IDs instead of attempting recovery
+    - Updated comment from "fallback recovery" to "database ID" for clarity
+    - Tested with valid ID (success) and invalid ID (404 error) - both working correctly
+    - Made API more robust and predictable by eliminating brittle fallback behavior

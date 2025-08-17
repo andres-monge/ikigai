@@ -100,16 +100,8 @@ assessmentRouter.post("/action-plan", async (req, res, next) => {
       return res.status(404).json({ error: "Session not found" });
     }
 
-    /* Identify the chosen path with fallback recovery */
-    let chosenPath = session.purposePaths.find((p) => p.id === chosenPathId);
-    
-    // If path not found by ID, try to recover by treating chosenPathId as array index
-    if (!chosenPath && session.purposePaths.length > 0) {
-      // Try to use chosenPathId as a zero-based index
-      if (chosenPathId >= 1 && chosenPathId <= session.purposePaths.length) {
-        chosenPath = session.purposePaths[chosenPathId - 1]; // Convert to 0-based index
-      }
-    }
+    /* Identify the chosen path by database ID */
+    const chosenPath = session.purposePaths.find((p) => p.id === chosenPathId);
     
     if (!chosenPath) {
       return res
