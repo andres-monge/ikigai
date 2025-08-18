@@ -4,17 +4,18 @@
 
 This initial phase establishes the project's core dependencies and configures the testing frameworks, ensuring that every subsequent feature can be automatically validated.
 
-[ ] Step 1: Install Dependencies and Configure Environment
-**Task**: Install the necessary packages: `@replit/database` for persistent storage, `@playwright/test` for end-to-end testing, and `p-limit` for concurrency control. After installing, configure the `REPLIT_DB_URL` in your Replit Secrets. The AI cannot do this for you; you must add it manually via the "Secrets" tab in your Replit workspace.
+[X] Step 1: Install Dependencies and Configure Environment
+**Task**: Install the necessary packages: `@replit/database` for persistent storage, `@playwright/test` for end-to-end testing, and `p-limit` for concurrency control. After installing, configure the `REPLIT_DB_URL` in your Replit Secrets.
 **Suggested Files for Context**: `package.json`
 **Step Dependencies**: None
 
 ---
 
-[ ] Step 2: Configure Vitest and Playwright
+[X] Step 2: Configure Vitest and Playwright
 **Task**: Create or update the configuration files for our testing frameworks. Ensure `vitest.config.ts` is set up for testing server-side code. Create `playwright.config.ts` at the project root, configuring the `baseURL` and the `webServer` command needed to launch the app for testing.
 **Suggested Files for Context**: `vite.config.ts`, `package.json`
 **Step Dependencies**: Step 1
+**Completed**: ✅ Updated `vitest.config.ts` with server-side Node.js environment and client-side jsdom environment support. ✅ Created `playwright.config.ts` with baseURL (localhost:5000) and webServer configuration. ✅ Added Playwright test scripts to package.json. ✅ Created tests/ directory structure. ✅ Verified both configurations work correctly.
 
 ---
 
