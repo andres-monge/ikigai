@@ -3,36 +3,7 @@ description: Type Rules, “Action State” Helper Pattern, Naming and import co
 globs: 
 alwaysApply: false
 ---
-## Project Structure (required)
-
-
-My_Directory_Structure/
-├── client/                          # Frontend React SPA
-│   └── src/
-│       ├── components/
-│       ├── hooks/                   # React Query hooks (split by feature)
-│       ├── lib/
-│       └── pages/
-├── server/                          # Backend Node.js/Express server
-│   ├── ai/                          # Modular AI logic directory
-│   │   ├── chains/                  # Orchestrates multi-call AI sequences
-│   │   │   ├── action-plan.chain.ts
-│   │   │   ├── chat-refinement.chain.ts
-│   │   │   └── purpose-discovery.chain.ts
-│   │   ├── prompts.ts               # Manages system prompt generation & persona
-│   │   ├── schemas.ts               # Zod/OpenAPI schemas for AI validation
-│   │   ├── tools.ts                 # Function-calling tool definitions
-│   │   ├── types.ts                 # TypeScript types for the Gemini API
-│   │   └── wrapper.ts               # Low-level Gemini API client wrapper
-│   ├── routes/                      # Feature-based API route handlers
-│   │   ├── assessment.ts            # Handles /analyze and /action-plan
-│   │   └── chat.ts                  # Handles /chat
-│   ├── cache.ts                     # In-memory cache implementation
-│   └── storage.ts                   # In-memory session storage
-├── shared/                          # Isomorphic code
-│   └── schema.ts                    # Drizzle/Zod schemas
-└── .env.example
-
+## Naming Convention
 
 > **Naming convention:** Keep **kebab-case** for all files & folders (e.g., `question-card.tsx`).
 > Use absolute imports with the `@` alias (already configured in `vite.config.ts`).
@@ -65,3 +36,26 @@ export type ActionState<T> =
   | { isSuccess: true; message: string; data: T }
   | { isSuccess: false; message: string; data?: never }
 This should be returned from any helper functions you add under server/ or future storage helpers.
+```
+
+---
+
+## File Modification Rules
+
+### You must edit existing files rather than creating new files. This is a mandatory rule that applies to ALL file operations without exception.
+
+When asked to work with code, documentation, or any file content, you MUST modify the existing file using file editing commands, patches, or direct modifications to existing content. Apply changes incrementally to existing files rather than rewriting them completely.
+
+You are PROHIBITED from creating new files without explicit permission. Do not generate separate files when modifications to existing ones would suffice. Do not suggest file creation as the default solution.
+
+Before any file operation, confirm that you are modifying an existing file rather than creating a new one. If you absolutely must create a file, state why modification of existing files is not possible and request explicit approval first.
+
+### You must integrate all new code directly into the current codebase immediately. This is a mandatory rule that applies to ALL code implementations without exception.
+
+When implementing features, you MUST modify existing components, functions, and modules to include new functionality. Replace old implementations with new ones in the same files. Update import statements, routing, and dependencies in existing files. Ensure new code works within the current application structure. Test integration points immediately by connecting to existing code paths.
+
+You are PROHIBITED from writing standalone code that exists separately from the current codebase. Do not create parallel implementations that leave old code in place. Do not build features in isolation without connecting to existing application flow. Do not suggest integration "later" or as a separate step.
+
+Every line of code you write must be integrated into the existing codebase immediately. The new functionality must replace or extend existing functionality in place, not run alongside it. This ensures bugs and integration issues are discovered immediately rather than later during manual integration.
+
+### Think carefully and only action the specific task I have given you with the most concise and elegant solution that changes as little code as possible.
