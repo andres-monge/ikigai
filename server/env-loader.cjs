@@ -1,5 +1,5 @@
 // Simple environment loader that runs before the main server
-require('dotenv').config({ path: '.env.local' });
+require('dotenv').config({ path: '.env' });
 
 // Now spawn the main server using tsx
 const { spawn } = require('child_process');

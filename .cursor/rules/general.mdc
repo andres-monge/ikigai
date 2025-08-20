@@ -42,11 +42,9 @@ This should be returned from any helper functions you add under server/ or futur
 
 ## File Modification Rules
 
-### You must edit existing files rather than creating new files. This is a mandatory rule that applies to ALL file operations without exception.
+### When asked to work with code, documentation, or any file content, you MUST modify the existing file using file editing commands, patches, or direct modifications to existing content. Apply changes incrementally to existing files rather than rewriting them completely.
 
-When asked to work with code, documentation, or any file content, you MUST modify the existing file using file editing commands, patches, or direct modifications to existing content. Apply changes incrementally to existing files rather than rewriting them completely.
-
-You are PROHIBITED from creating new files without explicit permission. Do not generate separate files when modifications to existing ones would suffice. Do not suggest file creation as the default solution.
+You are PROHIBITED from creating new files without explicit permission or unless it is stated in the implementation plan. Do not generate separate files when modifications to existing ones would suffice. Do not suggest file creation as the default solution.
 
 Before any file operation, confirm that you are modifying an existing file rather than creating a new one. If you absolutely must create a file, state why modification of existing files is not possible and request explicit approval first.
 
