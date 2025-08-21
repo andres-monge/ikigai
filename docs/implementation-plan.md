@@ -16,7 +16,7 @@ This foundational phase configures your local development environment to connect
 
 ---
 
-[ ] Step 2: Set Up Production & Development Databases
+[X] Step 2: Set Up Production & Development Databases
 **Task**: Create two separate PostgreSQL databases using Replit's built-in database feature. One will serve as your live **production** database in your main application, and the other will be a safe **development** sandbox.
 **Suggested Files for Context**: `replit.md`
 **Step Dependencies**: Step 1
