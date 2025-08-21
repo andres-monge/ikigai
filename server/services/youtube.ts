@@ -14,6 +14,7 @@ import {
 } from '../cache';
 import type { Language } from '@shared/schema';
 import { youtubeVideoSchema } from '@shared/schema';
+import { env } from '../env.js';
 
 /**
  * Calls the YouTube Data API v3 `search.list` endpoint to retrieve up to 3
@@ -24,13 +25,9 @@ async function _fetchVideosForSkill(
   skill: string,
   language: Language,
 ): Promise<z.infer<typeof youtubeVideoSchema>[]> {
-  const apiKey = process.env.YOUTUBE_API_KEY;
-  if (!apiKey) {
-    throw new Error('[YouTubeService] Missing YOUTUBE_API_KEY environment variable.');
-  }
 
   const url = new URL('https://www.googleapis.com/youtube/v3/search');
-  url.searchParams.set('key', apiKey);
+  url.searchParams.set('key', env.YOUTUBE_API_KEY);
   url.searchParams.set('part', 'snippet');
   url.searchParams.set('q', `${skill} tutorial`);
   url.searchParams.set('type', 'video');

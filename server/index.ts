@@ -17,6 +17,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { env } from "./env.js";
 
 const app = express();
 const httpServer = createServer(app);
@@ -78,7 +79,7 @@ app.use((req, res, next) => {
   });
 
   // In development, hook into Vite's dev server. In production, serve static files.
-  if (process.env.NODE_ENV === "development") {
+  if (env.NODE_ENV === "development") {
     await setupVite(app, httpServer);
   } else {
     serveStatic(app);

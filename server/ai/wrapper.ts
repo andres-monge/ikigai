@@ -42,16 +42,11 @@ export type { GeminiContent } from './types';
 /* ────────────────────────────────────────────────────────────────────────── */
 /* Environment & Constants                                                    */
 /* ────────────────────────────────────────────────────────────────────────── */
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+import { env } from '../env.js';
 
-// === CHANGED: Removed default values. Throws error if not set in .env ===
-if (!process.env.GEMINI_REASONING_MODEL || !process.env.GEMINI_FACTS_MODEL) {
-  throw new Error(
-    'Please set GEMINI_REASONING_MODEL and GEMINI_FACTS_MODEL in your .env.local file.',
-  );
-}
-export const GEMINI_REASONING_MODEL = process.env.GEMINI_REASONING_MODEL;
-export const GEMINI_FACTS_MODEL = process.env.GEMINI_FACTS_MODEL;
+// Re-export model identifiers for backward compatibility
+export const GEMINI_REASONING_MODEL = env.GEMINI_REASONING_MODEL;
+export const GEMINI_FACTS_MODEL = env.GEMINI_FACTS_MODEL;
 
 // === CHANGED: Shortened BASE_URL to accommodate full model path from .env ===
 const BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
@@ -79,13 +74,9 @@ async function _generateWithRetry(
   body: GeminiGenerateContentRequest,
   maxRetries = 3,
 ): Promise<GeminiGenerateContentResponse> {
-  if (!GEMINI_API_KEY) {
-    throw new Error('GEMINI_API_KEY is not configured in environment variables.');
-  }
-
   // The `model` variable now correctly contains the full path e.g., "models/gemini-2.5-flash"
   const finalModel = model.startsWith('models/') ? model : `models/${model}`;
-  const url = `${BASE_URL}/${finalModel}:generateContent?key=${GEMINI_API_KEY}`;
+  const url = `${BASE_URL}/${finalModel}:generateContent?key=${env.GEMINI_API_KEY}`;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -132,12 +123,8 @@ async function* _generateStreamWithRetry(
   body: GeminiGenerateContentRequest,
   maxRetries = 1, // Retries are more complex with streams, so keep it simple
 ): AsyncGenerator<GeminiGenerateContentResponse, void, undefined> {
-  if (!GEMINI_API_KEY) {
-    throw new Error('GEMINI_API_KEY is not configured in environment variables.');
-  }
-
   const finalModel = model.startsWith('models/') ? model : `models/${model}`;
-  const url = `${BASE_URL}/${finalModel}:streamGenerateContent?key=${GEMINI_API_KEY}`;
+  const url = `${BASE_URL}/${finalModel}:streamGenerateContent?key=${env.GEMINI_API_KEY}`;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {

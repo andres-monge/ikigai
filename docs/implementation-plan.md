@@ -27,9 +27,9 @@ This foundational phase configures your local development environment to connect
 
 ---
 
-[ ] Step 3: Centralize Environment Variable Management
+[X] Step 3: Centralize Environment Variable Management
 **Task**: Create a new file `server/env.ts` to securely load, validate, and export all environment variables (like `DATABASE_URL` and `GEMINI_API_KEY`) from `process.env`. This module will ensure that required variables are present at runtime and provide a single, type-safe source for configuration throughout the backend.
-**Suggested Files for Context**: `server/index.ts`, `server/ai/wrapper.ts`, `Tech Spec.md`
+**Suggested Files for Context**: `server/index.ts`, `server/ai/wrapper.ts`, `docs/tech-spec.md`
 **Step Dependencies**: Step 2
 
 ---
