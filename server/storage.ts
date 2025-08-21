@@ -1,27 +1,34 @@
 /**
  * @description
- * In-memory storage layer for the Purpose Finder MVP.
+ * PostgreSQL storage layer for the Purpose Finder application.
  *
- *  ✨ New in Step 20 ✨
- *  ──────────────────
- *  • Introduced `HydratedAssessmentSession`, a superset of `AssessmentSession`
- *    that eagerly loads (joins) all related `purposePaths`.
- *  • Updated the `IStorage` contract and every relevant `MemStorage` method so
- *    callers always get fully-hydrated objects and never need to cast to `any`.
+ * ✨ Step 5 Implementation ✨
+ * ──────────────────────────
+ * • Replaced in-memory storage with persistent PostgreSQL implementation
+ * • Uses Drizzle ORM's relational query API for automatic hydration
+ * • Provides atomic operations with .returning() for efficiency
+ * • Maintains the same IStorage interface for drop-in compatibility
  *
  * @dependencies
- * - @shared/schema for the table-level Drizzle types.
+ * - server/db.js for the Drizzle client instance
+ * - @shared/schema for table definitions and types
+ * - drizzle-orm for query operators
  *
  * @notes
- * - This file remains a drop-in replacement for a future Postgres version;
- *   only the internal implementation will change.
+ * - All methods return HydratedAssessmentSession with eager-loaded purposePaths
+ * - Uses PostgreSQL's RETURNING clause for atomic create/update operations
+ * - Leverages foreign key CASCADE for automatic cleanup
  */
 
+import { db } from './db.js';
+import { eq } from 'drizzle-orm';
 import {
   type AssessmentSession,
   type InsertAssessmentSession,
   type PurposePath,
   type InsertPurposePath,
+  assessmentSessions,
+  purposePaths,
 } from "@shared/schema";
 
 /* ------------------------------------------------------------------ */
@@ -76,45 +83,39 @@ export interface IStorage {
 }
 
 /* ------------------------------------------------------------------ */
-/*                           MemStorage MVP                           */
+/*                         PostgresStorage Implementation             */
 /* ------------------------------------------------------------------ */
 
-export class MemStorage implements IStorage {
-  /* … unchanged property declarations … */
-  private assessmentSessions: Map<number, AssessmentSession> = new Map();
-  private purposePaths: Map<number, PurposePath> = new Map();
-  private nextSessionId = 1;
-  private nextPathId = 1;
-
-  private sessionIdIndex: Map<string, number> = new Map();
-
+export class PostgresStorage implements IStorage {
   /* ---------------- Assessment Session CRUD ---------------- */
 
   async getAssessmentSessionById(
     id: number,
   ): Promise<HydratedAssessmentSession | undefined> {
-    const session = this.assessmentSessions.get(id);
-    return session ? this.hydrateSession(session) : undefined;
+    const session = await db.query.assessmentSessions.findFirst({
+      where: eq(assessmentSessions.id, id),
+      with: { purposePaths: true }
+    });
+    return session as HydratedAssessmentSession | undefined;
   }
 
   async getAssessmentSessionBySessionId(
     sessionId: string,
   ): Promise<HydratedAssessmentSession | undefined> {
-    const internalId = this.sessionIdIndex.get(sessionId);
-    if (internalId === undefined) return undefined;
-    const session = this.assessmentSessions.get(internalId);
-    return session ? this.hydrateSession(session) : undefined;
+    const session = await db.query.assessmentSessions.findFirst({
+      where: eq(assessmentSessions.sessionId, sessionId),
+      with: { purposePaths: true }
+    });
+    return session as HydratedAssessmentSession | undefined;
   }
 
   async createAssessmentSession(
     insertSession: Omit<InsertAssessmentSession, "id">,
   ): Promise<HydratedAssessmentSession> {
-    const id = this.nextSessionId++;
     const now = new Date();
-    const session: AssessmentSession = {
-      id,
+    const insertData: any = {
       sessionId: insertSession.sessionId,
-      language: insertSession.language ?? "en",
+      language: insertSession.language ?? 'en',
       responses: insertSession.responses ?? null,
       coreDriversAnalysis: insertSession.coreDriversAnalysis ?? null,
       chosenPathId: insertSession.chosenPathId ?? null,
@@ -122,38 +123,37 @@ export class MemStorage implements IStorage {
       createdAt: now,
       updatedAt: now,
     };
-    this.assessmentSessions.set(id, session);
-    this.sessionIdIndex.set(session.sessionId, id);
-    return this.hydrateSession(session);
+    
+    const [created] = await db.insert(assessmentSessions)
+      .values(insertData)
+      .returning();
+
+    // Return hydrated session by fetching with relations
+    const hydrated = await this.getAssessmentSessionById(created.id);
+    if (!hydrated) {
+      throw new Error('Failed to create assessment session');
+    }
+    return hydrated;
   }
 
   async updateAssessmentSession(
     sessionId: string,
     updates: Partial<InsertAssessmentSession>,
   ): Promise<HydratedAssessmentSession | undefined> {
-    const internalId = this.sessionIdIndex.get(sessionId);
-    if (internalId === undefined) return undefined;
-
-    const existing = this.assessmentSessions.get(internalId);
-    if (!existing) return undefined;
-
-    // Guarantee monotonic `updatedAt` so that unit tests comparing strict
-    // inequality (`>` rather than `>=`) never fail due to clock resolution
-    // limits (particularly on fast CI runners where a 1 ms setTimeout may not
-    // advance the timestamp). If the newly generated timestamp happens to be
-    // equal to or behind the previous one, we manually bump it by 1 ms.
-    let nextUpdatedAt = new Date();
-    if (nextUpdatedAt.getTime() <= existing.updatedAt.getTime()) {
-      nextUpdatedAt = new Date(existing.updatedAt.getTime() + 1);
-    }
-
-    const updated: AssessmentSession = {
-      ...existing,
+    const updateData: any = {
       ...updates,
-      updatedAt: nextUpdatedAt,
+      updatedAt: new Date(),
     };
-    this.assessmentSessions.set(internalId, updated);
-    return this.hydrateSession(updated);
+    
+    const [updated] = await db.update(assessmentSessions)
+      .set(updateData)
+      .where(eq(assessmentSessions.sessionId, sessionId))
+      .returning();
+
+    if (!updated) return undefined;
+
+    // Return hydrated session by fetching with relations
+    return this.getAssessmentSessionById(updated.id);
   }
 
   /* ---------------- Purpose Path CRUD ---------------- */
@@ -161,56 +161,22 @@ export class MemStorage implements IStorage {
   async createPurposePath(
     insertPath: Omit<InsertPurposePath, "id">,
   ): Promise<PurposePath> {
-    const id = this.nextPathId++;
-    const path: PurposePath = { 
-      id, 
-      ...insertPath,
-      description: insertPath.description ?? null,
-      actionStrategy: insertPath.actionStrategy ?? null,
-      ikigaiAlignment: insertPath.ikigaiAlignment ?? {},
-    };
-    this.purposePaths.set(id, path);
-    return path;
+    const [created] = await db.insert(purposePaths)
+      .values({
+        assessmentId: insertPath.assessmentId,
+        title: insertPath.title,
+        description: insertPath.description ?? null,
+        actionStrategy: insertPath.actionStrategy ?? null,
+        ikigaiAlignment: insertPath.ikigaiAlignment ?? {},
+      })
+      .returning();
+
+    return created as PurposePath;
   }
 
   async deletePurposePathsByAssessmentId(assessmentId: number): Promise<void> {
-    const pathsToDelete: number[] = [];
-    for (const path of this.purposePaths.values()) {
-      if (path.assessmentId === assessmentId) pathsToDelete.push(path.id);
-    }
-
-    for (const pathId of pathsToDelete) {
-      this.purposePaths.delete(pathId);
-    }
-  }
-
-
-
-
-  /* ------------------------------------------------------------------ */
-  /*                         Private Helper Method                      */
-  /* ------------------------------------------------------------------ */
-
-  /**
-   * @private
-   * Simulates a relational join to attach all paths
-   * to the base session object.
-   */
-  private async hydrateSession(
-    session: AssessmentSession,
-  ): Promise<HydratedAssessmentSession> {
-    const purposePaths: PurposePath[] = [];
-
-    for (const path of this.purposePaths.values()) {
-      if (path.assessmentId === session.id) {
-        purposePaths.push(path);
-      }
-    }
-
-    return {
-      ...session,
-      purposePaths,
-    };
+    await db.delete(purposePaths)
+      .where(eq(purposePaths.assessmentId, assessmentId));
   }
 }
 
@@ -218,4 +184,4 @@ export class MemStorage implements IStorage {
 /*                         Export Singleton Store                      */
 /* ------------------------------------------------------------------ */
 
-export const storage: IStorage = new MemStorage();
+export const storage: IStorage = new PostgresStorage();
