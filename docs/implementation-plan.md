@@ -12,7 +12,7 @@ This foundational phase configures your local development environment to connect
 1.  If you haven't already, clone your project repository from GitHub to your local machine.
 2.  Create a new file named `.env` in the root directory of your local project.
 3.  Add the line `.env` to your `.gitignore` file to prevent committing secrets.
-4.  Run `pnpm install` in your terminal to install all project dependencies.
+4.  Run `npm install` in your terminal to install all project dependencies.
 
 ---
 
@@ -34,11 +34,11 @@ This foundational phase configures your local development environment to connect
 
 ---
 
-[ ] Step 4: Configure Drizzle ORM and Migrations
+[X] Step 4: Configure Drizzle ORM and Migrations
 **Task**: Install `drizzle-kit` and `pg` as development dependencies. Create a `drizzle.config.ts` file that reads the `DATABASE_URL` from the environment. Update `package.json` with new scripts (`db:gen`, `db:migrate:dev`, `db:migrate:prod`) to generate and apply database migrations using `drizzle-kit`. Create a `server/db.ts` file to initialize and export the Drizzle client instance, connecting to the database using the URL from the new `server/env.ts` module.
 **Suggested Files for Context**: `package.json`, `shared/schema.ts`, `server/env.ts`
 **Step Dependencies**: Step 3
-**User Instructions**: After the AI has generated the files, run `pnpm db:gen` followed by `pnpm db:migrate:dev` locally to generate the initial migration file based on `shared/schema.ts` and apply it to your database.
+**User Instructions**: After the AI has generated the files, run `npm db:gen` followed by `npm db:migrate:dev` locally to generate the initial migration file based on `shared/schema.ts` and apply it to your database.
 
 ---
 

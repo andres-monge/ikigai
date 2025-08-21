@@ -216,17 +216,8 @@ The schema is defined in `shared/schema.ts` using Drizzle ORM syntax for Postgre
       - `assessment_id`: `integer` (FK to `assessment_sessions.id` ON DELETE CASCADE)
       - `title`: `text`
       - `description`: `text`
-      - `ikigai_alignment`: **`jsonb`** (The `pay` property within this object now contains the full narrative text about salary, including source URLs).
+      - `ikigai_alignment`: **`jsonb`** (The `pay` property within this object contains the full narrative text about salary information, including source URLs).
       - `action_strategy`: `text`
-  - **`salary_data`**: Stores salary benchmark data retrieved for each path.
-      - `id`: `serial` (PK)
-      - `path_id`: `integer` (FK to `purpose_paths.id` ON DELETE CASCADE)
-      - `entry_level`: `text`
-      - `mid_level`: `text`
-      - `senior_level`: `text`
-      - `location`: `text`
-      - `sources`: `text[]` (array of strings)
-      - `retrieved_at`: `timestamptz` (with timezone, default now)
 
 -----
 

@@ -5,7 +5,7 @@
  *  ✨ New in Step 20 ✨
  *  ──────────────────
  *  • Introduced `HydratedAssessmentSession`, a superset of `AssessmentSession`
- *    that eagerly loads (joins) all related `purposePaths` and their `salaryData`.
+ *    that eagerly loads (joins) all related `purposePaths`.
  *  • Updated the `IStorage` contract and every relevant `MemStorage` method so
  *    callers always get fully-hydrated objects and never need to cast to `any`.
  *
@@ -22,8 +22,6 @@ import {
   type InsertAssessmentSession,
   type PurposePath,
   type InsertPurposePath,
-  type SalaryData,
-  type InsertSalaryData,
 } from "@shared/schema";
 
 /* ------------------------------------------------------------------ */
@@ -35,11 +33,10 @@ import {
  * A fully-resolved session that contains:
  *  • the base `AssessmentSession` columns
  *  • an array of all `PurposePath` rows belonging to the session
- *      – each path already has its `salaryData` array attached
  */
 export interface HydratedAssessmentSession extends AssessmentSession {
-  /** All purpose paths + their salary data for this session */
-  purposePaths: (PurposePath & { salaryData: SalaryData[] })[];
+  /** All purpose paths for this session */
+  purposePaths: PurposePath[];
 }
 
 /* ------------------------------------------------------------------ */
@@ -74,8 +71,6 @@ export interface IStorage {
   createPurposePath(path: Omit<InsertPurposePath, "id">): Promise<PurposePath>;
   deletePurposePathsByAssessmentId(assessmentId: number): Promise<void>;
 
-  // === Salary Data Methods ===
-  createSalaryData(data: Omit<InsertSalaryData, "id">): Promise<SalaryData>;
 
 
 }
@@ -88,10 +83,8 @@ export class MemStorage implements IStorage {
   /* … unchanged property declarations … */
   private assessmentSessions: Map<number, AssessmentSession> = new Map();
   private purposePaths: Map<number, PurposePath> = new Map();
-  private salaryData: Map<number, SalaryData> = new Map();
   private nextSessionId = 1;
   private nextPathId = 1;
-  private nextSalaryId = 1;
 
   private sessionIdIndex: Map<string, number> = new Map();
 
@@ -187,33 +180,10 @@ export class MemStorage implements IStorage {
     }
 
     for (const pathId of pathsToDelete) {
-      // Cascade delete salary rows
-      for (const [salaryId, salary] of this.salaryData) {
-        if (salary.pathId === pathId) this.salaryData.delete(salaryId);
-      }
       this.purposePaths.delete(pathId);
     }
   }
 
-  /* ---------------- Salary Data CRUD ---------------- */
-
-  async createSalaryData(
-    insertData: Omit<InsertSalaryData, "id">,
-  ): Promise<SalaryData> {
-    const id = this.nextSalaryId++;
-    const data: SalaryData = {
-      id,
-      retrievedAt: new Date(),
-      ...insertData,
-      location: insertData.location ?? null,
-      sources: insertData.sources ?? [],
-      entryLevel: insertData.entryLevel ?? null,
-      midLevel: insertData.midLevel ?? null,
-      seniorLevel: insertData.seniorLevel ?? null,
-    };
-    this.salaryData.set(id, data);
-    return data;
-  }
 
 
 
@@ -223,23 +193,18 @@ export class MemStorage implements IStorage {
 
   /**
    * @private
-   * Simulates a relational join to attach all paths + salaries
+   * Simulates a relational join to attach all paths
    * to the base session object.
    */
   private async hydrateSession(
     session: AssessmentSession,
   ): Promise<HydratedAssessmentSession> {
-    const purposePaths: (PurposePath & { salaryData: SalaryData[] })[] = [];
+    const purposePaths: PurposePath[] = [];
 
     for (const path of this.purposePaths.values()) {
-      if (path.assessmentId !== session.id) continue;
-
-      const salaryData: SalaryData[] = [];
-      for (const salary of this.salaryData.values()) {
-        if (salary.pathId === path.id) salaryData.push(salary);
+      if (path.assessmentId === session.id) {
+        purposePaths.push(path);
       }
-
-      purposePaths.push({ ...path, salaryData });
     }
 
     return {

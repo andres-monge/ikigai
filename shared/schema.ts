@@ -152,20 +152,6 @@ export const purposePaths = pgTable('purpose_paths', {
   actionStrategy: text('action_strategy'),
 });
 
-export const salaryData = pgTable('salary_data', {
-  id: serial('id').primaryKey(),
-  pathId: integer('path_id')
-    .notNull()
-    .references(() => purposePaths.id, { onDelete: 'cascade' }),
-  entryLevel: text('entry_level'),
-  midLevel: text('mid_level'),
-  seniorLevel: text('senior_level'),
-  location: text('location'),
-  sources: text('sources').array(),
-  retrievedAt: timestamp('retrieved_at', { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
 
 
 
@@ -184,21 +170,14 @@ export const assessmentSessionRelations = relations(
 
 export const purposePathRelations = relations(
   purposePaths,
-  ({ one, many }) => ({
+  ({ one }) => ({
     assessmentSession: one(assessmentSessions, {
       fields: [purposePaths.assessmentId],
       references: [assessmentSessions.id],
     }),
-    salaryData: many(salaryData),
   }),
 );
 
-export const salaryDataRelations = relations(salaryData, ({ one }) => ({
-  purposePath: one(purposePaths, {
-    fields: [salaryData.pathId],
-    references: [purposePaths.id],
-  }),
-}));
 
 
 
@@ -218,8 +197,6 @@ export const insertPurposePathSchema = createInsertSchema(purposePaths);
 export const selectPurposePathSchema = createSelectSchema(purposePaths);
 export type SelectPurposePath = z.infer<typeof selectPurposePathSchema>;
 
-export const insertSalaryDataSchema = createInsertSchema(salaryData);
-export const selectSalaryDataSchema = createSelectSchema(salaryData);
 
 
 
@@ -256,7 +233,5 @@ export type ActionState<T> =
 export type Language = 'en' | 'es';
 export type PurposePath = SelectPurposePath;
 export type AssessmentSession = SelectAssessmentSession;
-export type SalaryData = z.infer<typeof selectSalaryDataSchema>;
 export type InsertAssessmentSession = z.infer<typeof insertAssessmentSessionSchema>;
 export type InsertPurposePath = z.infer<typeof insertPurposePathSchema>;
-export type InsertSalaryData = z.infer<typeof insertSalaryDataSchema>;

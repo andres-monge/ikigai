@@ -45,14 +45,13 @@ The application uses a sophisticated AI orchestration system:
 #### Storage Layer (`server/storage.ts`)
 - Interface-based design (`IStorage`) for easy testing and future PostgreSQL migration
 - Current implementation: `MemStorage` with full relationship hydration
-- Returns `HydratedAssessmentSession` objects with nested purpose paths and salary data
+- Returns `HydratedAssessmentSession` objects with nested purpose paths
 - Planned migration to `PostgresStorage` class in implementation roadmap
 
 #### Database Schema (`shared/schema.ts`)
-Three core tables with Drizzle ORM:
+Two core tables with Drizzle ORM:
 - `assessment_sessions` - User sessions with questionnaire responses and analysis
-- `purpose_paths` - Generated career paths with ikigai alignment details
-- `salary_data` - Market salary information linked to specific paths
+- `purpose_paths` - Generated career paths with ikigai alignment details (salary information is embedded narratively within the ikigai_alignment JSONB field)
 
 #### Frontend State Management
 - TanStack Query for server state with feature-specific hooks in `client/src/hooks/`
