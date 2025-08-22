@@ -20,6 +20,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run test:e2e` - Run Playwright end-to-end tests
 - `npm run test:e2e:ui` - Run E2E tests with Playwright UI
 - `npm run test:e2e:headed` - Run E2E tests in headed mode
+- `npm run build` - Code compiles without TypeScript errors
+- `npm run check` - TypeScript checking passes
 
 ## Project Architecture
 

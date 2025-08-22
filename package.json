@@ -12,7 +12,7 @@
     "db:gen": "drizzle-kit generate",
     "db:migrate:dev": "drizzle-kit migrate",
     "db:migrate:prod": "NODE_ENV=production drizzle-kit migrate",
-    "test": "vitest",
+    "test": "node -r dotenv/config node_modules/.bin/vitest",
     "test:ui": "vitest --ui",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",

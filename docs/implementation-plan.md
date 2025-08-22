@@ -46,7 +46,7 @@ This foundational phase configures your local development environment to connect
 
 This phase replaces the in-memory storage with a persistent PostgreSQL implementation and adds essential safeguards like a concurrency limiter.
 
-[ ] Step 5: Implement `PostgresStorage` Class
+[X] Step 5: Implement `PostgresStorage` Class
 **Task**: In `server/storage.ts`, replace the `MemStorage` class with a new `PostgresStorage` class that implements the `IStorage` interface. Use the Drizzle client from `server/db.ts` to perform all database operations (create, get, update, delete). The `hydrateSession` method should now perform relational queries using Drizzle to join `assessment_sessions` with their related `purpose_paths`.
 **Suggested Files for Context**: `server/storage.ts`, `shared/schema.ts`, `server/db.ts`, `server/routes/assessment.ts`
 **Step Dependencies**: Step 4

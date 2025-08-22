@@ -24,25 +24,21 @@ For each step implementation, verify:
 ### Functionality
 - [ ] All requirements from the step description are implemented
 - [ ] Database operations are atomic and handle failures
+- [ ] Verify Drizzle ORM usage and database schema compliance
 - [ ] API endpoints follow REST conventions
 - [ ] Session management works correctly (anonymous sessions)
 - [ ] AI chain orchestration functions as specified
 - [ ] Components are properly integrated with backend
 
-### Testing & Validation
-- [ ] Code compiles without TypeScript errors (`npm run build`)
-- [ ] TypeScript checking passes (`npm run check`)
-- [ ] Database migrations run successfully (`npm run db:push`)
-- [ ] Unit tests pass (`npm test`)
-- [ ] E2E tests pass (`npm run test:e2e`)
-
 ### Documentation & Dependencies
-- [ ] Step dependencies are met (previous steps completed)
-- [ ] Any new dependencies are properly installed
-- [ ] Environment variables are documented
 - [ ] Implementation notes match actual code
 
 ## Output Format
+
+Provide feedback organized by priority:
+- Critical issues (must fix)
+- Warnings (should fix)
+- Suggestions (consider improving)
 
 Provide your review in this structure:
 
@@ -51,27 +47,16 @@ Provide your review in this structure:
 
 ### Issues Found
 For each issue:
-**Issue**: [Clear description of the problem]
-**Location**: [File path and line numbers if applicable]
-**Impact**: [How this affects functionality/security/maintainability]
-**Recommended Fix**: [Detailed steps to resolve the issue]
+**Priority**: [Critical/Warning/Suggestion] **Issue**: [Clear description of the problem] **Location**: [File path and line numbers if applicable] **Impact**: [How this affects functionality/security/maintainability] **Recommended Fix**: [Detailed steps to resolve the issue]
 
 ### Verification Needed
 - List areas that need manual testing
-- Suggest integration points to check
-
-### Next Steps
-- Priority order for addressing issues
-- Any blockers for subsequent steps
 ```
 
 ## Important Notes
 
 - **DO NOT FIX ISSUES** - Only document them thoroughly
-- Be specific about file locations and line numbers
 - Consider both immediate and potential future problems
 - Focus on issues that could break functionality or compromise security
 - To gather information on external libraries or documentation, use the context7 MCP server
-- Check integration with Gemini AI models and YouTube Data API
-- Verify Drizzle ORM usage and database schema compliance
 - Your detailed issue reports will be passed to another AI agent for implementation
