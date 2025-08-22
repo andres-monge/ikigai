@@ -7,10 +7,6 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node', // Default environment for server-side testing
-    environmentMatchGlobs: [
-      // Use jsdom for client-side component tests
-      ['**/client/**/*.{test,spec}.{js,ts,jsx,tsx}', 'jsdom'],
-    ],
     setupFiles: [],
     include: [
       '**/server/**/*.{test,spec}.{js,ts}',
@@ -22,6 +18,13 @@ export default defineConfig({
       '**/dist/**',
       '**/tests/**', // E2E tests handled by Playwright
     ],
+    // Use pool configuration for different environments instead of deprecated environmentMatchGlobs
+    pool: 'threads',
+    poolOptions: {
+      threads: {
+        singleThread: false,
+      },
+    },
   },
   resolve: {
     alias: {

@@ -53,7 +53,7 @@ This phase replaces the in-memory storage with a persistent PostgreSQL implement
 
 ---
 
-[ ] Step 6: Write Integration Tests for `PostgresStorage`
+[X] Step 6: Write Integration Tests for `PostgresStorage`
 **Task**: Create a new test file `server/storage.test.ts`. Write integration tests for the `PostgresStorage` class using Vitest. The tests should connect to the development database to verify that the `create`, `get`, `update`, and `delete` methods correctly interact with the database and that `hydrateSession` returns the expected nested data structures.
 **Suggested Files for Context**: `server/storage.ts`, `shared/schema.ts`, `vitest.config.ts`
 **Step Dependencies**: Step 5
@@ -62,7 +62,7 @@ This phase replaces the in-memory storage with a persistent PostgreSQL implement
 ---
 
 [ ] Step 7: Implement Concurrency Limiter for AI Routes
-**Task**: Create a new utility file, `server/ai/limiter.ts`. Using the `p-limit` library, create and export a limiter instance (e.g., `const aiLimiter = pLimit(5);`). In `server/routes/assessment.ts`, import this limiter and wrap the core logic of every AI-powered route within it (e.g., `aiLimiter(() => getPurposeDiscoveryChain(...))`).
+**Task**: Create a new utility file, `server/ai/limiter.ts`. Using the `p-limit` library, create and export a limiter instance (e.g., `const aiLimiter = pLimit(2);`). In `server/routes/assessment.ts`, import this limiter and wrap the core logic of every AI-powered route within it (e.g., `aiLimiter(() => getPurposeDiscoveryChain(...))`).
 **Suggested Files for Context**: `server/routes/assessment.ts`, `package.json`
 **Step Dependencies**: Step 6
 

@@ -318,3 +318,182 @@ describe('PostgresStorage - Hydration & Relationships', () => {
     expect(remainingPaths).toHaveLength(0);
   });
 });
+
+/* ------------------------------------------------------------------ */
+/*                         Concurrent Operations Tests               */
+/* ------------------------------------------------------------------ */
+
+describe('PostgresStorage - Concurrent Operations', () => {
+  
+  it('should handle concurrent session creation without conflicts', async () => {
+    const sessionPromises = Array.from({ length: 5 }, (_, i) => 
+      storage.createAssessmentSession({
+        sessionId: `concurrent-session-${i}`,
+        language: 'en' as const,
+        responses: testSessionData.responses
+      })
+    );
+    
+    const sessions = await Promise.all(sessionPromises);
+    
+    // Verify all sessions were created successfully
+    expect(sessions).toHaveLength(5);
+    sessions.forEach((session, i) => {
+      expect(session.sessionId).toBe(`concurrent-session-${i}`);
+      expect(session.id).toBeTypeOf('number');
+      expect(session.responses).toEqual(testSessionData.responses);
+    });
+    
+    // Verify unique IDs were assigned
+    const ids = sessions.map(s => s.id);
+    const uniqueIds = new Set(ids);
+    expect(uniqueIds.size).toBe(5);
+  });
+
+  it('should handle concurrent purpose path creation for same assessment', async () => {
+    const session = await storage.createAssessmentSession({
+      sessionId: 'concurrent-paths-session',
+      language: 'en' as const
+    });
+    
+    const pathPromises = Array.from({ length: 3 }, (_, i) =>
+      storage.createPurposePath({
+        ...testPurposePathData,
+        assessmentId: session.id,
+        title: `Concurrent Path ${i + 1}`
+      })
+    );
+    
+    const paths = await Promise.all(pathPromises);
+    
+    // Verify all paths were created successfully
+    expect(paths).toHaveLength(3);
+    paths.forEach((path, i) => {
+      expect(path.title).toBe(`Concurrent Path ${i + 1}`);
+      expect(path.assessmentId).toBe(session.id);
+      expect(path.id).toBeTypeOf('number');
+    });
+    
+    // Verify the session correctly hydrates all paths
+    const hydrated = await storage.getAssessmentSessionById(session.id);
+    expect(hydrated!.purposePaths).toHaveLength(3);
+  });
+
+  it('should handle concurrent reads while updates are happening', async () => {
+    const session = await storage.createAssessmentSession({
+      sessionId: 'concurrent-read-write-session',
+      language: 'en' as const,
+      responses: testSessionData.responses
+    });
+    
+    // Start concurrent operations: multiple reads and one update
+    const readPromises = Array.from({ length: 4 }, () =>
+      storage.getAssessmentSessionBySessionId('concurrent-read-write-session')
+    );
+    
+    const updatePromise = storage.updateAssessmentSession(
+      'concurrent-read-write-session',
+      {
+        coreDriversAnalysis: {
+          strengths: ["Concurrent testing"],
+          motivations: ["Data consistency"]
+        }
+      }
+    );
+    
+    // Execute all operations concurrently
+    const [readResults, updateResult] = await Promise.all([
+      Promise.all(readPromises),
+      updatePromise
+    ]);
+    
+    // Verify reads were successful
+    readResults.forEach(result => {
+      expect(result).toBeDefined();
+      expect(result!.sessionId).toBe('concurrent-read-write-session');
+      expect(result!.responses).toEqual(testSessionData.responses);
+    });
+    
+    // Verify update was successful
+    expect(updateResult).toBeDefined();
+    expect(updateResult!.coreDriversAnalysis).toEqual({
+      strengths: ["Concurrent testing"],
+      motivations: ["Data consistency"]
+    });
+  });
+
+  it('should handle concurrent updates to different sessions safely', async () => {
+    // Create multiple sessions
+    const sessionPromises = Array.from({ length: 3 }, (_, i) =>
+      storage.createAssessmentSession({
+        sessionId: `concurrent-update-session-${i}`,
+        language: 'en' as const
+      })
+    );
+    
+    const sessions = await Promise.all(sessionPromises);
+    
+    // Perform concurrent updates to different sessions
+    const updatePromises = sessions.map((session, i) =>
+      storage.updateAssessmentSession(session.sessionId, {
+        coreDriversAnalysis: {
+          sessionIndex: i,
+          timestamp: Date.now()
+        }
+      })
+    );
+    
+    const updatedSessions = await Promise.all(updatePromises);
+    
+    // Verify each update was applied correctly
+    updatedSessions.forEach((updated, i) => {
+      expect(updated).toBeDefined();
+      expect(updated!.coreDriversAnalysis).toEqual({
+        sessionIndex: i,
+        timestamp: expect.any(Number)
+      });
+    });
+    
+    // Verify isolation: each session has only its own update
+    for (let i = 0; i < sessions.length; i++) {
+      const retrieved = await storage.getAssessmentSessionById(sessions[i].id);
+      expect(retrieved!.coreDriversAnalysis).toEqual({
+        sessionIndex: i,
+        timestamp: expect.any(Number)
+      });
+    }
+  });
+
+  it('should handle race conditions in purpose path deletion', async () => {
+    const session = await storage.createAssessmentSession({
+      sessionId: 'race-condition-session',
+      language: 'en' as const
+    });
+    
+    // Create multiple purpose paths
+    const pathPromises = Array.from({ length: 5 }, (_, i) =>
+      storage.createPurposePath({
+        ...testPurposePathData,
+        assessmentId: session.id,
+        title: `Race Path ${i + 1}`
+      })
+    );
+    
+    await Promise.all(pathPromises);
+    
+    // Verify paths were created
+    const beforeDeletion = await storage.getAssessmentSessionById(session.id);
+    expect(beforeDeletion!.purposePaths).toHaveLength(5);
+    
+    // Attempt concurrent deletions (should be idempotent)
+    const deletionPromises = Array.from({ length: 3 }, () =>
+      storage.deletePurposePathsByAssessmentId(session.id)
+    );
+    
+    await Promise.all(deletionPromises);
+    
+    // Verify all paths were deleted without errors
+    const afterDeletion = await storage.getAssessmentSessionById(session.id);
+    expect(afterDeletion!.purposePaths).toHaveLength(0);
+  });
+});
