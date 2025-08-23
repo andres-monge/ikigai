@@ -56,7 +56,8 @@ assessmentRouter.post("/analyze", async (req, res, next) => {
       getPurposeDiscoveryChain(responses, language)
     );
 
-    // Atomic operation: create new paths first, then delete old ones
+    // Atomic operation: track old paths, create new ones, then delete old ones
+    const oldPathIds = session.purposePaths.map(p => p.id);
     const newPaths: PurposePath[] = [];
     try {
       // Create all new paths first (store in memory)
@@ -71,8 +72,10 @@ assessmentRouter.post("/analyze", async (req, res, next) => {
         newPaths.push(createdPath);
       }
       
-      // Only delete old paths after all new ones are successfully created
-      await storage.deletePurposePathsByAssessmentId(session.id);
+      // Delete ONLY the old paths by their specific IDs
+      for (const oldId of oldPathIds) {
+        await storage.deletePurposePathById(oldId);
+      }
     } catch (error) {
       // If path creation fails, clean up any paths we did create
       for (const createdPath of newPaths) {

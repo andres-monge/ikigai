@@ -182,7 +182,7 @@ describe('Assessment Routes - Atomic Operations', () => {
       responses: testSessionData.responses
     });
 
-    // Add existing purpose paths that should be preserved
+    // Add existing purpose paths that should be preserved on failure
     await storage.createPurposePath({
       assessmentId: session.id,
       title: "Existing QA Role",
