@@ -78,6 +78,43 @@ Integrate this new router in `server/routes.ts` and update the `handleStartOver`
 
 ---
 
+## Phase 1 Optimization: Technical Debt Prevention
+
+[ ] Step 8.1: Fix Non-Atomic Database Operations
+**Task**: In server/routes/assessment.ts, wrap the delete/create operations in a try-catch to ensure we don't leave the database in an inconsistent state. If path creation fails, the session should remain unchanged. Simple approach: store paths in memory first, only delete old ones after successful creation.
+**Suggested Files for Context**: `server/routes/assessment.ts`, `server/storage.ts`
+**Step Dependencies**: None
+
+---
+
+[ ] Step 8.2: Remove any Types from Storage Layer
+**Task**: Replace any with proper types in PostgresStorage. This prevents runtime errors from typos and makes the code self-documenting. Quick fix without changing functionality.
+**Suggested Files for Context**: `server/storage.ts`, `shared/schema.ts`
+**Step Dependencies**: None
+
+---
+
+[ ] Step 8.3: Fix Frontend Routing Bug
+**Task**: In results.tsx, change redirect from /questionnaire (doesn't exist) to /. This is a real bug that breaks user flow.
+**Suggested Files for Context**: `client/src/pages/results.tsx`
+**Step Dependencies**: None
+
+---
+
+[ ] Step 8.4: Remove Unused Type That Causes Confusion
+**Task**: Remove PurposePathWithSalary type and its salaryData field since the spec embeds salary in ikigaiAlignment.pay. This mismatch between frontend and backend types is technical debt.
+**Suggested Files for Context**: `client/src/types/assessment.ts`, `client/src/components/results/purpose-paths.tsx`
+**Step Dependencies**: None
+
+---
+
+[ ] Step 8.5: Add Test for Atomic Operations
+**Task**: Add one test to verify that if path creation fails, old paths aren't deleted. This guards against the main data consistency issue.
+**Suggested Files for Context**: `server/routes/assessment.test.ts`
+**Step Dependencies**: Step 8.1
+
+---
+
 ## Phase 2: Backend Word-by-Word Streaming API
 
 This phase refactors the AI chains and endpoints to support word-by-word streaming, providing a dynamic, real-time user experience.
