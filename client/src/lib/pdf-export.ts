@@ -21,7 +21,7 @@
  * - @/lib/i18n: For the translation function `t` and `Language` type.
  */
 import jsPDF from 'jspdf';
-import type { FullAssessment, PurposePathWithSalary } from '@/types/assessment';
+import type { FullAssessment, PurposePath } from '@/types/assessment';
 import type { ActionPlan } from '@/types/assessment';
 import { t, type Language } from '@/lib/i18n';
 
@@ -109,7 +109,7 @@ export function exportToPDF(
   
   currentY += 20;
 
-  results.purposePaths.forEach((path: PurposePathWithSalary, index: number) => {
+  results.purposePaths.forEach((path: PurposePath, index: number) => {
     // Check if we need a new page
     if (currentY > pageHeight - 120) {
       pdf.addPage();

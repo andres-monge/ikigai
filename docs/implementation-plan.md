@@ -101,7 +101,7 @@ Integrate this new router in `server/routes.ts` and update the `handleStartOver`
 
 ---
 
-[ ] Step 8.4: Remove Unused Type That Causes Confusion
+[X] Step 8.4: Remove Unused Type That Causes Confusion
 **Task**: Remove PurposePathWithSalary type and its salaryData field since the spec embeds salary in ikigaiAlignment.pay. This mismatch between frontend and backend types is technical debt.
 **Suggested Files for Context**: `client/src/types/assessment.ts`, `client/src/components/results/purpose-paths.tsx`
 **Step Dependencies**: None

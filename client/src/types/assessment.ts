@@ -10,10 +10,6 @@
  * `FullAssessment` type, which mirrors the backend's hydrated session object.
  * - Added `ActionPlan` and its related types (`YoutubeVideo`, `SkillToLearn`)
  * to strongly type the action plan data.
- * - Added `PurposePathWithSalary` to represent the nested data structure from
- * the server.
- * - Updated `SalaryData` to include a `title` and reflect nullable fields
- * from the database schema.
  *
  * @dependencies
  * - @shared/schema: For re-exporting canonical types like `QuestionnaireResponses`.
@@ -58,18 +54,6 @@ export interface PurposePath {
   actionStrategy: string;
 }
 
-/**
- * Represents salary data as stored in the DB (with nullable fields)
- * plus a `title` field added by the client for rendering tables.
- */
-export interface SalaryData {
-  title: string;
-  entryLevel: string | null;
-  midLevel: string | null;
-  seniorLevel: string | null;
-  location: string | null;
-  sources: string[] | null;
-}
 
 export interface YoutubeVideo {
   title: string;
@@ -101,14 +85,6 @@ export interface ActionPlan {
   milestones: Milestone[];
 }
 
-/**
- * Helper type representing the nested structure of a purpose path
- * with its associated salary data, as returned by the backend.
- */
-export interface PurposePathWithSalary extends PurposePath {
-  // Omit 'title' as it's already on the parent PurposePath
-  salaryData: Omit<SalaryData, 'title'>[];
-}
 
 /**
  * @type FullAssessment
@@ -126,7 +102,7 @@ export interface FullAssessment {
   actionPlan: ActionPlan | null;
   createdAt: string;
   updatedAt: string;
-  purposePaths: PurposePathWithSalary[];
+  purposePaths: PurposePath[];
 }
 
 export interface ChatMessage {

@@ -17,10 +17,10 @@
 import { Rocket, Users, Code, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { t, type Language } from '@/lib/i18n';
-import type { PurposePathWithSalary } from '@/types/assessment';
+import type { PurposePath } from '@/types/assessment';
 
 interface PurposePathsProps {
-  purposePaths: PurposePathWithSalary[];
+  purposePaths: PurposePath[];
   language: Language;
   /**
    * Callback invoked when the user selects a path to generate an action plan.
