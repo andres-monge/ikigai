@@ -92,7 +92,7 @@ export function Results({
         
         // Redirect to questionnaire after a short delay
         setTimeout(() => {
-          navigate('/questionnaire');
+          navigate('/');
         }, 2000);
         
         return;
@@ -109,7 +109,7 @@ export function Results({
   /* Redirect guard */
   useEffect(() => {
     if (!session || !session.purposePaths || !session.coreDriversAnalysis) {
-      navigate('/questionnaire');
+      navigate('/');
     }
   }, [session, navigate]);
 

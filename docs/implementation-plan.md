@@ -94,7 +94,7 @@ Integrate this new router in `server/routes.ts` and update the `handleStartOver`
 
 ---
 
-[ ] Step 8.3: Fix Frontend Routing Bug
+[X] Step 8.3: Fix Frontend Routing Bug
 **Task**: In results.tsx, change redirect from /questionnaire (doesn't exist) to /. This is a real bug that breaks user flow.
 **Suggested Files for Context**: `client/src/pages/results.tsx`
 **Step Dependencies**: None
