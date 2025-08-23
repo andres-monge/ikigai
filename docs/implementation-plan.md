@@ -87,7 +87,7 @@ Integrate this new router in `server/routes.ts` and update the `handleStartOver`
 
 ---
 
-[ ] Step 8.2: Remove any Types from Storage Layer
+[X] Step 8.2: Remove any Types from Storage Layer
 **Task**: Replace any with proper types in PostgresStorage. This prevents runtime errors from typos and makes the code self-documenting. Quick fix without changing functionality.
 **Suggested Files for Context**: `server/storage.ts`, `shared/schema.ts`
 **Step Dependencies**: None

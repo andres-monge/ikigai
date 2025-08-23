@@ -114,19 +114,19 @@ export class PostgresStorage implements IStorage {
     insertSession: Omit<InsertAssessmentSession, "id">,
   ): Promise<HydratedAssessmentSession> {
     const now = new Date();
-    const insertData: any = {
+    const insertData = {
       sessionId: insertSession.sessionId,
       language: insertSession.language ?? 'en',
-      responses: insertSession.responses ?? null,
-      coreDriversAnalysis: insertSession.coreDriversAnalysis ?? null,
+      responses: insertSession.responses as unknown,
+      coreDriversAnalysis: insertSession.coreDriversAnalysis as unknown,
       chosenPathId: insertSession.chosenPathId ?? null,
-      actionPlan: insertSession.actionPlan ?? null,
+      actionPlan: insertSession.actionPlan as unknown,
       createdAt: now,
       updatedAt: now,
     };
     
     const [created] = await db.insert(assessmentSessions)
-      .values(insertData)
+      .values(insertData as typeof assessmentSessions.$inferInsert)
       .returning();
 
     // Return hydrated session by fetching with relations
@@ -141,10 +141,10 @@ export class PostgresStorage implements IStorage {
     sessionId: string,
     updates: Partial<InsertAssessmentSession>,
   ): Promise<HydratedAssessmentSession | undefined> {
-    const updateData: any = {
+    const updateData = {
       ...updates,
       updatedAt: new Date(),
-    };
+    } as Record<string, unknown>;
     
     const [updated] = await db.update(assessmentSessions)
       .set(updateData)
