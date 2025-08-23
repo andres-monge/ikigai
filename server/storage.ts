@@ -77,6 +77,7 @@ export interface IStorage {
   // === Purpose Path Methods ===
   createPurposePath(path: Omit<InsertPurposePath, "id">): Promise<PurposePath>;
   deletePurposePathsByAssessmentId(assessmentId: number): Promise<void>;
+  deletePurposePathById(id: number): Promise<boolean>;
 
   // === Session Management Methods ===
   deleteAssessmentSessionBySessionId(sessionId: string): Promise<boolean>;
@@ -177,6 +178,14 @@ export class PostgresStorage implements IStorage {
   async deletePurposePathsByAssessmentId(assessmentId: number): Promise<void> {
     await db.delete(purposePaths)
       .where(eq(purposePaths.assessmentId, assessmentId));
+  }
+
+  async deletePurposePathById(id: number): Promise<boolean> {
+    const [deleted] = await db.delete(purposePaths)
+      .where(eq(purposePaths.id, id))
+      .returning({ id: purposePaths.id });
+
+    return !!deleted;
   }
 
   /* ---------------- Session Management ---------------- */

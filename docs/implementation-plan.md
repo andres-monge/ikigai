@@ -80,7 +80,7 @@ Integrate this new router in `server/routes.ts` and update the `handleStartOver`
 
 ## Phase 1 Optimization: Technical Debt Prevention
 
-[ ] Step 8.1: Fix Non-Atomic Database Operations
+[X] Step 8.1: Fix Non-Atomic Database Operations
 **Task**: In server/routes/assessment.ts, wrap the delete/create operations in a try-catch to ensure we don't leave the database in an inconsistent state. If path creation fails, the session should remain unchanged. Simple approach: store paths in memory first, only delete old ones after successful creation.
 **Suggested Files for Context**: `server/routes/assessment.ts`, `server/storage.ts`
 **Step Dependencies**: None

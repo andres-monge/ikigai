@@ -56,16 +56,33 @@ assessmentRouter.post("/analyze", async (req, res, next) => {
       getPurposeDiscoveryChain(responses, language)
     );
 
-    // Clear old paths & persist fresh ones
-    await storage.deletePurposePathsByAssessmentId(session.id);
-    for (const path of analysisResult.purposePaths) {
-      const createdPath = await storage.createPurposePath({
-        assessmentId: session.id,
-        title: path.title,
-        description: path.description,
-        ikigaiAlignment: path.ikigaiAlignment,
-        actionStrategy: path.actionStrategy,
-      });
+    // Atomic operation: create new paths first, then delete old ones
+    const newPaths: PurposePath[] = [];
+    try {
+      // Create all new paths first (store in memory)
+      for (const path of analysisResult.purposePaths) {
+        const createdPath = await storage.createPurposePath({
+          assessmentId: session.id,
+          title: path.title,
+          description: path.description,
+          ikigaiAlignment: path.ikigaiAlignment,
+          actionStrategy: path.actionStrategy,
+        });
+        newPaths.push(createdPath);
+      }
+      
+      // Only delete old paths after all new ones are successfully created
+      await storage.deletePurposePathsByAssessmentId(session.id);
+    } catch (error) {
+      // If path creation fails, clean up any paths we did create
+      for (const createdPath of newPaths) {
+        try {
+          await storage.deletePurposePathById(createdPath.id);
+        } catch (cleanupError) {
+          console.error('Failed to cleanup created path during rollback:', cleanupError);
+        }
+      }
+      throw error; // Re-throw the original error
     }
 
     // Save core-driver summary
