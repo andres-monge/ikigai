@@ -22,6 +22,9 @@ import { env } from "./env.js";
 const app = express();
 const httpServer = createServer(app);
 
+// Set server timeout to 3 minutes to accommodate queued AI requests
+httpServer.timeout = 3 * 60 * 1000; // 3 minutes in milliseconds
+
 // ========= Middleware Setup =========
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));

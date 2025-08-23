@@ -22,6 +22,7 @@ import {
   type PurposePath,
 } from "@shared/schema";
 import { getPurposeDiscoveryChain, getActionPlanChain } from "../ai/chains";
+import { aiLimiter } from "../ai/limiter";
 
 export const assessmentRouter = Router();
 
@@ -50,8 +51,10 @@ assessmentRouter.post("/analyze", async (req, res, next) => {
       await storage.updateAssessmentSession(sessionId, { responses, language });
     }
 
-    // AI orchestration
-    const analysisResult = await getPurposeDiscoveryChain(responses, language);
+    // AI orchestration (with concurrency limiting)
+    const analysisResult = await aiLimiter(() => 
+      getPurposeDiscoveryChain(responses, language)
+    );
 
     // Clear old paths & persist fresh ones
     await storage.deletePurposePathsByAssessmentId(session.id);
@@ -109,10 +112,9 @@ assessmentRouter.post("/action-plan", async (req, res, next) => {
         .json({ error: "Chosen path not found for this session" });
     }
 
-    /* Generate action plan & persist */
-    const actionPlan = await getActionPlanChain(
-      chosenPath as PurposePath,
-      session.language,
+    /* Generate action plan & persist (with concurrency limiting) */
+    const actionPlan = await aiLimiter(() => 
+      getActionPlanChain(chosenPath as PurposePath, session.language)
     );
     await storage.updateAssessmentSession(sessionId, {
       actionPlan,

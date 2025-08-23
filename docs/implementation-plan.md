@@ -61,8 +61,8 @@ This phase replaces the in-memory storage with a persistent PostgreSQL implement
 
 ---
 
-[ ] Step 7: Implement Concurrency Limiter for AI Routes
-**Task**: Create a new utility file, `server/ai/limiter.ts`. Using the `p-limit` library, create and export a limiter instance (e.g., `const aiLimiter = pLimit(2);`). In `server/routes/assessment.ts`, import this limiter and wrap the core logic of every AI-powered route within it (e.g., `aiLimiter(() => getPurposeDiscoveryChain(...))`).
+[X] Step 7: Implement Concurrency Limiter for AI Routes
+**Task**: Create `server/ai/limiter.ts` with p-limit concurrency control (max 2 concurrent). Wrap AI chain calls in `server/routes/assessment.ts` with the limiter.
 **Suggested Files for Context**: `server/routes/assessment.ts`, `package.json`
 **Step Dependencies**: Step 6
 

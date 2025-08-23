@@ -1,16 +1,42 @@
 import { Sparkles } from 'lucide-react';
 import { t, type Language } from '@/lib/i18n';
+import { useState, useEffect } from 'react';
 
 interface LoadingOverlayProps {
   isVisible: boolean;
   language: Language;
+  isQueued?: boolean;
 }
 
 export function LoadingOverlay({
   isVisible,
   language,
+  isQueued = false,
 }: LoadingOverlayProps) {
+  const [showQueueMessage, setShowQueueMessage] = useState(false);
+
+  // Show queue message after 15 seconds of loading, or immediately if isQueued is true
+  useEffect(() => {
+    if (!isVisible) {
+      setShowQueueMessage(false);
+      return;
+    }
+
+    if (isQueued) {
+      setShowQueueMessage(true);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setShowQueueMessage(true);
+    }, 15000);
+
+    return () => clearTimeout(timer);
+  }, [isVisible, isQueued]);
+
   if (!isVisible) return null;
+
+  const shouldShowQueueMessage = showQueueMessage || isQueued;
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
@@ -22,7 +48,10 @@ export function LoadingOverlay({
           {t('loading.title', language)}
         </h3>
         <p className="text-slate-600">
-          {t('loading.description', language)}
+          {shouldShowQueueMessage 
+            ? t('loading.queued', language)
+            : t('loading.description', language)
+          }
         </p>
       </div>
     </div>
