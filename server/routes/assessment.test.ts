@@ -1,23 +1,30 @@
 /**
  * @description
- * Tests for the assessment routes, focusing on concurrency limiter functionality.
+ * Tests for the assessment routes, focusing on concurrency limiter functionality
+ * and atomic operations for data consistency.
  * 
- * This test suite verifies that the p-limit concurrency control works correctly
- * by simulating multiple simultaneous requests and ensuring only the expected
- * number run concurrently.
+ * This test suite verifies:
+ * - p-limit concurrency control works correctly
+ * - Atomic operations ensure data consistency when path creation fails
  */
 
 import { beforeEach, afterAll, describe, it, expect, vi } from 'vitest';
+import request from 'supertest';
+import express from 'express';
 import { eq } from 'drizzle-orm';
 import { db } from '../db.js';
 import { assessmentSessions, purposePaths } from '../../shared/schema.js';
 import type { QuestionnaireResponses } from '../../shared/schema.js';
+import { assessmentRouter } from './assessment.js';
+import { storage, PostgresStorage } from '../storage.js';
 
 // Mock the AI chains to control timing
 vi.mock('../ai/chains', () => ({
   getPurposeDiscoveryChain: vi.fn(),
   getActionPlanChain: vi.fn(),
 }));
+
+// We'll mock the storage.createPurposePath method dynamically in the test
 
 import { getPurposeDiscoveryChain, getActionPlanChain } from '../ai/chains';
 
@@ -97,6 +104,157 @@ const mockAnalysisResult = {
     }
   ]
 };
+
+// Additional mock data for atomic operations testing
+const mockAnalysisResultMultiplePaths = {
+  coreDriversAnalysis: {
+    strengths: ["Quality focus", "Problem solving"],
+    motivations: ["Bug-free software", "User satisfaction"]
+  },
+  purposePaths: [
+    {
+      title: "Senior QA Engineer",
+      description: "Lead quality assurance initiatives with automation focus",
+      actionStrategy: "Focus on automation and testing frameworks",
+      ikigaiAlignment: {
+        passion: "Testing software",
+        mission: "Quality assurance",
+        profession: "QA Engineer",
+        vocation: "Software quality"
+      }
+    },
+    {
+      title: "QA Manager",
+      description: "Manage quality assurance teams and processes",
+      actionStrategy: "Build and lead QA teams",
+      ikigaiAlignment: {
+        passion: "Process improvement",
+        mission: "Team leadership",
+        profession: "QA Management",
+        vocation: "Quality leadership"
+      }
+    }
+  ]
+};
+
+// Create a test app for route testing
+let app: express.Application;
+
+/* ------------------------------------------------------------------ */
+/*                         Route Test Setup                          */
+/* ------------------------------------------------------------------ */
+
+// Test app setup function
+function createTestApp() {
+  const testApp = express();
+  testApp.use(express.json());
+  testApp.use('/api', assessmentRouter);
+  
+  // Add error handler for test app
+  testApp.use((err: any, _req: any, res: any, _next: any) => {
+    res.status(500).json({ 
+      error: err.message || 'Internal server error',
+      details: err.stack 
+    });
+  });
+  
+  return testApp;
+}
+
+/* ------------------------------------------------------------------ */
+/*                         Atomic Operations Tests                   */
+/* ------------------------------------------------------------------ */
+
+describe('Assessment Routes - Atomic Operations', () => {
+
+  beforeEach(async () => {
+    // Create fresh test app for each test
+    app = createTestApp();
+  });
+
+  it('should preserve old paths when new path creation fails (atomic behavior)', async () => {
+    const atomicTestSessionId = 'atomic-test-' + Math.random().toString(36) + '-' + Date.now();
+    
+    // 1. Create session with existing purpose paths
+    const session = await storage.createAssessmentSession({
+      sessionId: atomicTestSessionId,
+      language: 'en',
+      responses: testSessionData.responses
+    });
+
+    // Add existing purpose paths that should be preserved
+    await storage.createPurposePath({
+      assessmentId: session.id,
+      title: "Existing QA Role",
+      description: "Current quality assurance position",
+      ikigaiAlignment: { passion: "Testing" },
+      actionStrategy: "Current approach"
+    });
+
+    await storage.createPurposePath({
+      assessmentId: session.id,
+      title: "Existing Dev Role", 
+      description: "Current development position",
+      ikigaiAlignment: { passion: "Coding" },
+      actionStrategy: "Development approach"
+    });
+
+    // Verify existing paths are in database
+    const beforeSession = await storage.getAssessmentSessionBySessionId(atomicTestSessionId);
+    expect(beforeSession?.purposePaths).toHaveLength(2);
+
+    // 2. Mock AI to return multiple new paths
+    (getPurposeDiscoveryChain as any).mockResolvedValue(mockAnalysisResultMultiplePaths);
+
+    // 3. Spy on storage.createPurposePath to fail after first success
+    let createCallCount = 0;
+    const originalCreatePurposePath = storage.createPurposePath.bind(storage);
+    
+    const createSpy = vi.spyOn(storage, 'createPurposePath').mockImplementation(async (pathData: any) => {
+      createCallCount++;
+      if (createCallCount === 1) {
+        // First call succeeds - create the path using original method
+        return await originalCreatePurposePath(pathData);
+      } else {
+        // Second call fails
+        throw new Error('Database connection error during path creation');
+      }
+    });
+
+    // 4. Make request that should trigger atomic failure
+    const response = await request(app)
+      .post('/api/analyze')
+      .send({
+        sessionId: atomicTestSessionId,
+        responses: testSessionData.responses,
+        language: 'en'
+      });
+
+    // 5. Verify error response includes debugging information
+    expect(response.status).toBe(500);
+    expect(response.body.error).toBe('Database connection error during path creation');
+    expect(response.body.details).toBeDefined();
+    expect(createCallCount).toBe(2); // Verify both path creations were attempted
+
+    // 6. Verify atomic behavior: old paths should still exist
+    const afterSession = await storage.getAssessmentSessionBySessionId(atomicTestSessionId);
+    expect(afterSession?.purposePaths).toHaveLength(2);
+    
+    // Verify the original paths are still there
+    const pathTitles = afterSession?.purposePaths.map(p => p.title) || [];
+    expect(pathTitles).toContain("Existing QA Role");
+    expect(pathTitles).toContain("Existing Dev Role");
+    
+    // Verify no new paths were left behind
+    expect(pathTitles).not.toContain("Senior QA Engineer");
+    expect(pathTitles).not.toContain("QA Manager");
+
+    // Cleanup
+    createSpy.mockRestore();
+    await storage.deleteAssessmentSessionBySessionId(atomicTestSessionId);
+  });
+
+});
 
 /* ------------------------------------------------------------------ */
 /*                         Concurrency Tests                         */

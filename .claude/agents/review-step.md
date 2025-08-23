@@ -1,5 +1,5 @@
 ---
-name: step-reviewer
+name: review-step
 description: Thoroughly reviews implementation of specific steps from the implementation plan. Identifies issues without fixing them, focusing on code quality, functionality, and MVP requirements.
 tools: Read, Glob, Grep, mcp__context7__resolve-library-id, mcp__context7__get-library-docs
 ---
