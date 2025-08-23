@@ -45,11 +45,21 @@ export interface GeminiTool {
   googleSearch?: object; // An empty object enables Google Search.
 }
 
+/** Simple JSON schema representation for OpenAPI-like schemas */
+export type JsonSchemaLike = {
+  type?: string; // Allow any string type (more flexible than enum)
+  properties?: Record<string, JsonSchemaLike>;
+  items?: JsonSchemaLike;
+  description?: string;
+  required?: readonly string[] | string[]; // Allow both readonly and mutable arrays
+  [key: string]: unknown; // Allow other schema properties
+};
+
 /** Configuration options for content generation. */
 export interface GeminiGenerationConfig {
   temperature?: number;
   responseMimeType?: 'application/json' | 'text/plain';
-  responseSchema?: any;
+  responseSchema?: JsonSchemaLike;
 }
 
 /** The request body sent to the `generateContent` endpoint. */

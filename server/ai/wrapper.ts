@@ -23,9 +23,13 @@
  */
 
 /* ────────────────────────────────────────────────────────────────────────── */
-/* Import Type Definitions (moved to ./types.ts for better organization)      */
+/* Import Type Definitions and Official SDK                                   */
 /* ────────────────────────────────────────────────────────────────────────── */
 
+// Official Google GenAI SDK
+import { GoogleGenAI, GenerateContentResponse, type Candidate } from '@google/genai';
+
+// Our custom type definitions for backward compatibility
 import type {
   GeminiPart,
   GeminiContent,
@@ -48,134 +52,98 @@ import { env } from '../env.js';
 export const GEMINI_REASONING_MODEL = env.GEMINI_REASONING_MODEL;
 export const GEMINI_FACTS_MODEL = env.GEMINI_FACTS_MODEL;
 
-// === CHANGED: Shortened BASE_URL to accommodate full model path from .env ===
-const BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
+// Create singleton GoogleGenAI instance
+const ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
+
+// === LEGACY (no longer used): Base URL for manual API calls ===
+// const BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
+
+/**
+ * Normalizes model ID by removing 'models/' prefix if present.
+ * The SDK expects model IDs without the prefix (e.g., 'gemini-2.0-flash' not 'models/gemini-2.0-flash').
+ */
+function normalizeModelId(model: string): string {
+  return model.startsWith('models/') ? model.slice(7) : model;
+}
 
 /* ────────────────────────────────────────────────────────────────────────── */
-/* Internal Utilities                                                         */
+/* Type Definitions & Guards                                                  */
 /* ────────────────────────────────────────────────────────────────────────── */
 
 /**
- * A promise-based sleep function for implementing delays.
- * @param {number} ms - The number of milliseconds to sleep.
+ * Minimal type definition for SDK parameters to avoid 'any'
  */
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+type SdkGenerateContentParams = {
+  model: string;
+  contents: GeminiContent[];
+  config?: {
+    tools?: GeminiTool[];
+    temperature?: number;
+    maxOutputTokens?: number;
+    topP?: number;
+    topK?: number;
+    responseMimeType?: string;
+    responseSchema?: any;
+  };
+};
 
 /**
- * The core, private function for making requests to the Gemini API with a retry mechanism.
- * @param {string} model - The specific model to query (e.g., 'gemini-1.5-flash').
- * @param {GeminiGenerateContentRequest} body - The full request body for the Gemini API.
- * @param {number} [maxRetries=3] - The maximum number of times to retry on failure.
- * @returns {Promise<GeminiGenerateContentResponse>} The response from the Gemini API.
- * @throws {Error} Throws an error if the request fails after all retries.
+ * Type guard to validate SDK response shape more thoroughly
  */
-async function _generateWithRetry(
-  model: string,
-  body: GeminiGenerateContentRequest,
-  maxRetries = 3,
-): Promise<GeminiGenerateContentResponse> {
-  // The `model` variable now correctly contains the full path e.g., "models/gemini-2.5-flash"
-  const finalModel = model.startsWith('models/') ? model : `models/${model}`;
-  const url = `${BASE_URL}/${finalModel}:generateContent?key=${env.GEMINI_API_KEY}`;
-
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-
-      if (!res.ok) {
-        const errorBody = await res.text();
-        throw new Error(
-          `Gemini API request failed with status ${res.status} ${res.statusText}: ${errorBody}`,
-        );
-      }
-
-      const jsonResponse =
-        (await res.json()) as GeminiGenerateContentResponse;
-      if (!jsonResponse.candidates || jsonResponse.candidates.length === 0) {
-        console.warn('Gemini response contained no candidates.', {
-          promptFeedback: jsonResponse.promptFeedback,
-        });
-      }
-      return jsonResponse;
-    } catch (error) {
-      console.error(`Gemini API attempt ${attempt} failed:`, error);
-      if (attempt === maxRetries) {
-        throw error;
-      }
-      await sleep(1000 * 2 ** (attempt - 1));
+function isValidGenerateContentResponse(value: unknown): value is GeminiGenerateContentResponse {
+  const response = value as GenerateContentResponse;
+  
+  if (!response || !Array.isArray(response.candidates)) {
+    return false;
+  }
+  
+  // Validate that each candidate has the expected structure
+  for (const candidate of response.candidates) {
+    if (!candidate.content || !Array.isArray(candidate.content.parts)) {
+      return false;
     }
   }
-  throw new Error('Gemini request failed after all retries.');
+  
+  return true;
 }
 
 /**
- * A private, core function for making streaming requests to the Gemini API.
- * @param model - The specific model to query.
- * @param body - The request body for the Gemini API.
- * @returns An async iterator that yields response chunks.
+ * Simple error normalization for SDK errors
  */
-async function* _generateStreamWithRetry(
-  model: string,
-  body: GeminiGenerateContentRequest,
-  maxRetries = 1, // Retries are more complex with streams, so keep it simple
-): AsyncGenerator<GeminiGenerateContentResponse, void, undefined> {
-  const finalModel = model.startsWith('models/') ? model : `models/${model}`;
-  const url = `${BASE_URL}/${finalModel}:streamGenerateContent?key=${env.GEMINI_API_KEY}`;
-
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-
-      if (!res.ok || !res.body) {
-        const errorBody = await res.text();
-        throw new Error(
-          `Gemini API stream request failed with status ${res.status} ${res.statusText}: ${errorBody}`,
-        );
-      }
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) {
-          return; // Stream finished
-        }
-        const chunk = decoder.decode(value);
-        // The Gemini stream sends multiple JSON objects, often prefixed with "data: ".
-        // We need to handle this framing.
-        const lines = chunk.split('\n');
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const jsonStr = line.substring(5);
-            try {
-              const parsed = JSON.parse(
-                jsonStr,
-              ) as GeminiGenerateContentResponse;
-              yield parsed;
-            } catch (e) {
-              console.warn('Could not parse stream chunk as JSON:', jsonStr);
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.error(`Gemini Stream API attempt ${attempt} failed:`, error);
-      if (attempt === maxRetries) {
-        throw error;
-      }
-      await sleep(1000 * 2 ** (attempt - 1));
-    }
+function normalizeSdkError(error: unknown, context: string): Error {
+  if (error instanceof Error) {
+    const enhancedError = new Error(`Google GenAI SDK error (${context}): ${error.message}`);
+    enhancedError.cause = error;
+    return enhancedError;
   }
+  
+  return new Error(`Google GenAI SDK error (${context}): ${String(error)}`);
 }
+
+/**
+ * Safely converts SDK response to our expected interface
+ */
+function convertSdkResponse(sdkResponse: GenerateContentResponse): GeminiGenerateContentResponse {
+  if (!isValidGenerateContentResponse(sdkResponse)) {
+    throw new Error('SDK returned response with invalid structure (missing candidates array)');
+  }
+  
+  // Simple type bridge: SDK and our interfaces are compatible
+  // Both follow the same Gemini API specification
+  return {
+    candidates: sdkResponse.candidates as unknown as GeminiGenerateContentResponse['candidates'],
+    promptFeedback: sdkResponse.promptFeedback,
+  };
+}
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/* Legacy Internal Functions - REMOVED (now using official SDK)              */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+// The following functions have been replaced by the official @google/genai SDK:
+// - sleep(): No longer needed as SDK handles retries internally
+// - _generateWithRetry(): Replaced by ai.models.generateContent()
+// - _generateStreamWithRetry(): Replaced by ai.models.generateContentStream()
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /* Public API Client Functions                                                */
@@ -198,12 +166,35 @@ export async function generateContent(
   tools?: GeminiTool[],
   generationConfig?: GeminiGenerationConfig,
 ): Promise<GeminiGenerateContentResponse> {
-  const requestBody: GeminiGenerateContentRequest = {
-    contents,
-    tools,
-    generationConfig,
+  const normalizedModel = normalizeModelId(model);
+  
+  // Build typed parameters for SDK
+  const sdkParams: SdkGenerateContentParams = {
+    model: normalizedModel,
+    contents: contents,
+    config: {
+      ...generationConfig,
+      tools: tools,
+    },
   };
-  return _generateWithRetry(model, requestBody);
+  
+  try {
+    const response = await ai.models.generateContent(sdkParams);
+    
+    // Convert SDK response safely with validation
+    const convertedResponse = convertSdkResponse(response);
+    
+    // Basic validation for critical fields
+    if (!convertedResponse.candidates || convertedResponse.candidates.length === 0) {
+      console.warn('SDK response contained no candidates.', {
+        promptFeedback: convertedResponse.promptFeedback,
+      });
+    }
+    
+    return convertedResponse;
+  } catch (error) {
+    throw normalizeSdkError(error, 'generateContent');
+  }
 }
 
 /**
@@ -217,11 +208,22 @@ export async function generateContent(
 export async function generateContentWithSearch(
   contents: GeminiContent[],
 ): Promise<GeminiGenerateContentResponse> {
-  const requestBody: GeminiGenerateContentRequest = {
-    contents,
-    tools: [{ googleSearch: {} }],
+  const normalizedModel = normalizeModelId(GEMINI_FACTS_MODEL);
+  
+  const sdkParams: SdkGenerateContentParams = {
+    model: normalizedModel,
+    contents: contents,
+    config: {
+      tools: [{ googleSearch: {} }],
+    },
   };
-  return _generateWithRetry(GEMINI_FACTS_MODEL, requestBody);
+  
+  try {
+    const response = await ai.models.generateContent(sdkParams);
+    return convertSdkResponse(response);
+  } catch (error) {
+    throw normalizeSdkError(error, 'generateContentWithSearch');
+  }
 }
 
 /**
@@ -240,21 +242,27 @@ export async function* generateContentStream(
   tools?: GeminiTool[],
   generationConfig?: GeminiGenerationConfig,
 ): AsyncGenerator<string, void, undefined> {
-  const requestBody: GeminiGenerateContentRequest = {
-    contents,
-    tools,
-    generationConfig,
+  const normalizedModel = normalizeModelId(model);
+  
+  const sdkParams: SdkGenerateContentParams = {
+    model: normalizedModel,
+    contents: contents,
+    config: {
+      ...generationConfig,
+      tools: tools,
+    },
   };
-
-  const stream = _generateStreamWithRetry(model, requestBody);
-
-  for await (const chunk of stream) {
-    const candidate = chunk.candidates?.[0] as any;
-    const text =
-      candidate?.content?.parts?.[0]?.text ??
-      candidate?.delta?.parts?.[0]?.text;
-    if (text) {
-      yield text;
+  
+  try {
+    const responseStream = await ai.models.generateContentStream(sdkParams);
+    
+    for await (const chunk of responseStream) {
+      // SDK provides convenient .text property on chunks
+      if (chunk.text) {
+        yield chunk.text;
+      }
     }
+  } catch (error) {
+    throw normalizeSdkError(error, 'generateContentStream');
   }
 }
