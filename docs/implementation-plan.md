@@ -68,7 +68,7 @@ This phase replaces the in-memory storage with a persistent PostgreSQL implement
 
 ---
 
-[X] Step 8: Implement Session Management Endpoints
+[X] Step 8.0: Implement Session Management Endpoints
 **Task**: Create a new API route file `server/routes/session.ts`. Add two endpoints:
 1.  A `GET /api/session/:sessionId` endpoint that retrieves and returns the fully hydrated session data from the Postgres database.
 2.  A `POST /api/session/start-over` endpoint that finds and deletes all data associated with a `sessionId` from the relevant database tables.
@@ -95,7 +95,7 @@ This phase refactors the AI chains and endpoints to support word-by-word streami
 [ ] Step 9: COMPLEX: Implement Word-by-Word Streaming for Purpose Discovery
 **Task**: Create `server/ai/chains/purpose-discovery.stream.chain.ts`. The main generator function will orchestrate a continuous text stream. Update the prompt in `server/ai/prompts.ts` to instruct the model to generate the Core Drivers Analysis and each Purpose Path separated by clear delimiters (e.g., `[SECTION:CORE_DRIVERS]...text...[END_SECTION]`). In `server/routes/assessment.ts`, update the `/api/analyze/stream` endpoint to pipe raw text chunks from `generateContentStream` to the client as Server-Sent Events (SSE), while also assembling the full text on the server to save to the database upon completion.
 **Suggested Files for Context**: `server/ai/prompts.ts`, `server/ai/wrapper.ts`, `server/routes/assessment.ts`, `server/storage.ts`
-**Step Dependencies**: Step 8
+**Step Dependencies**: Step 8.0
 
 ---
 

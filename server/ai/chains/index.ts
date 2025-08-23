@@ -7,4 +7,5 @@
  */
 
 export { getPurposeDiscoveryChain } from './purpose-discovery.chain';
+export { getPurposeDiscoveryStreamChain } from './purpose-discovery.stream.chain';
 export { getActionPlanChain } from './action-plan.chain'; 
