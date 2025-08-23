@@ -217,7 +217,10 @@ export const actionPlanRequestSchema = z.object({
 });
 export type ActionPlanRequest = z.infer<typeof actionPlanRequestSchema>;
 
-
+export const startOverRequestSchema = z.object({
+  sessionId: z.string().min(1),
+});
+export type StartOverRequest = z.infer<typeof startOverRequestSchema>;
 
 /**
  * Generic ActionState helper for API responses.

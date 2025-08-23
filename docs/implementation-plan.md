@@ -68,7 +68,7 @@ This phase replaces the in-memory storage with a persistent PostgreSQL implement
 
 ---
 
-[ ] Step 8: Implement Session Management Endpoints
+[X] Step 8: Implement Session Management Endpoints
 **Task**: Create a new API route file `server/routes/session.ts`. Add two endpoints:
 1.  A `GET /api/session/:sessionId` endpoint that retrieves and returns the fully hydrated session data from the Postgres database.
 2.  A `POST /api/session/start-over` endpoint that finds and deletes all data associated with a `sessionId` from the relevant database tables.

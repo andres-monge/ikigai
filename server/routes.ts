@@ -13,6 +13,7 @@
 import type { Express } from "express";
 import { Router } from "express";
 import { assessmentRouter } from "./routes/assessment";
+import { sessionRouter } from "./routes/session";
 
 /**
  * Registers all API routes with the provided Express application instance.
@@ -23,6 +24,7 @@ export function registerRoutes(app: Express): void {
 
   // Mount feature-specific routers
   apiRouter.use(assessmentRouter);
+  apiRouter.use(sessionRouter);
 
   // Mount the main API router under the /api prefix
   app.use("/api", apiRouter);

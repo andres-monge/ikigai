@@ -62,8 +62,25 @@ setSessionId(newId);
 /**
 * Clears current session data and kicks the user back to the landing page.
 * Used by the Results page's "Start Over" button.
+*
+* ✨ Step 8 Enhancement ✨
+* Now calls the API to delete server-side data before clearing local state.
 */
-const handleStartOver = () => {
+const handleStartOver = async () => {
+// Call API to delete server-side session data
+try {
+  await fetch('/api/session/start-over', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sessionId }),
+    credentials: 'include'
+  });
+} catch (error) {
+  // Log error but continue - don't block user from resetting
+  console.error('Failed to clear server session data:', error);
+}
+
+// Always reset local state regardless of API result
 setSession(null);
 // Generate a brand-new session id to avoid contaminating a new run
 const newId =

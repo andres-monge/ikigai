@@ -18,11 +18,11 @@ export default defineConfig({
       '**/dist/**',
       '**/tests/**', // E2E tests handled by Playwright
     ],
-    // Use pool configuration for different environments instead of deprecated environmentMatchGlobs
+    // Force sequential execution for database tests to avoid conflicts
     pool: 'threads',
     poolOptions: {
       threads: {
-        singleThread: false,
+        singleThread: true, // Run tests sequentially to avoid database conflicts
       },
     },
   },

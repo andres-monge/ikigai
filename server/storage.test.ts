@@ -184,6 +184,27 @@ describe('PostgresStorage - Assessment Sessions', () => {
     
     expect(updated).toBeUndefined();
   });
+
+  it('should delete assessment session by sessionId and return true when session exists', async () => {
+    const created = await storage.createAssessmentSession(testSessionData);
+    
+    // Verify it exists
+    const beforeDelete = await storage.getAssessmentSessionBySessionId(testSessionData.sessionId);
+    expect(beforeDelete).toBeDefined();
+    
+    // Delete it
+    const wasDeleted = await storage.deleteAssessmentSessionBySessionId(testSessionData.sessionId);
+    expect(wasDeleted).toBe(true);
+    
+    // Verify it's gone
+    const afterDelete = await storage.getAssessmentSessionBySessionId(testSessionData.sessionId);
+    expect(afterDelete).toBeUndefined();
+  });
+
+  it('should return false when deleting non-existent session', async () => {
+    const wasDeleted = await storage.deleteAssessmentSessionBySessionId('non-existent-session');
+    expect(wasDeleted).toBe(false);
+  });
 });
 
 /* ------------------------------------------------------------------ */
