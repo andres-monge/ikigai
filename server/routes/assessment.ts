@@ -27,6 +27,7 @@ import { aiLimiter } from "../ai/limiter";
 import { getYoutubeVideosForSkills } from "../services/youtube";
 import { parsePurposeDiscoveryStreamedText } from "../ai/parsers/purpose-discovery.parser";
 import { parseActionPlanStreamedText, parseMilestoneSection } from "../ai/parsers/action-plan.parser";
+import { setSseHeaders, writeSseData, writeSseEvent, setupSseCleanup, writeSseError, SSE_EVENTS } from "../utils/sse";
 
 export const assessmentRouter = Router();
 
@@ -141,27 +142,15 @@ assessmentRouter.get("/analyze/stream", async (req, res) => {
     }
 
     // Set up Server-Sent Events headers
-    res.writeHead(200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Headers': 'Cache-Control',
-    });
+    setSseHeaders(res);
 
     // Send initial connection confirmation
-    res.write('data: [STREAM_START]\n\n');
+    writeSseEvent(res, SSE_EVENTS.STREAM_START);
 
     let fullText = '';
 
     // Handle client disconnect
-    const cleanup = () => {
-      activeStreams.delete(sessionId);
-    };
-
-    req.on('close', cleanup);
-    req.on('aborted', cleanup);
-    res.on('close', cleanup);
+    setupSseCleanup(req, res, sessionId, activeStreams);
 
     try {
       // Validate that responses has the correct structure
@@ -179,11 +168,11 @@ assessmentRouter.get("/analyze/stream", async (req, res) => {
         fullText += chunk;
         
         // Send chunk to client using SSE format
-        res.write(`data: ${chunk}\n\n`);
+        writeSseData(res, chunk);
       }
 
       // Stream completed successfully - now parse and save to database
-      res.write('data: [STREAM_END]\n\n');
+      writeSseEvent(res, SSE_EVENTS.STREAM_END);
       
       // Parse the complete streamed text
       const parsedData = parsePurposeDiscoveryStreamedText(fullText);
@@ -216,7 +205,7 @@ assessmentRouter.get("/analyze/stream", async (req, res) => {
             coreDriversAnalysis: parsedData.coreDriversAnalysis,
           });
           
-          res.write('data: [SAVE_SUCCESS]\n\n');
+          writeSseEvent(res, SSE_EVENTS.SAVE_SUCCESS);
         } catch (saveError) {
           // Rollback any created paths
           for (const createdPath of newPaths) {
@@ -234,7 +223,7 @@ assessmentRouter.get("/analyze/stream", async (req, res) => {
 
     } catch (error) {
       console.error('Streaming error:', error);
-      res.write(`data: [ERROR] ${error instanceof Error ? error.message : 'Unknown error'}\n\n`);
+      writeSseError(res, error instanceof Error ? error : 'Unknown error');
     }
 
     res.end();
@@ -356,26 +345,15 @@ assessmentRouter.get("/action-plan/stream", async (req, res) => {
     }
     
     // Set up Server-Sent Events headers
-    res.writeHead(200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Headers': 'Cache-Control',
-    });
+    setSseHeaders(res);
     
     // Send initial connection confirmation
-    res.write('data: [STREAM_START]\n\n');
+    writeSseEvent(res, SSE_EVENTS.STREAM_START);
     
     let fullText = '';
     
     // Handle client disconnect
-    const cleanup = () => {
-      activeStreams.delete(sessionId);
-    };
-    req.on('close', cleanup);
-    req.on('aborted', cleanup);
-    res.on('close', cleanup);
+    setupSseCleanup(req, res, sessionId, activeStreams);
     
     try {
       // Start streaming with concurrency limiting
@@ -388,18 +366,18 @@ assessmentRouter.get("/action-plan/stream", async (req, res) => {
         fullText += chunk;
         
         // Send chunk to client using SSE format
-        res.write(`data: ${chunk}\n\n`);
+        writeSseData(res, chunk);
       }
       
       // Stream completed successfully
-      res.write('data: [STREAM_END]\n\n');
+      writeSseEvent(res, SSE_EVENTS.STREAM_END);
       
       // Parse the complete streamed text
       const parsedData = parseActionPlanStreamedText(fullText);
       
       if (parsedData) {
         // Start enrichment phase - fetch YouTube videos
-        res.write('data: [ENRICH_START]\n\n');
+        writeSseEvent(res, SSE_EVENTS.ENRICH_START);
         
         // Extract all unique skills across milestones
         const allSkills = new Set<string>();
@@ -436,13 +414,13 @@ assessmentRouter.get("/action-plan/stream", async (req, res) => {
           chosenPathId: chosenPath.id,
         });
         
-        res.write('data: [SAVE_SUCCESS]\n\n');
+        writeSseEvent(res, SSE_EVENTS.SAVE_SUCCESS);
       } else {
         throw new Error('Failed to parse streamed response');
       }
     } catch (error) {
       console.error('Streaming error:', error);
-      res.write(`data: [ERROR] ${error instanceof Error ? error.message : 'Unknown error'}\n\n`);
+      writeSseError(res, error instanceof Error ? error : 'Unknown error');
     }
     
     res.end();

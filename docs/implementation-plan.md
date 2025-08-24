@@ -178,7 +178,7 @@ This phase refactors the AI chains and endpoints to support word-by-word streami
     - Suggested Files for Context: server/routes/assessment.ts, shared/schema.ts
     - Step Dependencies: None
 
-[ ] Step 12.2: Create SSE Utilities Module
+[X] Step 12.2: Create SSE Utilities Module
     - Task: Create server/utils/sse.ts with helpers: setSseHeaders(res), writeSseData(res, chunk), writeSseEvent(res, event: string). Define event constants (STREAM_START, STREAM_END, ENRICH_START, SAVE_SUCCESS, ERROR). Replace duplicated SSE logic in streaming endpoints.
     - Suggested Files for Context: server/routes/assessment.ts
     - Step Dependencies: None
