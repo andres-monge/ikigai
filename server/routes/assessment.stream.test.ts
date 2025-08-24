@@ -52,6 +52,9 @@ beforeEach(async () => {
   
   // Reset all mocks
   vi.clearAllMocks();
+  
+  // Explicitly reset YouTube service mock to ensure consistency
+  (getYoutubeVideosForSkills as any).mockReset();
 });
 
 afterAll(async () => {
@@ -556,6 +559,7 @@ const mockActionPlanStreamChunks = [
 
 /**
  * Mock YouTube video data that the service would return for each skill.
+ * Uses realistic YouTube URL patterns for better production matching.
  */
 const mockYouTubeVideoData = [
   {
@@ -563,13 +567,13 @@ const mockYouTubeVideoData = [
     videos: [
       {
         title: 'React Tutorial for Beginners',
-        url: 'https://youtube.com/watch?v=react-tutorial-1',
-        thumbnailUrl: 'https://img.youtube.com/vi/react-tutorial-1/mqdefault.jpg'
+        url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        thumbnailUrl: 'https://img.youtube.com/vi/dQw4w9WgXcQ/mqdefault.jpg'
       },
       {
         title: 'Complete React Course 2024',
-        url: 'https://youtube.com/watch?v=react-course-2024',
-        thumbnailUrl: 'https://img.youtube.com/vi/react-course-2024/mqdefault.jpg'
+        url: 'https://www.youtube.com/watch?v=SqcY0GlETPk',
+        thumbnailUrl: 'https://img.youtube.com/vi/SqcY0GlETPk/mqdefault.jpg'
       }
     ]
   },
@@ -578,8 +582,8 @@ const mockYouTubeVideoData = [
     videos: [
       {
         title: 'ES6+ Features Explained',
-        url: 'https://youtube.com/watch?v=es6-features',
-        thumbnailUrl: 'https://img.youtube.com/vi/es6-features/mqdefault.jpg'
+        url: 'https://www.youtube.com/watch?v=oEX2yKr8Wxo',
+        thumbnailUrl: 'https://img.youtube.com/vi/oEX2yKr8Wxo/mqdefault.jpg'
       }
     ]
   },
@@ -588,8 +592,8 @@ const mockYouTubeVideoData = [
     videos: [
       {
         title: 'Redux vs Context API',
-        url: 'https://youtube.com/watch?v=state-management',
-        thumbnailUrl: 'https://img.youtube.com/vi/state-management/mqdefault.jpg'
+        url: 'https://www.youtube.com/watch?v=OvM4hIxrqAw',
+        thumbnailUrl: 'https://img.youtube.com/vi/OvM4hIxrqAw/mqdefault.jpg'
       }
     ]
   },
@@ -598,8 +602,8 @@ const mockYouTubeVideoData = [
     videos: [
       {
         title: 'Fetch API vs Axios',
-        url: 'https://youtube.com/watch?v=api-integration',
-        thumbnailUrl: 'https://img.youtube.com/vi/api-integration/mqdefault.jpg'
+        url: 'https://www.youtube.com/watch?v=6LyagkoRWYA',
+        thumbnailUrl: 'https://img.youtube.com/vi/6LyagkoRWYA/mqdefault.jpg'
       }
     ]
   },
@@ -608,8 +612,8 @@ const mockYouTubeVideoData = [
     videos: [
       {
         title: 'MERN Stack Tutorial',
-        url: 'https://youtube.com/watch?v=mern-stack',
-        thumbnailUrl: 'https://img.youtube.com/vi/mern-stack/mqdefault.jpg'
+        url: 'https://www.youtube.com/watch?v=7CqJlxBYj-M',
+        thumbnailUrl: 'https://img.youtube.com/vi/7CqJlxBYj-M/mqdefault.jpg'
       }
     ]
   },
@@ -618,8 +622,8 @@ const mockYouTubeVideoData = [
     videos: [
       {
         title: 'How to Contribute to Open Source',
-        url: 'https://youtube.com/watch?v=open-source-guide',
-        thumbnailUrl: 'https://img.youtube.com/vi/open-source-guide/mqdefault.jpg'
+        url: 'https://www.youtube.com/watch?v=yzeVMecydCE',
+        thumbnailUrl: 'https://img.youtube.com/vi/yzeVMecydCE/mqdefault.jpg'
       }
     ]
   }
@@ -724,7 +728,7 @@ describe('Action Plan Streaming Endpoint - /api/action-plan/stream', () => {
     expect(reactSkill).toBeDefined();
     expect(reactSkill!.youtubeLinks).toHaveLength(2);
     expect(reactSkill!.youtubeLinks[0].title).toBe('React Tutorial for Beginners');
-    expect(reactSkill!.youtubeLinks[0].url).toBe('https://youtube.com/watch?v=react-tutorial-1');
+    expect(reactSkill!.youtubeLinks[0].url).toBe('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
   });
 
   it('should prevent concurrent streams for the same session (real HTTP server)', async () => {
@@ -908,6 +912,72 @@ describe('Action Plan Streaming Endpoint - /api/action-plan/stream', () => {
     expect(errorEvent).toContain('Action plan generation failed');
 
     // 6. Verify database was not updated with partial data
+    const sessionAfterError = await storage.getAssessmentSessionBySessionId(sessionId);
+    expect(sessionAfterError!.actionPlan).toBeNull();
+    expect(sessionAfterError!.chosenPathId).toBeNull();
+  });
+
+  it('should handle YouTube enrichment failures gracefully', async () => {
+    // 1. Create a test session with purpose paths
+    const sessionId = 'youtube-error-' + Date.now();
+    const testSession = await storage.createAssessmentSession({
+      sessionId,
+      language: 'en',
+      responses: testResponses,
+      coreDriversAnalysis: {
+        statementSentence: 'You are driven by the desire to create meaningful software.',
+        coreThreads: 'Problem-solving, technical excellence, user impact.'
+      }
+    });
+
+    const purposePath = await storage.createPurposePath({
+      assessmentId: testSession.id,
+      title: 'Senior Full-Stack Developer',
+      description: 'Lead development of complex web applications.',
+      ikigaiAlignment: {
+        love: 'Building user interfaces',
+        goodAt: 'Full-stack development',
+        worldNeeds: 'Better software',
+        pay: '$120,000-$150,000'
+      },
+      actionStrategy: 'Focus on modern frameworks.'
+    });
+
+    // 2. Mock successful streaming but failing YouTube enrichment
+    (getActionPlanStreamChain as any).mockImplementation(async function*() {
+      yield '[SECTION:MILESTONE_1]';
+      yield '[TITLE]Build Foundation[/TITLE]';
+      yield '[TIMELINE]Weeks 1-2[/TIMELINE]';
+      yield '[ACTIONS]• Learn React basics[/ACTIONS]';
+      yield '[SKILLS][SKILL]React fundamentals[/SKILL][/SKILLS]';
+      yield '[END_SECTION]';
+    });
+
+    // 3. Mock YouTube service to throw an error during enrichment
+    (getYoutubeVideosForSkills as any).mockImplementation(async () => {
+      throw new Error('YouTube API rate limit exceeded');
+    });
+
+    // 4. Make the streaming request
+    const response = await request(app)
+      .get('/api/action-plan/stream')
+      .query({ sessionId, chosenPathId: purposePath.id })
+      .expect(200);
+
+    // 5. Parse the SSE events
+    const events = parseSSEEvents(response.text);
+    
+    // 6. Verify streaming completed but enrichment failed
+    expect(events[0]).toBe('[STREAM_START]');
+    expect(events).toContain('[STREAM_END]');
+    expect(events).toContain('[ENRICH_START]');
+    
+    // Should contain an error event for enrichment failure
+    const errorEvent = events.find(event => event.startsWith('[ERROR]'));
+    expect(errorEvent).toBeDefined();
+    expect(errorEvent).toContain('YouTube API rate limit exceeded');
+
+    // 7. Verify streaming data was NOT persisted due to enrichment failure
     const sessionAfterError = await storage.getAssessmentSessionBySessionId(sessionId);
     expect(sessionAfterError!.actionPlan).toBeNull();
     expect(sessionAfterError!.chosenPathId).toBeNull();
