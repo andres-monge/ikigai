@@ -66,7 +66,6 @@ export const translations: Record<string, Record<string, string>> = {
     // Loading
     'loading.title': 'Our AIs are cooking.',
     'loading.description': 'This will only take a minute.',
-    'loading.queued': 'High demand! You\'re in a short queue...',
 
     // Common
     'common.error': 'Something went wrong. Please try again.',
@@ -121,7 +120,6 @@ export const translations: Record<string, Record<string, string>> = {
     // Loading
     'loading.title': 'Las IAs están cocinando',
     'loading.description': 'Tardará un minuto.',
-    'loading.queued': '¡Alta demanda! Estás en una breve cola...',
 
     // Common
     'common.error': 'Algo salió mal. Por favor inténtalo de nuevo.',
