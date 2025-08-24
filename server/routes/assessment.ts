@@ -414,7 +414,7 @@ assessmentRouter.get("/action-plan/stream", async (req, res) => {
   
   try {
     // Get the session data
-    const session = await storage.getAssessmentSessionBySessionId(sessionId) as HydratedAssessmentSession | undefined;
+    const session = await storage.getAssessmentSessionBySessionId(sessionId);
     if (!session) {
       return res.status(404).json({ error: "Session not found" });
     }
@@ -557,6 +557,51 @@ assessmentRouter.get("/action-plan/stream", async (req, res) => {
 });
 
 /**
+ * Parses individual milestone sections from delimited text.
+ */
+function parseMilestoneSection(milestoneSection: string) {
+  const titleMatch = milestoneSection.match(/\[TITLE\]([\s\S]*?)\[\/TITLE\]/);
+  const timelineMatch = milestoneSection.match(/\[TIMELINE\]([\s\S]*?)\[\/TIMELINE\]/);
+  const actionsMatch = milestoneSection.match(/\[ACTIONS\]([\s\S]*?)\[\/ACTIONS\]/);
+  const skillsMatch = milestoneSection.match(/\[SKILLS\]([\s\S]*?)\[\/SKILLS\]/);
+  
+  if (!titleMatch || !timelineMatch || !actionsMatch) {
+    return null; // Required fields missing
+  }
+  
+  // Parse actions - split by bullet points and clean up
+  const actionsText = actionsMatch[1].trim();
+  const actions = actionsText
+    .split('\n')
+    .map(line => line.replace(/^[•\-\*]\s*/, '').trim())
+    .filter(line => line.length > 0);
+  
+  // Parse skills
+  const skills: Array<{ skill: string; youtubeLinks: any[] }> = [];
+  if (skillsMatch) {
+    const skillsText = skillsMatch[1];
+    const skillMatches = skillsText.matchAll(/\[SKILL\]([\s\S]*?)\[\/SKILL\]/g);
+    
+    for (const skillMatch of skillMatches) {
+      const skill = skillMatch[1].trim();
+      if (skill) {
+        skills.push({
+          skill,
+          youtubeLinks: [], // Will be populated during enrichment
+        });
+      }
+    }
+  }
+  
+  return {
+    title: titleMatch[1].trim(),
+    timeline: timelineMatch[1].trim(),
+    actions,
+    skills,
+  };
+}
+
+/**
  * Parses the streamed delimited text into structured ActionPlan data for database storage.
  * Returns null if parsing fails.
  */
@@ -588,44 +633,11 @@ function parseActionPlanStreamedText(text: string) {
         break; // No more milestones found
       }
       
-      const milestoneSection = milestoneMatch[1];
-      
-      const titleMatch = milestoneSection.match(/\[TITLE\]([\s\S]*?)\[\/TITLE\]/);
-      const timelineMatch = milestoneSection.match(/\[TIMELINE\]([\s\S]*?)\[\/TIMELINE\]/);
-      const actionsMatch = milestoneSection.match(/\[ACTIONS\]([\s\S]*?)\[\/ACTIONS\]/);
-      const skillsMatch = milestoneSection.match(/\[SKILLS\]([\s\S]*?)\[\/SKILLS\]/);
-      
-      if (titleMatch && timelineMatch && actionsMatch) {
-        // Parse actions - split by bullet points and clean up
-        const actionsText = actionsMatch[1].trim();
-        const actions = actionsText
-          .split('\n')
-          .map(line => line.replace(/^[•\-\*]\s*/, '').trim())
-          .filter(line => line.length > 0);
-        
-        // Parse skills
-        const skills: Array<{ skill: string; youtubeLinks: any[] }> = [];
-        if (skillsMatch) {
-          const skillsText = skillsMatch[1];
-          const skillMatches = skillsText.matchAll(/\[SKILL\]([\s\S]*?)\[\/SKILL\]/g);
-          
-          for (const skillMatch of skillMatches) {
-            const skill = skillMatch[1].trim();
-            if (skill) {
-              skills.push({
-                skill,
-                youtubeLinks: [], // Will be populated during enrichment
-              });
-            }
-          }
-        }
-        
-        result.milestones.push({
-          title: titleMatch[1].trim(),
-          timeline: timelineMatch[1].trim(),
-          actions,
-          skills,
-        });
+      const milestone = parseMilestoneSection(milestoneMatch[1]);
+      if (milestone) {
+        result.milestones.push(milestone);
+      } else {
+        console.warn(`Failed to parse milestone ${milestoneIndex}, skipping`);
       }
       
       milestoneIndex++;
