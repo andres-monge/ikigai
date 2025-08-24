@@ -438,12 +438,7 @@ assessmentRouter.get("/action-plan/stream", async (req, res) => {
       }
       chosenPath = session.purposePaths.find((p) => p.id === pathId);
       
-      // Persist the chosen path ID for future use
-      if (chosenPath) {
-        await storage.updateAssessmentSession(sessionId, {
-          chosenPathId: pathId,
-        });
-      }
+      // Note: chosenPathId will be persisted only after successful streaming
     } else {
       return res.status(400).json({ 
         error: "chosenPathId is required when not previously set in session" 
@@ -569,12 +564,26 @@ function parseMilestoneSection(milestoneSection: string) {
     return null; // Required fields missing
   }
   
-  // Parse actions - split by bullet points and clean up
+  // Parse actions - handle both newline-separated and concatenated bullet points
   const actionsText = actionsMatch[1].trim();
-  const actions = actionsText
+  let actions: string[];
+  
+  // First try splitting by newlines (normal case)
+  const lineActions = actionsText
     .split('\n')
     .map(line => line.replace(/^[•\-\*]\s*/, '').trim())
     .filter(line => line.length > 0);
+  
+  // If we only got one action but it contains bullet points, it's likely concatenated
+  if (lineActions.length === 1 && /[•\-\*]/.test(actionsText)) {
+    // Split by bullet points and clean up
+    actions = actionsText
+      .split(/[•\-\*]/)
+      .map(action => action.trim())
+      .filter(action => action.length > 0);
+  } else {
+    actions = lineActions;
+  }
   
   // Parse skills
   const skills: Array<{ skill: string; youtubeLinks: any[] }> = [];
