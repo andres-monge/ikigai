@@ -173,7 +173,7 @@ This phase refactors the AI chains and endpoints to support word-by-word streami
 
 ### Code Organization & Modularization
 
-[ ] Step 12.1: Extract Streaming Parsers to Dedicated Module
+[X] Step 12.1: Extract Streaming Parsers to Dedicated Module
     - Task: Create server/ai/parsers/ directory with purpose-discovery.parser.ts and action-plan.parser.ts. Move parsing functions from server/routes/assessment.ts. Rename parseStreamedText to parsePurposeDiscoveryStreamedText for clarity. Keep existing parsing behavior unchanged. Run test suite after changes.
     - Suggested Files for Context: server/routes/assessment.ts, shared/schema.ts
     - Step Dependencies: None

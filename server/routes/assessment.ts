@@ -25,6 +25,8 @@ import {
 import { getPurposeDiscoveryChain, getPurposeDiscoveryStreamChain, getActionPlanChain, getActionPlanStreamChain } from "../ai/chains";
 import { aiLimiter } from "../ai/limiter";
 import { getYoutubeVideosForSkills } from "../services/youtube";
+import { parsePurposeDiscoveryStreamedText } from "../ai/parsers/purpose-discovery.parser";
+import { parseActionPlanStreamedText, parseMilestoneSection } from "../ai/parsers/action-plan.parser";
 
 export const assessmentRouter = Router();
 
@@ -184,7 +186,7 @@ assessmentRouter.get("/analyze/stream", async (req, res) => {
       res.write('data: [STREAM_END]\n\n');
       
       // Parse the complete streamed text
-      const parsedData = parseStreamedText(fullText);
+      const parsedData = parsePurposeDiscoveryStreamedText(fullText);
       
       if (parsedData) {
         // Save to database using atomic operations (same as non-streaming)
@@ -245,104 +247,6 @@ assessmentRouter.get("/analyze/stream", async (req, res) => {
   }
 });
 
-/**
- * Parses the streamed delimited text into structured data for database storage.
- * Returns null if parsing fails.
- */
-function parseStreamedText(text: string) {
-  try {
-    const result = {
-      coreDriversAnalysis: {
-        statementSentence: '',
-        coreThreads: '',
-      },
-      purposePaths: [] as Array<{
-        title: string;
-        description: string;
-        ikigaiAlignment: {
-          love: string;
-          goodAt: string;
-          worldNeeds: string;
-          pay: string;
-        };
-        actionStrategy: string;
-      }>,
-    };
-
-    // Parse Core Drivers section
-    const coreDriversMatch = text.match(/\[SECTION:CORE_DRIVERS\]([\s\S]*?)\[END_SECTION\]/);
-    if (coreDriversMatch) {
-      const coreSection = coreDriversMatch[1];
-      
-      const statementMatch = coreSection.match(/\[STATEMENT\]([\s\S]*?)\[\/STATEMENT\]/);
-      if (statementMatch) {
-        result.coreDriversAnalysis.statementSentence = statementMatch[1].trim();
-      }
-      
-      const threadsMatch = coreSection.match(/\[THREADS\]([\s\S]*?)\[\/THREADS\]/);
-      if (threadsMatch) {
-        result.coreDriversAnalysis.coreThreads = threadsMatch[1].trim();
-      }
-    }
-
-    // Parse each path section
-    for (let i = 1; i <= 3; i++) {
-      const pathRegex = new RegExp(`\\[SECTION:PATH_${i}\\]([\\s\\S]*?)\\[END_SECTION\\]`);
-      const pathMatch = text.match(pathRegex);
-      
-      if (pathMatch) {
-        const pathSection = pathMatch[1];
-        
-        const titleMatch = pathSection.match(/\[TITLE\]([\s\S]*?)\[\/TITLE\]/);
-        const descriptionMatch = pathSection.match(/\[DESCRIPTION\]([\s\S]*?)\[\/DESCRIPTION\]/);
-        const actionStrategyMatch = pathSection.match(/\[ACTION_STRATEGY\]([\s\S]*?)\[\/ACTION_STRATEGY\]/);
-        
-        // Parse ikigai alignment
-        const ikigaiMatch = pathSection.match(/\[IKIGAI\]([\s\S]*?)\[\/IKIGAI\]/);
-        let ikigaiAlignment = {
-          love: '',
-          goodAt: '',
-          worldNeeds: '',
-          pay: '',
-        };
-        
-        if (ikigaiMatch) {
-          const ikigaiSection = ikigaiMatch[1];
-          const loveMatch = ikigaiSection.match(/\[LOVE\]([\s\S]*?)\[\/LOVE\]/);
-          const goodAtMatch = ikigaiSection.match(/\[GOOD_AT\]([\s\S]*?)\[\/GOOD_AT\]/);
-          const worldNeedsMatch = ikigaiSection.match(/\[WORLD_NEEDS\]([\s\S]*?)\[\/WORLD_NEEDS\]/);
-          const payMatch = ikigaiSection.match(/\[PAY\]([\s\S]*?)\[\/PAY\]/);
-          
-          if (loveMatch) ikigaiAlignment.love = loveMatch[1].trim();
-          if (goodAtMatch) ikigaiAlignment.goodAt = goodAtMatch[1].trim();
-          if (worldNeedsMatch) ikigaiAlignment.worldNeeds = worldNeedsMatch[1].trim();
-          if (payMatch) ikigaiAlignment.pay = payMatch[1].trim();
-        }
-        
-        if (titleMatch && descriptionMatch && actionStrategyMatch) {
-          result.purposePaths.push({
-            title: titleMatch[1].trim(),
-            description: descriptionMatch[1].trim(),
-            ikigaiAlignment,
-            actionStrategy: actionStrategyMatch[1].trim(),
-          });
-        }
-      }
-    }
-
-    // Validate that we got all required data
-    if (result.coreDriversAnalysis.statementSentence && 
-        result.coreDriversAnalysis.coreThreads && 
-        result.purposePaths.length === 3) {
-      return result;
-    }
-    
-    return null;
-  } catch (error) {
-    console.error('Error parsing streamed text:', error);
-    return null;
-  }
-}
 
 /* ------------------------ POST /api/action-plan ------------------------- */
 
@@ -551,115 +455,3 @@ assessmentRouter.get("/action-plan/stream", async (req, res) => {
   }
 });
 
-/**
- * Parses individual milestone sections from delimited text.
- */
-function parseMilestoneSection(milestoneSection: string) {
-  const titleMatch = milestoneSection.match(/\[TITLE\]([\s\S]*?)\[\/TITLE\]/);
-  const timelineMatch = milestoneSection.match(/\[TIMELINE\]([\s\S]*?)\[\/TIMELINE\]/);
-  const actionsMatch = milestoneSection.match(/\[ACTIONS\]([\s\S]*?)\[\/ACTIONS\]/);
-  const skillsMatch = milestoneSection.match(/\[SKILLS\]([\s\S]*?)\[\/SKILLS\]/);
-  
-  if (!titleMatch || !timelineMatch || !actionsMatch) {
-    return null; // Required fields missing
-  }
-  
-  // Parse actions - handle both newline-separated and concatenated bullet points
-  const actionsText = actionsMatch[1].trim();
-  let actions: string[];
-  
-  // First try splitting by newlines (normal case)
-  const lineActions = actionsText
-    .split('\n')
-    .map(line => line.replace(/^[•\-\*]\s*/, '').trim())
-    .filter(line => line.length > 0);
-  
-  // If we only got one action but it contains bullet points, it's likely concatenated
-  if (lineActions.length === 1 && /[•\-\*]/.test(actionsText)) {
-    // Split by bullet points and clean up
-    actions = actionsText
-      .split(/[•\-\*]/)
-      .map(action => action.trim())
-      .filter(action => action.length > 0);
-  } else {
-    actions = lineActions;
-  }
-  
-  // Parse skills
-  const skills: Array<{ skill: string; youtubeLinks: any[] }> = [];
-  if (skillsMatch) {
-    const skillsText = skillsMatch[1];
-    const skillMatches = skillsText.matchAll(/\[SKILL\]([\s\S]*?)\[\/SKILL\]/g);
-    
-    for (const skillMatch of skillMatches) {
-      const skill = skillMatch[1].trim();
-      if (skill) {
-        skills.push({
-          skill,
-          youtubeLinks: [], // Will be populated during enrichment
-        });
-      }
-    }
-  }
-  
-  return {
-    title: titleMatch[1].trim(),
-    timeline: timelineMatch[1].trim(),
-    actions,
-    skills,
-  };
-}
-
-/**
- * Parses the streamed delimited text into structured ActionPlan data for database storage.
- * Returns null if parsing fails.
- */
-function parseActionPlanStreamedText(text: string) {
-  try {
-    const result = {
-      milestones: [] as Array<{
-        title: string;
-        timeline: string;
-        actions: string[];
-        skills: Array<{
-          skill: string;
-          youtubeLinks: Array<{
-            title: string;
-            url: string;
-            thumbnailUrl: string;
-          }>;
-        }>;
-      }>,
-    };
-    
-    // Parse each milestone section
-    let milestoneIndex = 1;
-    while (true) {
-      const milestoneRegex = new RegExp(`\\[SECTION:MILESTONE_${milestoneIndex}\\]([\\s\\S]*?)\\[END_SECTION\\]`);
-      const milestoneMatch = text.match(milestoneRegex);
-      
-      if (!milestoneMatch) {
-        break; // No more milestones found
-      }
-      
-      const milestone = parseMilestoneSection(milestoneMatch[1]);
-      if (milestone) {
-        result.milestones.push(milestone);
-      } else {
-        console.warn(`Failed to parse milestone ${milestoneIndex}, skipping`);
-      }
-      
-      milestoneIndex++;
-    }
-    
-    // Validate that we got at least one milestone
-    if (result.milestones.length > 0) {
-      return result;
-    }
-    
-    return null;
-  } catch (error) {
-    console.error('Error parsing action plan streamed text:', error);
-    return null;
-  }
-}
