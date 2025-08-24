@@ -128,10 +128,20 @@ This phase refactors the AI chains and endpoints to support word-by-word streami
 
 ---
 
-[ ] Step 11: COMPLEX: Implement Word-by-Word Streaming for Action Plan
+[X] Step 11: COMPLEX: Implement Word-by-Word Streaming for Action Plan
 **Task**: Following the same pattern, create `server/ai/chains/action-plan.stream.chain.ts` and update `server/ai/prompts.ts` to generate the action plan as a continuous stream of text, with delimiters separating each milestone. Update the `/api/action-plan/stream` endpoint in `server/routes/assessment.ts` to handle this new text stream, piping it to the client and saving the final result to the database.
 **Suggested Files for Context**: `server/ai/prompts.ts`, `server/ai/wrapper.ts`, `server/routes/assessment.ts`, `server/storage.ts`
 **Step Dependencies**: Step 10
+**Implementation Notes**:
+- Created `server/ai/chains/action-plan.stream.chain.ts` following exact pattern from Step 9
+- Added `getActionPlanStreamingPrompt` to `server/ai/prompts.ts` with milestone delimiter format
+- Implemented `GET /api/action-plan/stream` SSE endpoint in `server/routes/assessment.ts`
+- Added `parseActionPlanStreamedText` parser function for milestone extraction
+- Implemented post-stream YouTube enrichment: streams text first, then fetches videos in batch
+- SSE event flow: `[STREAM_START]` → chunks → `[STREAM_END]` → `[ENRICH_START]` → `[SAVE_SUCCESS]`
+- Reused existing concurrency controls, session management, and atomic persistence patterns
+- Added flexible chosenPathId handling: uses session's existing ID or accepts query parameter
+- Post-stream enrichment extracts unique skills across milestones, fetches YouTube videos once, maps back to milestones
 
 ---
 

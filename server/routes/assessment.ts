@@ -22,8 +22,9 @@ import {
   type PurposePath,
   type QuestionnaireResponses,
 } from "@shared/schema";
-import { getPurposeDiscoveryChain, getPurposeDiscoveryStreamChain, getActionPlanChain } from "../ai/chains";
+import { getPurposeDiscoveryChain, getPurposeDiscoveryStreamChain, getActionPlanChain, getActionPlanStreamChain } from "../ai/chains";
 import { aiLimiter } from "../ai/limiter";
+import { getYoutubeVideosForSkills } from "../services/youtube";
 
 export const assessmentRouter = Router();
 
@@ -391,3 +392,253 @@ assessmentRouter.post("/action-plan", async (req, res, next) => {
     next(err);
   }
 });
+
+/* --------------------- GET /api/action-plan/stream ---------------------- */
+assessmentRouter.get("/action-plan/stream", async (req, res) => {
+  const sessionId = req.query.sessionId as string;
+  const chosenPathId = req.query.chosenPathId as string;
+  
+  if (!sessionId) {
+    return res.status(400).json({ error: "sessionId is required" });
+  }
+  
+  // Check for concurrent streams for this session
+  if (activeStreams.get(sessionId)) {
+    return res.status(429).json({ 
+      error: "A stream is already in progress for this session" 
+    });
+  }
+  
+  // Mark this session as having an active stream
+  activeStreams.set(sessionId, true);
+  
+  try {
+    // Get the session data
+    const session = await storage.getAssessmentSessionBySessionId(sessionId) as HydratedAssessmentSession | undefined;
+    if (!session) {
+      return res.status(404).json({ error: "Session not found" });
+    }
+    
+    if (!session.language) {
+      return res.status(400).json({ 
+        error: "Session must have language set before streaming" 
+      });
+    }
+    
+    // Resolve the chosen path
+    let chosenPath: PurposePath | undefined;
+    
+    // Use session's chosenPathId if available, otherwise require it in query
+    if (session.chosenPathId) {
+      chosenPath = session.purposePaths.find((p) => p.id === session.chosenPathId);
+    } else if (chosenPathId) {
+      const pathId = parseInt(chosenPathId, 10);
+      if (isNaN(pathId)) {
+        return res.status(400).json({ error: "chosenPathId must be a valid number" });
+      }
+      chosenPath = session.purposePaths.find((p) => p.id === pathId);
+      
+      // Persist the chosen path ID for future use
+      if (chosenPath) {
+        await storage.updateAssessmentSession(sessionId, {
+          chosenPathId: pathId,
+        });
+      }
+    } else {
+      return res.status(400).json({ 
+        error: "chosenPathId is required when not previously set in session" 
+      });
+    }
+    
+    if (!chosenPath) {
+      return res.status(404).json({ 
+        error: "Chosen path not found for this session" 
+      });
+    }
+    
+    // Set up Server-Sent Events headers
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Headers': 'Cache-Control',
+    });
+    
+    // Send initial connection confirmation
+    res.write('data: [STREAM_START]\n\n');
+    
+    let fullText = '';
+    
+    // Handle client disconnect
+    const cleanup = () => {
+      activeStreams.delete(sessionId);
+    };
+    req.on('close', cleanup);
+    req.on('aborted', cleanup);
+    res.on('close', cleanup);
+    
+    try {
+      // Start streaming with concurrency limiting
+      const streamGenerator = await aiLimiter(() => 
+        getActionPlanStreamChain(chosenPath as PurposePath, session.language!)
+      );
+      
+      // Stream each chunk to the client while buffering for database
+      for await (const chunk of streamGenerator) {
+        fullText += chunk;
+        
+        // Send chunk to client using SSE format
+        res.write(`data: ${chunk}\n\n`);
+      }
+      
+      // Stream completed successfully
+      res.write('data: [STREAM_END]\n\n');
+      
+      // Parse the complete streamed text
+      const parsedData = parseActionPlanStreamedText(fullText);
+      
+      if (parsedData) {
+        // Start enrichment phase - fetch YouTube videos
+        res.write('data: [ENRICH_START]\n\n');
+        
+        // Extract all unique skills across milestones
+        const allSkills = new Set<string>();
+        parsedData.milestones.forEach(milestone => {
+          milestone.skills.forEach(skillObj => {
+            allSkills.add(skillObj.skill);
+          });
+        });
+        
+        // Fetch YouTube videos for all skills in one batch
+        const skillsArray = Array.from(allSkills);
+        const youtubeData = await getYoutubeVideosForSkills(skillsArray, session.language!);
+        
+        // Create a map for easy lookup
+        const youtubeMap = new Map(
+          youtubeData.map(item => [item.skill, item.videos])
+        );
+        
+        // Enrich the parsed data with YouTube videos
+        const enrichedData = {
+          ...parsedData,
+          milestones: parsedData.milestones.map(milestone => ({
+            ...milestone,
+            skills: milestone.skills.map(skillObj => ({
+              skill: skillObj.skill,
+              youtubeLinks: youtubeMap.get(skillObj.skill) || [],
+            })),
+          })),
+        };
+        
+        // Save the enriched action plan to database
+        await storage.updateAssessmentSession(sessionId, {
+          actionPlan: enrichedData,
+          chosenPathId: chosenPath.id,
+        });
+        
+        res.write('data: [SAVE_SUCCESS]\n\n');
+      } else {
+        throw new Error('Failed to parse streamed response');
+      }
+    } catch (error) {
+      console.error('Streaming error:', error);
+      res.write(`data: [ERROR] ${error instanceof Error ? error.message : 'Unknown error'}\n\n`);
+    }
+    
+    res.end();
+  } catch (error) {
+    console.error('Stream setup error:', error);
+    res.status(500).json({ error: 'Failed to start stream' });
+  } finally {
+    // Always clean up the active stream marker
+    activeStreams.delete(sessionId);
+  }
+});
+
+/**
+ * Parses the streamed delimited text into structured ActionPlan data for database storage.
+ * Returns null if parsing fails.
+ */
+function parseActionPlanStreamedText(text: string) {
+  try {
+    const result = {
+      milestones: [] as Array<{
+        title: string;
+        timeline: string;
+        actions: string[];
+        skills: Array<{
+          skill: string;
+          youtubeLinks: Array<{
+            title: string;
+            url: string;
+            thumbnailUrl: string;
+          }>;
+        }>;
+      }>,
+    };
+    
+    // Parse each milestone section
+    let milestoneIndex = 1;
+    while (true) {
+      const milestoneRegex = new RegExp(`\\[SECTION:MILESTONE_${milestoneIndex}\\]([\\s\\S]*?)\\[END_SECTION\\]`);
+      const milestoneMatch = text.match(milestoneRegex);
+      
+      if (!milestoneMatch) {
+        break; // No more milestones found
+      }
+      
+      const milestoneSection = milestoneMatch[1];
+      
+      const titleMatch = milestoneSection.match(/\[TITLE\]([\s\S]*?)\[\/TITLE\]/);
+      const timelineMatch = milestoneSection.match(/\[TIMELINE\]([\s\S]*?)\[\/TIMELINE\]/);
+      const actionsMatch = milestoneSection.match(/\[ACTIONS\]([\s\S]*?)\[\/ACTIONS\]/);
+      const skillsMatch = milestoneSection.match(/\[SKILLS\]([\s\S]*?)\[\/SKILLS\]/);
+      
+      if (titleMatch && timelineMatch && actionsMatch) {
+        // Parse actions - split by bullet points and clean up
+        const actionsText = actionsMatch[1].trim();
+        const actions = actionsText
+          .split('\n')
+          .map(line => line.replace(/^[•\-\*]\s*/, '').trim())
+          .filter(line => line.length > 0);
+        
+        // Parse skills
+        const skills: Array<{ skill: string; youtubeLinks: any[] }> = [];
+        if (skillsMatch) {
+          const skillsText = skillsMatch[1];
+          const skillMatches = skillsText.matchAll(/\[SKILL\]([\s\S]*?)\[\/SKILL\]/g);
+          
+          for (const skillMatch of skillMatches) {
+            const skill = skillMatch[1].trim();
+            if (skill) {
+              skills.push({
+                skill,
+                youtubeLinks: [], // Will be populated during enrichment
+              });
+            }
+          }
+        }
+        
+        result.milestones.push({
+          title: titleMatch[1].trim(),
+          timeline: timelineMatch[1].trim(),
+          actions,
+          skills,
+        });
+      }
+      
+      milestoneIndex++;
+    }
+    
+    // Validate that we got at least one milestone
+    if (result.milestones.length > 0) {
+      return result;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error parsing action plan streamed text:', error);
+    return null;
+  }
+}
