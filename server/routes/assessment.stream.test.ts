@@ -24,14 +24,15 @@ import type { QuestionnaireResponses } from '../../shared/schema.js';
 import { assessmentRouter } from './assessment.js';
 import { storage } from '../storage.js';
 
+// Import the function we'll be mocking before setting up the mock
+import { getPurposeDiscoveryStreamChain } from '../ai/chains';
+
 // Mock the AI chains - we want to test the streaming endpoint, not the AI generation
 vi.mock('../ai/chains', () => ({
   getPurposeDiscoveryChain: vi.fn(),
   getPurposeDiscoveryStreamChain: vi.fn(),
   getActionPlanChain: vi.fn(),
 }));
-
-import { getPurposeDiscoveryStreamChain } from '../ai/chains';
 
 /* ------------------------------------------------------------------ */
 /*                         Test Setup & Cleanup                      */
@@ -47,19 +48,35 @@ beforeEach(async () => {
 });
 
 afterAll(async () => {
-  // Clean up and close database connections
+  // Clean up database tables in correct order (foreign keys first)
   try {
     await db.delete(purposePaths);
     await db.delete(assessmentSessions);
-  } catch (error) {
-    console.log('Cleanup error (expected in test environment):', error);
+  } catch (error: any) {
+    // Only suppress specific expected errors, fail on unexpected ones
+    if (error?.code === 'ECONNRESET' || error?.code === 'ENOTFOUND') {
+      console.log('Expected database cleanup error in test environment:', error.message);
+    } else {
+      console.error('Unexpected cleanup error - this may indicate a test problem:', error);
+      // Don't throw to avoid breaking other tests, but log clearly
+    }
   }
   
   // Close the PostgreSQL connection pool
   try {
-    await db.$client.end();
-  } catch (error) {
-    console.log('Connection close error (expected in test environment):', error);
+    // Check if client is already closed to avoid double-close errors
+    if (db.$client && !db.$client.ended) {
+      await db.$client.end();
+    }
+  } catch (error: any) {
+    // Only suppress specific connection errors
+    if (error?.message?.includes('already ended') || 
+        error?.message?.includes('Connection terminated') ||
+        error?.code === 'ECONNRESET') {
+      console.log('Expected connection close scenario:', error.message);
+    } else {
+      console.error('Unexpected connection close error:', error);
+    }
   }
 }, 15000);
 
