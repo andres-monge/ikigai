@@ -12,21 +12,21 @@ import { beforeEach, afterAll, describe, it, expect, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import { eq } from 'drizzle-orm';
-import { db } from '../db.js';
-import { assessmentSessions, purposePaths } from '../../shared/schema.js';
-import type { QuestionnaireResponses } from '../../shared/schema.js';
-import { assessmentRouter } from './assessment.js';
-import { storage, PostgresStorage } from '../storage.js';
+import { db } from '../../db.js';
+import { assessmentSessions, purposePaths } from '../../../shared/schema.js';
+import type { QuestionnaireResponses } from '../../../shared/schema.js';
+import { assessmentRouter } from './index.js';
+import { storage, PostgresStorage } from '../../storage.js';
 
 // Mock the AI chains to control timing
-vi.mock('../ai/chains', () => ({
+vi.mock('../../ai/chains', () => ({
   getPurposeDiscoveryChain: vi.fn(),
   getActionPlanChain: vi.fn(),
 }));
 
 // We'll mock the storage.createPurposePath method dynamically in the test
 
-import { getPurposeDiscoveryChain, getActionPlanChain } from '../ai/chains';
+import { getPurposeDiscoveryChain, getActionPlanChain } from '../../ai/chains';
 
 /* ------------------------------------------------------------------ */
 /*                         Test Setup & Cleanup                      */
@@ -282,7 +282,7 @@ describe('Assessment Routes - Concurrency Limiter', () => {
     });
 
     // Import the limiter
-    const { aiLimiter } = await import('../ai/limiter.js');
+    const { aiLimiter } = await import('../../ai/limiter.js');
 
     // Create 4 concurrent requests (more than the limit of 2)
     const requestPromises = Array.from({ length: 4 }, () => 
@@ -317,7 +317,7 @@ describe('Assessment Routes - Concurrency Limiter', () => {
       return mockAnalysisResult;
     });
 
-    const { aiLimiter } = await import('../ai/limiter.js');
+    const { aiLimiter } = await import('../../ai/limiter.js');
 
     // Create 2 requests (within the limit)
     const requests = Array.from({ length: 2 }, () => 
@@ -351,9 +351,9 @@ describe('Assessment Routes - Concurrency Limiter', () => {
       };
     });
 
-    const { PostgresStorage } = await import('../storage.js');
+    const { PostgresStorage } = await import('../../storage.js');
     const storage = new PostgresStorage();
-    const { aiLimiter } = await import('../ai/limiter.js');
+    const { aiLimiter } = await import('../../ai/limiter.js');
 
     // Create a session with a purpose path
     const session = await storage.createAssessmentSession({

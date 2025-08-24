@@ -18,18 +18,18 @@ import { beforeEach, afterAll, describe, it, expect, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import { AddressInfo } from 'node:net';
-import { db } from '../db.js';
-import { assessmentSessions, purposePaths } from '../../shared/schema.js';
-import type { QuestionnaireResponses } from '../../shared/schema.js';
-import { assessmentRouter } from './assessment.js';
-import { storage } from '../storage.js';
+import { db } from '../../db.js';
+import { assessmentSessions, purposePaths } from '../../../shared/schema.js';
+import type { QuestionnaireResponses } from '../../../shared/schema.js';
+import { assessmentRouter } from './index.js';
+import { storage } from '../../storage.js';
 
 // Import the functions we'll be mocking before setting up the mock
-import { getPurposeDiscoveryStreamChain, getActionPlanStreamChain } from '../ai/chains';
-import { getYoutubeVideosForSkills } from '../services/youtube';
+import { getPurposeDiscoveryStreamChain, getActionPlanStreamChain } from '../../ai/chains';
+import { getYoutubeVideosForSkills } from '../../services/youtube';
 
 // Mock the AI chains - we want to test the streaming endpoint, not the AI generation
-vi.mock('../ai/chains', () => ({
+vi.mock('../../ai/chains', () => ({
   getPurposeDiscoveryChain: vi.fn(),
   getPurposeDiscoveryStreamChain: vi.fn(),
   getActionPlanChain: vi.fn(),
@@ -37,7 +37,7 @@ vi.mock('../ai/chains', () => ({
 }));
 
 // Mock the YouTube service for action plan enrichment
-vi.mock('../services/youtube', () => ({
+vi.mock('../../services/youtube', () => ({
   getYoutubeVideosForSkills: vi.fn(),
 }));
 

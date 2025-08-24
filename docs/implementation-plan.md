@@ -183,7 +183,7 @@ This phase refactors the AI chains and endpoints to support word-by-word streami
     - Suggested Files for Context: server/routes/assessment.ts
     - Step Dependencies: None
 
-[ ] Step 12.3: Split Assessment Routes by Feature
+[X] Step 12.3: Split Assessment Routes by Feature
     - Task: Split server/routes/assessment.ts (665 lines) into assessment/analyze.ts and assessment/action-plan.ts, with assessment/index.ts re-exporting combined router. Each file should be under 500 lines. Move shared utilities like session validation to assessment/utils.ts.
     - Suggested Files for Context: server/routes/assessment.ts, server/routes.ts
     - Step Dependencies: Steps 12.1, 12.2
