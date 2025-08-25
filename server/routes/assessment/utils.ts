@@ -7,7 +7,7 @@
 
 import type { Response } from "express";
 import { storage, type HydratedAssessmentSession } from "../../storage";
-import type { PurposePath } from "@shared/schema";
+import type { PurposePath, ActionPlan } from "@shared/schema";
 import { db } from "../../db";
 import { eq } from "drizzle-orm";
 import { purposePaths, assessmentSessions } from "@shared/schema";
@@ -141,14 +141,14 @@ export async function atomicPurposePathUpdate(
  */
 export async function atomicActionPlanUpdate(
   sessionId: string,
-  actionPlan: any,
+  actionPlan: ActionPlan,
   chosenPathId: number
 ): Promise<void> {
   try {
     await db.transaction(async (tx) => {
       await tx.update(assessmentSessions)
         .set({ 
-          actionPlan: actionPlan as unknown,
+          actionPlan: actionPlan,
           chosenPathId: chosenPathId,
           updatedAt: new Date()
         })

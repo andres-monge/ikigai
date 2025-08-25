@@ -68,7 +68,7 @@ purposeDiscoveryRouter.post("/analyze", async (req, res, next) => {
     // Atomic operation: create new paths, delete old ones, and save analysis
     await atomicPurposePathUpdate(
       sessionId, 
-      session, 
+      session!, 
       analysisResult.purposePaths,
       analysisResult.coreDriversAnalysis
     );
