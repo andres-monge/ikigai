@@ -123,6 +123,7 @@ export function useSSEStream(options: UseSSEStreamOptions): StreamingState {
   const eventSourceRef = useRef<EventSource | null>(null);
   const thinkingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const retryTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isStreamingRef = useRef<boolean>(false);
   
   // Clean up function
   const cleanup = useCallback(() => {
@@ -138,12 +139,14 @@ export function useSSEStream(options: UseSSEStreamOptions): StreamingState {
       clearTimeout(retryTimerRef.current);
       retryTimerRef.current = null;
     }
+    isStreamingRef.current = false;
   }, []);
   
   // Start streaming
   const startStream = useCallback(() => {
-    if (!enabled || eventSourceRef.current) return;
+    if (!enabled || eventSourceRef.current || isStreamingRef.current) return;
     
+    isStreamingRef.current = true;
     setState(prev => ({
       ...prev,
       phase: StreamingPhase.CONNECTING,
@@ -189,10 +192,12 @@ export function useSSEStream(options: UseSSEStreamOptions): StreamingState {
           } else if (data === SSE_EVENTS.SAVE_SUCCESS) {
             newPhase = StreamingPhase.COMPLETE;
             isComplete = true;
+            isStreamingRef.current = false;
             onComplete?.(newBuffer);
           } else if (data.startsWith(SSE_EVENTS.ERROR)) {
             newPhase = StreamingPhase.ERROR;
             newError = data.replace(SSE_EVENTS.ERROR, '').trim();
+            isStreamingRef.current = false;
             onError?.(newError || 'Unknown error');
           } else {
             // Regular text chunk
@@ -216,6 +221,7 @@ export function useSSEStream(options: UseSSEStreamOptions): StreamingState {
       };
       
       eventSource.onerror = () => {
+        isStreamingRef.current = false;
         setState(prev => ({
           ...prev,
           phase: StreamingPhase.ERROR,
@@ -230,6 +236,7 @@ export function useSSEStream(options: UseSSEStreamOptions): StreamingState {
       };
       
     } catch (error) {
+      isStreamingRef.current = false;
       setState(prev => ({
         ...prev,
         phase: StreamingPhase.ERROR,
@@ -241,17 +248,21 @@ export function useSSEStream(options: UseSSEStreamOptions): StreamingState {
   
   // Effect to start/stop streaming
   useEffect(() => {
-    if (enabled && state.phase === StreamingPhase.IDLE) {
+    if (enabled && !isStreamingRef.current) {
       startStream();
     }
     
-    if (!enabled) {
+    if (!enabled && isStreamingRef.current) {
       cleanup();
       setState(prev => ({ ...prev, phase: StreamingPhase.IDLE }));
     }
     
-    return cleanup;
-  }, [enabled, startStream, cleanup, state.phase]);
+    return () => {
+      if (!enabled) {
+        cleanup();
+      }
+    };
+  }, [enabled, startStream, cleanup]);
   
   // Cleanup on unmount
   useEffect(() => {
