@@ -25,7 +25,8 @@ import {
   setupStreamConcurrencyControl, 
   atomicPurposePathUpdate 
 } from "./utils";
-import { TransactionError } from "../../utils/errors";
+import { TransactionError, ValidationError } from "../../utils/errors";
+import { validateSessionForAI } from "../../utils/validation";
 
 export const purposeDiscoveryRouter = Router();
 
@@ -52,7 +53,12 @@ purposeDiscoveryRouter.post("/analyze", async (req, res, next) => {
       });
     } else {
       await storage.updateAssessmentSession(sessionId, { responses, language });
+      // Refresh session to get updated data
+      session = await storage.getAssessmentSessionBySessionId(sessionId);
     }
+
+    // Validate session data before expensive AI processing
+    validateSessionForAI(session!);
 
     // AI orchestration (with concurrency limiting)
     const analysisResult = await aiLimiter(() => 
@@ -71,6 +77,9 @@ purposeDiscoveryRouter.post("/analyze", async (req, res, next) => {
     const fullSession = await storage.getAssessmentSessionBySessionId(sessionId);
     res.json(fullSession);
   } catch (err) {
+    if (err instanceof ValidationError) {
+      return res.status(400).json(err.toResponse());
+    }
     if (err instanceof TransactionError) {
       return res.status(500).json(err.toResponse());
     }
@@ -99,15 +108,14 @@ purposeDiscoveryRouter.get("/analyze/stream", async (req, res) => {
       return res.status(404).json({ error: "Session not found" });
     }
 
-    if (!session.responses || !session.language) {
-      return res.status(400).json({ 
-        error: "Session must have responses and language before streaming" 
-      });
-    }
-
-    // Validate responses structure
-    if (typeof session.responses !== 'object') {
-      throw new Error('Invalid session responses format');
+    // Validate session data before expensive AI processing
+    try {
+      validateSessionForAI(session);
+    } catch (error) {
+      if (error instanceof ValidationError) {
+        return res.status(400).json(error.toResponse());
+      }
+      throw error;
     }
 
     // Set up Server-Sent Events headers

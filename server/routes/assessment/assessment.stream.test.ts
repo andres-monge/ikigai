@@ -481,7 +481,7 @@ describe('Assessment Streaming Endpoint - /api/analyze/stream', () => {
       .query({ sessionId })
       .expect(400);
 
-    expect(response.body.error).toBe('Session must have responses and language before streaming');
+    expect(response.body.error).toBe('Questionnaire responses are required before AI processing');
   });
 
   it('should return 400 when sessionId is missing', async () => {
@@ -738,6 +738,10 @@ describe('Action Plan Streaming Endpoint - /api/action-plan/stream', () => {
       sessionId,
       language: 'en',
       responses: testResponses,
+      coreDriversAnalysis: {
+        statementSentence: 'Test core drivers analysis.',
+        coreThreads: 'Test threads for concurrency test.'
+      }
     });
 
     const purposePath = await storage.createPurposePath({
@@ -811,13 +815,21 @@ describe('Action Plan Streaming Endpoint - /api/action-plan/stream', () => {
     const testSession1 = await storage.createAssessmentSession({
       sessionId: sessionId1,
       language: 'en',
-      responses: testResponses
+      responses: testResponses,
+      coreDriversAnalysis: {
+        statementSentence: 'Test core drivers analysis for session 1.',
+        coreThreads: 'Test threads for concurrent test 1.'
+      }
     });
     
     const testSession2 = await storage.createAssessmentSession({
       sessionId: sessionId2,
       language: 'en',
-      responses: testResponses
+      responses: testResponses,
+      coreDriversAnalysis: {
+        statementSentence: 'Test core drivers analysis for session 2.',
+        coreThreads: 'Test threads for concurrent test 2.'
+      }
     });
 
     const purposePath1 = await storage.createPurposePath({
@@ -874,7 +886,11 @@ describe('Action Plan Streaming Endpoint - /api/action-plan/stream', () => {
     const testSession = await storage.createAssessmentSession({
       sessionId,
       language: 'en',
-      responses: testResponses
+      responses: testResponses,
+      coreDriversAnalysis: {
+        statementSentence: 'Test core drivers analysis for error test.',
+        coreThreads: 'Test threads for error handling test.'
+      }
     });
 
     const purposePath = await storage.createPurposePath({

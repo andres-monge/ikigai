@@ -13,6 +13,7 @@ import { eq } from "drizzle-orm";
 import { purposePaths, assessmentSessions } from "@shared/schema";
 import { wrapTransactionError } from "../../utils/errors";
 import { inArray } from "drizzle-orm";
+import { validateSessionForAI } from "../../utils/validation";
 
 /**
  * Track active streaming sessions to prevent concurrent streams per session
@@ -22,6 +23,7 @@ export const activeStreams = new Map<string, boolean>();
 
 /**
  * Validates that a session exists and has required fields for streaming
+ * Uses comprehensive Zod validation for questionnaire responses structure
  * 
  * @param sessionId The session ID to validate
  * @returns The session if valid, or null if not found/invalid
@@ -33,17 +35,15 @@ export async function validateSessionForStreaming(sessionId: string): Promise<Hy
     return null;
   }
 
-  // Validate session has required fields for streaming
-  if (!session.responses || !session.language) {
+  try {
+    // Use comprehensive validation instead of basic checks
+    validateSessionForAI(session);
+    return session;
+  } catch (error) {
+    // If validation fails, return null to indicate invalid session
+    // The calling code will handle the error response appropriately
     return null;
   }
-
-  // Validate responses structure
-  if (typeof session.responses !== 'object') {
-    return null;
-  }
-
-  return session;
 }
 
 /**

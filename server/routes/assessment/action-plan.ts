@@ -25,7 +25,8 @@ import {
   setupStreamConcurrencyControl,
   atomicActionPlanUpdate 
 } from "./utils";
-import { TransactionError } from "../../utils/errors";
+import { TransactionError, ValidationError } from "../../utils/errors";
+import { validateSessionForActionPlan } from "../../utils/validation";
 
 export const actionPlanRouter = Router();
 
@@ -51,6 +52,9 @@ actionPlanRouter.post("/action-plan", async (req, res, next) => {
       return res.status(404).json({ error: "Session not found" });
     }
 
+    /* Validate session data before expensive AI processing */
+    validateSessionForActionPlan(session);
+
     /* Identify the chosen path by database ID */
     const chosenPath = session.purposePaths.find((p) => p.id === chosenPathId);
     
@@ -73,6 +77,9 @@ actionPlanRouter.post("/action-plan", async (req, res, next) => {
     );
     res.json(updatedSession);
   } catch (err) {
+    if (err instanceof ValidationError) {
+      return res.status(400).json(err.toResponse());
+    }
     if (err instanceof TransactionError) {
       return res.status(500).json(err.toResponse());
     }
@@ -132,6 +139,16 @@ actionPlanRouter.get("/action-plan/stream", async (req, res) => {
       return res.status(404).json({ 
         error: "Chosen path not found for this session" 
       });
+    }
+    
+    // Validate session data before expensive AI processing
+    try {
+      validateSessionForActionPlan(session);
+    } catch (error) {
+      if (error instanceof ValidationError) {
+        return res.status(400).json(error.toResponse());
+      }
+      throw error;
     }
     
     // Set up Server-Sent Events headers
