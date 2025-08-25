@@ -22,8 +22,10 @@ import { parseActionPlanStreamedText } from "../../ai/parsers/action-plan.parser
 import { setSseHeaders, writeSseData, writeSseEvent, setupSseCleanup, writeSseError, SSE_EVENTS } from "../../utils/sse";
 import { 
   activeStreams, 
-  setupStreamConcurrencyControl 
+  setupStreamConcurrencyControl,
+  atomicActionPlanUpdate 
 } from "./utils";
+import { TransactionError } from "../../utils/errors";
 
 export const actionPlanRouter = Router();
 
@@ -58,20 +60,22 @@ actionPlanRouter.post("/action-plan", async (req, res, next) => {
         .json({ error: "Chosen path not found for this session" });
     }
 
-    /* Generate action plan & persist (with concurrency limiting) */
+    /* Generate action plan & persist atomically (with concurrency limiting) */
     const actionPlan = await aiLimiter(() => 
       getActionPlanChain(chosenPath as PurposePath, session.language)
     );
-    await storage.updateAssessmentSession(sessionId, {
-      actionPlan,
-      chosenPathId: chosenPath.id,
-    });
+    
+    // Use atomic function for consistent transaction handling
+    await atomicActionPlanUpdate(sessionId, actionPlan, chosenPath.id);
 
     const updatedSession = await storage.getAssessmentSessionBySessionId(
       sessionId,
     );
     res.json(updatedSession);
   } catch (err) {
+    if (err instanceof TransactionError) {
+      return res.status(500).json(err.toResponse());
+    }
     next(err);
   }
 });
@@ -194,19 +198,25 @@ actionPlanRouter.get("/action-plan/stream", async (req, res) => {
           })),
         };
         
-        // Save the enriched action plan to database
-        await storage.updateAssessmentSession(sessionId, {
-          actionPlan: enrichedData,
-          chosenPathId: chosenPath.id,
-        });
+        // Save the enriched action plan to database atomically
+        await atomicActionPlanUpdate(sessionId, enrichedData, chosenPath.id);
         
         writeSseEvent(res, SSE_EVENTS.SAVE_SUCCESS);
       } else {
         throw new Error('Failed to parse streamed response');
       }
     } catch (error) {
-      console.error('Streaming error:', error);
-      writeSseError(res, error instanceof Error ? error : 'Unknown error');
+      if (error instanceof TransactionError) {
+        console.error('Streaming or database transaction error:', error.toJSON());
+        writeSseError(res, error.message);
+      } else {
+        console.error('Streaming error:', {
+          sessionId,
+          error: error instanceof Error ? error.message : error,
+          stack: error instanceof Error ? error.stack : undefined
+        });
+        writeSseError(res, 'Failed to save your action plan. Please try again.');
+      }
     }
     
     res.end();

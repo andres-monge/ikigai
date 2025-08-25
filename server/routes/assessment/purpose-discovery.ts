@@ -25,6 +25,7 @@ import {
   setupStreamConcurrencyControl, 
   atomicPurposePathUpdate 
 } from "./utils";
+import { TransactionError } from "../../utils/errors";
 
 export const purposeDiscoveryRouter = Router();
 
@@ -58,18 +59,21 @@ purposeDiscoveryRouter.post("/analyze", async (req, res, next) => {
       getPurposeDiscoveryChain(responses, language)
     );
 
-    // Atomic operation: create new paths, delete old ones
-    await atomicPurposePathUpdate(sessionId, session, analysisResult.purposePaths);
-
-    // Save core-driver summary
-    await storage.updateAssessmentSession(sessionId, {
-      coreDriversAnalysis: analysisResult.coreDriversAnalysis,
-    });
+    // Atomic operation: create new paths, delete old ones, and save analysis
+    await atomicPurposePathUpdate(
+      sessionId, 
+      session, 
+      analysisResult.purposePaths,
+      analysisResult.coreDriversAnalysis
+    );
 
     // Return hydrated session
     const fullSession = await storage.getAssessmentSessionBySessionId(sessionId);
     res.json(fullSession);
   } catch (err) {
+    if (err instanceof TransactionError) {
+      return res.status(500).json(err.toResponse());
+    }
     next(err);
   }
 });
@@ -138,13 +142,13 @@ purposeDiscoveryRouter.get("/analyze/stream", async (req, res) => {
       const parsedData = parsePurposeDiscoveryStreamedText(fullText);
       
       if (parsedData) {
-        // Save to database using atomic operations
-        await atomicPurposePathUpdate(sessionId, session, parsedData.purposePaths);
-        
-        // Save core drivers analysis
-        await storage.updateAssessmentSession(sessionId, {
-          coreDriversAnalysis: parsedData.coreDriversAnalysis,
-        });
+        // Save to database using atomic transaction (includes both paths and analysis)
+        await atomicPurposePathUpdate(
+          sessionId, 
+          session, 
+          parsedData.purposePaths,
+          parsedData.coreDriversAnalysis
+        );
         
         writeSseEvent(res, SSE_EVENTS.SAVE_SUCCESS);
       } else {
@@ -152,8 +156,17 @@ purposeDiscoveryRouter.get("/analyze/stream", async (req, res) => {
       }
 
     } catch (error) {
-      console.error('Streaming error:', error);
-      writeSseError(res, error instanceof Error ? error : 'Unknown error');
+      if (error instanceof TransactionError) {
+        console.error('Streaming or database transaction error:', error.toJSON());
+        writeSseError(res, error.message);
+      } else {
+        console.error('Streaming error:', {
+          sessionId,
+          error: error instanceof Error ? error.message : error,
+          stack: error instanceof Error ? error.stack : undefined
+        });
+        writeSseError(res, 'Failed to save your analysis. Please try again.');
+      }
     }
 
     res.end();

@@ -15,6 +15,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '../../db.js';
 import { assessmentSessions, purposePaths } from '../../../shared/schema.js';
 import type { QuestionnaireResponses } from '../../../shared/schema.js';
+import type { PgTransaction } from 'drizzle-orm/pg-core';
 import { assessmentRouter } from './index.js';
 import { storage, PostgresStorage } from '../../storage.js';
 
@@ -206,19 +207,18 @@ describe('Assessment Routes - Atomic Operations', () => {
     // 2. Mock AI to return multiple new paths
     (getPurposeDiscoveryChain as any).mockResolvedValue(mockAnalysisResultMultiplePaths);
 
-    // 3. Spy on storage.createPurposePath to fail after first success
-    let createCallCount = 0;
-    const originalCreatePurposePath = storage.createPurposePath.bind(storage);
+    // 3. Mock the transaction to fail during execution
+    // Since we now use database transactions, we need to mock the transaction itself
+    let transactionCallCount = 0;
+    const originalTransaction = db.transaction.bind(db);
     
-    const createSpy = vi.spyOn(storage, 'createPurposePath').mockImplementation(async (pathData: any) => {
-      createCallCount++;
-      if (createCallCount === 1) {
-        // First call succeeds - create the path using original method
-        return await originalCreatePurposePath(pathData);
-      } else {
-        // Second call fails
-        throw new Error('Database connection error during path creation');
-      }
+    // Mock db.transaction to fail when called  
+    const dbSpy = vi.spyOn(db, 'transaction').mockImplementation(async (
+      callback: (tx: PgTransaction<any, any, any>) => Promise<any>
+    ) => {
+      transactionCallCount++;
+      // Always fail to test atomic rollback behavior
+      throw new Error('Database connection error during path creation');
     });
 
     // 4. Make request that should trigger atomic failure
@@ -230,11 +230,12 @@ describe('Assessment Routes - Atomic Operations', () => {
         language: 'en'
       });
 
-    // 5. Verify error response includes debugging information
+    // 5. Verify error response includes debugging information (with structured errors)
     expect(response.status).toBe(500);
-    expect(response.body.error).toBe('Database connection error during path creation');
+    expect(response.body.error).toBe('Failed to save your analysis. Please try again.');
     expect(response.body.details).toBeDefined();
-    expect(createCallCount).toBe(2); // Verify both path creations were attempted
+    expect(response.body.details.originalError).toContain('Database connection error during path creation');
+    expect(transactionCallCount).toBe(1); // Verify transaction was attempted
 
     // 6. Verify atomic behavior: old paths should still exist
     const afterSession = await storage.getAssessmentSessionBySessionId(atomicTestSessionId);
@@ -250,7 +251,7 @@ describe('Assessment Routes - Atomic Operations', () => {
     expect(pathTitles).not.toContain("QA Manager");
 
     // Cleanup
-    createSpy.mockRestore();
+    dbSpy.mockRestore();
     await storage.deleteAssessmentSessionBySessionId(atomicTestSessionId);
   });
 

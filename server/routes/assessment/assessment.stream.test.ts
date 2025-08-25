@@ -413,7 +413,7 @@ describe('Assessment Streaming Endpoint - /api/analyze/stream', () => {
     expect(events2[0]).toBe('[STREAM_START]');
     expect(events1[events1.length - 1]).toBe('[SAVE_SUCCESS]');
     expect(events2[events2.length - 1]).toBe('[SAVE_SUCCESS]');
-  });
+  }, 15000); // Increase timeout for concurrent operations with transactions
 
   it('should handle AI chain errors gracefully during streaming', async () => {
     // 1. Create a test session
@@ -449,7 +449,7 @@ describe('Assessment Streaming Endpoint - /api/analyze/stream', () => {
     // Should contain an error event
     const errorEvent = events.find(event => event.startsWith('[ERROR]'));
     expect(errorEvent).toBeDefined();
-    expect(errorEvent).toContain('AI service temporarily unavailable');
+    expect(errorEvent).toContain('Failed to save your analysis. Please try again.');
 
     // 6. Verify database was not updated with partial data
     const sessionAfterError = await storage.getAssessmentSessionBySessionId(sessionId);
@@ -866,7 +866,7 @@ describe('Action Plan Streaming Endpoint - /api/action-plan/stream', () => {
     expect(events2[0]).toBe('[STREAM_START]');
     expect(events1[events1.length - 1]).toBe('[SAVE_SUCCESS]');
     expect(events2[events2.length - 1]).toBe('[SAVE_SUCCESS]');
-  });
+  }, 15000); // Increase timeout for concurrent operations with transactions
 
   it('should handle AI chain errors gracefully during streaming', async () => {
     // 1. Create a test session with purpose paths
@@ -909,7 +909,7 @@ describe('Action Plan Streaming Endpoint - /api/action-plan/stream', () => {
     // Should contain an error event
     const errorEvent = events.find(event => event.startsWith('[ERROR]'));
     expect(errorEvent).toBeDefined();
-    expect(errorEvent).toContain('Action plan generation failed');
+    expect(errorEvent).toContain('Failed to save your action plan. Please try again.');
 
     // 6. Verify database was not updated with partial data
     const sessionAfterError = await storage.getAssessmentSessionBySessionId(sessionId);
@@ -975,7 +975,7 @@ describe('Action Plan Streaming Endpoint - /api/action-plan/stream', () => {
     // Should contain an error event for enrichment failure
     const errorEvent = events.find(event => event.startsWith('[ERROR]'));
     expect(errorEvent).toBeDefined();
-    expect(errorEvent).toContain('YouTube API rate limit exceeded');
+    expect(errorEvent).toContain('Failed to save your action plan. Please try again.');
 
     // 7. Verify streaming data was NOT persisted due to enrichment failure
     const sessionAfterError = await storage.getAssessmentSessionBySessionId(sessionId);

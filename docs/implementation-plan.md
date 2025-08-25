@@ -190,16 +190,22 @@ This phase refactors the AI chains and endpoints to support word-by-word streami
 
 ### Code Quality & Database Improvements
 
-[ ] Step 12.4: Replace Manual Rollback with Database Transactions
+[X] Step 12.4: Replace Manual Rollback with Database Transactions and Structured error handling system
     - Task: Use Drizzle db.transaction() for atomic operations in both /api/analyze and streaming saves. Wrap: (a) create new purpose paths, (b) delete old paths, (c) update session fields. Remove manual cleanup loops and rollback logic.
     - Suggested Files for Context: server/routes/assessment/purpose-discovery.ts, server/routes/assessment/action-plan.ts, server/storage.ts, server/db.ts
     - Step Dependencies: Step 12.1
+    - Implementation Notes:
+      • COMPLETED: Replaced manual rollback with native `db.transaction()` for true database atomicity
+      • ARCHITECTURE: Created structured error handling system with `TransactionError`, `StreamingError`, `ValidationError` classes in `server/utils/errors.ts`
+      • ATOMICITY: Updated `atomicPurposePathUpdate()` to use transactions, optimized DELETE operations with batch `inArray()` instead of loops
+      • CONSISTENCY: Created `atomicActionPlanUpdate()` function for consistent transaction patterns across all endpoints
 
-[ ] Step 12.5: Add Runtime Validation and Structured Error Handling
-    - Task: Create server/utils/errors.ts with custom error classes (StreamingError, ValidationError, DatabaseError). Add validation of session.responses before streaming. Replace console.error calls with structured logging that includes sessionId and operation context.
+[ ] Step 12.5: Add Runtime Input Validation 
+    - Task: Add Zod-based validation of session.responses structure before AI processing to prevent malformed data from causing expensive AI chain failures. Validate questionnaire response completeness and format. Add early validation errors with structured error responses.
     - Suggested Files for Context: server/routes/assessment/purpose-discovery.ts, server/routes/assessment/action-plan.ts, shared/schema.ts
-    - Step Dependencies: Step 12.2
+    - Step Dependencies: Step 12.4
     - User Instructions: None
+    - Notes: Structured error handling system (TransactionError, StreamingError, ValidationError classes) already implemented in Step 12.4. This step focuses purely on input validation to catch issues before expensive operations.
 
 ### Test Organization & Coverage
 
