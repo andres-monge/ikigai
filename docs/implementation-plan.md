@@ -209,8 +209,8 @@ This phase refactors the AI chains and endpoints to support word-by-word streami
 
 ### Test Organization & Coverage
 
-[ ] Step 12.6: Split Monolithic Test File and Add Parser Tests
-    - Task: Split assessment.stream.test.ts (1036 lines) into assessment.paths.stream.test.ts and assessment.action-plan.stream.test.ts. Extract shared SSE utilities to tests/utils/sse.ts. Add focused unit tests for the new parser modules covering edge cases (concatenated bullets, missing sections). Run npm test to verify all tests pass.
+[X] Step 12.6: Split Monolithic Test File and Add Parser Tests
+    - Task: Split assessment.stream.test.ts (1036 lines) into assessment.purpose-discoverys.stream.test.ts and assessment.action-plan.stream.test.ts. Extract shared SSE utilities to sse-test-utils.ts. Add focused unit tests for the new parser modules covering edge cases (concatenated bullets, missing sections). Run npm test to verify all tests pass.
     - Suggested Files for Context: server/routes/assessment/assessment.stream.test.ts, vitest.config.ts
     - Step Dependencies: Steps 12.1, 12.3
 
