@@ -26,11 +26,11 @@ import {
   atomicPurposePathUpdate 
 } from "./utils";
 
-export const pathsRouter = Router();
+export const purposeDiscoveryRouter = Router();
 
 /* --------------------------- POST /api/analyze --------------------------- */
 
-pathsRouter.post("/analyze", async (req, res, next) => {
+purposeDiscoveryRouter.post("/analyze", async (req, res, next) => {
   try {
     const validation = analysisRequestSchema.safeParse(req.body);
     if (!validation.success) {
@@ -76,7 +76,7 @@ pathsRouter.post("/analyze", async (req, res, next) => {
 
 /* ----------------------- GET /api/analyze/stream ------------------------ */
 
-pathsRouter.get("/analyze/stream", async (req, res) => {
+purposeDiscoveryRouter.get("/analyze/stream", async (req, res) => {
   const sessionId = req.query.sessionId as string;
 
   if (!sessionId) {

@@ -116,11 +116,15 @@ My_Directory_Structure/
 ├── server/ # Backend Node.js/Express server
 │ ├── ai/ # Modular AI logic directory
 │ │ ├── chains/ # Orchestrates multi-call AI sequences
-│ │ │ ├── aaction-plan.chain.ts
+│ │ │ ├── action-plan.chain.ts
 │ │ │ ├── action-plan.stream.chain.ts # Logic for streaming action plan
 │ │ │ ├── index.ts
-│ │ │ └── purpose-discovery.chain.ts
+│ │ │ ├── purpose-discovery.chain.ts
 │ │ │ └── purpose-discovery.stream.chain.ts # Logic for streaming results
+│ │ ├── limiter.ts # Concurrency control for AI requests
+│ │ ├── parsers/ # Text parsing utilities for streaming responses
+│ │ │ ├── action-plan.parser.ts # Parses action plan streaming text
+│ │ │ └── purpose-discovery.parser.ts # Parses purpose discovery streaming text
 │ │ ├── prompts.ts # Manages system prompt generation & persona
 │ │ ├── schemas.ts # Zod/OpenAPI schemas for AI validation
 │ │ ├── tools.ts # Function-calling tool definitions
@@ -128,11 +132,20 @@ My_Directory_Structure/
 │ │ └── wrapper.ts # Low-level Gemini API client wrapper
 │ ├── db.ts # Drizzle client setup and export
 │ ├── routes/ # Feature-based API route handlers
-│ │ └── assessment.ts # Handles /analyze/stream and /action-plan/stream
+│ │ ├── assessment/ # Assessment-related endpoints (modular)
+│ │ │ ├── action-plan.ts # Action plan generation endpoints
+│ │ │ ├── assessment.stream.test.ts # Integration tests for streaming
+│ │ │ ├── assessment.test.ts # Unit tests for assessment routes
+│ │ │ ├── index.ts # Barrel export combining all assessment routes
+│ │ │ ├── purpose-discovery.ts # Purpose discovery endpoints
+│ │ │ └── utils.ts # Shared utilities for assessment routes
+│ │ └── session.ts # Session management endpoints
 │ ├── services/ # External API service abstractions
 │ │ ├── index.ts # Service exports
 │ │ ├── salary.ts # Salary data fetching service
 │ │ └── youtube.ts # YouTube API service
+│ ├── utils/ # Server utilities
+│ │ └── sse.ts # Server-Sent Events utilities
 │ ├── cache.ts # In-memory cache implementation
 │ └── storage.ts # PostgreSQL storage class using Drizzle
 ├── shared/ # Isomorphic code
@@ -281,7 +294,7 @@ The strategy is updated to leverage the best model for each task while simplifyi
 ## 9\. Data Flow
 
   - **Client ↔ Server: Server-Sent Events (SSE)** are the primary mechanism for delivering AI-generated content for analysis and action plans. Standard REST API calls (POST, GET) are used for initial data submission (questionnaire) and session management.
-  - **Server-Side:** The internal data flow is orchestrated by streaming-specific chains in server/ai/chains/ which pipe AI output directly to the client response.
+  - **Server-Side:** The internal data flow is orchestrated by streaming-specific chains in server/ai/chains/ which pipe AI output directly to the client response. Response parsing is handled by specialized parsers in server/ai/parsers/, and SSE utilities in server/utils/sse.ts manage the streaming protocol. Route handling is organized in a modular structure under server/routes/assessment/.
   - **State Management:** Client-side state for incoming streams is managed within individual React components using useState and useEffect. TanStack Query is used for non-streaming server state. Data is persisted in sessionStorage on stream completion to handle page refreshes gracefully.
 
 ## 10\. Environment Variables

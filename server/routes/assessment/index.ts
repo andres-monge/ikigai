@@ -9,18 +9,18 @@
  */
 
 import { Router } from "express";
-import { pathsRouter } from "./paths";
+import { purposeDiscoveryRouter } from "./purpose-discovery";
 import { actionPlanRouter } from "./action-plan";
 
 /**
  * Combined assessment router that includes all assessment endpoints:
- * - POST /api/analyze (from paths.ts)
- * - GET /api/analyze/stream (from paths.ts)  
+ * - POST /api/analyze (from purpose-discovery.ts)
+ * - GET /api/analyze/stream (from purpose-discovery.ts)  
  * - POST /api/action-plan (from action-plan.ts)
  * - GET /api/action-plan/stream (from action-plan.ts)
  */
 export const assessmentRouter = Router();
 
 // Mount feature-specific routers
-assessmentRouter.use(pathsRouter);
+assessmentRouter.use(purposeDiscoveryRouter);
 assessmentRouter.use(actionPlanRouter);

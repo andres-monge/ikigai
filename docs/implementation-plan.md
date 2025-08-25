@@ -192,20 +192,20 @@ This phase refactors the AI chains and endpoints to support word-by-word streami
 
 [ ] Step 12.4: Replace Manual Rollback with Database Transactions
     - Task: Use Drizzle db.transaction() for atomic operations in both /api/analyze and streaming saves. Wrap: (a) create new purpose paths, (b) delete old paths, (c) update session fields. Remove manual cleanup loops and rollback logic.
-    - Suggested Files for Context: server/routes/assessment.ts, server/storage.ts, server/db.ts
+    - Suggested Files for Context: server/routes/assessment/purpose-discovery.ts, server/routes/assessment/action-plan.ts, server/storage.ts, server/db.ts
     - Step Dependencies: Step 12.1
 
 [ ] Step 12.5: Add Runtime Validation and Structured Error Handling
     - Task: Create server/utils/errors.ts with custom error classes (StreamingError, ValidationError, DatabaseError). Add validation of session.responses before streaming. Replace console.error calls with structured logging that includes sessionId and operation context.
-    - Suggested Files for Context: server/routes/assessment.ts, shared/schema.ts
+    - Suggested Files for Context: server/routes/assessment/purpose-discovery.ts, server/routes/assessment/action-plan.ts, shared/schema.ts
     - Step Dependencies: Step 12.2
     - User Instructions: None
 
 ### Test Organization & Coverage
 
 [ ] Step 12.6: Split Monolithic Test File and Add Parser Tests
-    - Task: Split assessment.stream.test.ts (1036 lines) into assessment.analyze.stream.test.ts and assessment.action-plan.stream.test.ts. Extract shared SSE utilities to tests/utils/sse.ts. Add focused unit tests for the new parser modules covering edge cases (concatenated bullets, missing sections). Run npm test to verify all tests pass.
-    - Suggested Files for Context: server/routes/assessment.stream.test.ts, vitest.config.ts
+    - Task: Split assessment.stream.test.ts (1036 lines) into assessment.paths.stream.test.ts and assessment.action-plan.stream.test.ts. Extract shared SSE utilities to tests/utils/sse.ts. Add focused unit tests for the new parser modules covering edge cases (concatenated bullets, missing sections). Run npm test to verify all tests pass.
+    - Suggested Files for Context: server/routes/assessment/assessment.stream.test.ts, vitest.config.ts
     - Step Dependencies: Steps 12.1, 12.3
 
 ---
@@ -241,5 +241,5 @@ This final phase improves resilience and provides developers with the tools to e
 
 [ ] Step 16: Create a Developer Script for Controlled Edge-Case Testing
 **Task**: Create a new file `_docs/manual-test-harness.ts`. This script will not be part of the main application build. It should be a simple Node.js script that allows a developer to easily send a predefined JSON object (representing difficult questionnaire answers) to the `/api/analyze/stream` endpoint and print the raw streaming output. Include sample inputs in the script for testing vague, abstract, non-sequitur, and multi-language answers to help isolate issues.
-**Suggested Files for Context**: `server/routes/assessment.ts`, `shared/schema.ts`
+**Suggested Files for Context**: `server/routes/assessment`, `shared/schema.ts`
 **Step Dependencies**: Step 15
