@@ -25,9 +25,6 @@ import {
   MessageCircle,
   ArrowLeft,
   ClipboardCheck,
-  Brain,
-  Loader,
-  Youtube,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -41,10 +38,11 @@ import { useGetActionPlan } from '@/hooks/use-get-action-plan';
 import { useSSEStream, StreamingPhase } from '@/hooks/use-sse-stream';
 import { t, type Language } from '@/lib/i18n';
 import { Skeleton } from '@/components/ui/skeleton';
+import { StreamingStatus } from '@/components/streaming-status';
 import { exportActionPlanToPDF } from '@/lib/pdf-export';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
-import type { FullAssessment, ActionPlan, PurposePath } from '@/types/assessment';
+import type { FullAssessment, ActionPlan, PurposePath, Milestone, SkillToLearn, YoutubeVideo } from '@/types/assessment';
 
 interface ActionPlanProps {
   language: Language;
@@ -59,7 +57,6 @@ export function ActionPlan({
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [needsStreaming, setNeedsStreaming] = useState(false);
-  const [streamingBuffer, setStreamingBuffer] = useState('');
   const [sessionData, setSessionData] = useState<FullAssessment | null>(null);
 
   const { data: session, isLoading, isError } = useGetActionPlan(sessionId);
@@ -112,12 +109,6 @@ export function ActionPlan({
     }
   });
 
-  // Update streaming buffer when new data arrives
-  useEffect(() => {
-    if (streamingState.buffer !== streamingBuffer) {
-      setStreamingBuffer(streamingState.buffer);
-    }
-  }, [streamingState.buffer, streamingBuffer]);
 
   /* Data availability check and streaming setup */
   useEffect(() => {
@@ -208,18 +199,10 @@ export function ActionPlan({
         
         {/* Streaming Status */}
         <div className="bg-white rounded-2xl shadow-lg p-8 mb-8">
-          <div className="flex items-center justify-center mb-6">
-            {streamingState.phase === StreamingPhase.THINKING ? (
-              <Brain className="w-8 h-8 text-blue-600 animate-pulse mr-3" />
-            ) : streamingState.phase === StreamingPhase.ENRICHING ? (
-              <Youtube className="w-8 h-8 text-red-600 animate-pulse mr-3" />
-            ) : (
-              <Loader className="w-8 h-8 text-blue-600 animate-spin mr-3" />
-            )}
-            <span className="text-lg font-medium text-slate-700">
-              {getPhaseMessage(streamingState.phase)}
-            </span>
-          </div>
+          <StreamingStatus 
+            phase={streamingState.phase}
+            message={getPhaseMessage(streamingState.phase)}
+          />
           
           {/* Show error if present */}
           {streamingState.error && (
@@ -239,10 +222,10 @@ export function ActionPlan({
           )}
           
           {/* Show streaming content if available */}
-          {streamingBuffer && streamingState.phase === StreamingPhase.STREAMING && (
+          {streamingState.buffer && streamingState.phase === StreamingPhase.STREAMING && (
             <div className="mt-6">
               <div className="bg-slate-50 rounded-lg p-4 text-sm text-slate-700 font-mono whitespace-pre-wrap">
-                {streamingBuffer}
+                {streamingState.buffer}
               </div>
               
               {/* Show completed sections */}
@@ -305,7 +288,7 @@ export function ActionPlan({
 
       {/* Milestones Section */}
       <div className="space-y-8">
-        {currentActionPlan.milestones.map((ms: any, idx: number) => (
+        {currentActionPlan.milestones.map((ms: Milestone, idx: number) => (
           <Card key={idx}>
             <CardHeader className="flex flex-row gap-4 items-start">
               {/* Icon rotation for variety */}
@@ -343,11 +326,11 @@ export function ActionPlan({
                     {t('actionPlan.skills', language)}
                   </h4>
                   <div className="space-y-3">
-                    {ms.skills.map((skill: any, i: number) => (
+                    {ms.skills.map((skill: SkillToLearn, i: number) => (
                       <div key={i}>
                         <p className="font-medium text-slate-700 mb-1">{skill.skill}</p>
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                          {skill.youtubeLinks.map((video: any, j: number) => (
+                          {skill.youtubeLinks.map((video: YoutubeVideo, j: number) => (
                             <a
                               key={j}
                               href={video.url}

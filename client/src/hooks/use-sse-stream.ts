@@ -122,6 +122,7 @@ export function useSSEStream(options: UseSSEStreamOptions): StreamingState {
   
   const eventSourceRef = useRef<EventSource | null>(null);
   const thinkingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const retryTimerRef = useRef<NodeJS.Timeout | null>(null);
   
   // Clean up function
   const cleanup = useCallback(() => {
@@ -132,6 +133,10 @@ export function useSSEStream(options: UseSSEStreamOptions): StreamingState {
     if (thinkingTimerRef.current) {
       clearTimeout(thinkingTimerRef.current);
       thinkingTimerRef.current = null;
+    }
+    if (retryTimerRef.current) {
+      clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
     }
   }, []);
   
@@ -218,7 +223,7 @@ export function useSSEStream(options: UseSSEStreamOptions): StreamingState {
         }));
         
         // Auto-retry after 2 seconds
-        setTimeout(() => {
+        retryTimerRef.current = setTimeout(() => {
           cleanup();
           startStream();
         }, 2000);

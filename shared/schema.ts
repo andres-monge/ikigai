@@ -95,11 +95,13 @@ export const youtubeVideoSchema = z.object({
   /** Medium-quality thumbnail URL for display purposes. */
   thumbnailUrl: z.string().url(),
 });
+export type YoutubeVideo = z.infer<typeof youtubeVideoSchema>;
 
 export const skillToLearnSchema = z.object({
   skill: z.string(),
   youtubeLinks: z.array(youtubeVideoSchema).min(1),
 });
+export type SkillToLearn = z.infer<typeof skillToLearnSchema>;
 
 // === NEW ▶ Milestone-based Action-Plan schema (Step 3) ===
 export const milestoneSchema = z.object({

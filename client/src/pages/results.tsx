@@ -35,9 +35,10 @@
 
 import { useEffect, useState } from 'react';
 import { useLocation } from 'wouter';
-import { Download, RotateCcw, Brain, Loader } from 'lucide-react';
+import { Download, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { LoadingOverlay } from '@/components/loading-overlay';
+import { StreamingStatus } from '@/components/streaming-status';
 import { CoreDriversSummary } from '@/components/results/core-drivers-summary';
 import { PurposePaths } from '@/components/results/purpose-paths';
 import { t, type Language } from '@/lib/i18n';
@@ -69,7 +70,6 @@ export function Results({
   const { toast } = useToast();
   const [isGenerating, setIsGenerating] = useState(false);
   const [needsStreaming, setNeedsStreaming] = useState(false);
-  const [streamingBuffer, setStreamingBuffer] = useState('');
 
   const { createActionPlan } = useCreateActionPlan({
     sessionId,
@@ -144,12 +144,6 @@ export function Results({
     }
   });
 
-  // Update streaming buffer when new data arrives
-  useEffect(() => {
-    if (streamingState.buffer !== streamingBuffer) {
-      setStreamingBuffer(streamingState.buffer);
-    }
-  }, [streamingState.buffer, streamingBuffer]);
 
   /* Data availability check and streaming setup */
   useEffect(() => {
@@ -236,16 +230,10 @@ export function Results({
           
           {/* Streaming Status */}
           <div className="bg-white rounded-2xl shadow-lg p-8 mb-8">
-            <div className="flex items-center justify-center mb-6">
-              {streamingState.phase === StreamingPhase.THINKING ? (
-                <Brain className="w-8 h-8 text-purple-600 animate-pulse mr-3" />
-              ) : (
-                <Loader className="w-8 h-8 text-purple-600 animate-spin mr-3" />
-              )}
-              <span className="text-lg font-medium text-slate-700">
-                {getPhaseMessage(streamingState.phase)}
-              </span>
-            </div>
+            <StreamingStatus 
+              phase={streamingState.phase}
+              message={getPhaseMessage(streamingState.phase)}
+            />
             
             {/* Show error if present */}
             {streamingState.error && (
@@ -265,10 +253,10 @@ export function Results({
             )}
             
             {/* Show streaming content if available */}
-            {streamingBuffer && streamingState.phase === StreamingPhase.STREAMING && (
+            {streamingState.buffer && streamingState.phase === StreamingPhase.STREAMING && (
               <div className="mt-6">
                 <div className="bg-slate-50 rounded-lg p-4 text-sm text-slate-700 font-mono whitespace-pre-wrap">
-                  {streamingBuffer}
+                  {streamingState.buffer}
                 </div>
                 
                 {/* Show completed sections */}

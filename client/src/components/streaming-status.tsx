@@ -23,18 +23,18 @@ export function StreamingStatus({ phase, message }: StreamingStatusProps) {
   const getIcon = () => {
     switch (phase) {
       case StreamingPhase.THINKING:
-        return <Brain className="w-8 h-8 text-purple-600 animate-pulse" />;
+        return <Brain className="w-8 h-8 text-purple-600 animate-pulse mr-3" />;
       case StreamingPhase.ENRICHING:
-        return <Youtube className="w-8 h-8 text-red-600 animate-pulse" />;
+        return <Youtube className="w-8 h-8 text-red-600 animate-pulse mr-3" />;
       default:
-        return <Loader className="w-8 h-8 text-purple-600 animate-spin" />;
+        return <Loader className="w-8 h-8 text-purple-600 animate-spin mr-3" />;
     }
   };
 
   return (
     <div className="flex items-center justify-center mb-6">
       {getIcon()}
-      <span className="ml-3 text-lg font-medium text-slate-700">
+      <span className="text-lg font-medium text-slate-700">
         {message}
       </span>
     </div>
