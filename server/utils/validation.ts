@@ -132,7 +132,19 @@ export function validateSessionForAI(session: HydratedAssessmentSession): void {
 
   // Validate questionnaire responses using dedicated function
   // This will throw ValidationError if validation fails
-  validateQuestionnaireResponses(session.responses);
+  try {
+    validateQuestionnaireResponses(session.responses);
+  } catch (error) {
+    if (error instanceof ValidationError) {
+      // Re-throw with session context
+      throw new ValidationError(
+        error.message,
+        error.details,
+        session.sessionId
+      );
+    }
+    throw error;
+  }
 }
 
 /**

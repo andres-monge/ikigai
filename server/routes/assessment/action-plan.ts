@@ -142,14 +142,8 @@ actionPlanRouter.get("/action-plan/stream", async (req, res) => {
     }
     
     // Validate session data before expensive AI processing
-    try {
-      validateSessionForActionPlan(session);
-    } catch (error) {
-      if (error instanceof ValidationError) {
-        return res.status(400).json(error.toResponse());
-      }
-      throw error;
-    }
+    // ValidationError will bubble up to main catch block for consistent handling
+    validateSessionForActionPlan(session);
     
     // Set up Server-Sent Events headers
     setSseHeaders(res);
@@ -238,8 +232,13 @@ actionPlanRouter.get("/action-plan/stream", async (req, res) => {
     
     res.end();
   } catch (error) {
-    console.error('Stream setup error:', error);
-    res.status(500).json({ error: 'Failed to start stream' });
+    if (error instanceof ValidationError) {
+      console.error('Validation error during stream setup:', error.toJSON());
+      res.status(400).json(error.toResponse());
+    } else {
+      console.error('Stream setup error:', error);
+      res.status(500).json({ error: 'Failed to start stream' });
+    }
   } finally {
     // Always clean up the active stream marker
     activeStreams.delete(sessionId);

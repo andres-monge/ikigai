@@ -109,14 +109,11 @@ purposeDiscoveryRouter.get("/analyze/stream", async (req, res) => {
     }
 
     // Validate session data before expensive AI processing
+    // ValidationError will bubble up to main catch block for consistent handling
+    validateSessionForAI(session);
+
+    // Streaming-specific try-catch for AI operations
     try {
-      validateSessionForAI(session);
-    } catch (error) {
-      if (error instanceof ValidationError) {
-        return res.status(400).json(error.toResponse());
-      }
-      throw error;
-    }
 
     // Set up Server-Sent Events headers
     setSseHeaders(res);
@@ -178,9 +175,30 @@ purposeDiscoveryRouter.get("/analyze/stream", async (req, res) => {
     }
 
     res.end();
+    } catch (streamingError) {
+      // Handle streaming-specific errors
+      if (streamingError instanceof TransactionError) {
+        console.error('Streaming transaction error:', streamingError.toJSON());
+        writeSseError(res, streamingError.message);
+      } else {
+        console.error('General streaming error:', {
+          sessionId,
+          error: streamingError instanceof Error ? streamingError.message : streamingError,
+          stack: streamingError instanceof Error ? streamingError.stack : undefined
+        });
+        writeSseError(res, 'Failed to complete streaming. Please try again.');
+      }
+      res.end();
+    }
+
   } catch (error) {
-    console.error('Stream setup error:', error);
-    res.status(500).json({ error: 'Failed to start stream' });
+    if (error instanceof ValidationError) {
+      console.error('Validation error during stream setup:', error.toJSON());
+      res.status(400).json(error.toResponse());
+    } else {
+      console.error('Stream setup error:', error);
+      res.status(500).json({ error: 'Failed to start stream' });
+    }
   } finally {
     // Always clean up the active stream marker
     activeStreams.delete(sessionId);
