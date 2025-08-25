@@ -35,7 +35,7 @@
 
 import { useEffect, useState } from 'react';
 import { useLocation } from 'wouter';
-import { Download, RotateCcw } from 'lucide-react';
+import { Download, RotateCcw, Brain, Loader } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { LoadingOverlay } from '@/components/loading-overlay';
 import { CoreDriversSummary } from '@/components/results/core-drivers-summary';
@@ -44,7 +44,9 @@ import { t, type Language } from '@/lib/i18n';
 import { exportToPDF } from '@/lib/pdf-export';
 import { useSessionStorage } from '@/hooks/use-session-storage';
 import { useCreateActionPlan } from '@/hooks/use-create-action-plan';
+import { useSSEStream, StreamingPhase } from '@/hooks/use-sse-stream';
 import { useToast } from '@/hooks/use-toast';
+import { apiRequest } from '@/lib/queryClient';
 import type { FullAssessment } from '@/types/assessment';
 
 interface ResultsProps {
@@ -66,6 +68,8 @@ export function Results({
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [isGenerating, setIsGenerating] = useState(false);
+  const [needsStreaming, setNeedsStreaming] = useState(false);
+  const [streamingBuffer, setStreamingBuffer] = useState('');
 
   const { createActionPlan } = useCreateActionPlan({
     sessionId,
@@ -106,12 +110,83 @@ export function Results({
     },
   });
 
-  /* Redirect guard */
-  useEffect(() => {
-    if (!session || !session.purposePaths || !session.coreDriversAnalysis) {
-      navigate('/');
+  // SSE Streaming hook for purpose discovery
+  const streamingState = useSSEStream({
+    enabled: needsStreaming,
+    endpoint: `/api/analyze/stream?sessionId=${sessionId}`,
+    onComplete: async (finalBuffer) => {
+      // On completion, fetch the final session data from the server
+      try {
+        const res = await apiRequest('GET', `/api/session/${sessionId}`);
+        if (res.ok) {
+          const updatedSession = await res.json();
+          setSession(updatedSession);
+          sessionStorage.setItem('session', JSON.stringify(updatedSession));
+          setNeedsStreaming(false);
+        }
+      } catch (error) {
+        console.error('Failed to fetch completed session:', error);
+        toast({
+          title: t('common.error', language),
+          description: 'Failed to save analysis results.',
+          variant: 'destructive',
+        });
+      }
+    },
+    onError: (error) => {
+      console.error('Streaming error:', error);
+      toast({
+        title: t('common.error', language),
+        description: 'Analysis failed. Please try again.',
+        variant: 'destructive',
+      });
+      setNeedsStreaming(false);
     }
-  }, [session, navigate]);
+  });
+
+  // Update streaming buffer when new data arrives
+  useEffect(() => {
+    if (streamingState.buffer !== streamingBuffer) {
+      setStreamingBuffer(streamingState.buffer);
+    }
+  }, [streamingState.buffer, streamingBuffer]);
+
+  /* Data availability check and streaming setup */
+  useEffect(() => {
+    const checkSessionData = async () => {
+      // If we have complete data in sessionStorage, we're good
+      if (session?.purposePaths?.length === 3 && session?.coreDriversAnalysis) {
+        return;
+      }
+      
+      // Try to fetch from server
+      try {
+        const res = await apiRequest('GET', `/api/session/${sessionId}`);
+        if (res.ok) {
+          const serverSession = await res.json();
+          if (serverSession?.purposePaths?.length === 3 && serverSession?.coreDriversAnalysis) {
+            // Complete data found on server
+            setSession(serverSession);
+            sessionStorage.setItem('session', JSON.stringify(serverSession));
+            return;
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch session from server:', error);
+      }
+      
+      // No complete data found, check if we have responses to analyze
+      if (session?.responses || sessionId) {
+        // Start streaming
+        setNeedsStreaming(true);
+      } else {
+        // No session data at all, redirect to home
+        navigate('/');
+      }
+    };
+    
+    checkSessionData();
+  }, [session, sessionId, navigate, setSession]);
 
   const handleChoosePath = async (pathId: number) => {
     if (typeof pathId !== 'number') return;
@@ -132,8 +207,98 @@ export function Results({
     }
   };
 
+  // Helper function to get phase message
+  const getPhaseMessage = (phase: StreamingPhase): string => {
+    switch (phase) {
+      case StreamingPhase.CONNECTING:
+        return language === 'es' ? 'Conectando al servicio de IA...' : 'Connecting to AI service...';
+      case StreamingPhase.THINKING:
+        return language === 'es' ? 'La IA está analizando tus respuestas...' : 'AI is analyzing your responses...';
+      case StreamingPhase.STREAMING:
+        return language === 'es' ? 'Generando tu análisis...' : 'Generating your analysis...';
+      case StreamingPhase.ERROR:
+        return language === 'es' ? 'Error en la conexión' : 'Connection error';
+      default:
+        return language === 'es' ? 'Procesando...' : 'Processing...';
+    }
+  };
+
+  // Show streaming UI if we're in streaming mode
+  if (needsStreaming && streamingState.phase !== StreamingPhase.COMPLETE) {
+    return (
+      <>
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold text-slate-900 mb-4">
+              {t('results.title', language)}
+            </h2>
+          </div>
+          
+          {/* Streaming Status */}
+          <div className="bg-white rounded-2xl shadow-lg p-8 mb-8">
+            <div className="flex items-center justify-center mb-6">
+              {streamingState.phase === StreamingPhase.THINKING ? (
+                <Brain className="w-8 h-8 text-purple-600 animate-pulse mr-3" />
+              ) : (
+                <Loader className="w-8 h-8 text-purple-600 animate-spin mr-3" />
+              )}
+              <span className="text-lg font-medium text-slate-700">
+                {getPhaseMessage(streamingState.phase)}
+              </span>
+            </div>
+            
+            {/* Show error if present */}
+            {streamingState.error && (
+              <div className="text-center mb-4">
+                <p className="text-red-600">{streamingState.error}</p>
+                <Button
+                  onClick={() => {
+                    setNeedsStreaming(false);
+                    setTimeout(() => setNeedsStreaming(true), 1000);
+                  }}
+                  className="mt-2"
+                  variant="outline"
+                >
+                  {language === 'es' ? 'Reintentar' : 'Retry'}
+                </Button>
+              </div>
+            )}
+            
+            {/* Show streaming content if available */}
+            {streamingBuffer && streamingState.phase === StreamingPhase.STREAMING && (
+              <div className="mt-6">
+                <div className="bg-slate-50 rounded-lg p-4 text-sm text-slate-700 font-mono whitespace-pre-wrap">
+                  {streamingBuffer}
+                </div>
+                
+                {/* Show completed sections */}
+                {streamingState.completedSections.length > 0 && (
+                  <div className="mt-4">
+                    <p className="text-sm text-slate-600 mb-2">
+                      {language === 'es' ? 'Secciones completadas:' : 'Completed sections:'}
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {streamingState.completedSections.map((section) => (
+                        <span
+                          key={section}
+                          className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full"
+                        >
+                          {section.replace('_', ' ')}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </>
+    );
+  }
+
   if (!session || !session.coreDriversAnalysis) {
-    // Small fallback while redirect effect runs or for invalid state
+    // Small fallback while data loads
     return null;
   }
 

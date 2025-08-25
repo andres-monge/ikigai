@@ -16,7 +16,7 @@
  * - wouter, lucide-react, @/hooks, @/components, @/lib, @/types
  */
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'wouter';
 import {
   Lightbulb,
@@ -25,6 +25,9 @@ import {
   MessageCircle,
   ArrowLeft,
   ClipboardCheck,
+  Brain,
+  Loader,
+  Youtube,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -35,9 +38,13 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { useGetActionPlan } from '@/hooks/use-get-action-plan';
+import { useSSEStream, StreamingPhase } from '@/hooks/use-sse-stream';
 import { t, type Language } from '@/lib/i18n';
 import { Skeleton } from '@/components/ui/skeleton';
 import { exportActionPlanToPDF } from '@/lib/pdf-export';
+import { apiRequest } from '@/lib/queryClient';
+import { useToast } from '@/hooks/use-toast';
+import type { FullAssessment, ActionPlan, PurposePath } from '@/types/assessment';
 
 interface ActionPlanProps {
   language: Language;
@@ -50,30 +57,225 @@ export function ActionPlan({
   sessionId,
 }: ActionPlanProps) {
   const [, navigate] = useLocation();
+  const { toast } = useToast();
+  const [needsStreaming, setNeedsStreaming] = useState(false);
+  const [streamingBuffer, setStreamingBuffer] = useState('');
+  const [sessionData, setSessionData] = useState<FullAssessment | null>(null);
 
   const { data: session, isLoading, isError } = useGetActionPlan(sessionId);
 
   const actionPlan = session?.actionPlan;
   const chosenPath = useMemo(() => {
-    if (!session || !session.chosenPathId) return null;
+    const currentSession = sessionData || session;
+    if (!currentSession || !currentSession.chosenPathId) return null;
     return (
-      session.purposePaths.find((p) => p.id === session.chosenPathId) || null
+      currentSession.purposePaths.find((p: PurposePath) => p.id === currentSession.chosenPathId) || null
     );
-  }, [session]);
+  }, [session, sessionData]);
 
-  useEffect(() => {
-    // On first load, if we're not loading and there's no plan, redirect.
-    // This handles page refreshes or direct navigation.
-    if (!isLoading && !actionPlan) {
-      navigate('/questionnaire');
+  // Get chosenPathId for streaming
+  const chosenPathId = useMemo(() => {
+    const currentSession = sessionData || session;
+    return currentSession?.chosenPathId;
+  }, [session, sessionData]);
+
+  // SSE Streaming hook for action plan
+  const streamingState = useSSEStream({
+    enabled: needsStreaming && !!chosenPathId,
+    endpoint: `/api/action-plan/stream?sessionId=${sessionId}&chosenPathId=${chosenPathId || ''}`,
+    onComplete: async (finalBuffer) => {
+      // On completion, fetch the final session data from the server
+      try {
+        const res = await apiRequest('GET', `/api/session/${sessionId}`);
+        if (res.ok) {
+          const updatedSession = await res.json();
+          setSessionData(updatedSession);
+          setNeedsStreaming(false);
+        }
+      } catch (error) {
+        console.error('Failed to fetch completed session:', error);
+        toast({
+          title: t('common.error', language),
+          description: 'Failed to save action plan.',
+          variant: 'destructive',
+        });
+      }
+    },
+    onError: (error) => {
+      console.error('Streaming error:', error);
+      toast({
+        title: t('common.error', language),
+        description: 'Action plan generation failed. Please try again.',
+        variant: 'destructive',
+      });
+      setNeedsStreaming(false);
     }
-  }, [isLoading, actionPlan, navigate]);
+  });
+
+  // Update streaming buffer when new data arrives
+  useEffect(() => {
+    if (streamingState.buffer !== streamingBuffer) {
+      setStreamingBuffer(streamingState.buffer);
+    }
+  }, [streamingState.buffer, streamingBuffer]);
+
+  /* Data availability check and streaming setup */
+  useEffect(() => {
+    const checkActionPlanData = async () => {
+      // Use sessionData if available (from streaming), otherwise use hook data
+      const currentSession = sessionData || session;
+      const currentActionPlan = currentSession?.actionPlan;
+      
+      // If we have complete action plan, we're good
+      if (currentActionPlan?.milestones && currentActionPlan.milestones.length > 0) {
+        return;
+      }
+      
+      // If still loading from the hook, wait
+      if (isLoading) {
+        return;
+      }
+      
+      // Try to fetch fresh data from server
+      try {
+        const res = await apiRequest('GET', `/api/session/${sessionId}`);
+        if (res.ok) {
+          const serverSession = await res.json();
+          if (serverSession?.actionPlan?.milestones && serverSession.actionPlan.milestones.length > 0) {
+            // Complete action plan found on server
+            setSessionData(serverSession);
+            return;
+          }
+          
+          // No action plan but has chosen path - can stream
+          if (serverSession?.chosenPathId && serverSession?.purposePaths?.length > 0) {
+            setSessionData(serverSession);
+            setNeedsStreaming(true);
+            return;
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch session from server:', error);
+      }
+      
+      // No session data or chosen path, redirect to results
+      navigate('/results');
+    };
+    
+    checkActionPlanData();
+  }, [isLoading, session, sessionData, sessionId, navigate]);
+
+  // Helper function to get phase message
+  const getPhaseMessage = (phase: StreamingPhase): string => {
+    switch (phase) {
+      case StreamingPhase.CONNECTING:
+        return language === 'es' ? 'Conectando al servicio de IA...' : 'Connecting to AI service...';
+      case StreamingPhase.THINKING:
+        return language === 'es' ? 'La IA está creando tu plan de acción...' : 'AI is creating your action plan...';
+      case StreamingPhase.STREAMING:
+        return language === 'es' ? 'Generando tus hitos...' : 'Generating your milestones...';
+      case StreamingPhase.ENRICHING:
+        return language === 'es' ? 'Buscando recursos de aprendizaje...' : 'Finding learning resources...';
+      case StreamingPhase.ERROR:
+        return language === 'es' ? 'Error en la conexión' : 'Connection error';
+      default:
+        return language === 'es' ? 'Procesando...' : 'Processing...';
+    }
+  };
 
   if (isLoading) {
     return <ActionPlanSkeleton />;
   }
 
-  if (isError || !actionPlan || !chosenPath) {
+  // Show streaming UI if we're in streaming mode
+  if (needsStreaming && streamingState.phase !== StreamingPhase.COMPLETE) {
+    return (
+      <div className="max-w-4xl mx-auto py-8 px-4">
+        {/* Header Section */}
+        <div className="text-center mb-12">
+          <h2 className="text-3xl font-bold text-slate-900 mb-2">
+            {t('actionPlan.title', language)}
+          </h2>
+          <p className="text-lg text-slate-600 mb-4">
+            {t('actionPlan.subtitle', language)}
+          </p>
+          {chosenPath && (
+            <div className="inline-block bg-slate-100 text-slate-800 font-semibold px-4 py-2 rounded-lg">
+              {t('actionPlan.chosenPath', language)}: {chosenPath.title}
+            </div>
+          )}
+        </div>
+        
+        {/* Streaming Status */}
+        <div className="bg-white rounded-2xl shadow-lg p-8 mb-8">
+          <div className="flex items-center justify-center mb-6">
+            {streamingState.phase === StreamingPhase.THINKING ? (
+              <Brain className="w-8 h-8 text-blue-600 animate-pulse mr-3" />
+            ) : streamingState.phase === StreamingPhase.ENRICHING ? (
+              <Youtube className="w-8 h-8 text-red-600 animate-pulse mr-3" />
+            ) : (
+              <Loader className="w-8 h-8 text-blue-600 animate-spin mr-3" />
+            )}
+            <span className="text-lg font-medium text-slate-700">
+              {getPhaseMessage(streamingState.phase)}
+            </span>
+          </div>
+          
+          {/* Show error if present */}
+          {streamingState.error && (
+            <div className="text-center mb-4">
+              <p className="text-red-600">{streamingState.error}</p>
+              <Button
+                onClick={() => {
+                  setNeedsStreaming(false);
+                  setTimeout(() => setNeedsStreaming(true), 1000);
+                }}
+                className="mt-2"
+                variant="outline"
+              >
+                {language === 'es' ? 'Reintentar' : 'Retry'}
+              </Button>
+            </div>
+          )}
+          
+          {/* Show streaming content if available */}
+          {streamingBuffer && streamingState.phase === StreamingPhase.STREAMING && (
+            <div className="mt-6">
+              <div className="bg-slate-50 rounded-lg p-4 text-sm text-slate-700 font-mono whitespace-pre-wrap">
+                {streamingBuffer}
+              </div>
+              
+              {/* Show completed sections */}
+              {streamingState.completedSections.length > 0 && (
+                <div className="mt-4">
+                  <p className="text-sm text-slate-600 mb-2">
+                    {language === 'es' ? 'Hitos completados:' : 'Completed milestones:'}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {streamingState.completedSections.map((section) => (
+                      <span
+                        key={section}
+                        className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
+                      >
+                        {section.replace('MILESTONE_', 'Milestone ').replace('_', ' ')}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Use sessionData if available, otherwise fall back to session
+  const currentSession = sessionData || session;
+  const currentActionPlan = currentSession?.actionPlan;
+  const currentChosenPath = chosenPath;
+
+  if (isError || !currentActionPlan || !currentChosenPath) {
     // This state should ideally be brief due to the redirect guard.
     return null;
   }
@@ -81,9 +283,9 @@ export function ActionPlan({
   const handleExportPDF = () => {
     // This check is for TypeScript, but the button is only rendered when this
     // data is available anyway.
-    if (!actionPlan || !chosenPath) return;
+    if (!currentActionPlan || !currentChosenPath) return;
 
-    exportActionPlanToPDF(actionPlan, chosenPath.title, language);
+    exportActionPlanToPDF(currentActionPlan, currentChosenPath.title, language);
   };
 
   return (
@@ -97,13 +299,13 @@ export function ActionPlan({
           {t('actionPlan.subtitle', language)}
         </p>
         <div className="inline-block bg-slate-100 text-slate-800 font-semibold px-4 py-2 rounded-lg">
-          {t('actionPlan.chosenPath', language)}: {chosenPath.title}
+          {t('actionPlan.chosenPath', language)}: {currentChosenPath.title}
         </div>
       </div>
 
       {/* Milestones Section */}
       <div className="space-y-8">
-        {actionPlan.milestones.map((ms, idx) => (
+        {currentActionPlan.milestones.map((ms: any, idx: number) => (
           <Card key={idx}>
             <CardHeader className="flex flex-row gap-4 items-start">
               {/* Icon rotation for variety */}
@@ -127,7 +329,7 @@ export function ActionPlan({
                   {t('actionPlan.actions', language)}
                 </h4>
                 <ul className="list-disc list-inside space-y-2 text-slate-700">
-                  {ms.actions.map((act, i) => (
+                  {ms.actions.map((act: string, i: number) => (
                     <li key={i}>{act}</li>
                   ))}
                 </ul>
@@ -141,11 +343,11 @@ export function ActionPlan({
                     {t('actionPlan.skills', language)}
                   </h4>
                   <div className="space-y-3">
-                    {ms.skills.map((skill, i) => (
+                    {ms.skills.map((skill: any, i: number) => (
                       <div key={i}>
                         <p className="font-medium text-slate-700 mb-1">{skill.skill}</p>
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                          {skill.youtubeLinks.map((video, j) => (
+                          {skill.youtubeLinks.map((video: any, j: number) => (
                             <a
                               key={j}
                               href={video.url}
