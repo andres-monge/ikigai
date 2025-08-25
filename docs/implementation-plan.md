@@ -200,7 +200,7 @@ This phase refactors the AI chains and endpoints to support word-by-word streami
       • ATOMICITY: Updated `atomicPurposePathUpdate()` to use transactions, optimized DELETE operations with batch `inArray()` instead of loops
       • CONSISTENCY: Created `atomicActionPlanUpdate()` function for consistent transaction patterns across all endpoints
 
-[ ] Step 12.5: Add Runtime Input Validation 
+[X] Step 12.5: Add Runtime Input Validation 
     - Task: Add Zod-based validation of session.responses structure before AI processing to prevent malformed data from causing expensive AI chain failures. Validate questionnaire response completeness and format. Add early validation errors with structured error responses.
     - Suggested Files for Context: server/routes/assessment/purpose-discovery.ts, server/routes/assessment/action-plan.ts, shared/schema.ts
     - Step Dependencies: Step 12.4
