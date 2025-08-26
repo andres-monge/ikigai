@@ -39,7 +39,6 @@ import { t, type Language } from '@/lib/i18n';
 import { QUESTIONS, buildFlatQuestionList } from './questions';
 import type {
   QuestionnaireResponses,
-  FullAssessment,
 } from '@/types/assessment';
 
 /* -------------------------------------------------------------------------- */
@@ -73,8 +72,8 @@ export function SinglePageQuestionnaire({
   /** Holds user-typed answers keyed by the question id */
   const [answers, setAnswers] = useState<Record<string, string>>({});
 
-  /** Persisted `FullAssessment` once the backend returns */
-  const [, setSession] = useSessionStorage<FullAssessment | null>(
+  /** Session storage state - set to null after save to trigger streaming */
+  const [, setSession] = useSessionStorage<null>(
     'session',
     null,
   );
@@ -90,15 +89,18 @@ export function SinglePageQuestionnaire({
     sessionId,
     language,
     onSuccess: (data) => {
-      sessionStorage.setItem('session', JSON.stringify(data));
-      setSession(data);
+      // Clear any existing session data to ensure streaming is triggered
+      sessionStorage.removeItem('session');
+      setSession(null);
+      
+      // Navigate immediately to results page - sessionId comes from props
       navigate('/results');
     },
     onError: (error) => {
-      console.error('Purpose Discovery failed', error);
+      console.error('Questionnaire save failed', error);
       toast({
         title: t('common.error', language),
-        description: 'Could not complete the analysis. Please try again later.',
+        description: 'Could not save your responses. Please try again.',
         variant: 'destructive',
       });
     },

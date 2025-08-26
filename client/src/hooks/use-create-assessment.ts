@@ -1,15 +1,15 @@
 /**
  * @file use-create-assessment.ts
  *
- * React-Query mutation hook for kick-starting the Purpose Discovery flow.
+ * React-Query mutation hook for saving questionnaire responses without AI generation.
  *
  * This file was extracted from the former `use-assessment.ts` monolith in
- * Step 6 of the Implementation Plan.  The goal is to have one hook per
- * concern so the file remains small, focused and easier to reason about.
+ * Step 6 of the Implementation Plan. Updated in Step 13.2 to use the save-only
+ * endpoint for instant navigation to streaming experience.
  *
  * Responsibilities:
- *  • POST the user's questionnaire responses to `/api/analyze`.
- *  • Return the hydrated `FullAssessment` object coming from the backend.
+ *  • POST the user's questionnaire responses to `/api/questionnaire/save`.
+ *  • Return a minimal response `{ sessionId, success }` for immediate navigation.
  *  • Expose a typed `createAssessment` mutation and a boolean `isPending` flag
  *    for UI state.
  *
@@ -18,19 +18,26 @@
  *  • The hook itself does not swallow errors—letting React-Query bubble them
  *    up keeps the behaviour predictable.
  *
- * @see {@link ../../_docs/implementation_plan.md} – Phase 2, Step 6
+ * @see {@link ../../_docs/implementation_plan.md} – Phase 3, Step 13.2
  */
 
 import { useMutation } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import type {
   QuestionnaireResponses,
-  FullAssessment,
 } from '@/types/assessment';
 
 /* -------------------------------------------------------------------------- */
 /* Public Types                                                               */
 /* -------------------------------------------------------------------------- */
+
+/**
+ * Minimal response from the save-only endpoint.
+ */
+interface SaveAssessmentResponse {
+  sessionId: string;
+  success: boolean;
+}
 
 /**
  * Options accepted by {@link useCreateAssessment}.
@@ -41,13 +48,13 @@ export interface UseCreateAssessmentOptions {
    */
   sessionId: string;
   /**
-   * UI language – forwarded to the AI so it can generate localised output.
+   * UI language – saved with the questionnaire responses.
    */
   language: 'en' | 'es';
   /**
-   * Callback invoked when the backend responds with the full session object.
+   * Callback invoked when the backend saves the questionnaire successfully.
    */
-  onSuccess?: (data: FullAssessment) => void;
+  onSuccess?: (data: SaveAssessmentResponse) => void;
   /**
    * Callback invoked when the request or server-side processing fails.
    */
@@ -59,8 +66,8 @@ export interface UseCreateAssessmentOptions {
 /* -------------------------------------------------------------------------- */
 
 /**
- * React hook exposing a mutation that sends questionnaire answers to the
- * server and resolves with the complete `FullAssessment`.
+ * React hook exposing a mutation that saves questionnaire answers without
+ * AI generation, enabling instant navigation to streaming pages.
  */
 export function useCreateAssessment({
   sessionId,
@@ -70,23 +77,23 @@ export function useCreateAssessment({
 }: UseCreateAssessmentOptions) {
   const mutation = useMutation({
     mutationFn: async (payload: QuestionnaireResponses) => {
-      // Make the API request.  The helper automatically adds headers & JSON.
-      const res = await apiRequest('POST', '/api/analyze', {
+      // Make the API request to the save-only endpoint.
+      const res = await apiRequest('POST', '/api/questionnaire/save', {
         sessionId,
         language,
         responses: payload,
       });
-      // The backend always returns the fully-hydrated session record.
-      return (await res.json()) as FullAssessment;
+      // The backend returns a minimal response for instant navigation.
+      return (await res.json()) as SaveAssessmentResponse;
     },
     onSuccess,
     onError,
   });
 
   return {
-    /** Trigger the analysis. */
+    /** Save the questionnaire responses. */
     createAssessment: mutation.mutate,
-    /** `true` while the request and AI processing are ongoing. */
+    /** `true` while the save request is ongoing. */
     isPending: mutation.isPending,
   } as const;
 } 
