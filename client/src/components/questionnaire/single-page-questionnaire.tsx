@@ -6,13 +6,12 @@
  * a single page.  This is the streamlined alternative to the now-deprecated
  * multi-step wizard found in `pages/questionnaire.tsx`.
  *
- * Key features implemented in **Steps 2 & 4** of the Implementation Plan:
  *  • Uses `react-textarea-autosize` so every answer box grows with content.  
  *  • Renders all eight questions in one go – no pagination, no progress bar.  
- *  • Handles submission by calling `useCreateAssessment`, then navigates to
- *    `/results` on success.  
- *  • Persists the returned `FullAssessment` object to `sessionStorage` under
- *    the `session` key so downstream pages can access it instantly.
+ *  • Handles submission by calling `useCreateAssessment` save-only endpoint,
+ *    then navigates immediately to `/results` for streaming AI generation.
+ *  • Clears existing session data to trigger streaming detection on the
+ *    Results page for real-time AI analysis.
  *  • Implements **simple grid layout** for the questions (Step 4) – a single
  *      column on **all** screen sizes using `grid grid-cols-1 gap-6`.
  *  • Styles the submit button with the brand’s `gradient-primary` utility
@@ -39,6 +38,7 @@ import { t, type Language } from '@/lib/i18n';
 import { QUESTIONS, buildFlatQuestionList } from './questions';
 import type {
   QuestionnaireResponses,
+  FullAssessment,
 } from '@/types/assessment';
 
 /* -------------------------------------------------------------------------- */
@@ -73,7 +73,7 @@ export function SinglePageQuestionnaire({
   const [answers, setAnswers] = useState<Record<string, string>>({});
 
   /** Session storage state - set to null after save to trigger streaming */
-  const [, setSession] = useSessionStorage<null>(
+  const [, setSession] = useSessionStorage<FullAssessment | null>(
     'session',
     null,
   );
@@ -90,7 +90,6 @@ export function SinglePageQuestionnaire({
     language,
     onSuccess: (data) => {
       // Clear any existing session data to ensure streaming is triggered
-      sessionStorage.removeItem('session');
       setSession(null);
       
       // Navigate immediately to results page - sessionId comes from props

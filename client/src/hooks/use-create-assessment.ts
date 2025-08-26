@@ -22,6 +22,7 @@
  */
 
 import { useMutation } from '@tanstack/react-query';
+import { z } from 'zod';
 import { apiRequest } from '@/lib/queryClient';
 import type {
   QuestionnaireResponses,
@@ -30,6 +31,14 @@ import type {
 /* -------------------------------------------------------------------------- */
 /* Public Types                                                               */
 /* -------------------------------------------------------------------------- */
+
+/**
+ * Zod schema for validating the save-only endpoint response.
+ */
+const SaveAssessmentResponseSchema = z.object({
+  sessionId: z.string(),
+  success: z.boolean(),
+});
 
 /**
  * Minimal response from the save-only endpoint.
@@ -83,8 +92,9 @@ export function useCreateAssessment({
         language,
         responses: payload,
       });
-      // The backend returns a minimal response for instant navigation.
-      return (await res.json()) as SaveAssessmentResponse;
+      // Parse and validate the backend response for instant navigation.
+      const rawData = await res.json();
+      return SaveAssessmentResponseSchema.parse(rawData);
     },
     onSuccess,
     onError,

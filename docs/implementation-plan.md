@@ -234,7 +234,7 @@ This phase connects the frontend to the new word-by-word streaming APIs and vali
 
 ---
 
-[ ] Step 13.2: Update Questionnaire to Use Save-Only Endpoint and Navigate Immediately
+[X] Step 13.2: Update Questionnaire to Use Save-Only Endpoint and Navigate Immediately
 **Task**: Modify the questionnaire submission flow to use the new save endpoint instead of the full analysis endpoint. Update the `useCreateAssessment` hook to call `/api/questionnaire/save`, and change the questionnaire component's onSuccess handler to navigate immediately to `/results` without storing complete analysis data in sessionStorage. **Critical**: Clear any existing analysis data from sessionStorage before navigation to ensure streaming is triggered. Remove or minimize the loading overlay after successful save since the Results page will handle the streaming experience. This enables the instant navigation that makes streaming feel responsive. The key is ensuring no complete data exists in storage that would bypass streaming detection.
 **Suggested Files for Context**: `client/src/components/questionnaire/single-page-questionnaire.tsx`, `client/src/hooks/use-create-assessment.ts`, `client/src/pages/results.tsx`
 **Step Dependencies**: Step 13.1
