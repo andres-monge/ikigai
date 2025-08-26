@@ -27,7 +27,7 @@ import {
   setupStreamConcurrencyControl, 
   atomicPurposePathUpdate 
 } from "./utils";
-import { TransactionError, ValidationError } from "../../utils/errors";
+import { TransactionError, ValidationError, wrapTransactionError } from "../../utils/errors";
 import { validateSessionForAI } from "../../utils/validation";
 import { db } from "../../db";
 import { eq, inArray } from "drizzle-orm";
@@ -211,6 +211,20 @@ purposeDiscoveryRouter.get("/analyze/stream", async (req, res) => {
 
 /* ------------------------ POST /api/questionnaire/save ------------------------ */
 
+/**
+ * @route POST /api/questionnaire/save
+ * @description Saves questionnaire responses without triggering AI generation.
+ * This enables instant navigation to streaming pages by persisting user data
+ * and clearing any existing AI-generated content to force fresh streaming.
+ * 
+ * @param {string} sessionId - Unique session identifier
+ * @param {QuestionnaireResponses} responses - User's questionnaire responses
+ * @param {Language} language - User's preferred language ('en' | 'es')
+ * 
+ * @returns {Object} Minimal response with sessionId and success status
+ * @throws {ValidationError} When request data is invalid
+ * @throws {TransactionError} When database operations fail
+ */
 purposeDiscoveryRouter.post("/questionnaire/save", async (req, res, next) => {
   try {
     const validation = analysisRequestSchema.safeParse(req.body);
@@ -224,15 +238,22 @@ purposeDiscoveryRouter.post("/questionnaire/save", async (req, res, next) => {
 
     // Use database transaction for atomic operation
     await db.transaction(async (tx) => {
-      // Check if session exists
-      const existingSession = await storage.getAssessmentSessionBySessionId(sessionId);
+      // Check if session exists (within transaction to avoid race conditions)
+      const [existingSession] = await tx.select()
+        .from(assessmentSessions)
+        .where(eq(assessmentSessions.sessionId, sessionId))
+        .limit(1);
       
       if (existingSession) {
+        // Get existing purpose paths for this session to delete them
+        const existingPaths = await tx.select({ id: purposePaths.id })
+          .from(purposePaths)
+          .where(eq(purposePaths.assessmentId, existingSession.id));
         // Update existing session and clear ALL AI-generated data
         
         // Step 1: Delete all purpose paths for this assessment
-        const oldPathIds = existingSession.purposePaths.map(p => p.id);
-        if (oldPathIds.length > 0) {
+        if (existingPaths.length > 0) {
+          const oldPathIds = existingPaths.map(p => p.id);
           await tx.delete(purposePaths)
             .where(inArray(purposePaths.id, oldPathIds));
         }
@@ -240,7 +261,7 @@ purposeDiscoveryRouter.post("/questionnaire/save", async (req, res, next) => {
         // Step 2: Update session with new responses and clear AI fields
         await tx.update(assessmentSessions)
           .set({
-            responses: responses as unknown,
+            responses: responses satisfies QuestionnaireResponses as unknown,
             language: language,
             coreDriversAnalysis: null,
             chosenPathId: null,
@@ -255,7 +276,7 @@ purposeDiscoveryRouter.post("/questionnaire/save", async (req, res, next) => {
           .values({
             sessionId,
             language,
-            responses: responses as unknown,
+            responses: responses satisfies QuestionnaireResponses as unknown,
             coreDriversAnalysis: null,
             chosenPathId: null,
             actionPlan: null,
@@ -275,6 +296,10 @@ purposeDiscoveryRouter.post("/questionnaire/save", async (req, res, next) => {
     if (err instanceof TransactionError) {
       return res.status(500).json(err.toResponse());
     }
-    next(err);
+    // Wrap database transaction errors with structured error handling
+    // Extract sessionId from validated data if available
+    const sessionIdForError = req.body?.sessionId || 'unknown';
+    const wrappedError = wrapTransactionError(err, 'session_update', sessionIdForError);
+    return res.status(500).json(wrappedError.toResponse());
   }
 });

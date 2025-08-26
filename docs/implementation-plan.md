@@ -227,7 +227,7 @@ This phase connects the frontend to the new word-by-word streaming APIs and vali
 
 ---
 
-[ ] Step 13.1: Add Lightweight Questionnaire Save Endpoint
+[X] Step 13.1: Add Lightweight Questionnaire Save Endpoint
 **Task**: Create a new endpoint `POST /api/questionnaire/save` in the purpose discovery router that validates and saves questionnaire responses without running AI generation. The endpoint should accept sessionId, language, and responses, perform the same validation as the existing `/api/analyze` endpoint, save the responses to the database, and return a minimal success response with just `{ sessionId, success: true }`. This separates data persistence from AI generation to enable immediate navigation to the streaming experience. Add integration tests for the new endpoint in the existing test suite to verify input validation, response saving, and error handling work correctly. Return minimal response data to avoid bypassing streaming detection on frontend.
 **Suggested Files for Context**: `server/routes/assessment/purpose-discovery.ts`, `server/storage.ts`, `shared/schema.ts`, `server/utils/errors.ts`, `server/routes/assessment/assessment.test.ts`
 **Step Dependencies**: Step 13

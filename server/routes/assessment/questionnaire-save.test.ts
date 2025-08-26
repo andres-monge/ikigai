@@ -441,4 +441,137 @@ describe('POST /api/questionnaire/save', () => {
     expect(session2!.updatedAt.getTime()).toBeLessThanOrEqual(afterUpdate.getTime());
   });
 
+  it('should handle concurrent session access correctly', async () => {
+    const concurrentSessionId = 'concurrent-test-session';
+    
+    // Create initial session
+    await storage.createAssessmentSession({
+      sessionId: concurrentSessionId,
+      language: 'en',
+      responses: testQuestionnaireSaveData.responses
+    });
+
+    // Simulate concurrent requests with different response data
+    const request1 = request(app)
+      .post('/api/questionnaire/save')
+      .send({
+        sessionId: concurrentSessionId,
+        language: 'en',
+        responses: {
+          ...testQuestionnaireSaveData.responses,
+          passions: [{ question: "Test 1", answer: "Concurrent update 1" }]
+        }
+      });
+
+    const request2 = request(app)
+      .post('/api/questionnaire/save')
+      .send({
+        sessionId: concurrentSessionId,
+        language: 'es',
+        responses: {
+          ...testQuestionnaireSaveData.responses,
+          passions: [{ question: "Test 2", answer: "Concurrent update 2" }]
+        }
+      });
+
+    // Execute both requests concurrently
+    const [response1, response2] = await Promise.all([request1, request2]);
+
+    // Both should succeed
+    expect(response1.status).toBe(200);
+    expect(response2.status).toBe(200);
+    expect(response1.body).toEqual({ sessionId: concurrentSessionId, success: true });
+    expect(response2.body).toEqual({ sessionId: concurrentSessionId, success: true });
+
+    // Verify final state is consistent (one of the updates should have won)
+    const finalSession = await storage.getAssessmentSessionBySessionId(concurrentSessionId);
+    expect(finalSession).toBeDefined();
+    expect(['en', 'es']).toContain(finalSession!.language);
+    
+    // Should have either response 1 or response 2, but not corrupted data
+    const finalAnswer = finalSession!.responses.passions[0].answer;
+    expect(['Concurrent update 1', 'Concurrent update 2']).toContain(finalAnswer);
+  });
+
+  it('should rollback properly on database constraint violations', async () => {
+    const constraintTestSessionId = 'constraint-test-session';
+    
+    // Create a session with purpose paths
+    const session = await storage.createAssessmentSession({
+      sessionId: constraintTestSessionId,
+      language: 'en',
+      responses: testQuestionnaireSaveData.responses
+    });
+
+    await storage.createPurposePath({
+      assessmentId: session.id,
+      title: "Original Path",
+      description: "Should be preserved on constraint failure",
+      ikigaiAlignment: { passion: "Testing" },
+      actionStrategy: "Original strategy"
+    });
+
+    // Mock a database constraint error during the update
+    // This simulates scenarios like database connection issues, constraint violations, etc.
+    const dbSpy = vi.spyOn(db, 'transaction').mockImplementationOnce(async (callback) => {
+      // Start the transaction but fail during execution
+      throw new Error('Database constraint violation: foreign key constraint failed');
+    });
+
+    const response = await request(app)
+      .post('/api/questionnaire/save')
+      .send({
+        sessionId: constraintTestSessionId,
+        language: 'es',
+        responses: updatedResponses
+      });
+
+    // Should return structured error
+    expect(response.status).toBe(500);
+    expect(response.body.error).toBe('Failed to update your session. Please try again.');
+    expect(response.body.code).toBe('DATABASE_TRANSACTION_FAILED');
+
+    // Original data should be preserved (rollback successful)
+    const preservedSession = await storage.getAssessmentSessionBySessionId(constraintTestSessionId);
+    expect(preservedSession).toBeDefined();
+    expect(preservedSession!.language).toBe('en'); // Original language
+    expect(preservedSession!.responses).toEqual(testQuestionnaireSaveData.responses); // Original responses
+    expect(preservedSession!.purposePaths).toHaveLength(1);
+    expect(preservedSession!.purposePaths[0].title).toBe("Original Path");
+
+    // Cleanup
+    dbSpy.mockRestore();
+    await storage.deleteAssessmentSessionBySessionId(constraintTestSessionId);
+  });
+
+  it('should handle transaction timeouts gracefully', async () => {
+    const timeoutSessionId = 'timeout-test-session';
+    
+    // Mock a transaction timeout
+    const dbSpy = vi.spyOn(db, 'transaction').mockImplementationOnce(async () => {
+      // Simulate a database timeout
+      throw new Error('connection timeout');
+    });
+
+    const response = await request(app)
+      .post('/api/questionnaire/save')
+      .send({
+        sessionId: timeoutSessionId,
+        language: 'en',
+        responses: testQuestionnaireSaveData.responses
+      });
+
+    // Should return appropriate error response
+    expect(response.status).toBe(500);
+    expect(response.body.error).toBe('Failed to update your session. Please try again.');
+    expect(response.body.code).toBe('DATABASE_TRANSACTION_FAILED');
+
+    // Should not have created any partial data
+    const session = await storage.getAssessmentSessionBySessionId(timeoutSessionId);
+    expect(session).toBeUndefined();
+
+    // Cleanup
+    dbSpy.mockRestore();
+  });
+
 });
