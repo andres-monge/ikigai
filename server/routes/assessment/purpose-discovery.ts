@@ -14,6 +14,8 @@ import {
   analysisRequestSchema,
   type PurposePath,
   type QuestionnaireResponses,
+  purposePaths,
+  assessmentSessions,
 } from "@shared/schema";
 import { getPurposeDiscoveryChain, getPurposeDiscoveryStreamChain } from "../../ai/chains";
 import { aiLimiter } from "../../ai/limiter";
@@ -27,6 +29,8 @@ import {
 } from "./utils";
 import { TransactionError, ValidationError } from "../../utils/errors";
 import { validateSessionForAI } from "../../utils/validation";
+import { db } from "../../db";
+import { eq, inArray } from "drizzle-orm";
 
 export const purposeDiscoveryRouter = Router();
 
@@ -202,5 +206,75 @@ purposeDiscoveryRouter.get("/analyze/stream", async (req, res) => {
   } finally {
     // Always clean up the active stream marker
     activeStreams.delete(sessionId);
+  }
+});
+
+/* ------------------------ POST /api/questionnaire/save ------------------------ */
+
+purposeDiscoveryRouter.post("/questionnaire/save", async (req, res, next) => {
+  try {
+    const validation = analysisRequestSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        error: "Invalid request data",
+        details: validation.error.errors,
+      });
+    }
+    const { sessionId, responses, language } = validation.data;
+
+    // Use database transaction for atomic operation
+    await db.transaction(async (tx) => {
+      // Check if session exists
+      const existingSession = await storage.getAssessmentSessionBySessionId(sessionId);
+      
+      if (existingSession) {
+        // Update existing session and clear ALL AI-generated data
+        
+        // Step 1: Delete all purpose paths for this assessment
+        const oldPathIds = existingSession.purposePaths.map(p => p.id);
+        if (oldPathIds.length > 0) {
+          await tx.delete(purposePaths)
+            .where(inArray(purposePaths.id, oldPathIds));
+        }
+        
+        // Step 2: Update session with new responses and clear AI fields
+        await tx.update(assessmentSessions)
+          .set({
+            responses: responses as unknown,
+            language: language,
+            coreDriversAnalysis: null,
+            chosenPathId: null,
+            actionPlan: null,
+            updatedAt: new Date()
+          })
+          .where(eq(assessmentSessions.sessionId, sessionId));
+          
+      } else {
+        // Create new session without any AI data
+        await tx.insert(assessmentSessions)
+          .values({
+            sessionId,
+            language,
+            responses: responses as unknown,
+            coreDriversAnalysis: null,
+            chosenPathId: null,
+            actionPlan: null,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          });
+      }
+    });
+
+    // Return minimal response to avoid bypassing streaming detection
+    res.json({ sessionId, success: true });
+    
+  } catch (err) {
+    if (err instanceof ValidationError) {
+      return res.status(400).json(err.toResponse());
+    }
+    if (err instanceof TransactionError) {
+      return res.status(500).json(err.toResponse());
+    }
+    next(err);
   }
 });

@@ -21,7 +21,7 @@ For the next unchecked step in docs/implementation-plan.md, follow the exploreâ†
 - Determine the order of implementation  
 - Consider edge cases and error handling  
 - Plan for testing and validation 
-- PLEASE: Ask any clarifying questions you need to deliver the best possible version of the task, along with your recommendations.
+- PLEASE: Ask any clarifying questions you need to deliver the best possible version of the task. IMPORTANT: For each question, you must provide your recommendation.
 - Explain your plan (including an overview of the relevant programming concepts) for a beginner so they can understand what your code will be doing and are able to evaluate the implementation of the step.
 - Go back and forth with me until we have a clear, complete understanding of the task and the plan.
 - Do not write code until we have a complete plan and I approve the plan. Once I approve the plan, move on to the CODE Phase.
