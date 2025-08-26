@@ -228,28 +228,28 @@ This phase connects the frontend to the new word-by-word streaming APIs and vali
 ---
 
 [ ] Step 13.1: Add Lightweight Questionnaire Save Endpoint
-**Task**: Create a new endpoint `POST /api/questionnaire/save` in the purpose discovery router that validates and saves questionnaire responses without running AI generation. The endpoint should accept sessionId, language, and responses, perform the same validation as the existing `/api/analyze` endpoint, save the responses to the database, and return a simple success response with the sessionId. This separates data persistence from AI generation to enable immediate navigation to the streaming experience. Add integration tests for the new endpoint in the existing test suite to verify input validation, response saving, and error handling work correctly.
+**Task**: Create a new endpoint `POST /api/questionnaire/save` in the purpose discovery router that validates and saves questionnaire responses without running AI generation. The endpoint should accept sessionId, language, and responses, perform the same validation as the existing `/api/analyze` endpoint, save the responses to the database, and return a minimal success response with just `{ sessionId, success: true }`. This separates data persistence from AI generation to enable immediate navigation to the streaming experience. Add integration tests for the new endpoint in the existing test suite to verify input validation, response saving, and error handling work correctly. Return minimal response data to avoid bypassing streaming detection on frontend.
 **Suggested Files for Context**: `server/routes/assessment/purpose-discovery.ts`, `server/storage.ts`, `shared/schema.ts`, `server/utils/errors.ts`, `server/routes/assessment/assessment.test.ts`
 **Step Dependencies**: Step 13
 
 ---
 
 [ ] Step 13.2: Update Questionnaire to Use Save-Only Endpoint and Navigate Immediately
-**Task**: Modify the questionnaire submission flow to use the new save endpoint instead of the full analysis endpoint. Update the `useCreateAssessment` hook to call `/api/questionnaire/save`, and change the questionnaire component's onSuccess handler to navigate immediately to `/results` without storing complete analysis data in sessionStorage. Remove or minimize the loading overlay after successful save since the Results page will handle the streaming experience. This enables the instant navigation that makes streaming feel responsive.
+**Task**: Modify the questionnaire submission flow to use the new save endpoint instead of the full analysis endpoint. Update the `useCreateAssessment` hook to call `/api/questionnaire/save`, and change the questionnaire component's onSuccess handler to navigate immediately to `/results` without storing complete analysis data in sessionStorage. **Critical**: Clear any existing analysis data from sessionStorage before navigation to ensure streaming is triggered. Remove or minimize the loading overlay after successful save since the Results page will handle the streaming experience. This enables the instant navigation that makes streaming feel responsive. The key is ensuring no complete data exists in storage that would bypass streaming detection.
 **Suggested Files for Context**: `client/src/components/questionnaire/single-page-questionnaire.tsx`, `client/src/hooks/use-create-assessment.ts`, `client/src/pages/results.tsx`
 **Step Dependencies**: Step 13.1
 
 ---
 
 [ ] Step 13.3: Simplify Results Page Streaming Detection and Path Selection
-**Task**: Refactor the Results page to prioritize streaming over cached data. Simplify the streaming detection logic to trigger streaming whenever `coreDriversAnalysis` is missing from the session, removing complex fallback chains. Update `handleChoosePath` to navigate immediately to `/action-plan` using React Router's location state to pass the `chosenPathId`, eliminating the wait for the POST request to complete. This makes path selection instant and lets the Action Plan page handle its own streaming.
+**Task**: Refactor the Results page to prioritize streaming over cached data. Simplify the streaming detection logic to trigger streaming whenever `coreDriversAnalysis` is missing from the session, removing complex fallback chains. Update `handleChoosePath` to navigate immediately to `/action-plan?pathId={selectedPathId}` using query parameters (not React Router state, since we use Wouter), eliminating the wait for the POST request to complete. This makes path selection instant and lets the Action Plan page handle its own streaming. Use query parameters for cross-page data transfer as they survive page refreshes and work with Wouter routing. Simple detection rule: missing core drivers analysis = start streaming.
 **Suggested Files for Context**: `client/src/pages/results.tsx`, `client/src/hooks/use-sse-stream.ts`, `client/src/hooks/use-create-action-plan.ts`
 **Step Dependencies**: Step 13.2
 
 ---
 
-[ ] Step 13.4: Update Action Plan Page to Use Location State and Stream Immediately
-**Task**: Modify the Action Plan page to retrieve `chosenPathId` from React Router's location state (passed from Results page) or fallback to session data. Simplify streaming detection to trigger whenever `actionPlan` is missing from the session. Ensure the streaming endpoint receives the `chosenPathId` via query parameter. Remove dependencies on `session.chosenPathId` being set before streaming can begin, since the streaming endpoint handles persistence. This completes the streaming-first navigation flow where both major pages start streaming immediately upon arrival.
+[ ] Step 13.4: Update Action Plan Page to Use Query Parameters and Stream Immediately
+**Task**: Modify the Action Plan page to retrieve `pathId` from URL query parameters (passed from Results page) or fallback to session data. Simplify streaming detection to trigger whenever `actionPlan` is missing from the session OR when `pathId` is present in query params (to handle path re-selection). Ensure the streaming endpoint receives the `pathId` via query parameter. Remove dependencies on `session.chosenPathId` being set before streaming can begin, since the streaming endpoint handles persistence. This completes the streaming-first navigation flow where both major pages start streaming immediately upon arrival. Read `pathId` from URL query params first, then fallback to session. Stream if `!session.actionPlan || location.search.includes('pathId')` to handle both missing data and path changes.
 **Suggested Files for Context**: `client/src/pages/action-plan.tsx`, `client/src/hooks/use-sse-stream.ts`, `server/routes/assessment/action-plan.ts`
 **Step Dependencies**: Step 13.3
 
