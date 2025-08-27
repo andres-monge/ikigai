@@ -17,7 +17,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { useLocation } from 'wouter';
+import { useLocation, useSearch } from 'wouter';
 import {
   Lightbulb,
   GraduationCap,
@@ -62,14 +62,16 @@ export function ActionPlan({
   const { data: session, isLoading, isError } = useGetActionPlan(sessionId);
 
   // Extract pathId from URL query parameters and resolve effective pathId
-  const queryPathId = new URLSearchParams(window.location.search).get('pathId');
-  const effectivePathId = queryPathId ? parseInt(queryPathId, 10) : (sessionData || session)?.chosenPathId;
+  const searchString = useSearch();
+  const queryPathId = new URLSearchParams(searchString).get('pathId');
+  const parsedPathId = queryPathId ? parseInt(queryPathId, 10) : null;
+  const effectivePathId = (parsedPathId && !isNaN(parsedPathId)) ? parsedPathId : (sessionData || session)?.chosenPathId;
 
   const actionPlan = session?.actionPlan;
   const chosenPath = useMemo(() => {
     const currentSession = sessionData || session;
     if (!currentSession || !effectivePathId) return null;
-    return currentSession.purposePaths.find((p: PurposePath) => p.id === effectivePathId) || null;
+    return currentSession.purposePaths?.find((p: PurposePath) => p.id === effectivePathId) || null;
   }, [session, sessionData, effectivePathId]);
 
   // SSE Streaming hook for action plan
@@ -115,8 +117,10 @@ export function ActionPlan({
       return;
     }
     
-    // Simple rule: stream if no action plan OR pathId in URL
-    const shouldStream = !currentSession?.actionPlan || queryPathId !== null;
+    // Simple rule: stream if no action plan OR pathId in URL (and not already streaming/complete)
+    const shouldStream = (!currentSession?.actionPlan || queryPathId !== null) && 
+                        streamingState.phase !== StreamingPhase.STREAMING && 
+                        streamingState.phase !== StreamingPhase.COMPLETE;
     
     // Must have valid pathId and purpose paths to stream
     if (shouldStream && effectivePathId && currentSession?.purposePaths && currentSession.purposePaths.length > 0) {
@@ -132,7 +136,7 @@ export function ActionPlan({
     if (!currentSession?.actionPlan && !effectivePathId) {
       navigate('/results');
     }
-  }, [isLoading, session, sessionData, effectivePathId, queryPathId, navigate]);
+  }, [isLoading, session, sessionData, effectivePathId, queryPathId, navigate, streamingState.phase]);
 
   // Helper function to get phase message
   const getPhaseMessage = (phase: StreamingPhase): string => {
