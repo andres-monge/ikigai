@@ -3,33 +3,24 @@
  * @description Displays the Purpose Discovery outcome and allows the user to
  * choose a path to generate a detailed action plan.
  *
- * ✨ **Updates in Step 21** ✨
- * - Integrated the `useCreateActionPlan` hook to trigger action plan generation.
- * - The component now reads the full session object (`FullAssessment`) from
- * session storage under the key 'session'.
- * - A handler function (`handleChoosePath`) is passed to `PurposePaths`.
- * - On successful action plan creation, it updates the session data and
- * navigates the user to `/action-plan`.
- * - Removed global <SalaryBenchmarks /> table in favor of path-level salary display.
+ * - Streaming-first approach: Prioritizes real-time AI content generation over cached data
+ * - Simplified streaming detection: Starts streaming when `coreDriversAnalysis` is missing
+ * - Instant path selection: Navigate immediately to `/action-plan?pathId={selectedPathId}` 
+ *   using query parameters for cross-page data transfer (compatible with Wouter routing)
+ * - No loading states: Action Plan page handles its own streaming and data loading
+ * - Clean separation of concerns: Results page focuses only on displaying analysis and navigation
  *
- * ✨ **Updates in Step 23** ✨
- * - Added `sessionId` prop to ensure a non-empty identifier is always sent
- *   to the backend when generating an action plan, resolving the bug where an
- *   empty `sessionId` caused a 404 error.
- *
- * ✨ **Updates in Step 29 (Action Plan Loading UX)** ✨
- * - Implemented a full-page loading overlay to prevent UI freeze during plan generation.
- * - `handleChoosePath` is now an `async` function that `await`s the `createActionPlan`
- *   mutation. Navigation to `/action-plan` only occurs *after* the plan is
- *   successfully created and saved, eliminating the previous race condition.
- * - A local `isGenerating` state controls the visibility of the loading overlay
- *   and disables the "Choose Path" buttons, providing clear feedback to the user.
+ * **Architecture Decisions:**
+ * - Uses Server-Sent Events (SSE) for real-time AI response streaming
+ * - Query parameters over route state for data persistence across page refreshes
+ * - Single streaming detection rule: missing core drivers analysis = start streaming
+ * - Removed complex fallback chains and loading overlays for MVP simplicity
  *
  * @dependencies
- * - wouter: For navigation.
- * - lucide-react: For icons.
+ * - wouter: For navigation and routing.
+ * - @/hooks/use-sse-stream: For real-time AI content streaming.
  * - @/hooks/use-session-storage: To persist/retrieve session data.
- * - @/hooks/use-create-action-plan: For the `useCreateActionPlan` mutation.
+ * - @/components/streaming-status: Real-time streaming progress indicator.
  * - @/types/assessment: For the `FullAssessment` type.
  */
 
@@ -72,7 +63,7 @@ export function Results({
   const streamingState = useSSEStream({
     enabled: needsStreaming,
     endpoint: `/api/analyze/stream?sessionId=${sessionId}`,
-    onComplete: async (finalBuffer) => {
+    onComplete: async () => {
       // On completion, fetch the final session data from the server
       try {
         const res = await apiRequest('GET', `/api/session/${sessionId}`);
@@ -118,10 +109,16 @@ export function Results({
     
     // Core drivers analysis missing = start streaming
     setNeedsStreaming(true);
-  }, [session, sessionId, navigate]);
+  }, [session, sessionId]);
 
   const handleChoosePath = (pathId: number) => {
     if (typeof pathId !== 'number') return;
+
+    // Validate that pathId exists in current session's purpose paths
+    if (!session?.purposePaths?.some(path => path.id === pathId)) {
+      console.error('Invalid pathId:', pathId, 'Available paths:', session?.purposePaths?.map(p => p.id));
+      return;
+    }
 
     // Navigate immediately with query parameter
     navigate(`/action-plan?pathId=${pathId}`);
@@ -211,8 +208,8 @@ export function Results({
     );
   }
 
-  if (!session || !session.coreDriversAnalysis) {
-    // Small fallback while data loads
+  if (!session || !session.coreDriversAnalysis || !session.purposePaths || session.purposePaths.length !== 3) {
+    // Small fallback while data loads or if session data is incomplete
     return null;
   }
 
