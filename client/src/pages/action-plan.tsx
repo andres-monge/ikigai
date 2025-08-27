@@ -54,32 +54,28 @@ export function ActionPlan({
   language,
   sessionId,
 }: ActionPlanProps) {
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
   const { toast } = useToast();
   const [needsStreaming, setNeedsStreaming] = useState(false);
   const [sessionData, setSessionData] = useState<FullAssessment | null>(null);
 
   const { data: session, isLoading, isError } = useGetActionPlan(sessionId);
 
+  // Extract pathId from URL query parameters and resolve effective pathId
+  const queryPathId = new URLSearchParams(window.location.search).get('pathId');
+  const effectivePathId = queryPathId ? parseInt(queryPathId, 10) : (sessionData || session)?.chosenPathId;
+
   const actionPlan = session?.actionPlan;
   const chosenPath = useMemo(() => {
     const currentSession = sessionData || session;
-    if (!currentSession || !currentSession.chosenPathId) return null;
-    return (
-      currentSession.purposePaths.find((p: PurposePath) => p.id === currentSession.chosenPathId) || null
-    );
-  }, [session, sessionData]);
-
-  // Get chosenPathId for streaming
-  const chosenPathId = useMemo(() => {
-    const currentSession = sessionData || session;
-    return currentSession?.chosenPathId;
-  }, [session, sessionData]);
+    if (!currentSession || !effectivePathId) return null;
+    return currentSession.purposePaths.find((p: PurposePath) => p.id === effectivePathId) || null;
+  }, [session, sessionData, effectivePathId]);
 
   // SSE Streaming hook for action plan
   const streamingState = useSSEStream({
-    enabled: needsStreaming && !!chosenPathId,
-    endpoint: `/api/action-plan/stream?sessionId=${sessionId}&chosenPathId=${chosenPathId || ''}`,
+    enabled: needsStreaming && !!effectivePathId,
+    endpoint: `/api/action-plan/stream?sessionId=${sessionId}&chosenPathId=${effectivePathId || ''}`,
     onComplete: async (finalBuffer) => {
       // On completion, fetch the final session data from the server
       try {
@@ -110,51 +106,33 @@ export function ActionPlan({
   });
 
 
-  /* Data availability check and streaming setup */
+  /* Simplified streaming detection and setup */
   useEffect(() => {
-    const checkActionPlanData = async () => {
-      // Use sessionData if available (from streaming), otherwise use hook data
-      const currentSession = sessionData || session;
-      const currentActionPlan = currentSession?.actionPlan;
-      
-      // If we have complete action plan, we're good
-      if (currentActionPlan?.milestones && currentActionPlan.milestones.length > 0) {
-        return;
-      }
-      
-      // If still loading from the hook, wait
-      if (isLoading) {
-        return;
-      }
-      
-      // Try to fetch fresh data from server
-      try {
-        const res = await apiRequest('GET', `/api/session/${sessionId}`);
-        if (res.ok) {
-          const serverSession = await res.json();
-          if (serverSession?.actionPlan?.milestones && serverSession.actionPlan.milestones.length > 0) {
-            // Complete action plan found on server
-            setSessionData(serverSession);
-            return;
-          }
-          
-          // No action plan but has chosen path - can stream
-          if (serverSession?.chosenPathId && serverSession?.purposePaths?.length > 0) {
-            setSessionData(serverSession);
-            setNeedsStreaming(true);
-            return;
-          }
-        }
-      } catch (error) {
-        console.error('Failed to fetch session from server:', error);
-      }
-      
-      // No session data or chosen path, redirect to results
-      navigate('/results');
-    };
+    const currentSession = sessionData || session;
     
-    checkActionPlanData();
-  }, [isLoading, session, sessionData, sessionId, navigate]);
+    // If still loading from the hook, wait
+    if (isLoading) {
+      return;
+    }
+    
+    // Simple rule: stream if no action plan OR pathId in URL
+    const shouldStream = !currentSession?.actionPlan || queryPathId !== null;
+    
+    // Must have valid pathId and purpose paths to stream
+    if (shouldStream && effectivePathId && currentSession?.purposePaths && currentSession.purposePaths.length > 0) {
+      // Validate pathId exists in purpose paths
+      const validPath = currentSession.purposePaths.some(p => p.id === effectivePathId);
+      if (validPath) {
+        setNeedsStreaming(true);
+        return;
+      }
+    }
+    
+    // No valid path to work with, redirect to results
+    if (!currentSession?.actionPlan && !effectivePathId) {
+      navigate('/results');
+    }
+  }, [isLoading, session, sessionData, effectivePathId, queryPathId, navigate]);
 
   // Helper function to get phase message
   const getPhaseMessage = (phase: StreamingPhase): string => {

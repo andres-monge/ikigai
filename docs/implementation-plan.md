@@ -255,10 +255,19 @@ This phase connects the frontend to the new word-by-word streaming APIs and vali
 
 ---
 
-[ ] Step 13.4: Update Action Plan Page to Use Query Parameters and Stream Immediately
+[X] Step 13.4: Update Action Plan Page to Use Query Parameters and Stream Immediately
 **Task**: Modify the Action Plan page to retrieve `pathId` from URL query parameters (passed from Results page) or fallback to session data. Simplify streaming detection to trigger whenever `actionPlan` is missing from the session OR when `pathId` is present in query params (to handle path re-selection). Ensure the streaming endpoint receives the `pathId` via query parameter. Remove dependencies on `session.chosenPathId` being set before streaming can begin, since the streaming endpoint handles persistence. This completes the streaming-first navigation flow where both major pages start streaming immediately upon arrival. Read `pathId` from URL query params first, then fallback to session. Stream if `!session.actionPlan || location.search.includes('pathId')` to handle both missing data and path changes.
 **Suggested Files for Context**: `client/src/pages/action-plan.tsx`, `client/src/hooks/use-sse-stream.ts`, `server/routes/assessment/action-plan.ts`
 **Step Dependencies**: Step 13.3
+**Implementation Notes**:
+- **Query Parameter Reading**: Added `URLSearchParams(window.location.search).get('pathId')` to extract pathId from URL
+- **Effective PathId Logic**: Created `effectivePathId` that prioritizes query param over session's `chosenPathId`
+- **Simplified Streaming Detection**: Replaced complex async `checkActionPlanData` with simple rule: stream if `!actionPlan || queryPathId !== null`
+- **Updated SSE Configuration**: Modified streaming endpoint URL to use `effectivePathId` instead of session's `chosenPathId`
+- **Removed Redundant Code**: Eliminated separate `chosenPathId` useMemo and complex server fetching logic
+- **Instant Navigation**: Pages now start streaming immediately when landing with `?pathId=X` query parameter
+- **Clean Fallback**: Redirects to `/results` only when no valid pathId can be resolved and no action plan exists
+- **TypeScript Safety**: Added proper null checks for `currentSession.purposePaths` array access
 
 ---
 
