@@ -241,10 +241,17 @@ This phase connects the frontend to the new word-by-word streaming APIs and vali
 
 ---
 
-[ ] Step 13.3: Simplify Results Page Streaming Detection and Path Selection
+[X] Step 13.3: Simplify Results Page Streaming Detection and Path Selection
 **Task**: Refactor the Results page to prioritize streaming over cached data. Simplify the streaming detection logic to trigger streaming whenever `coreDriversAnalysis` is missing from the session, removing complex fallback chains. Update `handleChoosePath` to navigate immediately to `/action-plan?pathId={selectedPathId}` using query parameters (not React Router state, since we use Wouter), eliminating the wait for the POST request to complete. This makes path selection instant and lets the Action Plan page handle its own streaming. Use query parameters for cross-page data transfer as they survive page refreshes and work with Wouter routing. Simple detection rule: missing core drivers analysis = start streaming.
 **Suggested Files for Context**: `client/src/pages/results.tsx`, `client/src/hooks/use-sse-stream.ts`, `client/src/hooks/use-create-action-plan.ts`
 **Step Dependencies**: Step 13.2
+**Implementation Notes**:
+- **Simplified streaming detection**: Replaced complex async `checkSessionData()` function with simple synchronous check: if `!session?.coreDriversAnalysis` then start streaming
+- **Instant path selection**: Updated `handleChoosePath` from async function with loading states to immediate navigation: `navigate('/action-plan?pathId=' + pathId)`
+- **Removed loading UI**: Eliminated `isGenerating` state, `LoadingOverlay` component, and `useCreateActionPlan` hook usage from Results page
+- **Query parameter navigation**: Using Wouter-compatible URL query parameters for cross-page data transfer (survives page refreshes)
+- **Maintained compatibility**: Set `isChoosing={false}` prop on PurposePaths component to satisfy TypeScript interface
+- **Clean separation of concerns**: Results page handles only streaming detection and instant navigation; Action Plan page (Step 13.4) will handle its own streaming and persistence
 
 ---
 

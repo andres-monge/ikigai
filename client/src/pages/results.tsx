@@ -37,14 +37,12 @@ import { useEffect, useState } from 'react';
 import { useLocation } from 'wouter';
 import { Download, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { LoadingOverlay } from '@/components/loading-overlay';
 import { StreamingStatus } from '@/components/streaming-status';
 import { CoreDriversSummary } from '@/components/results/core-drivers-summary';
 import { PurposePaths } from '@/components/results/purpose-paths';
 import { t, type Language } from '@/lib/i18n';
 import { exportToPDF } from '@/lib/pdf-export';
 import { useSessionStorage } from '@/hooks/use-session-storage';
-import { useCreateActionPlan } from '@/hooks/use-create-action-plan';
 import { useSSEStream, StreamingPhase } from '@/hooks/use-sse-stream';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
@@ -68,47 +66,7 @@ export function Results({
   );
   const [, navigate] = useLocation();
   const { toast } = useToast();
-  const [isGenerating, setIsGenerating] = useState(false);
   const [needsStreaming, setNeedsStreaming] = useState(false);
-
-  const { createActionPlan } = useCreateActionPlan({
-    sessionId,
-    onSuccess: (updatedSession) => {
-      // CRITICAL: The backend may have corrected the path ID during recovery.
-      // We need to update our local session with the corrected data.
-      setSession(updatedSession);
-      
-      // Force sessionStorage to update immediately
-      sessionStorage.setItem('session', JSON.stringify(updatedSession));
-    },
-    onError: (error) => {
-      console.error('Action plan generation failed:', error);
-      
-      // Handle session lost error specifically
-      if (error instanceof Error && error.message === 'SESSION_LOST') {
-        toast({
-          title: t('common.error', language),
-          description: language === 'es' 
-            ? 'Tu sesión se perdió. Por favor, vuelve a completar el cuestionario.' 
-            : 'Your session was lost. Please complete the questionnaire again.',
-          variant: 'destructive',
-        });
-        
-        // Redirect to questionnaire after a short delay
-        setTimeout(() => {
-          navigate('/');
-        }, 2000);
-        
-        return;
-      }
-      
-      toast({
-        title: t('common.error', language),
-        description: t('results.actionPlanError', language),
-        variant: 'destructive',
-      });
-    },
-  });
 
   // SSE Streaming hook for purpose discovery
   const streamingState = useSSEStream({
@@ -145,60 +103,28 @@ export function Results({
   });
 
 
-  /* Data availability check and streaming setup */
+  /* Simplified streaming detection */
   useEffect(() => {
-    const checkSessionData = async () => {
-      // If we have complete data in sessionStorage, we're good
-      if (session?.purposePaths?.length === 3 && session?.coreDriversAnalysis) {
-        return;
-      }
-      
-      // Try to fetch from server
-      try {
-        const res = await apiRequest('GET', `/api/session/${sessionId}`);
-        if (res.ok) {
-          const serverSession = await res.json();
-          if (serverSession?.purposePaths?.length === 3 && serverSession?.coreDriversAnalysis) {
-            // Complete data found on server
-            setSession(serverSession);
-            sessionStorage.setItem('session', JSON.stringify(serverSession));
-            return;
-          }
-        }
-      } catch (error) {
-        console.error('Failed to fetch session from server:', error);
-      }
-      
-      // No complete data found, check if we have responses to analyze
-      if (session?.responses || sessionId) {
-        // Start streaming
-        setNeedsStreaming(true);
-      } else {
-        // No session data at all, redirect to home
-        navigate('/');
-      }
-    };
+    // If we have complete core drivers analysis, we're good to render
+    if (session?.coreDriversAnalysis) {
+      return;
+    }
     
-    checkSessionData();
-  }, [session, sessionId, navigate, setSession]);
+    // No session at all, redirect to home
+    if (!session || !sessionId) {
+      navigate('/');
+      return;
+    }
+    
+    // Core drivers analysis missing = start streaming
+    setNeedsStreaming(true);
+  }, [session, sessionId, navigate]);
 
-  const handleChoosePath = async (pathId: number) => {
+  const handleChoosePath = (pathId: number) => {
     if (typeof pathId !== 'number') return;
 
-    setIsGenerating(true);
-    try {
-      await createActionPlan(pathId);
-      
-      // Now that the mutation is complete and the session is updated,
-      // it's safe to navigate.
-      navigate('/action-plan');
-    } catch (e) {
-      // Errors are handled by the `onError` callback in `useCreateActionPlan`,
-      // but we still need to stop the loading state here.
-    } finally {
-      // This ensures the loading overlay is hidden even if the mutation fails.
-      setIsGenerating(false);
-    }
+    // Navigate immediately with query parameter
+    navigate(`/action-plan?pathId=${pathId}`);
   };
 
   // Helper function to get phase message
@@ -301,10 +227,6 @@ export function Results({
 
   return (
     <>
-      <LoadingOverlay
-        isVisible={isGenerating}
-        language={language}
-      />
       <div className="max-w-6xl mx-auto">
         {/* AI Analysis Header */}
         <div className="text-center mb-12">
@@ -324,7 +246,7 @@ export function Results({
           purposePaths={session.purposePaths}
           language={language}
           onChoosePath={handleChoosePath}
-          isChoosing={isGenerating}
+          isChoosing={false}
         />
 
         {/* Export and Start Over Actions */}
