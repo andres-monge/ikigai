@@ -58,6 +58,7 @@ export function Results({
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [needsStreaming, setNeedsStreaming] = useState(false);
+  const [isFetchingSession, setIsFetchingSession] = useState(false);
 
   // SSE Streaming hook for purpose discovery
   const streamingState = useSSEStream({
@@ -94,22 +95,65 @@ export function Results({
   });
 
 
-  /* Simplified streaming detection */
+  /* Server-as-source-of-truth session management */
   useEffect(() => {
-    // If we have complete core drivers analysis, we're good to render
-    if (session?.coreDriversAnalysis) {
-      return;
-    }
-    
-    // No session at all, redirect to home
-    if (!session || !sessionId) {
+    // No sessionId means we can't proceed at all
+    if (!sessionId) {
       navigate('/');
       return;
     }
-    
-    // Core drivers analysis missing = start streaming
-    setNeedsStreaming(true);
-  }, [session, sessionId]);
+
+    // If we have complete core drivers analysis with matching sessionId, we're good to render
+    if (session?.coreDriversAnalysis && session.sessionId === sessionId) {
+      return;
+    }
+
+    // Clear stale session data if sessionId mismatch
+    if (session && session.sessionId !== sessionId) {
+      console.log('SessionId mismatch detected, clearing stale session data');
+      setSession(null);
+    }
+
+    // Need to fetch from server if session is missing or has wrong sessionId
+    if (!isFetchingSession && (!session || session.sessionId !== sessionId)) {
+      setIsFetchingSession(true);
+      
+      apiRequest('GET', `/api/session/${sessionId}`)
+        .then(async (res) => {
+          if (res.ok) {
+            const serverSession = await res.json();
+            setSession(serverSession);
+            sessionStorage.setItem('session', JSON.stringify(serverSession));
+            
+            // Check if we need streaming after fetching
+            if (!serverSession.coreDriversAnalysis) {
+              setNeedsStreaming(true);
+            }
+          } else if (res.status === 404) {
+            // Session doesn't exist on server, redirect to home
+            navigate('/');
+            return;
+          } else {
+            throw new Error(`Server returned ${res.status}`);
+          }
+        })
+        .catch((error) => {
+          console.error('Failed to fetch session from server:', error);
+          toast({
+            title: t('common.error', language),
+            description: 'Failed to load your session. Please try again.',
+            variant: 'destructive',
+          });
+          navigate('/');
+        })
+        .finally(() => {
+          setIsFetchingSession(false);
+        });
+    } else if (session && session.sessionId === sessionId && !session.coreDriversAnalysis && !needsStreaming) {
+      // We have the right session but need to start streaming
+      setNeedsStreaming(true);
+    }
+  }, [session?.sessionId, sessionId, isFetchingSession, session?.coreDriversAnalysis, needsStreaming]);
 
   const handleChoosePath = (pathId: number) => {
     if (typeof pathId !== 'number') return;
@@ -139,6 +183,28 @@ export function Results({
         return language === 'es' ? 'Procesando...' : 'Processing...';
     }
   };
+
+  // Show loading UI if we're fetching session from server
+  if (isFetchingSession) {
+    return (
+      <div className="max-w-6xl mx-auto">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl font-bold text-slate-900 mb-4">
+            {t('results.title', language)}
+          </h2>
+        </div>
+        
+        <div className="bg-white rounded-2xl shadow-lg p-8 mb-8">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto mb-4"></div>
+            <p className="text-slate-600">
+              {language === 'es' ? 'Cargando tu sesión...' : 'Loading your session...'}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Show streaming UI if we're in streaming mode
   if (needsStreaming && streamingState.phase !== StreamingPhase.COMPLETE) {
