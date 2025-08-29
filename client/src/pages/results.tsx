@@ -28,6 +28,7 @@ import { useEffect, useState } from 'react';
 import { useLocation } from 'wouter';
 import { Download, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { LoadingState } from '@/components/ui/loading-state';
 import { StreamingStatus } from '@/components/streaming-status';
 import { CoreDriversSummary } from '@/components/results/core-drivers-summary';
 import { PurposePaths } from '@/components/results/purpose-paths';
@@ -71,14 +72,13 @@ export function Results({
         if (res.ok) {
           const updatedSession = await res.json();
           setSession(updatedSession);
-          sessionStorage.setItem('session', JSON.stringify(updatedSession));
           setNeedsStreaming(false);
         }
       } catch (error) {
         console.error('Failed to fetch completed session:', error);
         toast({
           title: t('common.error', language),
-          description: 'Failed to save analysis results.',
+          description: t('results.saveAnalysisError', language),
           variant: 'destructive',
         });
       }
@@ -87,7 +87,7 @@ export function Results({
       console.error('Streaming error:', error);
       toast({
         title: t('common.error', language),
-        description: 'Analysis failed. Please try again.',
+        description: t('results.analysisFailedError', language),
         variant: 'destructive',
       });
       setNeedsStreaming(false);
@@ -95,7 +95,7 @@ export function Results({
   });
 
 
-  /* Server-as-source-of-truth session management */
+  /* Server-as-source-of-truth session management - Effect 1: Session validation and server fetch */
   useEffect(() => {
     // No sessionId means we can't proceed at all
     if (!sessionId) {
@@ -110,12 +110,15 @@ export function Results({
 
     // Clear stale session data if sessionId mismatch
     if (session && session.sessionId !== sessionId) {
-      console.log('SessionId mismatch detected, clearing stale session data');
+      if (process.env.NODE_ENV === 'development') {
+        console.log('SessionId mismatch detected, clearing stale session data');
+      }
       setSession(null);
+      return; // Let the effect re-run with cleared session
     }
 
     // Need to fetch from server if session is missing or has wrong sessionId
-    if (!isFetchingSession && (!session || session.sessionId !== sessionId)) {
+    if (!isFetchingSession && !needsStreaming && (!session || session.sessionId !== sessionId)) {
       setIsFetchingSession(true);
       
       apiRequest('GET', `/api/session/${sessionId}`)
@@ -123,12 +126,6 @@ export function Results({
           if (res.ok) {
             const serverSession = await res.json();
             setSession(serverSession);
-            sessionStorage.setItem('session', JSON.stringify(serverSession));
-            
-            // Check if we need streaming after fetching
-            if (!serverSession.coreDriversAnalysis) {
-              setNeedsStreaming(true);
-            }
           } else if (res.status === 404) {
             // Session doesn't exist on server, redirect to home
             navigate('/');
@@ -141,19 +138,25 @@ export function Results({
           console.error('Failed to fetch session from server:', error);
           toast({
             title: t('common.error', language),
-            description: 'Failed to load your session. Please try again.',
+            description: t('results.loadSessionError', language),
             variant: 'destructive',
           });
-          navigate('/');
+          // Delay navigation slightly to allow user to see the toast
+          setTimeout(() => navigate('/'), 2000);
         })
         .finally(() => {
           setIsFetchingSession(false);
         });
-    } else if (session && session.sessionId === sessionId && !session.coreDriversAnalysis && !needsStreaming) {
-      // We have the right session but need to start streaming
+    }
+  }, [sessionId, session?.sessionId, session?.coreDriversAnalysis, isFetchingSession, needsStreaming, navigate, setSession, toast, language]);
+
+  /* Server-as-source-of-truth session management - Effect 2: Streaming trigger */
+  useEffect(() => {
+    // Only trigger streaming if we have the right session but missing analysis
+    if (session && session.sessionId === sessionId && !session.coreDriversAnalysis && !needsStreaming && !isFetchingSession) {
       setNeedsStreaming(true);
     }
-  }, [session?.sessionId, sessionId, isFetchingSession, session?.coreDriversAnalysis, needsStreaming]);
+  }, [session?.sessionId, sessionId, session?.coreDriversAnalysis, needsStreaming, isFetchingSession]);
 
   const handleChoosePath = (pathId: number) => {
     if (typeof pathId !== 'number') return;
@@ -187,22 +190,11 @@ export function Results({
   // Show loading UI if we're fetching session from server
   if (isFetchingSession) {
     return (
-      <div className="max-w-6xl mx-auto">
-        <div className="text-center mb-12">
-          <h2 className="text-3xl font-bold text-slate-900 mb-4">
-            {t('results.title', language)}
-          </h2>
-        </div>
-        
-        <div className="bg-white rounded-2xl shadow-lg p-8 mb-8">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto mb-4"></div>
-            <p className="text-slate-600">
-              {language === 'es' ? 'Cargando tu sesión...' : 'Loading your session...'}
-            </p>
-          </div>
-        </div>
-      </div>
+      <LoadingState
+        title={t('results.title', language)}
+        message={t('results.loadingSession', language)}
+        language={language}
+      />
     );
   }
 

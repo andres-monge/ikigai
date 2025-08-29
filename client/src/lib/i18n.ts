@@ -43,6 +43,10 @@ export const translations: Record<string, Record<string, string>> = {
     'results.actionStrategy': 'Action Strategy',
     'results.actionPlanError':
       'Could not generate an action plan. Please try again.',
+    'results.loadingSession': 'Loading your session...',
+    'results.loadSessionError': 'Failed to load your session. Please try again.',
+    'results.saveAnalysisError': 'Failed to save analysis results.',
+    'results.analysisFailedError': 'Analysis failed. Please try again.',
 
     // Action Plan
     'actionPlan.title': 'Your Action Plan',
@@ -97,6 +101,10 @@ export const translations: Record<string, Record<string, string>> = {
     'results.actionStrategy': 'Plan de acción',
     'results.actionPlanError':
       'No se pudo generar un plan de acción. Por favor, inténtalo de nuevo.',
+    'results.loadingSession': 'Cargando tu sesión...',
+    'results.loadSessionError': 'No se pudo cargar tu sesión. Por favor, inténtalo de nuevo.',
+    'results.saveAnalysisError': 'No se pudieron guardar los resultados del análisis.',
+    'results.analysisFailedError': 'El análisis falló. Por favor, inténtalo de nuevo.',
 
     // Action Plan
     'actionPlan.title': 'Tu Plan de acción',
