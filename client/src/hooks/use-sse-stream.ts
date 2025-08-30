@@ -124,6 +124,7 @@ export function useSSEStream(options: UseSSEStreamOptions): StreamingState {
   const thinkingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const retryTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isStreamingRef = useRef<boolean>(false);
+  const hasSavedRef = useRef<boolean>(false);
   
   // Clean up function
   const cleanup = useCallback(() => {
@@ -140,6 +141,7 @@ export function useSSEStream(options: UseSSEStreamOptions): StreamingState {
       retryTimerRef.current = null;
     }
     isStreamingRef.current = false;
+    hasSavedRef.current = false;
   }, []);
   
   // Start streaming
@@ -193,6 +195,7 @@ export function useSSEStream(options: UseSSEStreamOptions): StreamingState {
             newPhase = StreamingPhase.COMPLETE;
             isComplete = true;
             isStreamingRef.current = false;
+            hasSavedRef.current = true;
             onComplete?.(newBuffer);
           } else if (data.startsWith(SSE_EVENTS.ERROR)) {
             newPhase = StreamingPhase.ERROR;
@@ -221,6 +224,9 @@ export function useSSEStream(options: UseSSEStreamOptions): StreamingState {
       };
       
       eventSource.onerror = () => {
+        // Ignore error if we already saved successfully
+        if (hasSavedRef.current) return;
+        
         isStreamingRef.current = false;
         setState(prev => ({
           ...prev,
@@ -228,11 +234,13 @@ export function useSSEStream(options: UseSSEStreamOptions): StreamingState {
           error: 'Connection lost. Retrying...'
         }));
         
-        // Auto-retry after 2 seconds
-        retryTimerRef.current = setTimeout(() => {
-          cleanup();
-          startStream();
-        }, 2000);
+        // Auto-retry after 2 seconds (skip if already saved)
+        if (!hasSavedRef.current) {
+          retryTimerRef.current = setTimeout(() => {
+            cleanup();
+            startStream();
+          }, 2000);
+        }
       };
       
     } catch (error) {

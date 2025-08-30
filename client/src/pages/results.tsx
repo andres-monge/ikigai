@@ -26,10 +26,9 @@
 
 import { useEffect, useState } from 'react';
 import { useLocation } from 'wouter';
-import { Download, RotateCcw } from 'lucide-react';
+import { Download, RotateCcw, Rocket, Users, Code } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { LoadingState } from '@/components/ui/loading-state';
-import { StreamingStatus } from '@/components/streaming-status';
 import { CoreDriversSummary } from '@/components/results/core-drivers-summary';
 import { PurposePaths } from '@/components/results/purpose-paths';
 import { t, type Language } from '@/lib/i18n';
@@ -39,6 +38,37 @@ import { useSSEStream, StreamingPhase } from '@/hooks/use-sse-stream';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import type { FullAssessment } from '@/types/assessment';
+
+/* -------------------------------------------------------------------------- */
+/* Streaming Buffer Extraction Utilities                                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Extract content between tags, returning partial content if end tag is missing
+ */
+function extract(text: string, start: string, end: string) {
+  const s = text.indexOf(start);
+  if (s < 0) return { value: '', complete: false };
+  const from = s + start.length;
+  const e = text.indexOf(end, from);
+  return e >= 0
+    ? { value: text.slice(from, e).trim(), complete: true }
+    : { value: text.slice(from).trim(), complete: false };
+}
+
+/**
+ * Extract a section's content between SECTION and END_SECTION tags
+ */
+function extractSectionContent(buffer: string, sectionName: string) {
+  const startTag = `[SECTION:${sectionName}]`;
+  const endTag = '[END_SECTION]';
+  const startIdx = buffer.indexOf(startTag);
+  if (startIdx < 0) return '';
+  const endIdx = buffer.indexOf(endTag, startIdx);
+  return endIdx >= 0 
+    ? buffer.slice(startIdx, endIdx + endTag.length)
+    : buffer.slice(startIdx);
+}
 
 interface ResultsProps {
   onStartOver: () => void;
@@ -200,69 +230,166 @@ export function Results({
 
   // Show streaming UI if we're in streaming mode
   if (needsStreaming && streamingState.phase !== StreamingPhase.COMPLETE) {
+    // Debug: Log buffer size to verify chunks are arriving
+    console.log(`[DEBUG] Streaming buffer length: ${streamingState.buffer.length}, phase: ${streamingState.phase}`);
+    
+    // Parse buffer into structured data for progressive UI rendering
+    const isCoreDriversComplete = streamingState.completedSections.includes('CORE_DRIVERS');
+    const coreDriversSection = extractSectionContent(streamingState.buffer, 'CORE_DRIVERS');
+    const coreDrivers = isCoreDriversComplete && session?.coreDriversAnalysis ? 
+      session.coreDriversAnalysis : {
+        statementSentence: extract(coreDriversSection, '[STATEMENT]', '[/STATEMENT]').value,
+        coreThreads: extract(coreDriversSection, '[THREADS]', '[/THREADS]').value
+      };
+
+    // Extract each path's data
+    const streamingPaths = [1, 2, 3].map(i => {
+      const isComplete = streamingState.completedSections.includes(`PATH_${i}`);
+      const pathSection = extractSectionContent(streamingState.buffer, `PATH_${i}`);
+      
+      // If complete and we have session data, use that (frozen)
+      if (isComplete && session?.purposePaths?.[i-1]) {
+        return session.purposePaths[i-1];
+      }
+      
+      // Otherwise extract from buffer
+      const ikigaiSection = extract(pathSection, '[IKIGAI]', '[/IKIGAI]').value;
+      
+      return {
+        id: i,
+        title: extract(pathSection, '[TITLE]', '[/TITLE]').value,
+        description: extract(pathSection, '[DESCRIPTION]', '[/DESCRIPTION]').value,
+        ikigaiAlignment: {
+          love: extract(ikigaiSection, '[LOVE]', '[/LOVE]').value,
+          goodAt: extract(ikigaiSection, '[GOOD_AT]', '[/GOOD_AT]').value,
+          worldNeeds: extract(ikigaiSection, '[WORLD_NEEDS]', '[/WORLD_NEEDS]').value,
+          pay: extract(ikigaiSection, '[PAY]', '[/PAY]').value,
+        },
+        actionStrategy: extract(pathSection, '[ACTION_STRATEGY]', '[/ACTION_STRATEGY]').value,
+      };
+    });
+
     return (
-      <>
-        <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-slate-900 mb-4">
-              {t('results.title', language)}
-            </h2>
-          </div>
-          
-          {/* Streaming Status */}
-          <div className="bg-white rounded-2xl shadow-lg p-8 mb-8">
-            <StreamingStatus 
-              phase={streamingState.phase}
-              message={getPhaseMessage(streamingState.phase)}
-            />
-            
-            {/* Show error if present */}
-            {streamingState.error && (
-              <div className="text-center mb-4">
-                <p className="text-red-600">{streamingState.error}</p>
-                <Button
-                  onClick={() => {
-                    setNeedsStreaming(false);
-                    setTimeout(() => setNeedsStreaming(true), 1000);
-                  }}
-                  className="mt-2"
-                  variant="outline"
-                >
-                  {language === 'es' ? 'Reintentar' : 'Retry'}
-                </Button>
-              </div>
-            )}
-            
-            {/* Show streaming content if available */}
-            {streamingState.buffer && streamingState.phase === StreamingPhase.STREAMING && (
-              <div className="mt-6">
-                <div className="bg-slate-50 rounded-lg p-4 text-sm text-slate-700 font-mono whitespace-pre-wrap">
-                  {streamingState.buffer}
-                </div>
-                
-                {/* Show completed sections */}
-                {streamingState.completedSections.length > 0 && (
-                  <div className="mt-4">
-                    <p className="text-sm text-slate-600 mb-2">
-                      {language === 'es' ? 'Secciones completadas:' : 'Completed sections:'}
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {streamingState.completedSections.map((section) => (
-                        <span
-                          key={section}
-                          className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full"
-                        >
-                          {section.replace('_', ' ')}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+      <div className="max-w-6xl mx-auto">
+        {/* Header */}
+        <div className="text-center mb-12">
+          <h2 className="text-3xl font-bold text-slate-900 mb-4">
+            {t('results.title', language)}
+          </h2>
+          {/* Streaming indicator */}
+          <div className="flex items-center justify-center gap-2 text-sm text-slate-600">
+            <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
+            {getPhaseMessage(streamingState.phase)}
           </div>
         </div>
-      </>
+        
+        {/* Core Drivers - render as plain text during streaming */}
+        <div className="bg-white rounded-2xl shadow-lg p-8 mb-8">
+          <div className="space-y-6">
+            <p className="text-center font-bold text-slate-800 text-lg">
+              {coreDrivers.statementSentence || (
+                <span className="inline-block h-6 bg-slate-100 rounded w-3/4 animate-pulse" />
+              )}
+            </p>
+            <div className="text-slate-600 whitespace-pre-wrap">
+              {coreDrivers.coreThreads || (
+                <>
+                  <span className="block h-4 bg-slate-100 rounded w-full mb-2 animate-pulse" />
+                  <span className="block h-4 bg-slate-100 rounded w-5/6 mb-2 animate-pulse" />
+                  <span className="block h-4 bg-slate-100 rounded w-4/6 animate-pulse" />
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+        
+        {/* Purpose Paths - inline card rendering without action buttons */}
+        <div className="mb-8">
+          <h3 className="text-2xl font-bold text-slate-900 mb-6 text-center">
+            {t('results.purposePaths', language)}
+          </h3>
+          <div className="grid lg:grid-cols-3 gap-6">
+            {streamingPaths.map((path, index) => {
+              const gradients = ['from-primary to-blue-600', 'from-secondary to-purple-600', 'from-accent to-orange-600'];
+              const gradient = gradients[index];
+              const icons = [Rocket, Users, Code];
+              const Icon = icons[index] || Rocket;
+              
+              return (
+                <div key={path.id} className="bg-white rounded-2xl shadow-lg overflow-hidden flex flex-col">
+                  <div className={`bg-gradient-to-br ${gradient} p-6 text-white`}>
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="text-xl font-bold">
+                        {path.title || <span className="inline-block h-7 bg-white/20 rounded w-3/4 animate-pulse" />}
+                      </h4>
+                      <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
+                        <Icon className="w-4 h-4" />
+                      </div>
+                    </div>
+                    <p className="opacity-90 text-sm">
+                      {path.description || <span className="inline-block h-5 bg-white/20 rounded w-full animate-pulse" />}
+                    </p>
+                  </div>
+                  
+                  <div className="p-6">
+                    {/* Ikigai Alignment */}
+                    <div className="mb-6">
+                      <h5 className="font-semibold text-slate-900 mb-3">{t('ikigai.alignment', language)}</h5>
+                      <div className="space-y-2">
+                        {[
+                          { key: 'love', color: 'red' },
+                          { key: 'goodAt', color: 'blue' },
+                          { key: 'worldNeeds', color: 'green' },
+                          { key: 'pay', color: 'yellow' }
+                        ].map(({ key, color }) => (
+                          <div key={key} className="flex items-start">
+                            <div className={`w-3 h-3 rounded-full mr-3 flex-shrink-0 mt-0.5 bg-${color}-400`} />
+                            <span className="text-sm text-slate-600">
+                              <strong>{t(`ikigai.${key}`, language)}:</strong>{' '}
+                              {path.ikigaiAlignment[key as keyof typeof path.ikigaiAlignment] || (
+                                <span className="inline-block h-4 bg-slate-100 rounded w-32 animate-pulse" />
+                              )}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    
+                    {/* Action Strategy */}
+                    <div className="bg-slate-50 rounded-lg p-4">
+                      <h6 className="font-medium text-slate-900 mb-2">{t('results.actionStrategy', language)}</h6>
+                      <p className="text-sm text-slate-600">
+                        {path.actionStrategy || (
+                          <span className="inline-block h-4 bg-slate-200 rounded w-full animate-pulse" />
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        
+        {/* Show error if present */}
+        {streamingState.error && (
+          <div className="text-center mb-4">
+            <p className="text-red-600">{streamingState.error}</p>
+            <Button
+              onClick={() => {
+                setNeedsStreaming(false);
+                setTimeout(() => setNeedsStreaming(true), 1000);
+              }}
+              className="mt-2"
+              variant="outline"
+            >
+              {language === 'es' ? 'Reintentar' : 'Retry'}
+            </Button>
+          </div>
+        )}
+        
+        {/* No action buttons during streaming */}
+      </div>
     );
   }
 
