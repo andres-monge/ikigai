@@ -54,7 +54,7 @@ An AI-powered web application designed to help career-switchers and students fin
 
       - **Frontend:** React SPA (Vite, TypeScript), using TanStack Query for server state. UI built with shadcn/ui and Tailwind CSS.
       - **Backend:** Node.js server (Express), orchestrating the AI generation logic.
-      - **AI & Data:** A dual-model strategy using **`GEMINI_REASONING_MODEL`** for high-quality reasoning and JSON output, and `GEMINI_FACTS_MODEL` with search for fact-retrieval. Real-time video data is sourced from the YouTube Data API.
+      - **AI & Data:** Uses **Vercel AI SDK** with **`GEMINI_REASONING_MODEL`** for structured object streaming via `streamObject`. Real-time video data is sourced from the YouTube Data API. The dual-model strategy is simplified to focus on reliable structured data generation.
       - **Data Persistence:** Session data is stored in a **Replit PostgreSQL database**. Schema management and migrations are handled by **Drizzle ORM** and **Drizzle Kit**. A two-database strategy (production and development) is employed to ensure a safe workflow.
       - **Deployment:** The application is packaged for deployment on Replit.
 
@@ -63,40 +63,40 @@ An AI-powered web application designed to help career-switchers and students fin
 ```mermaid
 graph TD
     subgraph "Browser (Client)"
-        C1[React SPA w/ EventSource] -->|HTTPS SSE| S1(Express Server)
+        C1[React SPA w/ useObject] -->|HTTPS SSE| S1(Express Server)
     end
 
     subgraph "Replit Environment (Server)"
-        S1 -- "/api/analyze/stream" --> ORC(Streaming Orchestrator)
+        S1 -- "/api/analyze/stream" --> ORC(AI SDK streamObject)
 
         subgraph "AI Stream (Purpose Discovery)"
-            ORC -- "User Profile" --> CALL2(② Gemini 1.5 Pro Stream)
-            ORC -- "Career Titles for Grounding" --> CALL1(① Flash-Lite + Search)
-            CALL1 -- "Live Salary Data" --> CALL2
+            ORC -- "User Profile + Zod Schema" --> CALL2(Gemini 1.5 Pro streamObject)
+            CALL2 -- "Structured JSON Stream" --> PARSE1(AI SDK Parser)
         end
 
-        S1 -- "/api/action-plan/stream" --> ORC2(Streaming Orchestrator)
+        S1 -- "/api/action-plan/stream" --> ORC2(AI SDK streamObject)
         subgraph "AI Stream (Action Plan)"
-            ORC2 -- "Chosen Path" --> CALL3(③ Gemini 1.5 Pro Stream)
-            CALL3 -- "Tool Call: getYoutubeVideos" --> YT_API(YouTube Data API)
-            YT_API -- "Video URLs" --> CALL3
+            ORC2 -- "Chosen Path + Zod Schema" --> CALL3(Gemini 1.5 Pro streamObject)
+            CALL3 -- "Structured JSON Stream" --> PARSE2(AI SDK Parser)
+            PARSE2 -- "Post-process: getYoutubeVideos" --> YT_API(YouTube Data API)
         end
 
         subgraph "Data Persistence"
             DB[(Replit PostgreSQL)]
         end
 
-        CALL2 -- "Full Text on Complete" --> PERSIST1(Validate & Persist)
-        CALL3 -- "Full Text on Complete" --> PERSIST2(Validate & Persist)
+        PARSE1 -- "Validated Object" --> PERSIST1(Validate & Persist)
+        YT_API -- "Enriched Object" --> PERSIST2(Validate & Persist)
         PERSIST1 --> DB
         PERSIST2 --> DB
     end
 
     style ORC fill:#d5e8d4,stroke:#333
     style ORC2 fill:#d5e8d4,stroke:#333
-    style CALL1 fill:#fff0cc,stroke:#333
     style CALL2 fill:#f8cecc,stroke:#333
     style CALL3 fill:#f8cecc,stroke:#333
+    style PARSE1 fill:#e1f5fe,stroke:#333
+    style PARSE2 fill:#e1f5fe,stroke:#333
     style YT_API fill:#e1d5e7,stroke:#333
     style DB fill:#dae8fc,stroke:#333
 ```
@@ -122,11 +122,8 @@ My_Directory_Structure/
 │ │ │ ├── purpose-discovery.chain.ts
 │ │ │ └── purpose-discovery.stream.chain.ts # Logic for streaming results
 │ │ ├── limiter.ts # Concurrency control for AI requests
-│ │ ├── parsers/ # Text parsing utilities for streaming responses
-│ │ │ ├── action-plan.parser.ts # Parses action plan streaming text
-│ │ │ └── purpose-discovery.parser.ts # Parses purpose discovery streaming text
 │ │ ├── prompts.ts # Manages system prompt generation & persona
-│ │ ├── schemas.ts # Zod/OpenAPI schemas for AI validation
+│ │ ├── schemas.ts # Zod schemas for AI SDK streamObject validation
 │ │ ├── tools.ts # Function-calling tool definitions
 │ │ ├── types.ts # TypeScript types for the Gemini API
 │ │ └── wrapper.ts # Low-level Gemini API client wrapper
@@ -175,11 +172,11 @@ My_Directory_Structure/
 
   - **Implementation Steps (Streaming):**
 
-    1.  Navigation & Connection: The client submits the questionnaire via a standard POST to /api/analyze, which saves the responses and returns success. The client then immediately navigates to /results. The Results page component mounts, displays a skeleton UI, and uses a useEffect hook to open an EventSource connection to GET /api/analyze/stream.
-    2.  Backend Generation: The server receives the request and invokes the getPurposeDiscoveryStreamChain. This chain's prompt instructs the AI to generate the analysis as a continuous stream of text, using delimiters like [SECTION:CORE_DRIVERS] and [SECTION:PATH_1] to structure the output.
-    3.  Streaming: The server pipes the raw text chunks from the AI model directly to the client as Server-Sent Events (SSE).
-    4.  Progressive Rendering: In the Results component, the EventSource onmessage handler appends incoming text to a local state buffer. A parsing function continuously checks this buffer for section delimiters. As each section is fully received, its content is parsed and set in state, causing React to replace the corresponding skeleton with the final, formatted component.
-    5.  Persistence: When the stream completes, the server assembles the full text, validates it, and persists the final structured JSON object to the database. The client also saves the final object to sessionStorage to handle page refreshes without re-streaming.
+    1.  Navigation & Connection: The client submits the questionnaire via a standard POST to /api/questionnaire/save, which saves the responses and returns success. The client then immediately navigates to /results. The Results page component mounts, displays a skeleton UI, and uses the Vercel AI SDK's `useObject` hook to connect to GET /api/analyze/stream.
+    2.  Backend Generation: The server receives the request and invokes `streamObject` from the AI SDK with a Zod schema defining the expected structure. The prompt instructs the AI to generate the analysis as structured JSON matching the schema.
+    3.  Streaming: The AI SDK handles the structured streaming protocol, sending partial objects as Server-Sent Events (SSE) that are automatically parsed and validated.
+    4.  Progressive Rendering: The `useObject` hook provides partial data as it arrives. React components render skeleton states until their corresponding data fields become available, then progressively fill with the streamed content.
+    5.  Persistence: When the stream completes, the server validates the final structured object against the Zod schema and persists it to the database. The client receives the complete object for sessionStorage to handle page refreshes without re-streaming.
     
 ### 3.2 Action Plan Generation
 
@@ -201,10 +198,10 @@ My_Directory_Structure/
 
   - **Implementation Steps (Streaming):**
 
-    1.  Navigation & Connection: When the user clicks "Get Action Plan," the client immediately navigates to /action-plan. The ActionPlan page component mounts, shows a skeleton UI, and opens an EventSource connection to GET /api/action-plan/stream.
-    2.  Backend Generation: The server invokes the getActionPlanStreamChain. The AI is prompted to generate the plan milestone-by-milestone, using delimiters like [MILESTONE_START] and [MILESTONE_END]. Tool calling for YouTube videos happens transparently on the backend during generation.
-    3. Streaming & Rendering: The server streams the plan as text chunks. The client parses each completed milestone and adds it to an array in its local state, causing the UI to render the plan progressively.
-    4. Persistence: Upon stream completion, the full action plan is assembled, validated, and saved to the database by the server. The client saves the final plan to sessionStorage.
+    1.  Navigation & Connection: When the user clicks "Get Action Plan," the client immediately navigates to /action-plan?pathId=X. The ActionPlan page component mounts, shows a skeleton UI, and uses the Vercel AI SDK's `useObject` hook to connect to GET /api/action-plan/stream.
+    2.  Backend Generation: The server invokes `streamObject` with a Zod schema for the action plan structure. The AI generates the plan as structured JSON, with YouTube video enrichment happening as post-processing after the main content streams.
+    3. Streaming & Rendering: The AI SDK streams partial action plan objects. The `useObject` hook provides milestone data as it becomes available, allowing React components to progressively render each milestone with its timeline and actions.
+    4. Persistence: Upon stream completion, YouTube videos are fetched and integrated into the plan, then the complete validated object is saved to the database. The client receives the enriched plan for sessionStorage.
 
 -----
 
@@ -240,24 +237,26 @@ The schema is defined in `shared/schema.ts` using Drizzle ORM syntax for Postgre
 
 The strategy is updated to leverage the best model for each task while simplifying the final output.
 
-#### **Recommended Pairing for Purpose Discovery**
+#### **Simplified AI Strategy with Vercel AI SDK**
 
-| Call | Purpose | Model | Why this is the best fit |
+| Component | Purpose | Model | Implementation |
 | :--- | :--- | :--- | :--- |
-| **Call 1 – "Facts"** | • Use **Search tool** to fetch a **single, broad salary range** + citation URL for an analogous job title. \<br\>• Free-form text output is sufficient. | **`GEMINI_FACTS_MODEL`** | *Cost/speed first.* A cheap, fast model is perfect for this simple, single-purpose fact-retrieval task. Grounding ensures reliability. |
-| **Call 2 – "Reasoning + JSON"** | • Combine user questionnaire + salary facts. \<br\>• Perform high-level synthesis and reasoning. \<br\>• **Embed salary facts into a narrative** within the final JSON. \<br\>• Return strict JSON adhering to the `purposeDiscoveryOpenApiSchema`. | **`GEMINI_REASONING_MODEL`** | *Quality first.* We need the best possible reasoning to synthesize the user's answers into novel insights and to elegantly weave the factual data into the final output. This model provides that capability. |
+| **Purpose Discovery** | • Generate structured career analysis with core drivers and three purpose paths \<br\>• Include salary information narratively embedded | **`GEMINI_REASONING_MODEL`** | Single `streamObject` call with Zod schema validation. Simplified prompt focuses on JSON structure matching UI expectations. |
+| **Action Plan** | • Generate detailed milestone-based action plan \<br\>• Structure ready for YouTube video enrichment | **`GEMINI_REASONING_MODEL`** | Single `streamObject` call followed by post-processing to add YouTube videos. Maintains coherent narrative. |
 
-#### **Strategy for Action Plan Generation**
+#### **Strategy Benefits**
 
-  - **Single, Powerful Call:** The entire action plan is generated in a single call to **`GEMINI_REASONING_MODEL`** to ensure coherence and maintain a consistent narrative throughout the detailed plan.
-  - **Tool-Augmented, Not Search-Reliant:** The AI's primary job is reasoning. It offloads specific data lookups to a more reliable tool.
-  - **YouTube Data API for Grounding:** For learning resources, the AI determines the *skill*, and a backend function calls the **YouTube Data API**. This provides valid links and rich metadata (like thumbnails), which is a significant quality improvement over general web search.
+  - **Reliability:** AI SDK handles parsing and validation automatically, eliminating custom delimiter issues.
+  - **Type Safety:** Zod schemas ensure consistent data structure between frontend and backend.
+  - **Simplified Architecture:** Single model calls reduce complexity while maintaining quality.
+  - **YouTube Data API Integration:** Post-processing approach provides valid links and rich metadata without complicating the streaming.
 
-### 5.3 Chain Orchestrator (`server/ai/chains/`)
+### 5.3 AI SDK Integration (`server/ai/`)
 
-  - **Description:** Contains the high-level business logic for executing the multi-call sequences, broken down into separate files by feature.
-  - `purpose-discovery.chain.ts`: Implements the parallel execution, caching, and function-calling logic for the initial analysis.
-  - `action-plan.chain.ts`: A similar chain for generating the detailed action plan for a chosen path.
+  - **Description:** Simplified AI integration using Vercel AI SDK for reliable structured streaming.
+  - `schemas.ts`: Zod schemas that define the expected structure for purpose discovery and action plan objects.
+  - Streaming endpoints use `streamObject` directly in route handlers, eliminating the need for complex chain orchestration.
+  - Post-processing (like YouTube video enrichment) happens after the main content streams, keeping the architecture simple.
 
 ## 6\. Design System
 
@@ -293,9 +292,9 @@ The strategy is updated to leverage the best model for each task while simplifyi
 
 ## 9\. Data Flow
 
-  - **Client ↔ Server: Server-Sent Events (SSE)** are the primary mechanism for delivering AI-generated content for analysis and action plans. Standard REST API calls (POST, GET) are used for initial data submission (questionnaire) and session management.
-  - **Server-Side:** The internal data flow is orchestrated by streaming-specific chains in server/ai/chains/ which pipe AI output directly to the client response. Response parsing is handled by specialized parsers in server/ai/parsers/, and SSE utilities in server/utils/sse.ts manage the streaming protocol. Route handling is organized in a modular structure under server/routes/assessment/.
-  - **State Management:** Client-side state for incoming streams is managed within individual React components using useState and useEffect. TanStack Query is used for non-streaming server state. Data is persisted in sessionStorage on stream completion to handle page refreshes gracefully.
+  - **Client ↔ Server: Vercel AI SDK Protocol** powers the streaming interface using Server-Sent Events (SSE) with automatic parsing and validation. Standard REST API calls (POST, GET) are used for initial data submission (questionnaire) and session management.
+  - **Server-Side:** Route handlers use `streamObject` directly with Zod schemas for validation. The AI SDK handles the streaming protocol automatically, eliminating the need for custom parsers or delimiter handling. SSE utilities in server/utils/sse.ts support legacy endpoints during migration.
+  - **State Management:** Client-side streaming is managed by the AI SDK's `useObject` hook, which provides partial data as it arrives. TanStack Query is used for non-streaming server state. Data is persisted in sessionStorage on stream completion to handle page refreshes gracefully.
 
 ## 10\. Environment Variables
 

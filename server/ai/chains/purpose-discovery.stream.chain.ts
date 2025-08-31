@@ -43,7 +43,8 @@ export async function* getPurposeDiscoveryStreamChain(
         contents,
         undefined, // no tools for streaming MVP
         {
-          temperature: 0.7,
+          temperature: 0.4, // Lower temperature for more consistent delimiter format
+          responseMimeType: 'text/plain', // Prevent markdown/code fence formatting
         }
       );
 

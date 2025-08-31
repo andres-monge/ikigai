@@ -271,25 +271,96 @@ This phase connects the frontend to the new word-by-word streaming APIs and vali
 
 ---
 
-[ ] Step 14: COMPLEX: Write E2E Test for Core User Journey
-**Task**: Create a new E2E test file, `tests/journey.spec.ts`. Using Playwright, write a test that covers the full user flow. It should fill out the questionnaire, submit, and then on the results and action plan pages, it should assert that the final, fully-streamed content becomes visible on the page.
-**Suggested Files for Context**: `client/src/pages/home.tsx`, `client/src/pages/results.tsx`, `client/src/pages/action-plan.tsx`, `playwright.config.ts`
+## Phase 4: Change to Vercel AI SDK with Structured Streaming
+
+This phase migrates from custom delimiter parsing to Vercel AI SDK's stable `streamObject` API, solving the malformed delimiter problem while maintaining real-time streaming.
+
+[ ] Step 14: Install AI SDK Dependencies and Create Schema
+**Task**: Install `ai` and `@ai-sdk/google` packages. Create a new Zod schema in `server/ai/schemas.ts` that mirrors the existing `shared/schema.ts` structure for purpose discovery. Keep the schema flat and simple - just mirror the exact structure your UI expects without adding complexity.
+**Suggested Files for Context**: `package.json`, `shared/schema.ts`
 **Step Dependencies**: Step 13.4
 
 ---
 
-## Phase 4: Final Hardening and Debugging
+[ ] Step 14.1: Redirect Non-Streaming Endpoint to Use Streaming Infrastructure
+**Task**: Update `POST /api/analyze` to internally use the streaming infrastructure while maintaining backward compatibility. The endpoint will: (1) Save questionnaire responses using existing logic, (2) Call the streaming chain internally and collect all chunks in memory, (3) Parse the complete result and return it in the original format. This provides a safety net during migration without complex deprecation mechanisms. The endpoint becomes a synchronous wrapper around the streaming approach.
+**Suggested Files for Context**: `server/routes/assessment/purpose-discovery.ts`, `server/ai/chains/purpose-discovery.stream.chain.ts`
+**Step Dependencies**: Step 14
+**Implementation Notes**: This creates a unified code path while preserving test compatibility. The non-streaming endpoint effectively becomes a "streaming-to-completion" variant.
 
-This final phase improves resilience and provides developers with the tools to effectively debug and replicate AI failures.
+---
 
-[ ] Step 15: Implement Enhanced AI Error Logging
-**Task**: Update the `catch` blocks in all AI chain files. When an error is caught, log a structured JSON object that includes the original error, the `userInput`, the `finishReason` from the AI response, and any `functionCall` details. This will provide a complete snapshot of any failure for easier debugging.
-**Suggested Files for Context**: `server/ai/chains/purpose-discovery.stream.chain.ts`, `server/ai/chains/action-plan.stream.chain.ts`, `server/ai/chains/purpose-discovery.chain.ts`, `server/ai/chains/action-plan.chain.ts`
+[ ] Step 15: COMPLEX: Migrate Results Page Backend to streamObject
+**Task**: Update the `/api/analyze/stream` endpoint in `server/routes/assessment/purpose-discovery.ts` to use Vercel AI SDK's `streamObject` instead of the current delimiter-based approach. Replace the existing streaming chain with a single `streamObject` call using the schema from Step 14. Keep the same endpoint URL and maintain existing features like concurrency limiting, session validation, and database persistence. Update the prompt to request direct JSON output without delimiter instructions, using a lower temperature (0.3) for more stable object generation.
+**Suggested Files for Context**: `server/routes/assessment/purpose-discovery.ts`, `server/ai/chains/purpose-discovery.stream.chain.ts`, `server/ai/prompts.ts`
 **Step Dependencies**: Step 14
 
 ---
 
-[ ] Step 16: Create a Developer Script for Controlled Edge-Case Testing
-**Task**: Create a new file `_docs/manual-test-harness.ts`. This script will not be part of the main application build. It should be a simple Node.js script that allows a developer to easily send a predefined JSON object (representing difficult questionnaire answers) to the `/api/analyze/stream` endpoint and print the raw streaming output. Include sample inputs in the script for testing vague, abstract, non-sequitur, and multi-language answers to help isolate issues.
-**Suggested Files for Context**: `server/routes/assessment`, `shared/schema.ts`
+[ ] Step 16: COMPLEX: Migrate Results Page Frontend to useObject
+**Task**: Update `client/src/pages/results.tsx` to use Vercel AI SDK's `useObject` hook instead of the custom SSE parsing logic. Replace the existing `EventSource` handling, buffer parsing, and heuristic extraction with a simple `useObject` call. Render skeleton components until fields become available, then progressively fill them as the object streams in. Remove all delimiter-related parsing code and maintain the same visual loading experience.
+**Suggested Files for Context**: `client/src/pages/results.tsx`, `client/src/hooks/use-sse-stream.ts`
 **Step Dependencies**: Step 15
+
+---
+
+[ ] Step 17: Test and Measure Results Page Success
+**Task**: Test the migrated Results page thoroughly and measure key metrics: time to first content appearance, error frequency, and streaming completion rate. Compare malformed delimiter errors before and after (should drop to 0). Document any issues and ensure the streaming experience feels as responsive as the previous version. If successful, proceed to migrate Action Plan; if issues arise, debug and fix before continuing.
+**Suggested Files for Context**: `client/src/pages/results.tsx`, browser developer tools for performance testing
+**Step Dependencies**: Step 16
+
+---
+
+[ ] Step 17.1: Add Standardized Error Codes and Migrate Integration Tests to Streaming
+**Task**: Enhance error handling and migrate tests to use the proven streamObject approach. Part 1: Add standardized error codes ('VALIDATION_ERROR', 'TRANSACTION_ERROR', 'STREAMING_ERROR', 'CONCURRENCY_LIMIT_REACHED') to the existing error classes in `server/utils/errors.ts`. Update their `toResponse()` methods to include these codes for better debugging. Part 2: Migrate the integration tests in `assessment.test.ts` to use streaming endpoints. Update the atomic operations test to verify that when `db.transaction` throws during streaming save, no partial data is saved. Update concurrency tests to verify both per-session locks and global p-limit work with streaming endpoints. Maintain the self-verifying loop philosophy with clear error messages.
+**Suggested Files for Context**: `server/utils/errors.ts`, `server/routes/assessment/assessment.test.ts`, `server/utils/sse-test-utils.ts`
+**Step Dependencies**: Step 17
+**Implementation Notes**: This validates the streamObject approach with comprehensive tests before proceeding to Action Plan migration. Error codes improve debugging without changing SSE format.
+
+---
+
+[ ] Step 18: COMPLEX: Migrate Action Plan Backend to streamObject  
+**Task**: Apply the same `streamObject` pattern to the `/api/action-plan/stream` endpoint in `server/routes/assessment/action-plan.ts`. Create an action plan schema that matches your existing structure. Update the prompt to generate JSON directly, keeping the YouTube video enrichment as post-processing (don't stream the videos, fetch them after the plan is complete). Maintain the same SSE event flow for compatibility.
+**Suggested Files for Context**: `server/routes/assessment/action-plan.ts`, `server/ai/chains/action-plan.stream.chain.ts`, `server/ai/prompts.ts`
+**Step Dependencies**: Step 17.1
+
+---
+
+[ ] Step 19: COMPLEX: Migrate Action Plan Frontend to useObject
+**Task**: Update `client/src/pages/action-plan.tsx` to use `useObject` following the same pattern as the Results page. Remove custom parsing logic and replace with progressive skeleton filling. Ensure the pathId query parameter handling continues to work properly with the new streaming approach.
+**Suggested Files for Context**: `client/src/pages/action-plan.tsx`, `client/src/hooks/use-sse-stream.ts`  
+**Step Dependencies**: Step 18
+
+---
+
+[ ] Step 20: Clean Up Legacy Code and Complete Streaming-Only Architecture
+**Task**: Remove all deprecated code to finalize the streaming-only architecture. Part 1: Remove delimiter-based streaming code: custom parsers in `server/ai/parsers/`, old streaming chains, delimiter extraction functions, and heuristic parsing logic. Part 2: Remove non-streaming infrastructure: delete `server/ai/chains/purpose-discovery.chain.ts`, remove `server/services/salary.ts` and its exports, remove salary tool from `server/ai/tools.ts`, delete the redirected `POST /api/analyze` endpoint. Part 3: Remove environment variables: remove `GEMINI_FACTS_MODEL` references from code and documentation. Part 4: Update documentation: remove dual-model strategy sections from `docs/tech-spec.md`, update architecture diagrams to show streaming-only approach. 
+**Suggested Files for Context**: `server/ai/parsers/`, `server/ai/chains/`, `server/services/`, `server/routes/assessment/purpose-discovery.ts`, `docs/tech-spec.md`, `server/env.ts`
+**Step Dependencies**: Step 19
+**User Instructions**: Remove `GEMINI_FACTS_MODEL` from your `.env` file as it's no longer needed. Update any deployment configurations to remove this variable.
+**Implementation Notes**: This completes the architectural simplification started in Step 14.1. The codebase now has a single, streamlined path for all AI generation using the Vercel AI SDK.
+
+---
+
+## Phase 5: Final Hardening and Debugging
+
+This final phase improves resilience and provides developers with the tools to effectively debug and replicate AI failures.
+
+[ ] Step 21: COMPLEX: Write E2E Test for Core User Journey
+**Task**: Create a new E2E test file, `tests/journey.spec.ts`. Using Playwright, write a test that covers the full user flow with the new `streamObject` implementation. It should fill out the questionnaire, submit, and then on the results and action plan pages, assert that the final, fully-streamed content becomes visible on the page. Verify that malformed delimiter errors no longer occur.
+**Suggested Files for Context**: `client/src/pages/home.tsx`, `client/src/pages/results.tsx`, `client/src/pages/action-plan.tsx`, `playwright.config.ts`
+**Step Dependencies**: Step 20
+
+---
+
+[ ] Step 22: Implement Enhanced AI Error Logging
+**Task**: Update the `catch` blocks in the new `streamObject` implementations. When an error is caught, log a structured JSON object that includes the original error, the `userInput`, the `finishReason` from the AI response, and any streaming-specific details. This will provide a complete snapshot of any failure for easier debugging with the new streaming approach.
+**Suggested Files for Context**: `server/routes/assessment/purpose-discovery.ts`, `server/routes/assessment/action-plan.ts`
+**Step Dependencies**: Step 21
+
+---
+
+[ ] Step 23: Create a Developer Script for Controlled Edge-Case Testing
+**Task**: Create a new file `_docs/manual-test-harness.ts`. This script will not be part of the main application build. It should be a simple Node.js script that allows a developer to easily send a predefined JSON object (representing difficult questionnaire answers) to the new `streamObject` endpoints and print the streaming output. Include sample inputs in the script for testing vague, abstract, non-sequitur, and multi-language answers to verify the structured streaming approach handles edge cases better than delimiter parsing.
+**Suggested Files for Context**: `server/routes/assessment`, `shared/schema.ts`
+**Step Dependencies**: Step 22
