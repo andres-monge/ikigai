@@ -275,8 +275,8 @@ This phase connects the frontend to the new word-by-word streaming APIs and vali
 
 This phase migrates from custom delimiter parsing to Vercel AI SDK's stable `streamObject` API, solving the malformed delimiter problem while maintaining real-time streaming.
 
-[ ] Step 14: Install AI SDK Dependencies and Create Schema
-**Task**: Install `ai` and `@ai-sdk/google` packages. Create a new Zod schema in `server/ai/schemas.ts` that mirrors the existing `shared/schema.ts` structure for purpose discovery. Keep the schema flat and simple - just mirror the exact structure your UI expects without adding complexity.
+[X] Step 14: Install AI SDK Dependencies and Create Schema
+**Task**: Install `ai` and `@ai-sdk/google` packages. Use Zod schema in `server/ai/schemas.ts` that mirrors the existing `shared/schema.ts` structure for purpose discovery. Keep the schema flat and simple - just mirror the exact structure your UI expects without adding complexity.
 **Suggested Files for Context**: `package.json`, `shared/schema.ts`
 **Step Dependencies**: Step 13.4
 
@@ -284,7 +284,7 @@ This phase migrates from custom delimiter parsing to Vercel AI SDK's stable `str
 
 [ ] Step 14.1: Redirect Non-Streaming Endpoint to Use Streaming Infrastructure
 **Task**: Update `POST /api/analyze` to internally use the streaming infrastructure while maintaining backward compatibility. The endpoint will: (1) Save questionnaire responses using existing logic, (2) Call the streaming chain internally and collect all chunks in memory, (3) Parse the complete result and return it in the original format. This provides a safety net during migration without complex deprecation mechanisms. The endpoint becomes a synchronous wrapper around the streaming approach.
-**Suggested Files for Context**: `server/routes/assessment/purpose-discovery.ts`, `server/ai/chains/purpose-discovery.stream.chain.ts`
+**Suggested Files for Context**: `server/routes/assessment/purpose-discovery.ts`, `server/ai/chains/purpose-discovery.stream.chain.ts`, `docs/vercel-ai-sdk.md`
 **Step Dependencies**: Step 14
 **Implementation Notes**: This creates a unified code path while preserving test compatibility. The non-streaming endpoint effectively becomes a "streaming-to-completion" variant.
 
@@ -292,14 +292,14 @@ This phase migrates from custom delimiter parsing to Vercel AI SDK's stable `str
 
 [ ] Step 15: COMPLEX: Migrate Results Page Backend to streamObject
 **Task**: Update the `/api/analyze/stream` endpoint in `server/routes/assessment/purpose-discovery.ts` to use Vercel AI SDK's `streamObject` instead of the current delimiter-based approach. Replace the existing streaming chain with a single `streamObject` call using the schema from Step 14. Keep the same endpoint URL and maintain existing features like concurrency limiting, session validation, and database persistence. Update the prompt to request direct JSON output without delimiter instructions, using a lower temperature (0.3) for more stable object generation.
-**Suggested Files for Context**: `server/routes/assessment/purpose-discovery.ts`, `server/ai/chains/purpose-discovery.stream.chain.ts`, `server/ai/prompts.ts`
+**Suggested Files for Context**: `server/routes/assessment/purpose-discovery.ts`, `server/ai/chains/purpose-discovery.stream.chain.ts`, `server/ai/prompts.ts`, `docs/vercel-ai-sdk.md`
 **Step Dependencies**: Step 14
 
 ---
 
 [ ] Step 16: COMPLEX: Migrate Results Page Frontend to useObject
 **Task**: Update `client/src/pages/results.tsx` to use Vercel AI SDK's `useObject` hook instead of the custom SSE parsing logic. Replace the existing `EventSource` handling, buffer parsing, and heuristic extraction with a simple `useObject` call. Render skeleton components until fields become available, then progressively fill them as the object streams in. Remove all delimiter-related parsing code and maintain the same visual loading experience.
-**Suggested Files for Context**: `client/src/pages/results.tsx`, `client/src/hooks/use-sse-stream.ts`
+**Suggested Files for Context**: `client/src/pages/results.tsx`, `client/src/hooks/use-sse-stream.ts`, `docs/vercel-ai-sdk.md`
 **Step Dependencies**: Step 15
 
 ---
@@ -321,14 +321,14 @@ This phase migrates from custom delimiter parsing to Vercel AI SDK's stable `str
 
 [ ] Step 18: COMPLEX: Migrate Action Plan Backend to streamObject  
 **Task**: Apply the same `streamObject` pattern to the `/api/action-plan/stream` endpoint in `server/routes/assessment/action-plan.ts`. Create an action plan schema that matches your existing structure. Update the prompt to generate JSON directly, keeping the YouTube video enrichment as post-processing (don't stream the videos, fetch them after the plan is complete). Maintain the same SSE event flow for compatibility.
-**Suggested Files for Context**: `server/routes/assessment/action-plan.ts`, `server/ai/chains/action-plan.stream.chain.ts`, `server/ai/prompts.ts`
+**Suggested Files for Context**: `server/routes/assessment/action-plan.ts`, `server/ai/chains/action-plan.stream.chain.ts`, `server/ai/prompts.ts`, `docs/vercel-ai-sdk.md`
 **Step Dependencies**: Step 17.1
 
 ---
 
 [ ] Step 19: COMPLEX: Migrate Action Plan Frontend to useObject
 **Task**: Update `client/src/pages/action-plan.tsx` to use `useObject` following the same pattern as the Results page. Remove custom parsing logic and replace with progressive skeleton filling. Ensure the pathId query parameter handling continues to work properly with the new streaming approach.
-**Suggested Files for Context**: `client/src/pages/action-plan.tsx`, `client/src/hooks/use-sse-stream.ts`  
+**Suggested Files for Context**: `client/src/pages/action-plan.tsx`, `client/src/hooks/use-sse-stream.ts`, `docs/vercel-ai-sdk.md`  
 **Step Dependencies**: Step 18
 
 ---
