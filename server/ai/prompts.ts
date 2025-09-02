@@ -100,14 +100,12 @@ import type {
   ${formattedResponses}
   
   Your Process:
-  Step 1: **Internal Monologue (before calling function)**:
+  Step 1: **Analysis**:
       - Based on the user's answers (on energy, edge, impact, economics), what are the underlying *problems* they seem drawn to?
       - What fields might combine their interests? Think about intersections. For example, if they like writing and technology, don't just say "Technical Writer." Suggest "Building a niche newsletter for developers" or "Creating educational content for a complex software product."
       - For each potential path, ask yourself: Does this lead to working on problems the user cares about? Can the user start this as a side project (learn by doing)? Does it have compounding potential?
-  Step 2: **Function Call**:
-      - Once you have three distinct paths, you MUST call the \`getSalaryDataForCareers\` function. For each path, choose a representative job title for a job that they could get if they follow that path, together with a relevant location to get salary data. This data is for grounding, but the path itself is more than just the job title.
-  Step 3: **Generate Final JSON**:
-      - After the function returns salary data, weave the salary facts (range & sources) directly into the \`ikigaiAlignment.pay\` string for each path. Do NOT include a top-level \`salaryData\` field.
+  Step 2: **Generate Final JSON**:
+      - For the \`ikigaiAlignment.pay\` field of each path, include realistic salary ranges and market information based on your knowledge. Mention "based on market research" or similar for credibility. Do NOT include a top-level \`salaryData\` field.
       - Generate your final answer as a single JSON object that strictly follows the provided schema.
       - **For the 'coreDriversAnalysis' object:**
           - In the \`statementSentence\` field, write a single, insightful sentence that presents the core threads and summarizes the user's ikigai. This should be a culmination of the analysis.
