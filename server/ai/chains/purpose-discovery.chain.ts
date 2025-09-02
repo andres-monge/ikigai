@@ -52,20 +52,40 @@ export async function getPurposeDiscoveryChain(
         model: google(env.GEMINI_REASONING_MODEL),
         schema: purposeDiscoveryResultSchema,
         prompt: systemPrompt,
-        temperature: 0.3, // Lower temperature for more consistent output
+        temperature: 0.3, // Lower temperature for more consistent structured output (vs 0.4 in streaming)
       });
 
       // Collect all partial objects until stream completes
       let finalObject: PurposeDiscoveryResult | undefined;
       for await (const partialObject of result.partialObjectStream) {
-        // Only assign if we have a complete object
-        if (partialObject?.coreDriversAnalysis && partialObject?.purposePaths?.length === 3) {
+        // Comprehensive validation to ensure all required fields are populated
+        if (
+          partialObject?.coreDriversAnalysis?.statementSentence && 
+          partialObject?.coreDriversAnalysis?.coreThreads &&
+          partialObject?.purposePaths?.length === 3 &&
+          partialObject.purposePaths.every(path => 
+            path?.title && 
+            path?.description && 
+            path?.actionStrategy &&
+            path?.ikigaiAlignment?.love && 
+            path?.ikigaiAlignment?.goodAt &&
+            path?.ikigaiAlignment?.worldNeeds && 
+            path?.ikigaiAlignment?.pay
+          )
+        ) {
           finalObject = partialObject as PurposeDiscoveryResult;
+          break; // Exit early once we have a complete object for memory efficiency
         }
       }
 
       if (finalObject) {
-        return finalObject;
+        // Validate against schema before returning to ensure data integrity
+        const validationResult = purposeDiscoveryResultSchema.safeParse(finalObject);
+        if (validationResult.success) {
+          return validationResult.data;
+        } else {
+          throw new Error(`Final object validation failed: ${validationResult.error.message}`);
+        }
       }
 
       throw new Error('StreamObject completed but no final object was received');

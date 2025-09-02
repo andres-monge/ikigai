@@ -282,7 +282,7 @@ This phase migrates from custom delimiter parsing to Vercel AI SDK's stable `str
 
 ---
 
-[ ] Step 14.1: Redirect Non-Streaming Endpoint to Use Streaming Infrastructure
+[X] Step 14.1: Redirect Non-Streaming Endpoint to Use Streaming Infrastructure
 **Task**: Update `POST /api/analyze` to internally use the streaming infrastructure while maintaining backward compatibility. The endpoint will: (1) Save questionnaire responses using existing logic, (2) Call the streaming chain internally and collect all chunks in memory, (3) Parse the complete result and return it in the original format. This provides a safety net during migration without complex deprecation mechanisms. The endpoint becomes a synchronous wrapper around the streaming approach.
 **Suggested Files for Context**: `server/routes/assessment/purpose-discovery.ts`, `server/ai/chains/purpose-discovery.stream.chain.ts`, `docs/vercel-ai-sdk.md`
 **Step Dependencies**: Step 14
