@@ -34,40 +34,41 @@ import { PurposePaths } from '@/components/results/purpose-paths';
 import { t, type Language } from '@/lib/i18n';
 import { exportToPDF } from '@/lib/pdf-export';
 import { useSessionStorage } from '@/hooks/use-session-storage';
-import { experimental_useObject as useObject } from '@ai-sdk/react';
+import { useSSEStream, StreamingPhase } from '@/hooks/use-sse-stream';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
-import type { FullAssessment, CoreDrivers, PurposePath } from '@/types/assessment';
-import { z } from 'zod';
+import type { FullAssessment } from '@/types/assessment';
 
 /* -------------------------------------------------------------------------- */
-/* Streaming Object Schema                                                    */
+/* Streaming Buffer Extraction Utilities                                     */
 /* -------------------------------------------------------------------------- */
 
 /**
- * Client-side Zod schema for purpose discovery streaming result
- * Matches the backend's purposeDiscoveryResultSchema structure
+ * Extract content between tags, returning partial content if end tag is missing
  */
-const purposeDiscoveryStreamSchema = z.object({
-  coreDriversAnalysis: z.object({
-    statementSentence: z.string(),
-    coreThreads: z.string(),
-  }),
-  purposePaths: z.array(
-    z.object({
-      title: z.string(),
-      description: z.string(),
-      ikigaiAlignment: z.object({
-        love: z.string(),
-        goodAt: z.string(),
-        worldNeeds: z.string(),
-        pay: z.string(),
-      }),
-      actionStrategy: z.string(),
-    })
-  ).length(3),
-});
+function extract(text: string, start: string, end: string) {
+  const s = text.indexOf(start);
+  if (s < 0) return { value: '', complete: false };
+  const from = s + start.length;
+  const e = text.indexOf(end, from);
+  return e >= 0
+    ? { value: text.slice(from, e).trim(), complete: true }
+    : { value: text.slice(from).trim(), complete: false };
+}
 
+/**
+ * Extract a section's content between SECTION and END_SECTION tags
+ */
+function extractSectionContent(buffer: string, sectionName: string) {
+  const startTag = `[SECTION:${sectionName}]`;
+  const endTag = '[END_SECTION]';
+  const startIdx = buffer.indexOf(startTag);
+  if (startIdx < 0) return '';
+  const endIdx = buffer.indexOf(endTag, startIdx);
+  return endIdx >= 0 
+    ? buffer.slice(startIdx, endIdx + endTag.length)
+    : buffer.slice(startIdx);
+}
 
 interface ResultsProps {
   onStartOver: () => void;
@@ -90,17 +91,11 @@ export function Results({
   const [needsStreaming, setNeedsStreaming] = useState(false);
   const [isFetchingSession, setIsFetchingSession] = useState(false);
 
-  // useObject hook for purpose discovery streaming
-  // Always call hook but use submit() to trigger when needed (fixes React Hooks Rules)
-  const {
-    object: streamingResult,
-    error: streamingError,
-    isLoading: isStreaming,
-    submit
-  } = useObject({
-    api: `/api/analyze/stream?sessionId=${sessionId}`,
-    schema: purposeDiscoveryStreamSchema,
-    onFinish: async () => {
+  // SSE Streaming hook for purpose discovery
+  const streamingState = useSSEStream({
+    enabled: needsStreaming,
+    endpoint: `/api/analyze/stream?sessionId=${sessionId}`,
+    onComplete: async () => {
       // On completion, fetch the final session data from the server
       try {
         const res = await apiRequest('GET', `/api/session/${sessionId}`);
@@ -118,7 +113,7 @@ export function Results({
         });
       }
     },
-    onError: (error: Error) => {
+    onError: (error) => {
       console.error('Streaming error:', error);
       toast({
         title: t('common.error', language),
@@ -193,14 +188,6 @@ export function Results({
     }
   }, [session?.sessionId, sessionId, session?.coreDriversAnalysis, needsStreaming, isFetchingSession]);
 
-  /* Server-as-source-of-truth session management - Effect 3: Manual streaming trigger */
-  useEffect(() => {
-    // Trigger streaming when needsStreaming becomes true and we're not already streaming
-    if (needsStreaming && !isStreaming && !streamingResult) {
-      submit({});
-    }
-  }, [needsStreaming, isStreaming, streamingResult, submit]);
-
   const handleChoosePath = (pathId: number) => {
     if (typeof pathId !== 'number') return;
 
@@ -214,15 +201,20 @@ export function Results({
     navigate(`/action-plan?pathId=${pathId}`);
   };
 
-  // Helper function to get streaming phase message
-  const getStreamingMessage = (): string => {
-    if (streamingError) {
-      return language === 'es' ? 'Error en la conexión' : 'Connection error';
+  // Helper function to get phase message
+  const getPhaseMessage = (phase: StreamingPhase): string => {
+    switch (phase) {
+      case StreamingPhase.CONNECTING:
+        return language === 'es' ? 'Conectando al servicio de IA...' : 'Connecting to AI service...';
+      case StreamingPhase.THINKING:
+        return language === 'es' ? 'La IA está analizando tus respuestas...' : 'AI is analyzing your responses...';
+      case StreamingPhase.STREAMING:
+        return language === 'es' ? 'Generando tu análisis...' : 'Generating your analysis...';
+      case StreamingPhase.ERROR:
+        return language === 'es' ? 'Error en la conexión' : 'Connection error';
+      default:
+        return language === 'es' ? 'Procesando...' : 'Processing...';
     }
-    if (isStreaming) {
-      return language === 'es' ? 'Generando tu análisis...' : 'Generating your analysis...';
-    }
-    return language === 'es' ? 'Procesando...' : 'Processing...';
   };
 
   // Show loading UI if we're fetching session from server
@@ -237,32 +229,45 @@ export function Results({
   }
 
   // Show streaming UI if we're in streaming mode
-  if (needsStreaming && !session?.coreDriversAnalysis) {
-    // Use streaming object or fallback to empty structure for progressive rendering
-    const coreDrivers = streamingResult?.coreDriversAnalysis || {
-      statementSentence: '',
-      coreThreads: ''
-    };
-
-    // Use streaming paths or create skeleton structure  
-    const fallbackPaths: PurposePath[] = [
-      { id: 1, title: '', description: '', ikigaiAlignment: { love: '', goodAt: '', worldNeeds: '', pay: '' }, actionStrategy: '' },
-      { id: 2, title: '', description: '', ikigaiAlignment: { love: '', goodAt: '', worldNeeds: '', pay: '' }, actionStrategy: '' },
-      { id: 3, title: '', description: '', ikigaiAlignment: { love: '', goodAt: '', worldNeeds: '', pay: '' }, actionStrategy: '' }
-    ];
+  if (needsStreaming && streamingState.phase !== StreamingPhase.COMPLETE) {
+    // Debug: Log buffer size to verify chunks are arriving
+    console.log(`[DEBUG] Streaming buffer length: ${streamingState.buffer.length}, phase: ${streamingState.phase}`);
     
-    const streamingPaths: PurposePath[] = streamingResult?.purposePaths?.map((path, index) => ({
-      id: index + 1,
-      title: path?.title || '',
-      description: path?.description || '',
-      ikigaiAlignment: {
-        love: path?.ikigaiAlignment?.love || '',
-        goodAt: path?.ikigaiAlignment?.goodAt || '',
-        worldNeeds: path?.ikigaiAlignment?.worldNeeds || '',
-        pay: path?.ikigaiAlignment?.pay || ''
-      },
-      actionStrategy: path?.actionStrategy || ''
-    })) || fallbackPaths;
+    // Parse buffer into structured data for progressive UI rendering
+    const isCoreDriversComplete = streamingState.completedSections.includes('CORE_DRIVERS');
+    const coreDriversSection = extractSectionContent(streamingState.buffer, 'CORE_DRIVERS');
+    const coreDrivers = isCoreDriversComplete && session?.coreDriversAnalysis ? 
+      session.coreDriversAnalysis : {
+        statementSentence: extract(coreDriversSection, '[STATEMENT]', '[/STATEMENT]').value,
+        coreThreads: extract(coreDriversSection, '[THREADS]', '[/THREADS]').value
+      };
+
+    // Extract each path's data
+    const streamingPaths = [1, 2, 3].map(i => {
+      const isComplete = streamingState.completedSections.includes(`PATH_${i}`);
+      const pathSection = extractSectionContent(streamingState.buffer, `PATH_${i}`);
+      
+      // If complete and we have session data, use that (frozen)
+      if (isComplete && session?.purposePaths?.[i-1]) {
+        return session.purposePaths[i-1];
+      }
+      
+      // Otherwise extract from buffer
+      const ikigaiSection = extract(pathSection, '[IKIGAI]', '[/IKIGAI]').value;
+      
+      return {
+        id: i,
+        title: extract(pathSection, '[TITLE]', '[/TITLE]').value,
+        description: extract(pathSection, '[DESCRIPTION]', '[/DESCRIPTION]').value,
+        ikigaiAlignment: {
+          love: extract(ikigaiSection, '[LOVE]', '[/LOVE]').value,
+          goodAt: extract(ikigaiSection, '[GOOD_AT]', '[/GOOD_AT]').value,
+          worldNeeds: extract(ikigaiSection, '[WORLD_NEEDS]', '[/WORLD_NEEDS]').value,
+          pay: extract(ikigaiSection, '[PAY]', '[/PAY]').value,
+        },
+        actionStrategy: extract(pathSection, '[ACTION_STRATEGY]', '[/ACTION_STRATEGY]').value,
+      };
+    });
 
     return (
       <div className="max-w-6xl mx-auto">
@@ -274,7 +279,7 @@ export function Results({
           {/* Streaming indicator */}
           <div className="flex items-center justify-center gap-2 text-sm text-slate-600">
             <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
-            {getStreamingMessage()}
+            {getPhaseMessage(streamingState.phase)}
           </div>
         </div>
         
@@ -367,9 +372,9 @@ export function Results({
         </div>
         
         {/* Show error if present */}
-        {streamingError && (
+        {streamingState.error && (
           <div className="text-center mb-4">
-            <p className="text-red-600">{streamingError.message}</p>
+            <p className="text-red-600">{streamingState.error}</p>
             <Button
               onClick={() => {
                 setNeedsStreaming(false);

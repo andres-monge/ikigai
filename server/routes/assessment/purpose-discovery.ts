@@ -31,12 +31,6 @@ import { TransactionError, ValidationError, wrapTransactionError } from "../../u
 import { validateSessionForAI } from "../../utils/validation";
 import { db } from "../../db";
 import { eq, inArray } from "drizzle-orm";
-// Vercel AI SDK imports for streamObject
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import { streamObject } from 'ai';
-import { purposeDiscoveryResultSchema } from '../../ai/schemas';
-import { getPurposeDiscoverySystemPrompt } from '../../ai/prompts';
-import { env } from '../../env';
 
 export const purposeDiscoveryRouter = Router();
 
@@ -131,56 +125,43 @@ purposeDiscoveryRouter.get("/analyze/stream", async (req, res) => {
     // Send initial connection confirmation
     writeSseEvent(res, SSE_EVENTS.STREAM_START);
 
+    let fullText = '';
+
     // Handle client disconnect
     setupSseCleanup(req, res, sessionId, activeStreams);
 
     try {
-      // Initialize Google provider for Vercel AI SDK
-      const google = createGoogleGenerativeAI({
-        apiKey: env.GEMINI_API_KEY,
-      });
-
-      // Start streaming with concurrency limiting using streamObject
-      const result = await aiLimiter(() => 
-        streamObject({
-          model: google(env.GEMINI_REASONING_MODEL),
-          schema: purposeDiscoveryResultSchema,
-          prompt: getPurposeDiscoverySystemPrompt(
-            session.responses as QuestionnaireResponses, 
-            session.language!
-          ),
-          temperature: 0.3, // Lower temperature for more stable object generation
-        })
+      // Start streaming with concurrency limiting
+      const streamGenerator = await aiLimiter(() => 
+        getPurposeDiscoveryStreamChain(session.responses as QuestionnaireResponses, session.language!)
       );
 
-      // Stream JSON objects to the client as they arrive
-      // Note: Frontend expects delimiter format but we're now sending JSON
-      // This will be fixed in Step 16 when frontend migrates to useObject
-      console.log(`[Step 15] Streaming JSON objects for session ${sessionId} - Frontend temporarily incompatible until Step 16`);
-      
-      for await (const partialObject of result.partialObjectStream) {
-        // Send partial object as JSON through SSE
-        writeSseData(res, JSON.stringify(partialObject));
+      // Stream each chunk to the client while buffering for database
+      for await (const chunk of streamGenerator) {
+        fullText += chunk;
+        
+        // Send chunk to client using SSE format
+        writeSseData(res, chunk);
       }
 
-      // Stream completed successfully - now get final object and save to database
+      // Stream completed successfully - now parse and save to database
       writeSseEvent(res, SSE_EVENTS.STREAM_END);
       
-      // Get the complete validated object from streamObject
-      const finalObject = await result.object;
+      // Parse the complete streamed text
+      const parsedData = parsePurposeDiscoveryStreamedText(fullText);
       
-      if (finalObject) {
+      if (parsedData) {
         // Save to database using atomic transaction (includes both paths and analysis)
         await atomicPurposePathUpdate(
           sessionId, 
           session, 
-          finalObject.purposePaths,
-          finalObject.coreDriversAnalysis
+          parsedData.purposePaths,
+          parsedData.coreDriversAnalysis
         );
         
         writeSseEvent(res, SSE_EVENTS.SAVE_SUCCESS);
       } else {
-        throw new Error('Failed to generate complete object from streamObject');
+        throw new Error('Failed to parse streamed response');
       }
 
     } catch (error) {
@@ -188,16 +169,12 @@ purposeDiscoveryRouter.get("/analyze/stream", async (req, res) => {
         console.error('Streaming or database transaction error:', error.toJSON());
         writeSseError(res, error.message);
       } else {
-        // Enhanced error logging for AI SDK streamObject
-        console.error('StreamObject error:', {
+        console.error('Streaming error:', {
           sessionId,
           error: error instanceof Error ? error.message : error,
-          stack: error instanceof Error ? error.stack : undefined,
-          // Log any additional context that might be helpful for debugging
-          timestamp: new Date().toISOString(),
-          model: env.GEMINI_REASONING_MODEL
+          stack: error instanceof Error ? error.stack : undefined
         });
-        writeSseError(res, 'Failed to generate or save your analysis. Please try again.');
+        writeSseError(res, 'Failed to save your analysis. Please try again.');
       }
     }
 
