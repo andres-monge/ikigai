@@ -11,16 +11,15 @@
  * - Clean separation of concerns: Results page focuses only on displaying analysis and navigation
  *
  * **Architecture Decisions:**
- * - Uses Server-Sent Events (SSE) for real-time AI response streaming
+ * - Uses Vercel AI SDK's useObject hook for structured streaming with type safety
  * - Query parameters over route state for data persistence across page refreshes
  * - Single streaming detection rule: missing core drivers analysis = start streaming
  * - Removed complex fallback chains and loading overlays for MVP simplicity
  *
  * @dependencies
  * - wouter: For navigation and routing.
- * - @/hooks/use-sse-stream: For real-time AI content streaming.
+ * - @ai-sdk/react: For useObject streaming hook with structured data.
  * - @/hooks/use-session-storage: To persist/retrieve session data.
- * - @/components/streaming-status: Real-time streaming progress indicator.
  * - @/types/assessment: For the `FullAssessment` type.
  */
 
@@ -46,7 +45,10 @@ import type { FullAssessment } from '@/types/assessment';
 
 /**
  * Zod schema for the purpose discovery result structure
- * Matches the backend's purposeDiscoveryResultSchema from server/ai/schemas.ts
+ * 
+ * IMPORTANT: This schema must stay synchronized with the backend's 
+ * purposeDiscoveryResultSchema in server/ai/schemas.ts (lines 38-61)
+ * Any changes to the backend schema structure must be reflected here.
  */
 const purposeDiscoverySchema = z.object({
   coreDriversAnalysis: z.object({
