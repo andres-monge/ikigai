@@ -290,63 +290,86 @@ This phase migrates from custom delimiter parsing to Vercel AI SDK's stable `str
 
 ---
 
-[X] Step 15: COMPLEX: Migrate Results Page Backend to streamObject
-**Task**: Update the `/api/analyze/stream` endpoint in `server/routes/assessment/purpose-discovery.ts` to use Vercel AI SDK's `streamObject` instead of the current delimiter-based approach. Replace the existing streaming chain with a single `streamObject` call using the schema from Step 14. Keep the same endpoint URL and maintain existing features like concurrency limiting, session validation, and database persistence. Update the prompt to request direct JSON output without delimiter instructions, using a lower temperature (0.3) for more stable object generation.
-**Suggested Files for Context**: `server/routes/assessment/purpose-discovery.ts`, `server/ai/chains/purpose-discovery.stream.chain.ts`, `server/ai/prompts.ts`, `docs/vercel-ai-sdk.md`
-**Step Dependencies**: Step 14
+[ ] Step 15: COMPLEX: Migrate Results Page Backend to streamObject with Native Protocol
+**Task**: Replace the `/api/analyze/stream` endpoint in `server/routes/assessment/purpose-discovery.ts` with a **POST** endpoint that uses AI SDK's native streaming protocol. Change from GET to POST (required by `useObject`), remove all manual SSE code (`setSseHeaders`, `writeSseData`, `writeSseEvent`), and replace with `result.toTextStreamResponse()`. In Express, pipe this response directly to `res`. While streaming, concurrently await `result.object` to get the final validated data for database persistence via `atomicPurposePathUpdate`.
+**Suggested Files for Context**: `server/routes/assessment/purpose-discovery.ts`, `server/ai/schemas.ts`, `docs/vercel-ai-sdk.md` (lines 1092-1112)
+**Step Dependencies**: Step 14.1
 **Implementation Notes**: 
-- Successfully migrated streaming endpoint to use Vercel AI SDK's `streamObject`
-- Streams JSON objects directly via SSE (no delimiter conversion needed)
-- Temperature set to 0.3 for stable object generation
-- Database persistence works correctly with `atomicPurposePathUpdate` 
-- Frontend is temporarily broken (expected) - receives JSON instead of delimiters
-- Testing confirmed: endpoint streams progressive JSON objects and saves complete results
-- Legacy imports remain for Step 20 cleanup
+- Change route from `GET` to `POST /api/analyze/stream`
+- Accept body: `{ sessionId }` (get language from existing session)
+- Keep concurrency limiting with `activeStreams` and `aiLimiter`
+- Use `streamObject` with temperature 0.3 and existing schema
+- Return stream: `result.toTextStreamResponse().pipeToResponse(res)` (Express pattern)
+- Concurrently: `const finalObject = await result.object` then save to DB
+- Clean up `activeStreams` in finally block
 
 ---
 
-[ ] Step 16: COMPLEX: Migrate Results Page Frontend to useObject
-**Task**: Update `client/src/pages/results.tsx` to use Vercel AI SDK's `useObject` hook instead of the custom SSE parsing logic. Replace the existing `EventSource` handling, buffer parsing, and heuristic extraction with a simple `useObject` call. Render skeleton components until fields become available, then progressively fill them as the object streams in. Remove all delimiter-related parsing code and maintain the same visual loading experience.
-**Suggested Files for Context**: `client/src/pages/results.tsx`, `client/src/hooks/use-sse-stream.ts`, `docs/vercel-ai-sdk.md`
+[ ] Step 16: COMPLEX: Migrate Results Page Frontend to useObject 
+**Task**: Update `client/src/pages/results.tsx` to properly use `useObject` with the new POST endpoint. Change the API configuration to remove query parameters and use `submit({ sessionId })` to trigger streaming. The hook already handles the text stream protocol automatically. Keep progressive rendering with skeletons, and maintain the `onFinish` callback to fetch the complete session from the database.
+**Suggested Files for Context**: `client/src/pages/results.tsx`, `docs/vercel-ai-sdk.md` (lines 1060-1086)
 **Step Dependencies**: Step 15
+**Implementation Notes**:
+- Change `api: '/api/analyze/stream'` (no query string)
+- Call `submit({ sessionId })` when streaming needed
+- Keep existing schema and progressive rendering
+- `onFinish`: fetch complete session via `GET /api/session/${sessionId}`
+- Remove any SSE-related code or comments
+- Streaming detection remains: missing `coreDriversAnalysis` triggers streaming
 
 ---
 
 [ ] Step 17: Test and Measure Results Page Success
-**Task**: Test the migrated Results page thoroughly and measure key metrics: time to first content appearance, error frequency, and streaming completion rate. Compare malformed delimiter errors before and after (should drop to 0). Document any issues and ensure the streaming experience feels as responsive as the previous version. If successful, proceed to migrate Action Plan; if issues arise, debug and fix before continuing.
+**Task**: Test the migrated Results page thoroughly and measure key metrics: time to first content appearance, error frequency, and streaming completion rate. Verify that the AI SDK's text stream protocol provides more reliable streaming than the previous delimiter-based approach. Document any issues and ensure the streaming experience feels as responsive as the previous version. If successful, proceed to migrate Action Plan; if issues arise, debug and fix before continuing.
 **Suggested Files for Context**: `client/src/pages/results.tsx`, browser developer tools for performance testing
 **Step Dependencies**: Step 16
 
 ---
 
-[ ] Step 17.1: Add Standardized Error Codes and Migrate Integration Tests to Streaming
-**Task**: Enhance error handling and migrate tests to use the proven streamObject approach. Part 1: Add standardized error codes ('VALIDATION_ERROR', 'TRANSACTION_ERROR', 'STREAMING_ERROR', 'CONCURRENCY_LIMIT_REACHED') to the existing error classes in `server/utils/errors.ts`. Update their `toResponse()` methods to include these codes for better debugging. Part 2: Migrate the integration tests in `assessment.test.ts` to use streaming endpoints. Update the atomic operations test to verify that when `db.transaction` throws during streaming save, no partial data is saved. Update concurrency tests to verify both per-session locks and global p-limit work with streaming endpoints. Maintain the self-verifying loop philosophy with clear error messages.
-**Suggested Files for Context**: `server/utils/errors.ts`, `server/routes/assessment/assessment.test.ts`, `server/utils/sse-test-utils.ts`
+[ ] Step 17.1: Add Standardized Error Codes and Migrate Integration Tests to AI SDK Protocol
+**Task**: Enhance error handling and migrate tests to use the AI SDK streaming approach. Part 1: Add standardized error codes ('VALIDATION_ERROR', 'TRANSACTION_ERROR', 'STREAMING_ERROR', 'CONCURRENCY_LIMIT_REACHED') to the existing error classes in `server/utils/errors.ts`. Update their `toResponse()` methods to include these codes for better debugging. Part 2: Migrate the integration tests in `assessment.test.ts` to test POST streaming endpoints with AI SDK protocol. Update the atomic operations test to verify that when `db.transaction` throws during streaming save, no partial data is saved. Update concurrency tests to verify both per-session locks and global p-limit work with AI SDK streaming endpoints. Replace SSE parsing tests with AI SDK text stream validation.
+**Suggested Files for Context**: `server/utils/errors.ts`, `server/routes/assessment/assessment.test.ts`
 **Step Dependencies**: Step 17
-**Implementation Notes**: This validates the streamObject approach with comprehensive tests before proceeding to Action Plan migration. Error codes improve debugging without changing SSE format.
+**Implementation Notes**: This validates the AI SDK streamObject approach with comprehensive tests before proceeding to Action Plan migration. Tests now focus on POST endpoints and text stream protocol rather than SSE events.
 
 ---
 
-[ ] Step 18: COMPLEX: Migrate Action Plan Backend to streamObject  
-**Task**: Apply the same `streamObject` pattern to the `/api/action-plan/stream` endpoint in `server/routes/assessment/action-plan.ts`. Create an action plan schema that matches your existing structure. Update the prompt to generate JSON directly, keeping the YouTube video enrichment as post-processing (don't stream the videos, fetch them after the plan is complete). Maintain the same SSE event flow for compatibility.
-**Suggested Files for Context**: `server/routes/assessment/action-plan.ts`, `server/ai/chains/action-plan.stream.chain.ts`, `server/ai/prompts.ts`, `docs/vercel-ai-sdk.md`
+[ ] Step 18: COMPLEX: Migrate Action Plan Backend to streamObject with Native Protocol
+**Task**: Replace the `/api/action-plan/stream` endpoint in `server/routes/assessment/action-plan.ts` with a **POST** endpoint that uses AI SDK's native streaming protocol. Change from GET to POST (required by `useObject`), remove all manual SSE code, and replace with `result.toTextStreamResponse()`. Keep YouTube video enrichment as post-processing - stream the action plan first, then concurrently fetch and integrate YouTube videos while the final object is being persisted to the database.
+**Suggested Files for Context**: `server/routes/assessment/action-plan.ts`, `server/ai/schemas.ts`, `docs/vercel-ai-sdk.md` (lines 1092-1112)
 **Step Dependencies**: Step 17.1
+**Implementation Notes**: 
+- Change route from `GET` to `POST /api/action-plan/stream`
+- Accept body: `{ sessionId, pathId }` (or get pathId from session if not provided)
+- Keep concurrency limiting with `activeStreams` and `aiLimiter`
+- Use `streamObject` with action plan schema and temperature 0.3
+- Return stream: `result.toTextStreamResponse().pipeToResponse(res)` (Express pattern)
+- Concurrently: await `result.object`, enrich with YouTube videos, then save to DB
+- Clean up `activeStreams` in finally block
 
 ---
 
 [ ] Step 19: COMPLEX: Migrate Action Plan Frontend to useObject
-**Task**: Update `client/src/pages/action-plan.tsx` to use `useObject` following the same pattern as the Results page. Remove custom parsing logic and replace with progressive skeleton filling. Ensure the pathId query parameter handling continues to work properly with the new streaming approach.
-**Suggested Files for Context**: `client/src/pages/action-plan.tsx`, `client/src/hooks/use-sse-stream.ts`, `docs/vercel-ai-sdk.md`  
+**Task**: Update `client/src/pages/action-plan.tsx` to properly use `useObject` with the new POST endpoint. Change the API configuration to use `submit({ sessionId, pathId })` to trigger streaming. Keep the existing pathId query parameter logic but pass it in the POST body instead of URL params. Maintain progressive rendering with skeletons and the `onFinish` callback to fetch the complete session from the database.
+**Suggested Files for Context**: `client/src/pages/action-plan.tsx`, `docs/vercel-ai-sdk.md` (lines 1060-1086)  
 **Step Dependencies**: Step 18
+**Implementation Notes**:
+- Change `api: '/api/action-plan/stream'` (no query string)
+- Call `submit({ sessionId, pathId: effectivePathId })` when streaming needed
+- Keep existing pathId detection logic (URL params → session fallback)
+- Keep existing schema and progressive rendering of milestones
+- `onFinish`: fetch complete session via `GET /api/session/${sessionId}`
+- Remove any SSE-related code or comments
+- Streaming detection remains: missing `actionPlan` or new `pathId` triggers streaming
 
 ---
 
-[ ] Step 20: Clean Up Legacy Code and Complete Streaming-Only Architecture
-**Task**: Remove all deprecated code to finalize the streaming-only architecture. Part 1: Remove delimiter-based streaming code: custom parsers in `server/ai/parsers/`, old streaming chains, delimiter extraction functions, and heuristic parsing logic. Part 2: Remove non-streaming infrastructure: delete `server/ai/chains/purpose-discovery.chain.ts`, remove `server/services/salary.ts` and its exports, remove salary tool from `server/ai/tools.ts`, delete the redirected `POST /api/analyze` endpoint. Part 3: Remove environment variables: remove `GEMINI_FACTS_MODEL` references from code and documentation. Part 4: Update documentation: remove dual-model strategy sections from `docs/tech-spec.md`, update architecture diagrams to show streaming-only approach. 
-**Suggested Files for Context**: `server/ai/parsers/`, `server/ai/chains/`, `server/services/`, `server/routes/assessment/purpose-discovery.ts`, `docs/tech-spec.md`, `server/env.ts`
+[ ] Step 20: Clean Up Legacy Code and Complete AI SDK-Only Architecture
+**Task**: Remove all deprecated code to finalize the AI SDK-only architecture. Part 1: Remove delimiter-based streaming code: custom parsers in `server/ai/parsers/`, old streaming chains, delimiter extraction functions, and heuristic parsing logic. Part 2: Remove SSE infrastructure: delete `server/utils/sse.ts` and all SSE utilities, remove SSE event constants, and any remaining SSE-related imports. Part 3: Remove non-streaming infrastructure: delete `server/ai/chains/purpose-discovery.chain.ts`, remove `server/services/salary.ts` and its exports, remove salary tool from `server/ai/tools.ts`, delete the redirected `POST /api/analyze` endpoint. Part 4: Remove environment variables: remove `GEMINI_FACTS_MODEL` references from code and documentation. Part 5: Update documentation: remove dual-model strategy sections from `docs/tech-spec.md`, update architecture diagrams to show AI SDK-only approach.
+**Suggested Files for Context**: `server/ai/parsers/`, `server/ai/chains/`, `server/services/`, `server/utils/sse.ts`, `server/routes/assessment/purpose-discovery.ts`, `docs/tech-spec.md`, `server/env.ts`
 **Step Dependencies**: Step 19
 **User Instructions**: Remove `GEMINI_FACTS_MODEL` from your `.env` file as it's no longer needed. Update any deployment configurations to remove this variable.
-**Implementation Notes**: This completes the architectural simplification started in Step 14.1. The codebase now has a single, streamlined path for all AI generation using the Vercel AI SDK.
+**Implementation Notes**: This completes the architectural simplification started in Step 14.1. The codebase now has a single, streamlined path for all AI generation using the Vercel AI SDK's native protocols.
 
 ---
 
