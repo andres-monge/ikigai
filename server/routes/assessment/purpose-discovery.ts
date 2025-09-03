@@ -2,13 +2,14 @@
  * @description
  * Purpose path discovery endpoints:
  *  • POST /api/analyze - generates core drivers & purpose paths (non-streaming)
- *  • GET /api/analyze/stream - generates core drivers & purpose paths (streaming)
+ *  • POST /api/analyze/stream - generates core drivers & purpose paths (streaming)
  * 
  * These endpoints handle the initial analysis phase where users receive
  * their core drivers analysis and three potential career paths.
  */
 
 import { Router } from "express";
+import { z } from "zod";
 import { storage, type HydratedAssessmentSession } from "../../storage";
 import {
   analysisRequestSchema,
@@ -19,11 +20,8 @@ import {
 } from "@shared/schema";
 import { getPurposeDiscoveryChain, getPurposeDiscoveryStreamChain } from "../../ai/chains";
 import { aiLimiter } from "../../ai/limiter";
-import { parsePurposeDiscoveryStreamedText } from "../../ai/parsers/purpose-discovery.parser";
-import { setSseHeaders, writeSseData, writeSseEvent, setupSseCleanup, writeSseError, SSE_EVENTS } from "../../utils/sse";
 import { 
   activeStreams, 
-  validateSessionForStreaming, 
   setupStreamConcurrencyControl, 
   atomicPurposePathUpdate 
 } from "./utils";
@@ -91,14 +89,19 @@ purposeDiscoveryRouter.post("/analyze", async (req, res, next) => {
   }
 });
 
-/* ----------------------- GET /api/analyze/stream ------------------------ */
+/* ----------------------- POST /api/analyze/stream ------------------------ */
 
-purposeDiscoveryRouter.get("/analyze/stream", async (req, res) => {
-  const sessionId = req.query.sessionId as string;
-
-  if (!sessionId) {
-    return res.status(400).json({ error: "sessionId is required" });
+purposeDiscoveryRouter.post("/analyze/stream", async (req, res) => {
+  // Validate request body
+  const bodyValidation = z.object({ sessionId: z.string() }).safeParse(req.body);
+  if (!bodyValidation.success) {
+    return res.status(400).json({ 
+      error: "Invalid request body", 
+      details: bodyValidation.error.errors 
+    });
   }
+  
+  const { sessionId } = bodyValidation.data;
 
   // Check for concurrent streams and set up concurrency control
   if (!setupStreamConcurrencyControl(sessionId, res)) {
@@ -116,83 +119,43 @@ purposeDiscoveryRouter.get("/analyze/stream", async (req, res) => {
     // ValidationError will bubble up to main catch block for consistent handling
     validateSessionForAI(session);
 
-    // Streaming-specific try-catch for AI operations
+    // Start streaming with AI SDK
     try {
-
-    // Set up Server-Sent Events headers
-    setSseHeaders(res);
-
-    // Send initial connection confirmation
-    writeSseEvent(res, SSE_EVENTS.STREAM_START);
-
-    let fullText = '';
-
-    // Handle client disconnect
-    setupSseCleanup(req, res, sessionId, activeStreams);
-
-    try {
-      // Start streaming with concurrency limiting
-      const streamGenerator = await aiLimiter(() => 
+      // Get streamObject result with concurrency limiting
+      const result = await aiLimiter(() => 
         getPurposeDiscoveryStreamChain(session.responses as QuestionnaireResponses, session.language!)
       );
 
-      // Stream each chunk to the client while buffering for database
-      for await (const chunk of streamGenerator) {
-        fullText += chunk;
-        
-        // Send chunk to client using SSE format
-        writeSseData(res, chunk);
-      }
+      // Stream to client using AI SDK's text stream protocol
+      result.pipeTextStreamToResponse(res);
 
-      // Stream completed successfully - now parse and save to database
-      writeSseEvent(res, SSE_EVENTS.STREAM_END);
+      // Concurrently wait for the final validated object and save to database
+      const finalObject = await result.object;
       
-      // Parse the complete streamed text
-      const parsedData = parsePurposeDiscoveryStreamedText(fullText);
-      
-      if (parsedData) {
+      if (finalObject) {
         // Save to database using atomic transaction (includes both paths and analysis)
         await atomicPurposePathUpdate(
           sessionId, 
           session, 
-          parsedData.purposePaths,
-          parsedData.coreDriversAnalysis
+          finalObject.purposePaths,
+          finalObject.coreDriversAnalysis
         );
-        
-        writeSseEvent(res, SSE_EVENTS.SAVE_SUCCESS);
       } else {
-        throw new Error('Failed to parse streamed response');
+        throw new Error('Failed to get final object from stream');
       }
 
     } catch (error) {
       if (error instanceof TransactionError) {
         console.error('Streaming or database transaction error:', error.toJSON());
-        writeSseError(res, error.message);
       } else {
         console.error('Streaming error:', {
           sessionId,
           error: error instanceof Error ? error.message : error,
           stack: error instanceof Error ? error.stack : undefined
         });
-        writeSseError(res, 'Failed to save your analysis. Please try again.');
       }
-    }
-
-    res.end();
-    } catch (streamingError) {
-      // Handle streaming-specific errors
-      if (streamingError instanceof TransactionError) {
-        console.error('Streaming transaction error:', streamingError.toJSON());
-        writeSseError(res, streamingError.message);
-      } else {
-        console.error('General streaming error:', {
-          sessionId,
-          error: streamingError instanceof Error ? streamingError.message : streamingError,
-          stack: streamingError instanceof Error ? streamingError.stack : undefined
-        });
-        writeSseError(res, 'Failed to complete streaming. Please try again.');
-      }
-      res.end();
+      // Don't send additional responses - streaming may have already started
+      throw error;
     }
 
   } catch (error) {
