@@ -27,6 +27,8 @@
 import { useEffect, useState } from 'react';
 import { useLocation } from 'wouter';
 import { Download, RotateCcw, Rocket, Users, Code } from 'lucide-react';
+import { experimental_useObject as useObject } from '@ai-sdk/react';
+import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { LoadingState } from '@/components/ui/loading-state';
 import { CoreDriversSummary } from '@/components/results/core-drivers-summary';
@@ -34,41 +36,37 @@ import { PurposePaths } from '@/components/results/purpose-paths';
 import { t, type Language } from '@/lib/i18n';
 import { exportToPDF } from '@/lib/pdf-export';
 import { useSessionStorage } from '@/hooks/use-session-storage';
-import { useSSEStream, StreamingPhase } from '@/hooks/use-sse-stream';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import type { FullAssessment } from '@/types/assessment';
 
 /* -------------------------------------------------------------------------- */
-/* Streaming Buffer Extraction Utilities                                     */
+/* Streaming Schema for useObject Hook                                       */
 /* -------------------------------------------------------------------------- */
 
 /**
- * Extract content between tags, returning partial content if end tag is missing
+ * Zod schema for the purpose discovery result structure
+ * Matches the backend's purposeDiscoveryResultSchema from server/ai/schemas.ts
  */
-function extract(text: string, start: string, end: string) {
-  const s = text.indexOf(start);
-  if (s < 0) return { value: '', complete: false };
-  const from = s + start.length;
-  const e = text.indexOf(end, from);
-  return e >= 0
-    ? { value: text.slice(from, e).trim(), complete: true }
-    : { value: text.slice(from).trim(), complete: false };
-}
-
-/**
- * Extract a section's content between SECTION and END_SECTION tags
- */
-function extractSectionContent(buffer: string, sectionName: string) {
-  const startTag = `[SECTION:${sectionName}]`;
-  const endTag = '[END_SECTION]';
-  const startIdx = buffer.indexOf(startTag);
-  if (startIdx < 0) return '';
-  const endIdx = buffer.indexOf(endTag, startIdx);
-  return endIdx >= 0 
-    ? buffer.slice(startIdx, endIdx + endTag.length)
-    : buffer.slice(startIdx);
-}
+const purposeDiscoverySchema = z.object({
+  coreDriversAnalysis: z.object({
+    statementSentence: z.string(),
+    coreThreads: z.string(),
+  }),
+  purposePaths: z.array(
+    z.object({
+      title: z.string(),
+      description: z.string(),
+      ikigaiAlignment: z.object({
+        love: z.string(),
+        goodAt: z.string(),
+        worldNeeds: z.string(),
+        pay: z.string(),
+      }),
+      actionStrategy: z.string(),
+    })
+  ),
+});
 
 interface ResultsProps {
   onStartOver: () => void;
@@ -91,11 +89,11 @@ export function Results({
   const [needsStreaming, setNeedsStreaming] = useState(false);
   const [isFetchingSession, setIsFetchingSession] = useState(false);
 
-  // SSE Streaming hook for purpose discovery
-  const streamingState = useSSEStream({
-    enabled: needsStreaming,
-    endpoint: `/api/analyze/stream?sessionId=${sessionId}`,
-    onComplete: async () => {
+  // useObject hook for purpose discovery streaming
+  const { object, submit, isLoading, error } = useObject({
+    api: '/api/analyze/stream',
+    schema: purposeDiscoverySchema,
+    onFinish: async () => {
       // On completion, fetch the final session data from the server
       try {
         const res = await apiRequest('GET', `/api/session/${sessionId}`);
@@ -183,10 +181,11 @@ export function Results({
   /* Server-as-source-of-truth session management - Effect 2: Streaming trigger */
   useEffect(() => {
     // Only trigger streaming if we have the right session but missing analysis
-    if (session && session.sessionId === sessionId && !session.coreDriversAnalysis && !needsStreaming && !isFetchingSession) {
+    if (session && session.sessionId === sessionId && !session.coreDriversAnalysis && !needsStreaming && !isFetchingSession && !isLoading) {
       setNeedsStreaming(true);
+      submit({ sessionId });
     }
-  }, [session?.sessionId, sessionId, session?.coreDriversAnalysis, needsStreaming, isFetchingSession]);
+  }, [session?.sessionId, sessionId, session?.coreDriversAnalysis, needsStreaming, isFetchingSession, isLoading, submit]);
 
   const handleChoosePath = (pathId: number) => {
     if (typeof pathId !== 'number') return;
@@ -201,20 +200,9 @@ export function Results({
     navigate(`/action-plan?pathId=${pathId}`);
   };
 
-  // Helper function to get phase message
-  const getPhaseMessage = (phase: StreamingPhase): string => {
-    switch (phase) {
-      case StreamingPhase.CONNECTING:
-        return language === 'es' ? 'Conectando al servicio de IA...' : 'Connecting to AI service...';
-      case StreamingPhase.THINKING:
-        return language === 'es' ? 'La IA está analizando tus respuestas...' : 'AI is analyzing your responses...';
-      case StreamingPhase.STREAMING:
-        return language === 'es' ? 'Generando tu análisis...' : 'Generating your analysis...';
-      case StreamingPhase.ERROR:
-        return language === 'es' ? 'Error en la conexión' : 'Connection error';
-      default:
-        return language === 'es' ? 'Procesando...' : 'Processing...';
-    }
+  // Helper function to get streaming status message
+  const getStreamingMessage = (): string => {
+    return language === 'es' ? 'Generando tu análisis...' : 'Generating your analysis...';
   };
 
   // Show loading UI if we're fetching session from server
@@ -229,43 +217,28 @@ export function Results({
   }
 
   // Show streaming UI if we're in streaming mode
-  if (needsStreaming && streamingState.phase !== StreamingPhase.COMPLETE) {
-    // Debug: Log buffer size to verify chunks are arriving
-    console.log(`[DEBUG] Streaming buffer length: ${streamingState.buffer.length}, phase: ${streamingState.phase}`);
+  if (needsStreaming && isLoading) {
+    // Debug: Log streaming status
+    console.log('[DEBUG] Streaming in progress, object data:', object);
     
-    // Parse buffer into structured data for progressive UI rendering
-    const isCoreDriversComplete = streamingState.completedSections.includes('CORE_DRIVERS');
-    const coreDriversSection = extractSectionContent(streamingState.buffer, 'CORE_DRIVERS');
-    const coreDrivers = isCoreDriversComplete && session?.coreDriversAnalysis ? 
-      session.coreDriversAnalysis : {
-        statementSentence: extract(coreDriversSection, '[STATEMENT]', '[/STATEMENT]').value,
-        coreThreads: extract(coreDriversSection, '[THREADS]', '[/THREADS]').value
-      };
+    // Use partial object data for progressive rendering
+    const coreDrivers = object?.coreDriversAnalysis || {};
+    const streamingPaths = object?.purposePaths || [];
 
-    // Extract each path's data
-    const streamingPaths = [1, 2, 3].map(i => {
-      const isComplete = streamingState.completedSections.includes(`PATH_${i}`);
-      const pathSection = extractSectionContent(streamingState.buffer, `PATH_${i}`);
-      
-      // If complete and we have session data, use that (frozen)
-      if (isComplete && session?.purposePaths?.[i-1]) {
-        return session.purposePaths[i-1];
-      }
-      
-      // Otherwise extract from buffer
-      const ikigaiSection = extract(pathSection, '[IKIGAI]', '[/IKIGAI]').value;
-      
+    // Ensure we have 3 paths for consistent UI, filling gaps with empty objects
+    const normalizedPaths = [0, 1, 2].map(i => {
+      const streamingPath = streamingPaths[i];
       return {
-        id: i,
-        title: extract(pathSection, '[TITLE]', '[/TITLE]').value,
-        description: extract(pathSection, '[DESCRIPTION]', '[/DESCRIPTION]').value,
+        id: i + 1,
+        title: streamingPath?.title || '',
+        description: streamingPath?.description || '',
         ikigaiAlignment: {
-          love: extract(ikigaiSection, '[LOVE]', '[/LOVE]').value,
-          goodAt: extract(ikigaiSection, '[GOOD_AT]', '[/GOOD_AT]').value,
-          worldNeeds: extract(ikigaiSection, '[WORLD_NEEDS]', '[/WORLD_NEEDS]').value,
-          pay: extract(ikigaiSection, '[PAY]', '[/PAY]').value,
+          love: streamingPath?.ikigaiAlignment?.love || '',
+          goodAt: streamingPath?.ikigaiAlignment?.goodAt || '',
+          worldNeeds: streamingPath?.ikigaiAlignment?.worldNeeds || '',
+          pay: streamingPath?.ikigaiAlignment?.pay || '',
         },
-        actionStrategy: extract(pathSection, '[ACTION_STRATEGY]', '[/ACTION_STRATEGY]').value,
+        actionStrategy: streamingPath?.actionStrategy || '',
       };
     });
 
@@ -279,7 +252,7 @@ export function Results({
           {/* Streaming indicator */}
           <div className="flex items-center justify-center gap-2 text-sm text-slate-600">
             <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
-            {getPhaseMessage(streamingState.phase)}
+            {getStreamingMessage()}
           </div>
         </div>
         
@@ -309,7 +282,7 @@ export function Results({
             {t('results.purposePaths', language)}
           </h3>
           <div className="grid lg:grid-cols-3 gap-6">
-            {streamingPaths.map((path, index) => {
+            {normalizedPaths.map((path, index) => {
               const gradients = ['from-primary to-blue-600', 'from-secondary to-purple-600', 'from-accent to-orange-600'];
               const gradient = gradients[index];
               const icons = [Rocket, Users, Code];
@@ -372,13 +345,16 @@ export function Results({
         </div>
         
         {/* Show error if present */}
-        {streamingState.error && (
+        {error && (
           <div className="text-center mb-4">
-            <p className="text-red-600">{streamingState.error}</p>
+            <p className="text-red-600">{error.message || 'Streaming error occurred'}</p>
             <Button
               onClick={() => {
                 setNeedsStreaming(false);
-                setTimeout(() => setNeedsStreaming(true), 1000);
+                setTimeout(() => {
+                  setNeedsStreaming(true);
+                  submit({ sessionId });
+                }, 1000);
               }}
               className="mt-2"
               variant="outline"
