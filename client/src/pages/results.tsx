@@ -23,7 +23,7 @@
  * - @/types/assessment: For the `FullAssessment` type.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useLocation } from 'wouter';
 import { Download, RotateCcw, Rocket, Users, Code } from 'lucide-react';
 import { experimental_useObject as useObject } from '@ai-sdk/react';
@@ -90,6 +90,9 @@ export function Results({
   const { toast } = useToast();
   const [needsStreaming, setNeedsStreaming] = useState(false);
   const [isFetchingSession, setIsFetchingSession] = useState(false);
+  
+  // One-shot streaming trigger to prevent infinite loops
+  const hasInitiatedStreamingRef = useRef(false);
 
   // useObject hook for purpose discovery streaming
   const { object, submit, isLoading, error } = useObject({
@@ -125,8 +128,13 @@ export function Results({
   });
 
 
-  /* Server-as-source-of-truth session management - Effect 1: Session validation and server fetch */
+  /* Unified session management and streaming trigger with one-shot pattern */
   useEffect(() => {
+    // Reset streaming ref if sessionId changes (new assessment)
+    if (!sessionId || (session && session.sessionId !== sessionId)) {
+      hasInitiatedStreamingRef.current = false;
+    }
+
     // No sessionId means we can't proceed at all
     if (!sessionId) {
       navigate('/');
@@ -177,17 +185,37 @@ export function Results({
         .finally(() => {
           setIsFetchingSession(false);
         });
+      return; // Don't continue to streaming logic while fetching
     }
-  }, [sessionId, session?.sessionId, session?.coreDriversAnalysis, isFetchingSession, needsStreaming, navigate, setSession, toast, language]);
 
-  /* Server-as-source-of-truth session management - Effect 2: Streaming trigger */
-  useEffect(() => {
-    // Only trigger streaming if we have the right session but missing analysis
-    if (session && session.sessionId === sessionId && !session.coreDriversAnalysis && !needsStreaming && !isFetchingSession && !isLoading) {
+    // One-shot streaming trigger: only initiate streaming once per session
+    const shouldStream = 
+      session &&
+      session.sessionId === sessionId &&
+      !session.coreDriversAnalysis &&
+      !isFetchingSession &&
+      !hasInitiatedStreamingRef.current;
+
+    if (shouldStream) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[Results] Initiating streaming for sessionId:', sessionId);
+      }
+      hasInitiatedStreamingRef.current = true;
       setNeedsStreaming(true);
       submit({ sessionId });
     }
-  }, [session?.sessionId, sessionId, session?.coreDriversAnalysis, needsStreaming, isFetchingSession, isLoading, submit]);
+  }, [
+    sessionId,
+    session?.sessionId,
+    !!session?.coreDriversAnalysis,  // Boolean coercion for stability
+    isFetchingSession,
+    needsStreaming,
+    navigate,
+    setSession,
+    toast,
+    language
+    // Note: submit intentionally omitted from deps to prevent infinite loops
+  ]);
 
   const handleChoosePath = (pathId: number) => {
     if (typeof pathId !== 'number') return;
