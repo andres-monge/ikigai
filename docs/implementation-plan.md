@@ -290,18 +290,23 @@ This phase migrates from custom delimiter parsing to Vercel AI SDK's stable `str
 
 ---
 
-[ ] Step 15: COMPLEX: Migrate Results Page Backend to streamObject with Native Protocol
-**Task**: Replace the `/api/analyze/stream` endpoint in `server/routes/assessment/purpose-discovery.ts` with a **POST** endpoint that uses AI SDK's native streaming protocol. Change from GET to POST (required by `useObject`), remove all manual SSE code (`setSseHeaders`, `writeSseData`, `writeSseEvent`), and replace with `result.toTextStreamResponse()`. In Express, pipe this response directly to `res`. While streaming, concurrently await `result.object` to get the final validated data for database persistence via `atomicPurposePathUpdate`.
+[X] Step 15: COMPLEX: Migrate Results Page Backend to streamObject with Native Protocol
+**Task**: Replace the `/api/analyze/stream` endpoint in `server/routes/assessment/purpose-discovery.ts` with a **POST** endpoint that uses AI SDK's native streaming protocol. Change from GET to POST (required by `useObject`), remove all manual SSE code (`setSseHeaders`, `writeSseData`, `writeSseEvent`), and replace with `result.pipeTextStreamToResponse(res)`. While streaming, concurrently await `result.object` to get the final validated data for database persistence via `atomicPurposePathUpdate`.
 **Suggested Files for Context**: `server/routes/assessment/purpose-discovery.ts`, `server/ai/schemas.ts`, `docs/vercel-ai-sdk.md` (lines 1092-1112)
 **Step Dependencies**: Step 14.1
 **Implementation Notes**: 
-- Change route from `GET` to `POST /api/analyze/stream`
-- Accept body: `{ sessionId }` (get language from existing session)
-- Keep concurrency limiting with `activeStreams` and `aiLimiter`
-- Use `streamObject` with temperature 0.3 and existing schema
-- Return stream: `result.toTextStreamResponse().pipeToResponse(res)` (Express pattern)
-- Concurrently: `const finalObject = await result.object` then save to DB
-- Clean up `activeStreams` in finally block
+Updated Streaming Chain (purpose-discovery.stream.chain.ts)
+  - Replaced async generator with Vercel AI SDK's streamObject
+  - Added structured validation using purposeDiscoveryResultSchema
+Migrated Streaming Endpoint (/api/analyze/stream)
+  - Changed from GET to POST method (required for useObject)
+  - Added Zod validation for request body: { sessionId: string }
+  - Replaced manual SSE with result.pipeTextStreamToResponse(res)
+  - Implemented concurrent database saving using await result.object
+Cleaned Up Legacy Code
+  - Removed SSE utility imports from this endpoint
+  - Removed delimiter parser dependencies
+  - Maintained existing safeguards (concurrency, validation, transactions)
 
 ---
 
@@ -316,6 +321,7 @@ This phase migrates from custom delimiter parsing to Vercel AI SDK's stable `str
 - `onFinish`: fetch complete session via `GET /api/session/${sessionId}`
 - Remove any SSE-related code or comments
 - Streaming detection remains: missing `coreDriversAnalysis` triggers streaming
+- Backend now uses POST endpoint with `result.pipeTextStreamToResponse(res)` for Express compatibility
 
 ---
 
@@ -335,7 +341,7 @@ This phase migrates from custom delimiter parsing to Vercel AI SDK's stable `str
 ---
 
 [ ] Step 18: COMPLEX: Migrate Action Plan Backend to streamObject with Native Protocol
-**Task**: Replace the `/api/action-plan/stream` endpoint in `server/routes/assessment/action-plan.ts` with a **POST** endpoint that uses AI SDK's native streaming protocol. Change from GET to POST (required by `useObject`), remove all manual SSE code, and replace with `result.toTextStreamResponse()`. Keep YouTube video enrichment as post-processing - stream the action plan first, then concurrently fetch and integrate YouTube videos while the final object is being persisted to the database.
+**Task**: Replace the `/api/action-plan/stream` endpoint in `server/routes/assessment/action-plan.ts` with a **POST** endpoint that uses AI SDK's native streaming protocol. Change from GET to POST (required by `useObject`), remove all manual SSE code, and replace with `result.pipeTextStreamToResponse(res)`. Keep YouTube video enrichment as post-processing - stream the action plan first, then concurrently fetch and integrate YouTube videos while the final object is being persisted to the database.
 **Suggested Files for Context**: `server/routes/assessment/action-plan.ts`, `server/ai/schemas.ts`, `docs/vercel-ai-sdk.md` (lines 1092-1112)
 **Step Dependencies**: Step 17.1
 **Implementation Notes**: 
@@ -343,7 +349,7 @@ This phase migrates from custom delimiter parsing to Vercel AI SDK's stable `str
 - Accept body: `{ sessionId, pathId }` (or get pathId from session if not provided)
 - Keep concurrency limiting with `activeStreams` and `aiLimiter`
 - Use `streamObject` with action plan schema and temperature 0.3
-- Return stream: `result.toTextStreamResponse().pipeToResponse(res)` (Express pattern)
+- Return stream: `result.pipeTextStreamToResponse(res)` (Express pattern from Step 15)
 - Concurrently: await `result.object`, enrich with YouTube videos, then save to DB
 - Clean up `activeStreams` in finally block
 
