@@ -321,7 +321,7 @@ Cleaned Up Legacy Code
 - Removed all SSE-specific code (extract functions, StreamingPhase enum, useSSEStream)
 - Simplified status indicator to single "Generating analysis..." message
 - Maintained onFinish callback to fetch complete session from database
-- Verified endpoint connectivity - POST endpoint responds correctly to requests
+- Fixed race condition using the streamed object directly from useObject's onFinish callback
 - Migration maintains existing functionality: streaming detection, progressive UI, error handling, path selection
 
 ---
@@ -357,7 +357,7 @@ Cleaned Up Legacy Code
 ---
 
 [ ] Step 19: COMPLEX: Migrate Action Plan Frontend to useObject
-**Task**: Update `client/src/pages/action-plan.tsx` to properly use `useObject` with the new POST endpoint. Change the API configuration to use `submit({ sessionId, pathId })` to trigger streaming. Keep the existing pathId query parameter logic but pass it in the POST body instead of URL params. Maintain progressive rendering with skeletons and the `onFinish` callback to fetch the complete session from the database.
+**Task**: Update `client/src/pages/action-plan.tsx` to properly use `useObject` with the new POST endpoint. Change the API configuration to use `submit({ sessionId, pathId })` to trigger streaming. Keep the existing pathId query parameter logic but pass it in the POST body instead of URL params. Maintain progressive rendering with skeletons and update the `onFinish` callback to use the streamed object directly (avoiding a race condition, as done in Step 16). Implement the same one-shot streaming pattern from Step 16 using `useRef` to prevent infinite loop issues caused by unstable `submit` function dependencies.
 **Suggested Files for Context**: `client/src/pages/action-plan.tsx`, `docs/vercel-ai-sdk.md` (lines 1060-1086)  
 **Step Dependencies**: Step 18
 **Implementation Notes**:
@@ -365,7 +365,7 @@ Cleaned Up Legacy Code
 - Call `submit({ sessionId, pathId: effectivePathId })` when streaming needed
 - Keep existing pathId detection logic (URL params → session fallback)
 - Keep existing schema and progressive rendering of milestones
-- `onFinish`: fetch complete session via `GET /api/session/${sessionId}`
+- `onFinish`: use streamed `object` parameter directly to update local state immediately, then fetch complete session in background after delay (same pattern as Step 16)
 - Remove any SSE-related code or comments
 - Streaming detection remains: missing `actionPlan` or new `pathId` triggers streaming
 

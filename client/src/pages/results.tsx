@@ -98,22 +98,60 @@ export function Results({
   const { object, submit, isLoading, error } = useObject({
     api: '/api/analyze/stream',
     schema: purposeDiscoverySchema,
-    onFinish: async () => {
-      // On completion, fetch the final session data from the server
-      try {
-        const res = await apiRequest('GET', `/api/session/${sessionId}`);
-        if (res.ok) {
+    onFinish: async ({ object }) => {
+      // Immediately update local state with streamed data (eliminates race condition)
+      if (object && session) {
+        // Map streamed purposePaths to match database structure with temporary IDs
+        const mappedPurposePaths = object.purposePaths.map((path, index) => ({
+          ...path,
+          id: -(index + 1), // Temporary negative IDs to avoid conflicts
+          assessmentId: session.id || 0
+        }));
+        
+        const updatedSession = {
+          ...session,
+          coreDriversAnalysis: object.coreDriversAnalysis,
+          purposePaths: mappedPurposePaths
+        };
+        setSession(updatedSession);
+        setNeedsStreaming(false);
+        
+        // Background fetch to get DB-persisted version after delay
+        setTimeout(async () => {
+          try {
+            const res = await fetch(`/api/session/${sessionId}`, { 
+              cache: 'no-store', 
+              credentials: 'include' 
+            });
+            if (res.ok) {
+              const dbSession = await res.json();
+              setSession(dbSession);
+            }
+          } catch (error) {
+            console.error('Background session fetch failed (non-critical):', error);
+          }
+        }, 1000);
+      } else {
+        // Fallback to old behavior if object is missing
+        try {
+          const res = await fetch(`/api/session/${sessionId}`, { 
+            cache: 'no-store', 
+            credentials: 'include' 
+          });
+          if (!res.ok) {
+            throw new Error(`${res.status}: ${res.statusText}`);
+          }
           const updatedSession = await res.json();
           setSession(updatedSession);
           setNeedsStreaming(false);
+        } catch (error) {
+          console.error('Failed to fetch completed session:', error);
+          toast({
+            title: t('common.error', language),
+            description: t('results.saveAnalysisError', language),
+            variant: 'destructive',
+          });
         }
-      } catch (error) {
-        console.error('Failed to fetch completed session:', error);
-        toast({
-          title: t('common.error', language),
-          description: t('results.saveAnalysisError', language),
-          variant: 'destructive',
-        });
       }
     },
     onError: (error) => {
@@ -248,9 +286,6 @@ export function Results({
 
   // Show streaming UI if we're in streaming mode
   if (needsStreaming && isLoading) {
-    // Debug: Log streaming status
-    console.log('[DEBUG] Streaming in progress, object data:', object);
-    
     // Use partial object data for progressive rendering
     const coreDrivers = object?.coreDriversAnalysis || {};
     const streamingPaths = object?.purposePaths || [];
