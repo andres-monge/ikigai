@@ -26,7 +26,7 @@ import {
   setupStreamConcurrencyControl,
   atomicActionPlanUpdate 
 } from "./utils";
-import { TransactionError, ValidationError } from "../../utils/errors";
+import { TransactionError, ValidationError, YouTubeEnrichmentError } from "../../utils/errors";
 import { validateSessionForActionPlan } from "../../utils/validation";
 
 export const actionPlanRouter = Router();
@@ -149,7 +149,24 @@ actionPlanRouter.post("/action-plan/stream", async (req, res) => {
       );
 
       // Stream to client using AI SDK's text stream protocol
-      result.pipeTextStreamToResponse(res);
+      try {
+        result.pipeTextStreamToResponse(res);
+      } catch (streamError) {
+        console.error('Text streaming failed:', {
+          sessionId,
+          error: streamError instanceof Error ? streamError.message : streamError,
+          stack: streamError instanceof Error ? streamError.stack : undefined
+        });
+        // If streaming fails before starting, we can still send an error response
+        if (!res.headersSent) {
+          return res.status(500).json({ 
+            error: 'Failed to start streaming',
+            code: 'STREAMING_ERROR'
+          });
+        }
+        // If streaming already started, we can't send JSON response
+        throw streamError;
+      }
 
       // Concurrently wait for the final validated object
       const finalObject = await result.object;
@@ -192,8 +209,26 @@ actionPlanRouter.post("/action-plan/stream", async (req, res) => {
             };
           }
         } catch (enrichmentError) {
-          // If YouTube enrichment fails, use the base action plan without videos
-          console.error('YouTube enrichment failed, saving base plan:', enrichmentError);
+          // Handle specific YouTube enrichment errors with detailed logging
+          if (enrichmentError instanceof YouTubeEnrichmentError) {
+            console.error('YouTube API enrichment failed:', enrichmentError.toJSON());
+          } else if (enrichmentError instanceof Error && enrichmentError.message.includes('YouTube')) {
+            console.error('YouTube service error during enrichment:', {
+              sessionId,
+              error: enrichmentError.message,
+              stack: enrichmentError.stack?.split('\n').slice(0, 3),
+              timestamp: new Date().toISOString()
+            });
+          } else {
+            console.error('Unexpected error during YouTube enrichment:', {
+              sessionId,
+              error: enrichmentError instanceof Error ? enrichmentError.message : enrichmentError,
+              type: typeof enrichmentError,
+              timestamp: new Date().toISOString()
+            });
+          }
+          
+          // Graceful degradation: use the base action plan without videos
           enrichedData = finalObject;
         }
         

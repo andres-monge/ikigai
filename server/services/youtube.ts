@@ -15,6 +15,7 @@ import {
 import type { Language } from '@shared/schema';
 import { youtubeVideoSchema } from '@shared/schema';
 import { env } from '../env.js';
+import { YouTubeEnrichmentError } from '../utils/errors';
 
 /**
  * Calls the YouTube Data API v3 `search.list` endpoint to retrieve up to 3
@@ -50,9 +51,20 @@ async function _fetchVideosForSkill(
       status: res.status,
       statusText: res.statusText,
       body: errorBody,
-      url: url.toString()
+      url: url.toString(),
+      skill
     });
-    throw new Error(`[YouTubeService] YouTube API request failed: ${res.status} ${res.statusText} - ${errorBody}`);
+    
+    throw new YouTubeEnrichmentError(
+      `Failed to fetch videos for skill: ${skill}`,
+      {
+        apiResponse: errorBody,
+        url: url.toString(),
+        timestamp: new Date().toISOString()
+      },
+      skill,
+      res.status
+    );
   }
 
   const data: any = await res.json();
