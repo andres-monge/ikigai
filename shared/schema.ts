@@ -99,7 +99,7 @@ export type YoutubeVideo = z.infer<typeof youtubeVideoSchema>;
 
 export const skillToLearnSchema = z.object({
   skill: z.string(),
-  youtubeLinks: z.array(youtubeVideoSchema).min(1),
+  youtubeLinks: z.array(youtubeVideoSchema), // Allow empty arrays for graceful degradation
 });
 export type SkillToLearn = z.infer<typeof skillToLearnSchema>;
 
