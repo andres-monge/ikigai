@@ -159,12 +159,18 @@ purposeDiscoveryRouter.post("/analyze/stream", async (req, res) => {
     }
 
   } catch (error) {
-    if (error instanceof ValidationError) {
-      console.error('Validation error during stream setup:', error.toJSON());
-      res.status(400).json(error.toResponse());
+    // Check if response has already been sent to prevent headers error
+    if (!res.headersSent) {
+      if (error instanceof ValidationError) {
+        console.error('Validation error during stream setup:', error.toJSON());
+        res.status(400).json(error.toResponse());
+      } else {
+        console.error('Stream setup error:', error);
+        res.status(500).json({ error: 'Failed to start stream' });
+      }
     } else {
-      console.error('Stream setup error:', error);
-      res.status(500).json({ error: 'Failed to start stream' });
+      // If headers already sent (streaming started), just log the error
+      console.error('Error after streaming started:', error);
     }
   } finally {
     // Always clean up the active stream marker

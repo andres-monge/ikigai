@@ -41,18 +41,29 @@ vi.mock('../../ai/chains', () => ({
 
 /**
  * Creates a mock streamObject result for testing AI SDK streaming
- * This simulates the interface provided by Vercel AI SDK's streamObject
+ * This simulates AI SDK streaming behavior with progressive chunks
+ * optimized for fast test execution while testing application functionality
  */
 function createMockStreamResult(finalObject: any) {
   return {
     pipeTextStreamToResponse: vi.fn((res: any) => {
-      // Simulate streaming some text chunks
-      res.write('{"coreDriversAnalysis":{"statementSentence":"');
-      res.write('driven by the desire');
-      res.write('","coreThreads":"Problem-solving');
-      res.write('"},"purposePaths":[');
-      res.write('{"title":"Senior Full-Stack Developer"');
-      res.end(']}');
+      // Simulate progressive streaming without delays for fast test execution
+      const chunks = [
+        '{"coreDriversAnalysis":{',
+        '"statementSentence":"You are ',
+        'driven by the desire to create meaningful software",',
+        '"coreThreads":"Problem-solving, technical excellence"},',
+        '"purposePaths":[{',
+        '"title":"Senior Full-Stack Developer",',
+        '"description":"Lead development of complex web applications",',
+        '"ikigaiAlignment":{"love":"Building elegant interfaces"},',
+        '"actionStrategy":"Focus on modern frameworks"}',
+        ']}'
+      ];
+      
+      // Stream all chunks immediately for fast test execution
+      chunks.forEach(chunk => res.write(chunk));
+      res.end();
     }),
     object: Promise.resolve(finalObject)
   };
@@ -273,28 +284,50 @@ describe('Purpose Discovery Streaming Endpoint - /api/analyze/stream', () => {
       .send({ sessionId })
       .expect(200);
 
-    // 4. Verify that streaming was initiated (basic response validation)
+    // 4. Verify complete application functionality: streaming behavior and content
     expect(response.text).toBeDefined();
     expect(response.text.length).toBeGreaterThan(0);
+    
+    // Verify the stream contains the expected AI SDK structure
+    expect(response.text).toContain('coreDriversAnalysis');
+    expect(response.text).toContain('purposePaths');
+    expect(response.text).toContain('Senior Full-Stack Developer');
+    
+    // Verify proper JSON streaming (should be valid JSON parts)
+    expect(response.text).toMatch(/\"statementSentence\".*driven by the desire/);
+    expect(response.text).toMatch(/\"coreThreads\".*Problem-solving/);
 
-    // 5. Verify database persistence (key test - focus on outcomes)
+    // 5. Verify complete application workflow: questionnaire → AI → database persistence
     const updatedSession = await storage.getAssessmentSessionBySessionId(sessionId);
     expect(updatedSession).toBeDefined();
+    
+    // Core drivers analysis should be completely saved
     expect(updatedSession!.coreDriversAnalysis).toBeDefined();
     expect(updatedSession!.coreDriversAnalysis!.statementSentence).toContain('driven by the desire');
     expect(updatedSession!.coreDriversAnalysis!.coreThreads).toContain('Problem-solving');
     
-    // Verify all 3 purpose paths were created
+    // All 3 purpose paths should be created with complete data
     expect(updatedSession!.purposePaths).toHaveLength(3);
     const pathTitles = updatedSession!.purposePaths.map(p => p.title);
     expect(pathTitles).toContain('Senior Full-Stack Developer');
     expect(pathTitles).toContain('Technical Architect');
     expect(pathTitles).toContain('Product Engineering Lead');
     
-    // Verify ikigai alignment was saved correctly
+    // Verify complete ikigai alignment data structure
     const fullStackPath = updatedSession!.purposePaths.find(p => p.title === 'Senior Full-Stack Developer');
+    expect(fullStackPath).toBeDefined();
     expect(fullStackPath!.ikigaiAlignment.love).toBe('Building elegant user interfaces');
+    expect(fullStackPath!.ikigaiAlignment.goodAt).toBe('Full-stack development and architecture');
+    expect(fullStackPath!.ikigaiAlignment.worldNeeds).toBe('Better software experiences');
     expect(fullStackPath!.ikigaiAlignment.pay).toContain('$120,000-$150,000');
+    expect(fullStackPath!.actionStrategy).toContain('modern frameworks');
+    
+    // Verify the complete user journey: input responses are preserved
+    expect(updatedSession!.responses).toEqual(testResponses);
+    expect(updatedSession!.language).toBe('en');
+    
+    // Verify timestamps show the session was properly updated
+    expect(updatedSession!.updatedAt.getTime()).toBeGreaterThan(updatedSession!.createdAt.getTime());
   });
 
   it('should prevent concurrent streams for the same session (real HTTP server)', async () => {
@@ -372,19 +405,21 @@ describe('Purpose Discovery Streaming Endpoint - /api/analyze/stream', () => {
   }, 15000); // Increase timeout for real server operations
 
   it('should allow concurrent streams for different sessions', async () => {
-    // 1. Create two different test sessions
-    const sessionId1 = 'concurrent-test-1-' + Date.now();
-    const sessionId2 = 'concurrent-test-2-' + Date.now();
+    // 1. Create two different test sessions with unique IDs
+    const timestamp = Date.now();
+    const sessionId1 = 'concurrent-test-1-' + timestamp;
+    const sessionId2 = 'concurrent-test-2-' + timestamp;
     
-    await storage.createAssessmentSession({
+    // Create sessions in database using the actual storage layer to ensure proper FK relationships
+    const session1 = await storage.createAssessmentSession({
       sessionId: sessionId1,
       language: 'en',
       responses: testResponses
     });
     
-    await storage.createAssessmentSession({
+    const session2 = await storage.createAssessmentSession({
       sessionId: sessionId2,
-      language: 'en',
+      language: 'en', 
       responses: testResponses
     });
 
@@ -393,21 +428,40 @@ describe('Purpose Discovery Streaming Endpoint - /api/analyze/stream', () => {
       createMockStreamResult(mockFinalObject)
     );
 
-    // 3. Start both streams sequentially (not concurrently) to avoid DB race conditions in tests
+    // 3. Start both streams sequentially to ensure clean database operations
     const response1 = await request(app).post('/api/analyze/stream').send({ sessionId: sessionId1 });
     const response2 = await request(app).post('/api/analyze/stream').send({ sessionId: sessionId2 });
 
     // 4. Verify both streams succeeded
     expect(response1.status).toBe(200);
     expect(response2.status).toBe(200);
-
-    // 5. Verify both sessions were updated in database (simple verification)
-    const session1 = await storage.getAssessmentSessionBySessionId(sessionId1);
-    const session2 = await storage.getAssessmentSessionBySessionId(sessionId2);
     
-    expect(session1).toBeDefined();
-    expect(session2).toBeDefined();
-    // Note: Database validation simplified to avoid test complexity with mocked data
+    // Verify streaming content was returned (not just empty responses)
+    expect(response1.text).toBeDefined();
+    expect(response1.text.length).toBeGreaterThan(0);
+    expect(response2.text).toBeDefined();
+    expect(response2.text.length).toBeGreaterThan(0);
+
+    // 5. Verify complete application functionality: database persistence with proper data
+    const updatedSession1 = await storage.getAssessmentSessionBySessionId(sessionId1);
+    const updatedSession2 = await storage.getAssessmentSessionBySessionId(sessionId2);
+    
+    expect(updatedSession1).toBeDefined();
+    expect(updatedSession2).toBeDefined();
+    
+    // Verify the core application functionality: AI analysis was saved correctly
+    expect(updatedSession1!.coreDriversAnalysis).toBeDefined();
+    expect(updatedSession1!.coreDriversAnalysis!.statementSentence).toContain('driven by the desire');
+    expect(updatedSession1!.purposePaths).toHaveLength(3);
+    
+    expect(updatedSession2!.coreDriversAnalysis).toBeDefined();
+    expect(updatedSession2!.coreDriversAnalysis!.statementSentence).toContain('driven by the desire');
+    expect(updatedSession2!.purposePaths).toHaveLength(3);
+    
+    // Verify sessions maintain separate data (no cross-contamination)
+    expect(updatedSession1!.id).not.toBe(updatedSession2!.id);
+    expect(updatedSession1!.sessionId).toBe(sessionId1);
+    expect(updatedSession2!.sessionId).toBe(sessionId2);
   }, 15000); // Increase timeout for concurrent operations with transactions
 
   it('should handle AI chain errors gracefully during streaming', async () => {
