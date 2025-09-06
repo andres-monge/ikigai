@@ -529,7 +529,7 @@ describe('POST /api/questionnaire/save', () => {
     // Should return structured error
     expect(response.status).toBe(500);
     expect(response.body.error).toBe('Failed to update your session. Please try again.');
-    expect(response.body.code).toBe('DATABASE_TRANSACTION_FAILED');
+    expect(response.body.code).toBe('TRANSACTION_ERROR');
 
     // Original data should be preserved (rollback successful)
     const preservedSession = await storage.getAssessmentSessionBySessionId(constraintTestSessionId);
@@ -564,7 +564,7 @@ describe('POST /api/questionnaire/save', () => {
     // Should return appropriate error response
     expect(response.status).toBe(500);
     expect(response.body.error).toBe('Failed to update your session. Please try again.');
-    expect(response.body.code).toBe('DATABASE_TRANSACTION_FAILED');
+    expect(response.body.code).toBe('TRANSACTION_ERROR');
 
     // Should not have created any partial data
     const session = await storage.getAssessmentSessionBySessionId(timeoutSessionId);

@@ -81,7 +81,7 @@ This is a work-in-progress application following a detailed implementation plan 
 - Feature-based file organization for hooks and components
 - Comprehensive JSDoc documentation for complex functions
 
-## File Modification Rules
+## File Creation & Modification Rules
 
 ### When asked to work with code, documentation, or any file content, you MUST modify the existing file using file editing commands, patches, or direct modifications to existing content. Apply changes incrementally to existing files rather than rewriting them completely.
 

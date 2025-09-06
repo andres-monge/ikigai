@@ -380,7 +380,7 @@ describe('ValidationError structure and formatting', () => {
       
       // Check error properties
       expect(validationError.name).toBe('ValidationError');
-      expect(validationError.code).toBe('VALIDATION_FAILED');
+      expect(validationError.code).toBe('VALIDATION_ERROR');
       expect(validationError.message).toContain('required before AI processing');
       expect(validationError.details).toBeDefined();
       expect(validationError.details.field).toBeDefined();
@@ -408,7 +408,7 @@ describe('ValidationError structure and formatting', () => {
       const response = validationError.toResponse();
       
       expect(response).toHaveProperty('error');
-      expect(response).toHaveProperty('code', 'VALIDATION_FAILED');
+      expect(response).toHaveProperty('code', 'VALIDATION_ERROR');
       expect(response.error).toBe(validationError.message);
       
       // In test mode, should include details

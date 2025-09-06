@@ -233,6 +233,7 @@ describe('Assessment Routes - Atomic Operations', () => {
     // 5. Verify error response includes debugging information (with structured errors)
     expect(response.status).toBe(500);
     expect(response.body.error).toBe('Failed to save your analysis. Please try again.');
+    expect(response.body.code).toBe('TRANSACTION_ERROR');
     expect(response.body.details).toBeDefined();
     expect(response.body.details.originalError).toContain('Database connection error during path creation');
     expect(transactionCallCount).toBe(1); // Verify transaction was attempted

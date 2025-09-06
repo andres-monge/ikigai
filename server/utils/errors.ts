@@ -64,7 +64,7 @@ export class StreamingError extends TransactionError {
     details?: any,
     sessionId?: string
   ) {
-    super(userMessage, 'STREAMING_FAILED', details, sessionId);
+    super(userMessage, ERROR_CODES.STREAMING_ERROR, details, sessionId);
     this.name = 'StreamingError';
   }
 }
@@ -78,7 +78,7 @@ export class ValidationError extends TransactionError {
     details?: any,
     sessionId?: string
   ) {
-    super(userMessage, 'VALIDATION_FAILED', details, sessionId);
+    super(userMessage, ERROR_CODES.VALIDATION_ERROR, details, sessionId);
     this.name = 'ValidationError';
   }
 }
@@ -87,6 +87,13 @@ export class ValidationError extends TransactionError {
  * Error codes for consistent error categorization
  */
 export const ERROR_CODES = {
+  // Standardized error codes for self-verifying loop
+  VALIDATION_ERROR: 'VALIDATION_ERROR',
+  TRANSACTION_ERROR: 'TRANSACTION_ERROR', 
+  STREAMING_ERROR: 'STREAMING_ERROR',
+  CONCURRENCY_LIMIT_REACHED: 'CONCURRENCY_LIMIT_REACHED',
+  
+  // Legacy codes (maintain backward compatibility)
   PURPOSE_PATH_UPDATE_FAILED: 'PURPOSE_PATH_UPDATE_FAILED',
   ACTION_PLAN_UPDATE_FAILED: 'ACTION_PLAN_UPDATE_FAILED',
   STREAMING_FAILED: 'STREAMING_FAILED',
@@ -142,11 +149,11 @@ function getCodeForOperation(operation: string): string {
   switch (operation) {
     case 'purpose_path_update':
     case 'purpose_discovery':
-      return ERROR_CODES.PURPOSE_PATH_UPDATE_FAILED;
+      return ERROR_CODES.TRANSACTION_ERROR;
     case 'action_plan_update':
     case 'action_plan_generation':
-      return ERROR_CODES.ACTION_PLAN_UPDATE_FAILED;
+      return ERROR_CODES.TRANSACTION_ERROR;
     default:
-      return ERROR_CODES.DATABASE_TRANSACTION_FAILED;
+      return ERROR_CODES.TRANSACTION_ERROR;
   }
 }

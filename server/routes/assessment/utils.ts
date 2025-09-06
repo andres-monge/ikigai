@@ -11,7 +11,7 @@ import type { PurposePath, ActionPlan } from "@shared/schema";
 import { db } from "../../db";
 import { eq } from "drizzle-orm";
 import { purposePaths, assessmentSessions } from "@shared/schema";
-import { wrapTransactionError } from "../../utils/errors";
+import { wrapTransactionError, ERROR_CODES } from "../../utils/errors";
 import { inArray } from "drizzle-orm";
 import { validateSessionForAI } from "../../utils/validation";
 
@@ -56,7 +56,8 @@ export async function validateSessionForStreaming(sessionId: string): Promise<Hy
 export function setupStreamConcurrencyControl(sessionId: string, res: Response): boolean {
   if (activeStreams.get(sessionId)) {
     res.status(429).json({ 
-      error: "A stream is already in progress for this session" 
+      error: "A stream is already in progress for this session",
+      code: ERROR_CODES.CONCURRENCY_LIMIT_REACHED
     });
     return false;
   }
