@@ -349,10 +349,18 @@ Cleaned Up Legacy Code
 
 ---
 
+[X] Step 17.2: Migrate Action Plan Integration Tests to AI SDK Protocol
+**Task**: Migrate the integration tests in `assessment.action-plan.stream.test.ts` to test POST streaming endpoints with AI SDK protocol. Update tests to verify the complete action plan workflow including YouTube video enrichment, concurrent session handling, and atomic database persistence. Replace SSE parsing tests with AI SDK text stream validation. Ensure tests provide clear, actionable error messages that enable autonomous debugging during Steps 18-19. Follow the pattern from Step 17.1's test migration, focusing on testing the YouTube enrichment phase that happens after streaming completes.
+**Suggested Files for Context**: `server/routes/assessment/assessment.action-plan.stream.test.ts`, `server/routes/assessment/assessment.purpose-discovery.stream.test.ts` (as reference)
+**Step Dependencies**: Step 17.1
+**Implementation Notes**: Create a self-verifying loop that enables AI agents to debug issues autonomously during the Action Plan migration. Tests should verify the complete flow from streaming → parsing → YouTube enrichment → database persistence, with particular attention to the post-processing phase that makes Action Plan more complex than Purpose Discovery.
+
+---
+
 [ ] Step 18: COMPLEX: Migrate Action Plan Backend to streamObject with Native Protocol
 **Task**: Replace the `/api/action-plan/stream` endpoint in `server/routes/assessment/action-plan.ts` with a **POST** endpoint that uses AI SDK's native streaming protocol. Change from GET to POST (required by `useObject`), remove all manual SSE code, and replace with `result.pipeTextStreamToResponse(res)`. Keep YouTube video enrichment as post-processing - stream the action plan first, then concurrently fetch and integrate YouTube videos while the final object is being persisted to the database.
 **Suggested Files for Context**: `server/routes/assessment/action-plan.ts`, `server/ai/schemas.ts`, `docs/vercel-ai-sdk.md` (lines 1092-1112)
-**Step Dependencies**: Step 17.1
+**Step Dependencies**: Step 17.2
 **Implementation Notes**: 
 - Change route from `GET` to `POST /api/action-plan/stream`
 - Accept body: `{ sessionId, pathId }` (or get pathId from session if not provided)
