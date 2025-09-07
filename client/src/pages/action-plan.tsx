@@ -123,45 +123,11 @@ export function ActionPlan({
           actionPlan: object,
           chosenPathId: effectivePathId || session?.chosenPathId || null
         };
-        console.log('[ActionPlan] Initial onFinish - setting session data:', {
-          effectivePathId,
-          sessionChosenPathId: session?.chosenPathId,
-          finalChosenPathId: updatedSession.chosenPathId,
-          hasActionPlan: !!object,
-          purposePaths: session?.purposePaths?.map((p: any) => ({ id: p.id, title: p.title }))
-        });
         setSessionData(updatedSession);
         setNeedsStreaming(false);
         
-        // Background fetch to get DB-persisted version after delay
-        setTimeout(async () => {
-          try {
-            const res = await fetch(`/api/session/${sessionId}`, { 
-              cache: 'no-store', 
-              credentials: 'include' 
-            });
-            if (res.ok) {
-              const dbSession = await res.json();
-              const mergedSession = {
-                ...dbSession,
-                actionPlan: sessionData?.actionPlan || dbSession.actionPlan,  // Preserve local action plan
-                chosenPathId: effectivePathId || dbSession.chosenPathId
-              };
-              console.log('[ActionPlan] Background fetch - setting session data:', {
-                effectivePathId,
-                dbChosenPathId: dbSession.chosenPathId,
-                finalChosenPathId: mergedSession.chosenPathId,
-                hasLocalActionPlan: !!sessionData?.actionPlan,
-                hasDbActionPlan: !!dbSession.actionPlan,
-                preservedActionPlan: !!mergedSession.actionPlan,
-                purposePaths: dbSession.purposePaths?.map((p: any) => ({ id: p.id, title: p.title }))
-              });
-              setSessionData(mergedSession);
-            }
-          } catch (error) {
-            console.error('Background session fetch failed (non-critical):', error);
-          }
-        }, 1000);
+        // Persist to sessionStorage for consistency and page refresh support
+        sessionStorage.setItem('session', JSON.stringify(updatedSession));
       } else {
         // Fallback to old behavior if object is missing
         try {
@@ -232,11 +198,8 @@ export function ActionPlan({
 
     // Validate pathId exists in purpose paths
     if (currentSession?.purposePaths) {
-      const pathIds = currentSession.purposePaths.map(p => p.id);
-      console.log('[ActionPlan] Available path IDs:', pathIds, 'Looking for:', effectivePathId);
       const validPath = currentSession.purposePaths.some(p => p.id === effectivePathId);
       if (!validPath) {
-        console.log('[ActionPlan] Invalid pathId, redirecting to results');
         navigate('/results');
         return;
       }
@@ -251,9 +214,6 @@ export function ActionPlan({
       !hasInitiatedStreamingRef.current;
 
     if (shouldStream) {
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[ActionPlan] Initiating streaming for sessionId:', sessionId, 'pathId:', effectivePathId);
-      }
       hasInitiatedStreamingRef.current = true;
       setNeedsStreaming(true);
       submit({ sessionId, pathId: effectivePathId });
@@ -409,25 +369,7 @@ export function ActionPlan({
   const currentActionPlan = currentSession?.actionPlan;
   const currentChosenPath = chosenPath;
 
-  // Debug logging to trace component disappearing issue
-  console.log('[ActionPlan] Render state:', {
-    sessionData: !!sessionData,
-    session: !!session,
-    currentActionPlan: !!currentActionPlan,
-    chosenPath: !!chosenPath,
-    effectivePathId,
-    currentSession: {
-      purposePaths: currentSession?.purposePaths?.map((p: any) => ({ id: p.id, title: p.title })),
-      chosenPathId: currentSession?.chosenPathId
-    }
-  });
-
   if (isError || !currentActionPlan || !currentChosenPath) {
-    console.log('[ActionPlan] Returning null - missing:', { 
-      isError, 
-      hasActionPlan: !!currentActionPlan, 
-      hasChosenPath: !!currentChosenPath 
-    });
     // This state should ideally be brief due to the redirect guard.
     return null;
   }

@@ -372,7 +372,7 @@ Cleaned Up Legacy Code
 
 ---
 
-[ ] Step 19: COMPLEX: Migrate Action Plan Frontend to useObject
+[X] Step 19: COMPLEX: Migrate Action Plan Frontend to useObject
 **Task**: Update `client/src/pages/action-plan.tsx` to properly use `useObject` with the new POST endpoint. Change the API configuration to use `submit({ sessionId, pathId })` to trigger streaming. Keep the existing pathId query parameter logic but pass it in the POST body instead of URL params. Maintain progressive rendering with skeletons and update the `onFinish` callback to use the streamed object directly (avoiding a race condition, as done in Step 16). Implement the same one-shot streaming pattern from Step 16 using `useRef` to prevent infinite loop issues caused by unstable `submit` function dependencies.
 **Suggested Files for Context**: `client/src/pages/action-plan.tsx`, `docs/vercel-ai-sdk.md` (lines 1060-1086)  
 **Step Dependencies**: Step 18
