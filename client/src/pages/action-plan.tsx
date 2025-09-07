@@ -36,7 +36,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { useGetActionPlan } from '@/hooks/use-get-action-plan';
+import { useGetSession } from '@/hooks/use-get-session';
 import { t, type Language } from '@/lib/i18n';
 import { Skeleton } from '@/components/ui/skeleton';
 import { exportActionPlanToPDF } from '@/lib/pdf-export';
@@ -94,7 +94,7 @@ export function ActionPlan({
   // One-shot streaming trigger to prevent infinite loops
   const hasInitiatedStreamingRef = useRef(false);
 
-  const { data: session, isLoading: isSessionLoading, isError } = useGetActionPlan(sessionId);
+  const { data: session, isLoading: isSessionLoading, isError } = useGetSession(sessionId);
 
   // Extract pathId from URL query parameters and resolve effective pathId
   const searchString = useSearch();
@@ -106,7 +106,9 @@ export function ActionPlan({
   const chosenPath = useMemo(() => {
     const currentSession = sessionData || session;
     if (!currentSession || !effectivePathId) return null;
-    return currentSession.purposePaths?.find((p: PurposePath) => p.id === effectivePathId) || null;
+    return currentSession.purposePaths?.find((p: PurposePath) => 
+      p.id === effectivePathId || p.id === Number(effectivePathId)
+    ) || null;
   }, [session, sessionData, effectivePathId]);
 
   // useObject hook for action plan streaming
@@ -119,8 +121,15 @@ export function ActionPlan({
         const updatedSession = {
           ...session,
           actionPlan: object,
-          chosenPathId: effectivePathId || null
+          chosenPathId: effectivePathId || session?.chosenPathId || null
         };
+        console.log('[ActionPlan] Initial onFinish - setting session data:', {
+          effectivePathId,
+          sessionChosenPathId: session?.chosenPathId,
+          finalChosenPathId: updatedSession.chosenPathId,
+          hasActionPlan: !!object,
+          purposePaths: session?.purposePaths?.map((p: any) => ({ id: p.id, title: p.title }))
+        });
         setSessionData(updatedSession);
         setNeedsStreaming(false);
         
@@ -133,7 +142,21 @@ export function ActionPlan({
             });
             if (res.ok) {
               const dbSession = await res.json();
-              setSessionData(dbSession);
+              const mergedSession = {
+                ...dbSession,
+                actionPlan: sessionData?.actionPlan || dbSession.actionPlan,  // Preserve local action plan
+                chosenPathId: effectivePathId || dbSession.chosenPathId
+              };
+              console.log('[ActionPlan] Background fetch - setting session data:', {
+                effectivePathId,
+                dbChosenPathId: dbSession.chosenPathId,
+                finalChosenPathId: mergedSession.chosenPathId,
+                hasLocalActionPlan: !!sessionData?.actionPlan,
+                hasDbActionPlan: !!dbSession.actionPlan,
+                preservedActionPlan: !!mergedSession.actionPlan,
+                purposePaths: dbSession.purposePaths?.map((p: any) => ({ id: p.id, title: p.title }))
+              });
+              setSessionData(mergedSession);
             }
           } catch (error) {
             console.error('Background session fetch failed (non-critical):', error);
@@ -209,8 +232,11 @@ export function ActionPlan({
 
     // Validate pathId exists in purpose paths
     if (currentSession?.purposePaths) {
+      const pathIds = currentSession.purposePaths.map(p => p.id);
+      console.log('[ActionPlan] Available path IDs:', pathIds, 'Looking for:', effectivePathId);
       const validPath = currentSession.purposePaths.some(p => p.id === effectivePathId);
       if (!validPath) {
+        console.log('[ActionPlan] Invalid pathId, redirecting to results');
         navigate('/results');
         return;
       }
@@ -383,7 +409,25 @@ export function ActionPlan({
   const currentActionPlan = currentSession?.actionPlan;
   const currentChosenPath = chosenPath;
 
+  // Debug logging to trace component disappearing issue
+  console.log('[ActionPlan] Render state:', {
+    sessionData: !!sessionData,
+    session: !!session,
+    currentActionPlan: !!currentActionPlan,
+    chosenPath: !!chosenPath,
+    effectivePathId,
+    currentSession: {
+      purposePaths: currentSession?.purposePaths?.map((p: any) => ({ id: p.id, title: p.title })),
+      chosenPathId: currentSession?.chosenPathId
+    }
+  });
+
   if (isError || !currentActionPlan || !currentChosenPath) {
+    console.log('[ActionPlan] Returning null - missing:', { 
+      isError, 
+      hasActionPlan: !!currentActionPlan, 
+      hasChosenPath: !!currentChosenPath 
+    });
     // This state should ideally be brief due to the redirect guard.
     return null;
   }

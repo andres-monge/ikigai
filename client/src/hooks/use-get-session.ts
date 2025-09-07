@@ -1,13 +1,14 @@
 /**
- * @file use-get-action-plan.ts
+ * @file use-get-session.ts
  *
- * React-Query wrapper for reading the generated Action Plan from
- * `sessionStorage`.  The data is persisted locally after the backend returns
- * the full `FullAssessment` object, so a network call is unnecessary in the
- * MVP.
+ * React-Query wrapper for reading the session data from sessionStorage.
+ * Returns the full session including purpose paths and action plan (if available).
+ * 
+ * This hook is used by the Action Plan page to get session data for validation
+ * and to determine whether streaming is needed.
  *
  * Keeping this in its own file improves discoverability and paves the way for
- * an easy switch to a remote `GET /api/action-plan` endpoint once the backend
+ * an easy switch to a remote `GET /api/session` endpoint once the backend
  * persists data in a proper database.
  */
 
@@ -19,24 +20,22 @@ import type { FullAssessment } from '@/types/assessment';
 /* -------------------------------------------------------------------------- */
 
 /**
- * React hook that returns the stored session (including `actionPlan`) for the
- * provided `sessionId`.
+ * React hook that returns the stored session data for the provided `sessionId`.
+ * Returns the session even if no action plan exists, enabling streaming logic to work.
  */
-export function useGetActionPlan(sessionId: string) {
+export function useGetSession(sessionId: string) {
   return useQuery({
-    queryKey: ['actionPlan', sessionId],
+    queryKey: ['session', sessionId],
     queryFn: async (): Promise<FullAssessment | null> => {
       const stored = sessionStorage.getItem('session');
       if (!stored) return null;
 
       const session = JSON.parse(stored) as FullAssessment;
       
-      // Ensure the data belongs to the current session and contains a plan.
-      return session.sessionId === sessionId && session.actionPlan
-        ? session
-        : null;
+      // Return session if it belongs to the current sessionId (no actionPlan requirement)
+      return session.sessionId === sessionId ? session : null;
     },
     staleTime: Infinity, // Data is static unless a new plan is generated
     gcTime: 1000 * 60 * 60, // 1 hour – balances memory usage and UX
   });
-} 
+}
