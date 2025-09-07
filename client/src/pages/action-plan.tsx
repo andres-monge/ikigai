@@ -238,9 +238,8 @@ export function ActionPlan({
     session?.sessionId,
     !!session?.actionPlan,  // Boolean coercion for stability
     queryPathId,
-    navigate,
-    setSessionData
-    // Note: submit intentionally omitted from deps to prevent infinite loops
+    navigate
+    // Note: submit and setSessionData intentionally omitted from deps to prevent infinite loops
   ]);
 
   // Helper function to get streaming status message
@@ -336,7 +335,7 @@ export function ActionPlan({
                         {t('actionPlan.skills', language)}
                       </h4>
                       <div className="space-y-3">
-                        {milestone?.skills?.map((skill: any, i: number) => (
+                        {milestone?.skills?.map((skill, i: number) => skill && (
                           <div key={i}>
                             <p className="font-medium text-slate-700 mb-1">{skill.skill}</p>
                             <div className="text-sm text-slate-500">Learning resources will be added...</div>
@@ -361,6 +360,7 @@ export function ActionPlan({
             <p className="text-red-600">{error.message || 'Streaming error occurred'}</p>
             <Button
               onClick={() => {
+                hasInitiatedStreamingRef.current = false;
                 setNeedsStreaming(false);
                 setTimeout(() => {
                   setNeedsStreaming(true);
