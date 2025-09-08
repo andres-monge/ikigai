@@ -118,9 +118,18 @@ export function ActionPlan({
     onFinish: async ({ object }) => {
       // Immediately update local state with streamed data (eliminates race condition)
       if (object && session) {
+        // Clean any fake YouTube data that might have been generated during streaming
+        const cleanedObject = {
+          ...object,
+          milestones: object.milestones.map(m => ({
+            ...m,
+            skills: m.skills?.map(s => ({ skill: s.skill, youtubeLinks: [] })) || []
+          }))
+        };
+        
         const updatedSession = {
           ...session,
-          actionPlan: object,
+          actionPlan: cleanedObject,
           chosenPathId: effectivePathId || session?.chosenPathId || null
         };
         setSessionData(updatedSession);
@@ -128,6 +137,25 @@ export function ActionPlan({
         
         // Persist to sessionStorage for consistency and page refresh support
         sessionStorage.setItem('session', JSON.stringify(updatedSession));
+        
+        // Fetch enriched data with real YouTube videos after a delay
+        setTimeout(async () => {
+          try {
+            const res = await fetch(`/api/session/${sessionId}?t=${Date.now()}`, {
+              cache: 'no-store',
+              credentials: 'include'
+            });
+            if (res.ok) {
+              const enrichedSession = await res.json();
+              if (enrichedSession.actionPlan) {
+                setSessionData(enrichedSession);
+                sessionStorage.setItem('session', JSON.stringify(enrichedSession));
+              }
+            }
+          } catch (error) {
+            console.error('Failed to fetch enriched session:', error);
+          }
+        }, 2000);
       } else {
         // Fallback to old behavior if object is missing
         try {

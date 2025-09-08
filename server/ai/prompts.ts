@@ -260,7 +260,7 @@ import type {
       - Call the \`getYoutubeVideosForSkills\` function with the skills you identified so you can embed learning resources inside the relevant milestone(s).
   Step 3: **Generate Final JSON**:
       - Return a JSON object that matches the *milestone-based* schema (no top-level \`sideProjectIdeas\`, \`skillsToLearn\`, or \`peopleToNetworkWith\`).
-      - Integrate the skills & video links inside the appropriate milestone, *not* as a separate section.
+      - **IMPORTANT**: Do NOT generate YouTube video data. Only provide skill names. YouTube videos will be added automatically after streaming completes.
   
   ${langInstruction}`;
   };

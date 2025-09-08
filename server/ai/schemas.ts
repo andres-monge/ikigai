@@ -192,7 +192,7 @@ export const actionPlanOpenApiSchema = {
                   },
                 },
               },
-              required: ['skill', 'youtubeLinks'],
+              required: ['skill'],
             },
           },
         },
