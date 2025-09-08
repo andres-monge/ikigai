@@ -387,30 +387,68 @@ Cleaned Up Legacy Code
 
 ---
 
-[ ] Step 20: Clean Up Legacy Code and Complete AI SDK-Only Architecture
-**Task**: Remove all deprecated code to finalize the AI SDK-only architecture. Part 1: Remove delimiter-based streaming code: custom parsers in `server/ai/parsers/`, old streaming chains, delimiter extraction functions, and heuristic parsing logic. Part 2: Remove SSE infrastructure: delete `server/utils/sse.ts` and all SSE utilities, remove SSE event constants, and any remaining SSE-related imports. Part 3: Remove non-streaming infrastructure: delete `server/ai/chains/purpose-discovery.chain.ts`, remove `server/services/salary.ts` and its exports, remove salary tool from `server/ai/tools.ts`, delete the redirected `POST /api/analyze` endpoint. Part 4: Remove environment variables: remove `GEMINI_FACTS_MODEL` references from code and documentation. Part 5: Update documentation: remove dual-model strategy sections from `docs/tech-spec.md`, update architecture diagrams to show AI SDK-only approach.
-**Suggested Files for Context**: `server/ai/parsers/`, `server/ai/chains/`, `server/services/`, `server/utils/sse.ts`, `server/routes/assessment/purpose-discovery.ts`, `docs/tech-spec.md`, `server/env.ts`
+[ ] Step 20: COMPLEX: Write E2E Test for Core User Journey
+**Task**: Create a new E2E test file, `tests/journey.spec.ts`. Using Playwright, write a test that covers the full user flow with the current `streamObject` implementation. It should fill out the questionnaire, submit, and then on the results and action plan pages, assert that the final, fully-streamed content becomes visible on the page. This test will serve as a safety net before cleanup to ensure the user journey works correctly and can detect if cleanup breaks anything.
+**Suggested Files for Context**: `client/src/pages/home.tsx`, `client/src/pages/results.tsx`, `client/src/pages/action-plan.tsx`, `playwright.config.ts`
 **Step Dependencies**: Step 19
-**User Instructions**: Remove `GEMINI_FACTS_MODEL` from your `.env` file as it's no longer needed. Update any deployment configurations to remove this variable.
-**Implementation Notes**: This completes the architectural simplification started in Step 14.1. The codebase now has a single, streamlined path for all AI generation using the Vercel AI SDK's native protocols.
+**Implementation Notes**: This test should focus on the happy path user journey without testing implementation details. Run this test before and after cleanup steps to ensure the user experience remains intact.
 
 ---
 
-## Phase 5: Final Hardening and Debugging
+## Phase 5: Legacy Code Cleanup and Final Hardening
+
+This phase removes all deprecated code to finalize the AI SDK-only architecture, then improves resilience and debugging capabilities.
+
+[ ] Step 21.1: Remove Delimiter Parsers and Old Streaming Chains
+**Task**: Remove all delimiter-based parsing infrastructure that's been replaced by Vercel AI SDK's structured streaming. Delete complete files: `server/ai/parsers/purpose-discovery.parser.ts`, `server/ai/parsers/purpose-discovery.parser.test.ts`, `server/ai/parsers/action-plan.parser.ts`, `server/ai/parsers/action-plan.parser.test.ts`. Remove code sections: import of `parseActionPlanStreamedText` in `server/routes/assessment/action-plan.ts` (line 22), functions `getPurposeDiscoveryStreamingPrompt` and `getActionPlanStreamingPrompt` from `server/ai/prompts.ts`. Delete non-streaming chain files: `server/ai/chains/purpose-discovery.chain.ts`, `server/ai/chains/action-plan.chain.ts`. Update exports in `server/ai/chains/index.ts` to remove deleted chains.
+**Suggested Files for Context**: `server/ai/parsers/`, `server/ai/chains/`, `server/ai/prompts.ts`, `server/routes/assessment/action-plan.ts`
+**Step Dependencies**: Step 20
+**Testing**: Run `npm test` after changes to ensure no broken imports.
+
+---
+
+[ ] Step 21.2: Remove SSE Infrastructure and Update Test Utilities
+**Task**: Remove all Server-Sent Events infrastructure replaced by AI SDK's native streaming. Delete complete files: `server/utils/sse.ts`, `client/src/hooks/use-sse-stream.ts`, `client/src/components/streaming-status.tsx` (if exists). Extract `createTestApp` function from `server/utils/sse-test-utils.ts` to new file `server/utils/test-app.ts`, then delete `server/utils/sse-test-utils.ts`. Remove SSE imports from `server/routes/assessment/action-plan.ts` (line 23): `setSseHeaders, writeSseData, writeSseEvent, setupSseCleanup, writeSseError, SSE_EVENTS`. Remove any remaining SSE imports from `server/routes/assessment/purpose-discovery.ts`. Update all test files that import SSE utilities to use `createTestApp` from new location `server/utils/test-app.ts`.
+**Suggested Files for Context**: `server/utils/sse.ts`, `server/utils/sse-test-utils.ts`, `server/routes/assessment/action-plan.ts`, `server/routes/assessment/purpose-discovery.ts`, test files using SSE utilities
+**Step Dependencies**: Step 21.1
+**Testing**: Run `npm test` to ensure test utilities migration worked correctly.
+
+---
+
+[ ] Step 21.3: Remove Non-Streaming Endpoints and Unused Client Hooks
+**Task**: Remove endpoints and hooks that have been replaced by streaming-only architecture. Delete complete files: `client/src/hooks/use-create-action-plan.ts` (completely unused). Remove code sections: `POST /api/analyze` endpoint handler from `server/routes/assessment/purpose-discovery.ts`, `POST /api/action-plan` endpoint handler from `server/routes/assessment/action-plan.ts` (lines 36-110 approximately). Update or remove test in `server/routes/assessment/assessment.test.ts` that uses `POST /api/analyze` (line 226) - either convert to test streaming endpoint or remove if redundant. Update comments in `server/routes/assessment/index.ts` and `server/routes/assessment/action-plan.ts` header to remove references to deleted endpoints.
+**Suggested Files for Context**: `server/routes/assessment/purpose-discovery.ts`, `server/routes/assessment/action-plan.ts`, `server/routes/assessment/assessment.test.ts`, `client/src/hooks/use-create-action-plan.ts`
+**Step Dependencies**: Step 21.2
+**Testing**: Run `npm test` and `npm run build` to ensure no broken references.
+
+---
+
+[ ] Step 21.4: Remove Salary Service and GEMINI_FACTS_MODEL Infrastructure
+**Task**: Remove dual-model strategy infrastructure and salary-related services. Delete complete files: `server/services/salary.ts`. Remove code sections: export of salary service from `server/services/index.ts`, `getSalaryDataTool` function from `server/ai/tools.ts`, `salaryCache` and `SALARY_CACHE_TTL_MS` from `server/cache.ts` (lines 95-96), `GEMINI_FACTS_MODEL` property from schema in `server/env.ts`, `GEMINI_FACTS_MODEL` export from `server/ai/wrapper.ts`, `generateContentWithSearch` function from `server/ai/wrapper.ts`. Remove environment variable references from documentation files: `.env.example`, `docs/tech-spec.md`, `CLAUDE.md`, `replit.md`.
+**Suggested Files for Context**: `server/services/salary.ts`, `server/services/index.ts`, `server/ai/tools.ts`, `server/cache.ts`, `server/env.ts`, `server/ai/wrapper.ts`, documentation files
+**Step Dependencies**: Step 21.3
+**User Instructions**: Remove `GEMINI_FACTS_MODEL` from your `.env` file as it's no longer needed. Update any deployment configurations to remove this variable.
+**Testing**: Run `npm run check` to ensure TypeScript compilation succeeds.
+
+---
+
+[ ] Step 21.5: Update Documentation and Final Cleanup
+**Task**: Complete the architectural cleanup by updating documentation and removing any remaining references to deprecated features. Update `docs/tech-spec.md` to remove dual-model strategy sections and ensure it documents POST streaming via AI SDK only. Clean up any implementation notes in the plan referencing removed features. Update architecture descriptions to reflect streaming-only approach. Verify all imports and exports are clean with no broken references.
+**Suggested Files for Context**: `docs/tech-spec.md`, `docs/implementation-plan.md`, `CLAUDE.md`, `replit.md`
+**Step Dependencies**: Step 21.4
+**Testing**: Run full test suite (`npm test`), build (`npm run build`), type checking (`npm run check`), and manually test questionnaire → results → action plan flow to ensure everything works after cleanup.
+**Implementation Notes**: This completes the architectural simplification started in Step 14.1. The codebase now has a single, streamlined path for all AI generation using the Vercel AI SDK's native protocols. Approximately 2000+ lines of legacy code will be removed across these steps.
+
+---
+
+## Phase 6: Final Hardening and Debugging
 
 This final phase improves resilience and provides developers with the tools to effectively debug and replicate AI failures.
-
-[ ] Step 21: COMPLEX: Write E2E Test for Core User Journey
-**Task**: Create a new E2E test file, `tests/journey.spec.ts`. Using Playwright, write a test that covers the full user flow with the new `streamObject` implementation. It should fill out the questionnaire, submit, and then on the results and action plan pages, assert that the final, fully-streamed content becomes visible on the page. Verify that malformed delimiter errors no longer occur.
-**Suggested Files for Context**: `client/src/pages/home.tsx`, `client/src/pages/results.tsx`, `client/src/pages/action-plan.tsx`, `playwright.config.ts`
-**Step Dependencies**: Step 20
-
----
 
 [ ] Step 22: Implement Enhanced AI Error Logging
 **Task**: Update the `catch` blocks in the new `streamObject` implementations. When an error is caught, log a structured JSON object that includes the original error, the `userInput`, the `finishReason` from the AI response, and any streaming-specific details. This will provide a complete snapshot of any failure for easier debugging with the new streaming approach.
 **Suggested Files for Context**: `server/routes/assessment/purpose-discovery.ts`, `server/routes/assessment/action-plan.ts`
-**Step Dependencies**: Step 21
+**Step Dependencies**: Step 21.5
 
 ---
 
