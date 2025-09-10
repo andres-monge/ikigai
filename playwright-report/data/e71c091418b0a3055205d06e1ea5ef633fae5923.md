@@ -1,0 +1,70 @@
+# Page snapshot
+
+```yaml
+- banner:
+  - navigation:
+    - button "Ikigai Finder":
+      - img
+      - heading "Ikigai Finder" [level=1]
+    - button "EN"
+    - button "ES"
+- main:
+  - heading "Your Ikigai" [level=2]
+  - paragraph: You are uniquely positioned to bridge the digital divide in education by building intuitive, AI-powered learning tools and simplifying complex technology to empower individuals toward meaningful tech careers.
+  - list:
+    - listitem: You are driven to build and simplify technology, especially web-based tools, to make complex concepts accessible.2. You are compelled to leverage emerging technologies like AI and machine learning to solve real-world educational inequalities.3. You seek to empower individuals by providing practical pathways to tech careers, fostering financial stability and personal growth.
+  - heading "Your 3 Purpose Paths" [level=3]
+  - heading "The AI Education Architect" [level=4]
+  - img
+  - paragraph: You are drawn to the core challenge of making advanced technology like AI understandable and applicable for learning. This path involves designing, building, and iterating on cutting-edge educational platforms or tools that leverage AI/ML to personalize learning, automate feedback, or simulate real-world tech environments. Your frontend development skills and knack for simplifying complex systems would be invaluable in creating truly effective and user-friendly experiences. This isn't just about teaching; it's about engineering the future of learning.
+  - heading "Ikigai Alignment" [level=5]
+  - strong: "Love:"
+  - text: You'll love the process of building innovative web applications, diving deep into AI/ML concepts, and seeing your creations directly impact how people learn.
+  - strong: "Good At:"
+  - text: Your expertise in web development, UI/UX, and explaining complex ideas will shine as you translate advanced AI concepts into practical, engaging educational tools.
+  - strong: "Meaningful:"
+  - text: The world desperately needs accessible, effective AI education to prepare the next generation for tech jobs and close the digital divide. You'd be directly addressing this.
+  - strong: "Pay:"
+  - text: As an AI-focused EdTech Developer or Architect, you could expect a salary range of $100k-$180k+ depending on experience and location, based on market research for specialized software engineers in EdTech.
+  - heading "Action Strategy" [level=6]
+  - paragraph: Start by building a small AI-powered learning module as a side project, perhaps a tool that explains a complex ML concept interactively. Contribute to open-source EdTech projects, or seek roles in innovative EdTech startups focused on AI.
+  - button "Get Action Plan"
+  - heading "The Tech Accessibility Evangelist" [level=4]
+  - img
+  - paragraph: Your gift for explaining complex things simply is a powerful asset. This path focuses on becoming a leading voice and builder in making advanced tech, particularly AI/ML, accessible to a broader audience. This isn't just about creating content; it's about crafting entire learning experiences, potentially through interactive web applications, specialized courses, or a community platform. You'd be the bridge between cutting-edge research and practical application, empowering those who feel left behind by the rapid pace of technological change.
+  - heading "Ikigai Alignment" [level=5]
+  - strong: "Love:"
+  - text: You'll thrive on the challenge of distilling complex AI/ML topics into clear, actionable knowledge, and the satisfaction of seeing others grasp concepts they once found daunting.
+  - strong: "Good At:"
+  - text: Your proven ability to explain complex things simply, coupled with your web development skills, makes you ideal for creating engaging, interactive learning resources and platforms.
+  - strong: "Meaningful:"
+  - text: There's a massive need for clear, practical, and accessible education in AI/ML to democratize opportunities and combat the digital divide. You'd be a crucial part of this.
+  - strong: "Pay:"
+  - text: As a Senior Developer Advocate, Technical Content Creator, or specialized EdTech Consultant, you could command $90k-$160k+, with significant upside for self-employed ventures (courses, books, speaking) based on market research.
+  - heading "Action Strategy" [level=6]
+  - paragraph: Begin by creating a series of interactive tutorials or a small web app that demystifies an AI concept. Start a blog or YouTube channel focused on simplifying AI for beginners. Explore roles as a developer advocate or technical educator at a tech company or EdTech firm.
+  - button "Get Action Plan"
+  - heading "The Career Empowerment Engineer" [level=4]
+  - img
+  - paragraph: Your desire to help students get tech jobs through better educational tools points to a mission-driven approach. This path involves designing and implementing comprehensive learning pathways that directly lead to employment, with a strong focus on practical skills and career readiness. You could build a specialized online academy, develop a unique curriculum for a bootcamp, or even create a platform that connects learners with mentorship and job opportunities. Your frontend expertise would be key in crafting the user experience of these career-focused tools.
+  - heading "Ikigai Alignment" [level=5]
+  - strong: "Love:"
+  - text: You'll find deep satisfaction in directly impacting individuals' lives by equipping them with the skills and confidence to secure tech jobs and achieve financial stability.
+  - strong: "Good At:"
+  - text: Your web development skills, problem-solving abilities, and passion for teaching make you perfectly suited to build and refine educational tools that have clear career outcomes.
+  - strong: "Meaningful:"
+  - text: There's a critical need for effective, accessible pathways into tech careers, especially for those facing barriers. You'd be directly addressing economic opportunity and social mobility.
+  - strong: "Pay:"
+  - text: As a Lead Curriculum Developer, EdTech Product Manager, or founder of a specialized tech training program, initial salaries could range from $95k-$170k+, with substantial entrepreneurial potential for self-employment, based on market research.
+  - heading "Action Strategy" [level=6]
+  - paragraph: Identify a specific tech skill gap you believe you can address. Develop a prototype for a short, project-based online course or tool. Volunteer to mentor aspiring developers or collaborate with non-profits focused on tech education and job placement.
+  - button "Get Action Plan"
+  - button "Export as PDF":
+    - img
+    - text: Export as PDF
+  - button "Start Over":
+    - img
+    - text: Start Over
+- region "Notifications (F8)":
+  - list
+```

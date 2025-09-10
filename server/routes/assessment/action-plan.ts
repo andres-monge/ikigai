@@ -1,8 +1,7 @@
 /**
  * @description
  * Action plan generation endpoints:
- *  • POST /api/action-plan - generates step-by-step plan (non-streaming)
- *  • GET /api/action-plan/stream - generates step-by-step plan (streaming)
+ *  • POST /api/action-plan/stream - generates step-by-step plan (streaming)
  * 
  * These endpoints handle the second phase where users receive detailed
  * milestone-based action plans for their chosen career path, including
@@ -16,10 +15,9 @@ import {
   actionPlanRequestSchema,
   type PurposePath,
 } from "@shared/schema";
-import { getActionPlanChain, getActionPlanStreamChain } from "../../ai/chains";
+import { getActionPlanStreamChain } from "../../ai/chains";
 import { aiLimiter } from "../../ai/limiter";
 import { getYoutubeVideosForSkills } from "../../services/youtube";
-import { parseActionPlanStreamedText } from "../../ai/parsers/action-plan.parser";
 import { setSseHeaders, writeSseData, writeSseEvent, setupSseCleanup, writeSseError, SSE_EVENTS } from "../../utils/sse";
 import { 
   activeStreams, 
@@ -31,62 +29,6 @@ import { validateSessionForActionPlan } from "../../utils/validation";
 
 export const actionPlanRouter = Router();
 
-/* ------------------------ POST /api/action-plan ------------------------- */
-
-actionPlanRouter.post("/action-plan", async (req, res, next) => {
-  try {
-    const validation = actionPlanRequestSchema.safeParse(req.body);
-    if (!validation.success) {
-      return res.status(400).json({
-        error: "Invalid request data",
-        details: validation.error.errors,
-      });
-    }
-    const { sessionId, chosenPathId } = validation.data;
-
-    /* Retrieve fully-hydrated session */
-    const session = await storage.getAssessmentSessionBySessionId(
-      sessionId,
-    ) as HydratedAssessmentSession | undefined;
-
-    if (!session) {
-      return res.status(404).json({ error: "Session not found" });
-    }
-
-    /* Validate session data before expensive AI processing */
-    validateSessionForActionPlan(session);
-
-    /* Identify the chosen path by database ID */
-    const chosenPath = session.purposePaths.find((p) => p.id === chosenPathId);
-    
-    if (!chosenPath) {
-      return res
-        .status(404)
-        .json({ error: "Chosen path not found for this session" });
-    }
-
-    /* Generate action plan & persist atomically (with concurrency limiting) */
-    const actionPlan = await aiLimiter(() => 
-      getActionPlanChain(chosenPath as PurposePath, session.language)
-    );
-    
-    // Use atomic function for consistent transaction handling
-    await atomicActionPlanUpdate(sessionId, actionPlan, chosenPath.id);
-
-    const updatedSession = await storage.getAssessmentSessionBySessionId(
-      sessionId,
-    );
-    res.json(updatedSession);
-  } catch (err) {
-    if (err instanceof ValidationError) {
-      return res.status(400).json(err.toResponse());
-    }
-    if (err instanceof TransactionError) {
-      return res.status(500).json(err.toResponse());
-    }
-    next(err);
-  }
-});
 
 /* --------------------- POST /api/action-plan/stream ---------------------- */
 

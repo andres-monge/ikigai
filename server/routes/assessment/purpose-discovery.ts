@@ -1,8 +1,8 @@
 /**
  * @description
  * Purpose path discovery endpoints:
- *  • POST /api/analyze - generates core drivers & purpose paths (non-streaming)
  *  • POST /api/analyze/stream - generates core drivers & purpose paths (streaming)
+ *  • POST /api/questionnaire/save - saves responses without AI generation
  * 
  * These endpoints handle the initial analysis phase where users receive
  * their core drivers analysis and three potential career paths.
@@ -18,7 +18,7 @@ import {
   purposePaths,
   assessmentSessions,
 } from "@shared/schema";
-import { getPurposeDiscoveryChain, getPurposeDiscoveryStreamChain } from "../../ai/chains";
+import { getPurposeDiscoveryStreamChain } from "../../ai/chains";
 import { aiLimiter } from "../../ai/limiter";
 import { 
   activeStreams, 
@@ -32,62 +32,6 @@ import { eq, inArray } from "drizzle-orm";
 
 export const purposeDiscoveryRouter = Router();
 
-/* --------------------------- POST /api/analyze --------------------------- */
-
-purposeDiscoveryRouter.post("/analyze", async (req, res, next) => {
-  try {
-    const validation = analysisRequestSchema.safeParse(req.body);
-    if (!validation.success) {
-      return res.status(400).json({
-        error: "Invalid request data",
-        details: validation.error.errors,
-      });
-    }
-    const { sessionId, responses, language } = validation.data;
-
-    // Upsert session
-    let session = await storage.getAssessmentSessionBySessionId(sessionId);
-    if (!session) {
-      session = await storage.createAssessmentSession({
-        sessionId,
-        language,
-        responses,
-      });
-    } else {
-      await storage.updateAssessmentSession(sessionId, { responses, language });
-      // Refresh session to get updated data
-      session = await storage.getAssessmentSessionBySessionId(sessionId);
-    }
-
-    // Validate session data before expensive AI processing
-    validateSessionForAI(session!);
-
-    // AI orchestration (with concurrency limiting)
-    const analysisResult = await aiLimiter(() => 
-      getPurposeDiscoveryChain(responses, language)
-    );
-
-    // Atomic operation: create new paths, delete old ones, and save analysis
-    await atomicPurposePathUpdate(
-      sessionId, 
-      session!, 
-      analysisResult.purposePaths,
-      analysisResult.coreDriversAnalysis
-    );
-
-    // Return hydrated session
-    const fullSession = await storage.getAssessmentSessionBySessionId(sessionId);
-    res.json(fullSession);
-  } catch (err) {
-    if (err instanceof ValidationError) {
-      return res.status(400).json(err.toResponse());
-    }
-    if (err instanceof TransactionError) {
-      return res.status(500).json(err.toResponse());
-    }
-    next(err);
-  }
-});
 
 /* ----------------------- POST /api/analyze/stream ------------------------ */
 

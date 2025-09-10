@@ -24,11 +24,11 @@ import { storage } from '../../storage.js';
 
 // Mock the AI chains to ensure they're never called
 vi.mock('../../ai/chains', () => ({
-  getPurposeDiscoveryChain: vi.fn(),
-  getActionPlanChain: vi.fn(),
+  getPurposeDiscoveryStreamChain: vi.fn(),
+  getActionPlanStreamChain: vi.fn(),
 }));
 
-import { getPurposeDiscoveryChain, getActionPlanChain } from '../../ai/chains';
+import { getPurposeDiscoveryStreamChain, getActionPlanStreamChain } from '../../ai/chains';
 
 /* ------------------------------------------------------------------ */
 /*                         Test Setup & Cleanup                      */
@@ -167,8 +167,8 @@ describe('POST /api/questionnaire/save', () => {
     expect(session!.purposePaths).toHaveLength(0);
 
     // Verify AI chains were NOT called
-    expect(getPurposeDiscoveryChain).not.toHaveBeenCalled();
-    expect(getActionPlanChain).not.toHaveBeenCalled();
+    expect(getPurposeDiscoveryStreamChain).not.toHaveBeenCalled();
+    expect(getActionPlanStreamChain).not.toHaveBeenCalled();
   });
 
   it('should update existing session and clear all AI data', async () => {
@@ -233,8 +233,8 @@ describe('POST /api/questionnaire/save', () => {
     expect(afterUpdate!.purposePaths).toHaveLength(0); // All old paths deleted
 
     // Verify AI chains were NOT called
-    expect(getPurposeDiscoveryChain).not.toHaveBeenCalled();
-    expect(getActionPlanChain).not.toHaveBeenCalled();
+    expect(getPurposeDiscoveryStreamChain).not.toHaveBeenCalled();
+    expect(getActionPlanStreamChain).not.toHaveBeenCalled();
   });
 
   it('should handle validation errors correctly', async () => {
@@ -281,8 +281,8 @@ describe('POST /api/questionnaire/save', () => {
     expect(invalidRequest3.body.error).toBe("Invalid request data");
 
     // Verify no AI chains were called during validation failures
-    expect(getPurposeDiscoveryChain).not.toHaveBeenCalled();
-    expect(getActionPlanChain).not.toHaveBeenCalled();
+    expect(getPurposeDiscoveryStreamChain).not.toHaveBeenCalled();
+    expect(getActionPlanStreamChain).not.toHaveBeenCalled();
   });
 
   it('should handle database transaction failures gracefully', async () => {
@@ -304,8 +304,8 @@ describe('POST /api/questionnaire/save', () => {
     expect(session).toBeUndefined();
 
     // Verify AI chains were NOT called
-    expect(getPurposeDiscoveryChain).not.toHaveBeenCalled();
-    expect(getActionPlanChain).not.toHaveBeenCalled();
+    expect(getPurposeDiscoveryStreamChain).not.toHaveBeenCalled();
+    expect(getActionPlanStreamChain).not.toHaveBeenCalled();
 
     // Cleanup
     dbSpy.mockRestore();
@@ -396,8 +396,8 @@ describe('POST /api/questionnaire/save', () => {
     expect(session!.responses).toEqual(spanishRequest.responses);
 
     // Verify AI chains were NOT called
-    expect(getPurposeDiscoveryChain).not.toHaveBeenCalled();
-    expect(getActionPlanChain).not.toHaveBeenCalled();
+    expect(getPurposeDiscoveryStreamChain).not.toHaveBeenCalled();
+    expect(getActionPlanStreamChain).not.toHaveBeenCalled();
   });
 
   it('should maintain session timestamps correctly', async () => {
