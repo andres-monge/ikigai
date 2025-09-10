@@ -106,7 +106,6 @@ Preferred communication style: Simple, everyday language.
 ### Environment Variables
 - `GEMINI_API_KEY`: Google AI authentication
 - `GEMINI_REASONING_MODEL`: Primary analysis model
-- `GEMINI_FACTS_MODEL`: Search-enabled model
 - `YOUTUBE_API_KEY`: Video recommendations
 - `DATABASE_URL`: PostgreSQL connection (future migration)
 

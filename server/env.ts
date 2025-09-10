@@ -42,9 +42,6 @@ const envSchema = z.object({
     .string()
     .min(1, 'GEMINI_REASONING_MODEL cannot be empty'),
 
-  GEMINI_FACTS_MODEL: z
-    .string()
-    .min(1, 'GEMINI_FACTS_MODEL cannot be empty'),
 
   // YouTube Data API Configuration
   YOUTUBE_API_KEY: z

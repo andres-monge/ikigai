@@ -50,7 +50,6 @@ import { env } from '../env.js';
 
 // Re-export model identifiers for backward compatibility
 export const GEMINI_REASONING_MODEL = env.GEMINI_REASONING_MODEL;
-export const GEMINI_FACTS_MODEL = env.GEMINI_FACTS_MODEL;
 
 // Create singleton GoogleGenAI instance
 const ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
@@ -197,34 +196,6 @@ export async function generateContent(
   }
 }
 
-/**
- * A specialized version of `generateContent` that forces the use of the Google Search tool.
- * This is designed for use with the "Facts" model.
- * Per the Gemini API rules, this cannot be used with JSON mode simultaneously.
- *
- * @param {GeminiContent[]} contents - The prompt/content for the model.
- * @returns {Promise<GeminiGenerateContentResponse>} The full response, including grounding metadata.
- */
-export async function generateContentWithSearch(
-  contents: GeminiContent[],
-): Promise<GeminiGenerateContentResponse> {
-  const normalizedModel = normalizeModelId(GEMINI_FACTS_MODEL);
-  
-  const sdkParams: SdkGenerateContentParams = {
-    model: normalizedModel,
-    contents: contents,
-    config: {
-      tools: [{ googleSearch: {} }],
-    },
-  };
-  
-  try {
-    const response = await ai.models.generateContent(sdkParams);
-    return convertSdkResponse(response);
-  } catch (error) {
-    throw normalizeSdkError(error, 'generateContentWithSearch');
-  }
-}
 
 /**
  * Generates content as a stream using the specified model and prompt.

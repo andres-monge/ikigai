@@ -160,10 +160,7 @@ My_Directory_Structure/
 
     1.  The client sends a `POST` request to `/api/analyze`.
     2.  The server's orchestrator in `server/ai/chains/purpose-discovery.chain.ts` initiates two parallel processes.
-    3.  **Call 1 (`GEMINI_FACTS_MODEL`):** A prompt is sent with search enabled to find a **single, broad salary range** for an analogous, standard job title related to the user's profile, along with source URLs.
-    4.  **Call 2 (`GEMINI_REASONING_MODEL`):** The main reasoning process begins. The prompt includes the user's questionnaire, the AI persona, and a tool definition for `getSalaryDataForCareers`.
-    5.  Once Call 1 returns the salary data, the orchestrator uses it to resolve the function call for Call 2.
-    6.  Call 2 resumes, now possessing the grounded salary fact. It synthesizes the full analysis and **embeds the salary information directly into the `ikigaiAlignment.pay` string** for each path.
+    3.  **AI Analysis (`GEMINI_REASONING_MODEL`):** The reasoning model analyzes the user's questionnaire and generates structured career path recommendations using the Vercel AI SDK's `streamObject` functionality.
     7.  The final, structured JSON (without a top-level `salaryData` key) is returned, validated via Zod, and persisted to the PostgreSQL database.
     
 ### 3.1.1 Purpose Discovery (Streaming)
@@ -303,5 +300,4 @@ The application will require the following environment variables to be set. On R
   - `DATABASE_URL`: The full connection string for the PostgreSQL database.
   - `GEMINI_API_KEY`: The API key for Google AI Studio.
   - `GEMINI_REASONING_MODEL`: The identifier for the main analysis model.
-  - `GEMINI_FACTS_MODEL`: The identifier for the fact-retrieval model.
   - `YOUTUBE_API_KEY`: A valid API key from the Google Cloud Console with the YouTube Data API v3 enabled.

@@ -13,27 +13,7 @@ import { actionPlanSchema } from '@shared/schema';
 
 // ========= INTERNAL ZOD SCHEMAS FOR AI OUTPUT VALIDATION =========
 
-export const salaryFunctionArgSchema = z.object({
-  careers: z
-    .array(
-      z.object({
-        title: z.string().describe('The job title, e.g., "Software Engineer"'),
-        location: z
-          .string()
-          .describe('The city or region for the salary, e.g., "London"'),
-      }),
-    )
-    .min(1),
-});
-export type SalaryFunctionArgs = z.infer<typeof salaryFunctionArgSchema>;
 
-export const rawSalaryDataSchema = z.object({
-  title: z.string(),
-  location: z.string(),
-  salaryRange: z.string(),
-  sources: z.array(z.string().url()),
-});
-export type RawSalaryData = z.infer<typeof rawSalaryDataSchema>;
 
 export const purposeDiscoveryResultSchema = z.object({
   coreDriversAnalysis: z.object({
@@ -124,7 +104,7 @@ export const purposeDiscoveryOpenApiSchema = {
               pay: {
                 type: 'STRING',
                 description:
-                  'How this path meets their economic needs, referencing the salary data.',
+                  'How this path meets their economic needs with realistic salary information.',
               },
             },
             required: ['love', 'goodAt', 'worldNeeds', 'pay'],

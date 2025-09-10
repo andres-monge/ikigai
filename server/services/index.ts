@@ -5,4 +5,3 @@
  */
 
 export { getYoutubeVideosForSkills } from './youtube';
-export { getSalaryDataForCareers } from './salary';

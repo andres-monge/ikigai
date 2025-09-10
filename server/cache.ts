@@ -1,7 +1,7 @@
 /**
  * @description
  * This file provides a simple in-memory cache implementation with Time-to-Live (TTL) support.
- * It's designed to be a generic cache, but a specific instance for caching salary data is exported.
+ * It's designed to be a generic cache, with a specific instance for caching YouTube video data exported.
  * This helps to reduce latency and API costs by temporarily storing frequently requested data.
  *
  * Key features:
@@ -89,8 +89,3 @@ class Cache {
 export const youtubeCache = new Cache();
 export const YOUTUBE_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
-/**
- * Singleton instance of the Cache class specifically for salary data.
- */
-export const salaryCache = new Cache();
-export const SALARY_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days

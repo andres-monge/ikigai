@@ -71,7 +71,6 @@ This is a work-in-progress application following a detailed implementation plan 
 - `DATABASE_URL` - PostgreSQL connection string
 - `GEMINI_API_KEY` - Google AI Studio API key
 - `GEMINI_REASONING_MODEL` - Main analysis model identifier
-- `GEMINI_FACTS_MODEL` - Fact-retrieval model identifier  
 - `YOUTUBE_API_KEY` - YouTube Data API v3 key
 
 ### Code Conventions

@@ -441,7 +441,7 @@ This phase removes all deprecated code to finalize the AI SDK-only architecture,
 
 ---
 
-[ ] Step 21.4: Remove Salary Service and GEMINI_FACTS_MODEL Infrastructure
+[X] Step 21.4: Remove Salary Service and GEMINI_FACTS_MODEL Infrastructure
 **Task**: Remove dual-model strategy infrastructure and salary-related services. Delete complete files: `server/services/salary.ts`. Remove code sections: export of salary service from `server/services/index.ts`, `getSalaryDataTool` function from `server/ai/tools.ts`, `salaryCache` and `SALARY_CACHE_TTL_MS` from `server/cache.ts` (lines 95-96), `GEMINI_FACTS_MODEL` property from schema in `server/env.ts`, `GEMINI_FACTS_MODEL` export from `server/ai/wrapper.ts`, `generateContentWithSearch` function from `server/ai/wrapper.ts`. Remove environment variable references from documentation files: `.env.example`, `docs/tech-spec.md`, `CLAUDE.md`, `replit.md`.
 **Suggested Files for Context**: `server/services/salary.ts`, `server/services/index.ts`, `server/ai/tools.ts`, `server/cache.ts`, `server/env.ts`, `server/ai/wrapper.ts`, documentation files
 **Step Dependencies**: Step 21.3
