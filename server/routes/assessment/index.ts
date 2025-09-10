@@ -14,10 +14,9 @@ import { actionPlanRouter } from "./action-plan";
 
 /**
  * Combined assessment router that includes all assessment endpoints:
- * - POST /api/analyze (from purpose-discovery.ts)
- * - GET /api/analyze/stream (from purpose-discovery.ts)  
- * - POST /api/action-plan (from action-plan.ts)
- * - GET /api/action-plan/stream (from action-plan.ts)
+ * - POST /api/analyze/stream (from purpose-discovery.ts)
+ * - POST /api/questionnaire/save (from purpose-discovery.ts)
+ * - POST /api/action-plan/stream (from action-plan.ts)
  */
 export const assessmentRouter = Router();
 

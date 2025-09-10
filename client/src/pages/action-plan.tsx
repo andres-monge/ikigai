@@ -126,8 +126,10 @@ export function ActionPlan({
           sessionId,
           language,
           id: 0,
-          responses: {},
+          responses: null,
+          coreDriversAnalysis: null,
           chosenPathId: effectivePathId,
+          actionPlan: null,
           purposePaths: [],
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
@@ -165,8 +167,8 @@ export function ActionPlan({
               // Only apply enriched data if it's complete with real YouTube videos
               if (enrichedSession.actionPlan?.milestones?.length > 0) {
                 // Verify we're getting enrichment, not a downgrade
-                const hasRealYouTubeData = enrichedSession.actionPlan.milestones.some(m =>
-                  m.skills?.some(s => s.youtubeLinks && s.youtubeLinks.length > 0)
+                const hasRealYouTubeData = enrichedSession.actionPlan.milestones.some((m: Milestone) =>
+                  m.skills?.some((s: SkillToLearn) => s.youtubeLinks && s.youtubeLinks.length > 0)
                 );
                 if (hasRealYouTubeData || enrichedSession.actionPlan.milestones.length > cleanedObject.milestones.length) {
                   setSessionData(enrichedSession);

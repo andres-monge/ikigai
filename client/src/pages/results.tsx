@@ -106,7 +106,11 @@ export function Results({
           sessionId, 
           language,
           id: 0,
-          responses: {},
+          responses: null,
+          coreDriversAnalysis: null,
+          chosenPathId: null,
+          actionPlan: null,
+          purposePaths: [],
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         };

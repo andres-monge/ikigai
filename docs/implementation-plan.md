@@ -433,7 +433,7 @@ This phase removes all deprecated code to finalize the AI SDK-only architecture,
 
 ---
 
-[ ] Step 21.3: Remove Non-Streaming Endpoints and Unused Client Hooks
+[X] Step 21.3: Remove Non-Streaming Endpoints and Unused Client Hooks
 **Task**: Remove endpoints and hooks that have been replaced by streaming-only architecture. Delete complete files: `client/src/hooks/use-create-action-plan.ts` (completely unused). Remove code sections: `POST /api/analyze` endpoint handler from `server/routes/assessment/purpose-discovery.ts`, `POST /api/action-plan` endpoint handler from `server/routes/assessment/action-plan.ts` (lines 36-110 approximately). Update or remove test in `server/routes/assessment/assessment.test.ts` that uses `POST /api/analyze` (line 226) - either convert to test streaming endpoint or remove if redundant. Update comments in `server/routes/assessment/index.ts` and `server/routes/assessment/action-plan.ts` header to remove references to deleted endpoints.
 **Suggested Files for Context**: `server/routes/assessment/purpose-discovery.ts`, `server/routes/assessment/action-plan.ts`, `server/routes/assessment/assessment.test.ts`, `client/src/hooks/use-create-action-plan.ts`
 **Step Dependencies**: Step 21.2
