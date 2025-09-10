@@ -387,7 +387,7 @@ Cleaned Up Legacy Code
 
 ---
 
-[ ] Step 20: COMPLEX: Write E2E Test for Core User Journey
+[X] Step 20: COMPLEX: Write E2E Test for Core User Journey
 **Task**: Create a new E2E test file, `tests/journey.spec.ts`. Using Playwright, write a test that covers the full user flow with the current `streamObject` implementation. It should fill out the questionnaire, submit, and then on the results and action plan pages, assert that the final, fully-streamed content becomes visible on the page. This test will serve as a safety net before cleanup to ensure the user journey works correctly and can detect if cleanup breaks anything.
 **Suggested Files for Context**: `client/src/pages/home.tsx`, `client/src/pages/results.tsx`, `client/src/pages/action-plan.tsx`, `playwright.config.ts`
 **Step Dependencies**: Step 19
