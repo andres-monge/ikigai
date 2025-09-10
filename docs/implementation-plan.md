@@ -407,7 +407,7 @@ This phase removes all deprecated code to finalize the AI SDK-only architecture,
 
 ---
 
-[ ] Step 21.2: Remove SSE Infrastructure and Update Test Utilities
+[X] Step 21.2: Remove SSE Infrastructure and Update Test Utilities
 **Task**: Remove all Server-Sent Events infrastructure replaced by AI SDK's native streaming. Delete complete files: `server/utils/sse.ts`, `client/src/hooks/use-sse-stream.ts`, `client/src/components/streaming-status.tsx` (if exists). Extract `createTestApp` function from `server/utils/sse-test-utils.ts` to new file `server/utils/test-app.ts`, then delete `server/utils/sse-test-utils.ts`. Remove SSE imports from `server/routes/assessment/action-plan.ts` (line 23): `setSseHeaders, writeSseData, writeSseEvent, setupSseCleanup, writeSseError, SSE_EVENTS`. Remove any remaining SSE imports from `server/routes/assessment/purpose-discovery.ts`. Update all test files that import SSE utilities to use `createTestApp` from new location `server/utils/test-app.ts`.
 **Suggested Files for Context**: `server/utils/sse.ts`, `server/utils/sse-test-utils.ts`, `server/routes/assessment/action-plan.ts`, `server/routes/assessment/purpose-discovery.ts`, test files using SSE utilities
 **Step Dependencies**: Step 21.1
