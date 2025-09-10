@@ -29,9 +29,7 @@ import { getPurposeDiscoveryStreamChain } from '../../ai/chains';
 
 // Mock the AI chains - we want to test the streaming endpoint, not the AI generation
 vi.mock('../../ai/chains', () => ({
-  getPurposeDiscoveryChain: vi.fn(),
   getPurposeDiscoveryStreamChain: vi.fn(),
-  getActionPlanChain: vi.fn(),
   getActionPlanStreamChain: vi.fn(),
 }));
 

@@ -399,7 +399,7 @@ Cleaned Up Legacy Code
 
 This phase removes all deprecated code to finalize the AI SDK-only architecture, then improves resilience and debugging capabilities.
 
-[ ] Step 21.1: Remove Delimiter Parsers and Old Streaming Chains
+[X] Step 21.1: Remove Delimiter Parsers and Old Streaming Chains
 **Task**: Remove all delimiter-based parsing infrastructure that's been replaced by Vercel AI SDK's structured streaming. Delete complete files: `server/ai/parsers/purpose-discovery.parser.ts`, `server/ai/parsers/purpose-discovery.parser.test.ts`, `server/ai/parsers/action-plan.parser.ts`, `server/ai/parsers/action-plan.parser.test.ts`. Remove code sections: import of `parseActionPlanStreamedText` in `server/routes/assessment/action-plan.ts` (line 22), functions `getPurposeDiscoveryStreamingPrompt` and `getActionPlanStreamingPrompt` from `server/ai/prompts.ts`. Delete non-streaming chain files: `server/ai/chains/purpose-discovery.chain.ts`, `server/ai/chains/action-plan.chain.ts`. Update exports in `server/ai/chains/index.ts` to remove deleted chains.
 **Suggested Files for Context**: `server/ai/parsers/`, `server/ai/chains/`, `server/ai/prompts.ts`, `server/routes/assessment/action-plan.ts`
 **Step Dependencies**: Step 20

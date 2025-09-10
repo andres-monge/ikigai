@@ -97,7 +97,7 @@ export function validateQuestionnaireResponses(responses: unknown): Questionnair
  * try {
  *   validateSessionForAI(session);
  *   // Proceed with AI chain call
- *   const result = await getPurposeDiscoveryChain(session.responses, session.language);
+ *   const result = await getPurposeDiscoveryStreamChain(session.responses, session.language);
  * } catch (error) {
  *   if (error instanceof ValidationError) {
  *     return res.status(400).json(error.toResponse());

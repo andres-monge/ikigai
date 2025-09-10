@@ -28,9 +28,7 @@ import { getYoutubeVideosForSkills } from '../../services/youtube';
 
 // Mock the AI chains
 vi.mock('../../ai/chains', () => ({
-  getPurposeDiscoveryChain: vi.fn(),
   getPurposeDiscoveryStreamChain: vi.fn(),
-  getActionPlanChain: vi.fn(),
   getActionPlanStreamChain: vi.fn(),
 }));
 

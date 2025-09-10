@@ -18,7 +18,6 @@ import {
 import { getActionPlanStreamChain } from "../../ai/chains";
 import { aiLimiter } from "../../ai/limiter";
 import { getYoutubeVideosForSkills } from "../../services/youtube";
-import { setSseHeaders, writeSseData, writeSseEvent, setupSseCleanup, writeSseError, SSE_EVENTS } from "../../utils/sse";
 import { 
   activeStreams, 
   setupStreamConcurrencyControl,

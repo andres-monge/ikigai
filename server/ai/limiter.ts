@@ -40,7 +40,7 @@ const MAX_CONCURRENT_AI_OPERATIONS = 2;
  * ```typescript
  * // Wrap an AI chain call with the limiter
  * const analysis = await aiLimiter(() => 
- *   getPurposeDiscoveryChain(responses, language)
+ *   getPurposeDiscoveryStreamChain(responses, language)
  * );
  * ```
  */
