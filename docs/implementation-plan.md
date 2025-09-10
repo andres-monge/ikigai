@@ -415,6 +415,24 @@ This phase removes all deprecated code to finalize the AI SDK-only architecture,
 
 ---
 
+[X] Step 21.2.5: Fix Race Condition in Results and Action Plan Pages
+**Task**: Resolve timing-dependent race condition that caused components to disappear after streaming completion. The issue occurred when the initial session fetch was slower than streaming, causing `onFinish` to take fallback paths that could fetch incomplete data and trigger strict validation checks. Implement comprehensive fixes for both Results and Action Plan pages to ensure UI stability regardless of network timing. **Root Cause**: The `onFinish` callback in `useObject` hooks depended on `session` being present (`if (object && session)`). When the initial `/api/session` call was slower than streaming, the condition failed, triggering fallback server fetches that could return incomplete data and cause strict validation checks to return `null`.
+**Suggested Files for Context**: `client/src/pages/results.tsx`, `client/src/pages/action-plan.tsx`
+**Implementation Notes**:
+- **Results Page Fix** (`client/src/pages/results.tsx`):
+  - Removed session dependency in `onFinish`: changed `if (object && session)` to `if (object)`
+  - Created minimal session object if needed with sessionId, language, and basic structure
+  - Added downgrade protection: background fetch only applies if DB session has complete data
+  - Relaxed validation at line 464: only return null for truly missing core data, not incomplete purposePaths
+- **Action Plan Page Fix** (`client/src/pages/action-plan.tsx`):
+  - Applied identical session-independent `onFinish` logic with additional complexity handling
+  - Enhanced pathId resolution: prioritized URL params → sessionData → session chosenPathId  
+  - Added YouTube enrichment protection: only apply enriched data if it contains real YouTube videos or improvements
+  - Replaced strict validation with graceful fallback UI for missing chosen path data
+  - Maintained dual state management (sessionData as primary, session as initial data)
+
+---
+
 [ ] Step 21.3: Remove Non-Streaming Endpoints and Unused Client Hooks
 **Task**: Remove endpoints and hooks that have been replaced by streaming-only architecture. Delete complete files: `client/src/hooks/use-create-action-plan.ts` (completely unused). Remove code sections: `POST /api/analyze` endpoint handler from `server/routes/assessment/purpose-discovery.ts`, `POST /api/action-plan` endpoint handler from `server/routes/assessment/action-plan.ts` (lines 36-110 approximately). Update or remove test in `server/routes/assessment/assessment.test.ts` that uses `POST /api/analyze` (line 226) - either convert to test streaming endpoint or remove if redundant. Update comments in `server/routes/assessment/index.ts` and `server/routes/assessment/action-plan.ts` header to remove references to deleted endpoints.
 **Suggested Files for Context**: `server/routes/assessment/purpose-discovery.ts`, `server/routes/assessment/action-plan.ts`, `server/routes/assessment/assessment.test.ts`, `client/src/hooks/use-create-action-plan.ts`

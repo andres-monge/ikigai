@@ -99,17 +99,27 @@ export function Results({
     api: '/api/analyze/stream',
     schema: purposeDiscoverySchema,
     onFinish: async ({ object }) => {
-      // Immediately update local state with streamed data (eliminates race condition)
-      if (object && session) {
+      // Always use streamed data, regardless of session state (fixes race condition)
+      if (object) {
+        // Create base session from existing or minimal data
+        const baseSession = session || { 
+          sessionId, 
+          language,
+          id: 0,
+          responses: {},
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        
         // Map streamed purposePaths to match database structure with temporary IDs
         const mappedPurposePaths = object.purposePaths.map((path, index) => ({
           ...path,
           id: -(index + 1), // Temporary negative IDs to avoid conflicts
-          assessmentId: session.id || 0
+          assessmentId: baseSession.id || 0
         }));
         
         const updatedSession = {
-          ...session,
+          ...baseSession,
           coreDriversAnalysis: object.coreDriversAnalysis,
           purposePaths: mappedPurposePaths
         };
@@ -125,33 +135,24 @@ export function Results({
             });
             if (res.ok) {
               const dbSession = await res.json();
-              setSession(dbSession);
+              
+              // Only apply DB session if it has complete data (prevent downgrades)
+              if (dbSession.coreDriversAnalysis && dbSession.purposePaths?.length === 3) {
+                setSession(dbSession);
+              }
             }
           } catch (error) {
             console.error('Background session fetch failed (non-critical):', error);
           }
         }, 1000);
       } else {
-        // Fallback to old behavior if object is missing
-        try {
-          const res = await fetch(`/api/session/${sessionId}`, { 
-            cache: 'no-store', 
-            credentials: 'include' 
-          });
-          if (!res.ok) {
-            throw new Error(`${res.status}: ${res.statusText}`);
-          }
-          const updatedSession = await res.json();
-          setSession(updatedSession);
-          setNeedsStreaming(false);
-        } catch (error) {
-          console.error('Failed to fetch completed session:', error);
-          toast({
-            title: t('common.error', language),
-            description: t('results.saveAnalysisError', language),
-            variant: 'destructive',
-          });
-        }
+        // Object is missing - this should not happen with AI SDK but handle gracefully
+        toast({
+          title: t('common.error', language),
+          description: t('results.saveAnalysisError', language),
+          variant: 'destructive',
+        });
+        setNeedsStreaming(false);
       }
     },
     onError: (error) => {
@@ -235,9 +236,6 @@ export function Results({
       !hasInitiatedStreamingRef.current;
 
     if (shouldStream) {
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[Results] Initiating streaming for sessionId:', sessionId);
-      }
       hasInitiatedStreamingRef.current = true;
       setNeedsStreaming(true);
       submit({ sessionId });
@@ -434,9 +432,21 @@ export function Results({
     );
   }
 
-  if (!session || !session.coreDriversAnalysis || !session.purposePaths || session.purposePaths.length !== 3) {
-    // Small fallback while data loads or if session data is incomplete
+  // Only return null if there's truly no data - be more forgiving about purposePaths
+  if (!session || !session.coreDriversAnalysis) {
     return null;
+  }
+  
+  // Defensive check for purposePaths
+  if (!session.purposePaths || session.purposePaths.length === 0) {
+    return (
+      <div className="max-w-6xl mx-auto text-center">
+        <h2 className="text-3xl font-bold text-slate-900 mb-4">
+          {t('results.title', language)}
+        </h2>
+        <p>Analysis complete, but purpose paths are loading...</p>
+      </div>
+    );
   }
 
   /**
@@ -466,7 +476,7 @@ export function Results({
 
         {/* Purpose Paths */}
         <PurposePaths
-          purposePaths={session.purposePaths}
+          purposePaths={session.purposePaths || []}
           language={language}
           onChoosePath={handleChoosePath}
           isChoosing={false}

@@ -100,7 +100,10 @@ export function ActionPlan({
   const searchString = useSearch();
   const queryPathId = new URLSearchParams(searchString).get('pathId');
   const parsedPathId = queryPathId ? parseInt(queryPathId, 10) : null;
-  const effectivePathId = (parsedPathId && !isNaN(parsedPathId)) ? parsedPathId : (sessionData || session)?.chosenPathId;
+  // Prioritize URL pathId, then sessionData, then session chosenPathId
+  const effectivePathId = (parsedPathId && !isNaN(parsedPathId)) ? 
+    parsedPathId : 
+    (sessionData?.chosenPathId || session?.chosenPathId);
 
   const actionPlan = session?.actionPlan;
   const chosenPath = useMemo(() => {
@@ -116,8 +119,20 @@ export function ActionPlan({
     api: '/api/action-plan/stream',
     schema: actionPlanSchema,
     onFinish: async ({ object }) => {
-      // Immediately update local state with streamed data (eliminates race condition)
-      if (object && session) {
+      // Always preserve streamed data, regardless of session state (fixes race condition)
+      if (object) {
+        // Create base session from existing data or minimal fallback
+        const baseSession = session || sessionData || { 
+          sessionId,
+          language,
+          id: 0,
+          responses: {},
+          chosenPathId: effectivePathId,
+          purposePaths: [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        
         // Clean any fake YouTube data that might have been generated during streaming
         const cleanedObject = {
           ...object,
@@ -128,9 +143,9 @@ export function ActionPlan({
         };
         
         const updatedSession = {
-          ...session,
+          ...baseSession,
           actionPlan: cleanedObject,
-          chosenPathId: effectivePathId || session?.chosenPathId || null
+          chosenPathId: effectivePathId || baseSession?.chosenPathId || null
         };
         setSessionData(updatedSession);
         setNeedsStreaming(false);
@@ -147,9 +162,16 @@ export function ActionPlan({
             });
             if (res.ok) {
               const enrichedSession = await res.json();
-              if (enrichedSession.actionPlan) {
-                setSessionData(enrichedSession);
-                sessionStorage.setItem('session', JSON.stringify(enrichedSession));
+              // Only apply enriched data if it's complete with real YouTube videos
+              if (enrichedSession.actionPlan?.milestones?.length > 0) {
+                // Verify we're getting enrichment, not a downgrade
+                const hasRealYouTubeData = enrichedSession.actionPlan.milestones.some(m =>
+                  m.skills?.some(s => s.youtubeLinks && s.youtubeLinks.length > 0)
+                );
+                if (hasRealYouTubeData || enrichedSession.actionPlan.milestones.length > cleanedObject.milestones.length) {
+                  setSessionData(enrichedSession);
+                  sessionStorage.setItem('session', JSON.stringify(enrichedSession));
+                }
               }
             }
           } catch (error) {
@@ -157,26 +179,13 @@ export function ActionPlan({
           }
         }, 2000);
       } else {
-        // Fallback to old behavior if object is missing
-        try {
-          const res = await fetch(`/api/session/${sessionId}`, { 
-            cache: 'no-store', 
-            credentials: 'include' 
-          });
-          if (!res.ok) {
-            throw new Error(`${res.status}: ${res.statusText}`);
-          }
-          const updatedSession = await res.json();
-          setSessionData(updatedSession);
-          setNeedsStreaming(false);
-        } catch (error) {
-          console.error('Failed to fetch completed session:', error);
-          toast({
-            title: t('common.error', language),
-            description: 'Failed to save action plan.',
-            variant: 'destructive',
-          });
-        }
+        // Object is missing - this should not happen with AI SDK but handle gracefully
+        toast({
+          title: t('common.error', language),
+          description: 'Failed to generate action plan.',
+          variant: 'destructive',
+        });
+        setNeedsStreaming(false);
       }
     },
     onError: (error) => {
@@ -392,14 +401,82 @@ export function ActionPlan({
     );
   }
 
-  // Use sessionData if available, otherwise fall back to session
+  // Use sessionData as primary source (updated by streaming), session as initial data only
   const currentSession = sessionData || session;
   const currentActionPlan = currentSession?.actionPlan;
   const currentChosenPath = chosenPath;
 
-  if (isError || !currentActionPlan || !currentChosenPath) {
-    // This state should ideally be brief due to the redirect guard.
+  // Only return null if there's truly no action plan data
+  if (isError || !currentActionPlan) {
     return null;
+  }
+
+  // Handle missing chosen path gracefully - show action plan with generic header
+  if (!currentChosenPath) {
+    return (
+      <div className="max-w-4xl mx-auto py-8 px-4">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl font-bold text-slate-900 mb-2">
+            {t('actionPlan.title', language)}
+          </h2>
+          <p className="text-lg text-slate-600 mb-4">
+            {t('actionPlan.subtitle', language)}
+          </p>
+          <div className="inline-block bg-slate-100 text-slate-800 font-semibold px-4 py-2 rounded-lg">
+            Your Action Plan
+          </div>
+        </div>
+        
+        {/* Render milestones even without chosen path details */}
+        <div className="space-y-8">
+          {currentActionPlan.milestones.map((ms: Milestone, idx: number) => (
+            <Card key={idx}>
+              <CardHeader className="flex flex-row gap-4 items-start">
+                {idx % 2 === 0 ? (
+                  <Lightbulb className="w-8 h-8 text-amber-500 shrink-0" />
+                ) : (
+                  <GraduationCap className="w-8 h-8 text-blue-600 shrink-0" />
+                )}
+                <div className="flex-1">
+                  <CardTitle className="flex justify-between items-center">
+                    <span>{ms.title || `Milestone ${idx + 1}`}</span>
+                    <span className="text-sm font-normal text-slate-600">{ms.timeline}</span>
+                  </CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0 pl-16">
+                <div className="space-y-4">
+                  {ms.actions && ms.actions.length > 0 && (
+                    <div>
+                      <h4 className="font-semibold text-slate-900 mb-2">{t('actionPlan.actions', language)}</h4>
+                      <ul className="space-y-1">
+                        {ms.actions.map((action: string, actionIdx: number) => (
+                          <li key={actionIdx} className="flex items-start">
+                            <span className="w-2 h-2 bg-slate-400 rounded-full mr-3 mt-2 flex-shrink-0" />
+                            <span className="text-slate-700">{action}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        
+        {/* Action buttons */}
+        <div className="flex flex-col sm:flex-row gap-4 justify-center mt-12">
+          <Button
+            onClick={() => navigate('/results')}
+            size="lg"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            {t('actionPlan.backToResults', language)}
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   const handleExportPDF = () => {
