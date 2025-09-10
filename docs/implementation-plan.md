@@ -395,7 +395,7 @@ Cleaned Up Legacy Code
 
 ---
 
-## Phase 5: Legacy Code Cleanup and Final Hardening
+## Phase 5: Legacy Code Cleanup
 
 This phase removes all deprecated code to finalize the AI SDK-only architecture, then improves resilience and debugging capabilities.
 
