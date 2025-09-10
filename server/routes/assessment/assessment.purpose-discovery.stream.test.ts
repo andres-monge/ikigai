@@ -22,7 +22,7 @@ import { db } from '../../db.js';
 import { assessmentSessions, purposePaths } from '../../../shared/schema.js';
 import type { QuestionnaireResponses } from '../../../shared/schema.js';
 import { storage } from '../../storage.js';
-import { parseSSEEvents, createTestApp } from '../../utils/sse-test-utils.js';
+import { createTestApp } from '../../utils/test-app.js';
 
 // Import the functions we'll be mocking before setting up the mock
 import { getPurposeDiscoveryStreamChain } from '../../ai/chains';
