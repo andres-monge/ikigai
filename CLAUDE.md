@@ -32,23 +32,23 @@ Ikigai Finder is an AI-powered career guidance application that helps users disc
 - **Frontend**: React SPA with TypeScript, Vite, TanStack Query, shadcn/ui components
 - **Backend**: Express.js server with AI orchestration chains
 - **Database**: PostgreSQL with Drizzle ORM
-- **AI Integration**: Dual Gemini model strategy (reasoning + facts with search)
+- **AI Integration**: Vercel AI SDK with GEMINI_REASONING_MODEL for structured streaming
 - **Deployment**: Configured for Replit deployment
 
 ### Key Architectural Patterns
 
-#### AI Chain System (`server/ai/chains/`)
-The application uses a sophisticated AI orchestration system:
-- `purpose-discovery.chain.ts` - Generates career path analysis using dual-model approach
-- `action-plan.chain.ts` - Creates detailed milestone-based action plans
-- Parallel AI calls: lightweight model for salary data + powerful model for reasoning
-- Function calling integration for YouTube video recommendations and salary data
+#### AI Streaming System (`server/ai/chains/`)
+The application uses Vercel AI SDK for structured streaming:
+- `purpose-discovery.stream.chain.ts` - Generates career path analysis using streamObject
+- `action-plan.stream.chain.ts` - Creates detailed milestone-based action plans with post-processing
+- Single model approach with GEMINI_REASONING_MODEL for reliable structured output
+- YouTube video enrichment happens as post-processing after streaming completes
 
 #### Storage Layer (`server/storage.ts`)
-- Interface-based design (`IStorage`) for easy testing and future PostgreSQL migration
-- Current implementation: `MemStorage` with full relationship hydration
+- Interface-based design (`IStorage`) for easy testing
+- Current implementation: `PostgresStorage` with full relationship hydration using Drizzle ORM
 - Returns `HydratedAssessmentSession` objects with nested purpose paths
-- Planned migration to `PostgresStorage` class in implementation roadmap
+- Atomic database transactions for data consistency
 
 #### Database Schema (`shared/schema.ts`)
 Two core tables with Drizzle ORM:
@@ -57,15 +57,15 @@ Two core tables with Drizzle ORM:
 
 #### Frontend State Management
 - TanStack Query for server state with feature-specific hooks in `client/src/hooks/`
-- Session-based anonymous user tracking (no user accounts required)
-- Streaming interface planned for real-time AI content delivery
+- Session-based anonymous user tracking (no user accounts required)  
+- Vercel AI SDK's `useObject` hook for real-time streaming AI content delivery
 
 ### Implementation Status
 This is a work-in-progress application following a detailed implementation plan in `_docs/implementation-plan.md`. The current state includes:
-- Complete database schema and in-memory storage layer
-- Basic AI chain architecture with dual-model strategy  
-- React frontend with questionnaire and results components
-- Integration tests for storage layer
+- Complete database schema and PostgreSQL storage layer
+- Streaming AI architecture using Vercel AI SDK with structured object validation
+- React frontend with questionnaire, results, and action plan pages with real-time streaming
+- Comprehensive integration tests for all major workflows
 
 ### Environment Variables Required
 - `DATABASE_URL` - PostgreSQL connection string
