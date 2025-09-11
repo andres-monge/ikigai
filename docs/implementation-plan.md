@@ -459,14 +459,65 @@ This phase removes all deprecated code to finalize the AI SDK-only architecture,
 
 ---
 
+## Phases 4 & 5 Optimization
+
+### Critical Bug Fixes & Type Safety
+
+- [ ] Step 22.1: Fix SessionStorage Key Collision
+  - **Task**: Update both pages to use separate sessionStorage keys to prevent data conflicts. Change Results page to use `'results-streaming-session'` and Action Plan to use `'action-plan-streaming-session'`. Update the `useGetSession` hook to accept an optional `storageKey` parameter that defaults to `'session'` for backward compatibility. This prevents data corruption when navigating between pages.
+  - **Suggested Files for Context**: `client/src/pages/results.tsx`, `client/src/pages/action-plan.tsx`, `client/src/hooks/use-get-session.ts`, `client/src/hooks/use-session-storage.ts`
+  - **Step Dependencies**: None
+  - **Why**: Real bug that could cause data loss or UI inconsistencies when users navigate between Results and Action Plan pages
+
+- [ ] Step 22.2: Remove `any` Types from Database Utilities
+  - **Task**: Define `IkigaiAlignment` and `CoreDriversAnalysis` interfaces in `shared/types.ts` (new file, browser-safe). Update `atomicPurposePathUpdate` and `atomicActionPlanUpdate` in `server/routes/assessment/utils.ts` to use these types instead of `any`. This improves type safety for core data structures.
+  - **Suggested Files for Context**: `server/routes/assessment/utils.ts`, `server/ai/schemas.ts`, `shared/schema.ts`
+  - **Step Dependencies**: None
+  - **Why**: `any` types bypass TypeScript's safety net and can hide bugs that only appear at runtime
+
+### Schema Synchronization & Maintenance
+
+- [ ] Step 22.3: Create Single Source of Truth for Streaming Schemas
+  - **Task**: Create `shared/streaming-schemas.ts` that exports ONLY the Zod schemas needed by both frontend and backend (no Drizzle imports). Move `purposeDiscoveryResultSchema` and `actionPlanResultSchema` from `server/ai/schemas.ts` to this shared location. Update both server files to import from shared. Replace inline schemas in `client/src/pages/results.tsx` and `action-plan.tsx` with imports from shared. Add a comment block explaining this is the single source of truth to prevent drift.
+  - **Suggested Files for Context**: `server/ai/schemas.ts`, `client/src/pages/results.tsx`, `client/src/pages/action-plan.tsx`
+  - **Step Dependencies**: Step 22.2
+  - **Why**: Manual schema duplication is error-prone. A single source of truth prevents runtime validation errors when schemas drift
+
+### Error Handling & Observability
+
+- [ ] Step 22.4: Implement Enhanced AI Error Logging
+  - **Task**: Create `server/utils/ai-logger.ts` with `logAIStreamError` function that captures: error details, user input (questionnaire responses or chosen path), streaming metadata (partial object if available, finish reason), sessionId, timestamp, and model configuration. Update catch blocks in both `/api/analyze/stream` and `/api/action-plan/stream` to use this structured logging. Include the partial streaming state to debug where streams fail.
+  - **Suggested Files for Context**: `server/routes/assessment/purpose-discovery.ts`, `server/routes/assessment/action-plan.ts`, `server/ai/chains/purpose-discovery.stream.chain.ts`, `server/ai/chains/action-plan.stream.chain.ts`
+  - **Step Dependencies**: None
+  - **Why**: When AI streaming fails, we need complete context to debug. This implements the original Step 22 requirement for comprehensive failure snapshots
+
+- [ ] Step 22.5: Standardize Error Response Format
+  - **Task**: Ensure both streaming endpoints return consistent error shapes. The `/api/analyze/stream` endpoint should include `code: 'VALIDATION_ERROR'` in validation errors like action-plan already does. When streaming fails, include structured metadata (without exposing sensitive data) to help frontend handle errors gracefully.
+  - **Suggested Files for Context**: `server/routes/assessment/purpose-discovery.ts`, `server/routes/assessment/action-plan.ts`, `server/utils/errors.ts`
+  - **Step Dependencies**: Step 22.4
+  - **Why**: Inconsistent error formats make it harder for the frontend to handle failures gracefully
+
+### Test Reliability & Database Isolation
+
+- [ ] Step 22.6: Fix Test Database Race Conditions
+  - **Task**: Add unique test prefixes to sessionIds in each test to prevent collision (e.g., `test-${Date.now()}-${Math.random()}`). Wrap database operations in tests with transactions where possible. Add `afterEach` cleanup that's more thorough - delete only test-prefixed sessions. In test setup, add a small delay between database cleanup and test start to ensure cleanup completes.
+  - **Suggested Files for Context**: `server/routes/assessment/assessment.purpose-discovery.stream.test.ts`, `server/routes/assessment/assessment.action-plan.stream.test.ts`, `server/routes/assessment/questionnaire-save.test.ts`
+  - **Step Dependencies**: None
+  - **Why**: Intermittent test failures indicate race conditions. Tests running in parallel can interfere when they share sessionIds or when cleanup hasn't completed
+
+### Code Organization
+
+- [ ] Step 22.7: Extract Common Streaming Logic
+  - **Task**: Create `client/src/hooks/use-streaming-state.ts` with a hook that handles the common pattern: initial session fetch, streaming detection logic (missing data check), and session storage management. Both Results and Action Plan pages can use this to reduce duplication while keeping their specific business logic. Don't over-abstract - just extract the truly common initialization and detection patterns.
+  - **Suggested Files for Context**: `client/src/pages/results.tsx`, `client/src/pages/action-plan.tsx`
+  - **Step Dependencies**: Steps 22.1, 22.3
+  - **Why**: Both pages have nearly identical session loading and streaming detection logic. Extracting reduces maintenance burden
+
+---
+
 ## Phase 6: Final Hardening and Debugging
 
-This final phase improves resilience and provides developers with the tools to effectively debug and replicate AI failures.
-
-[ ] Step 22: Implement Enhanced AI Error Logging
-**Task**: Update the `catch` blocks in the new `streamObject` implementations. When an error is caught, log a structured JSON object that includes the original error, the `userInput`, the `finishReason` from the AI response, and any streaming-specific details. This will provide a complete snapshot of any failure for easier debugging with the new streaming approach.
-**Suggested Files for Context**: `server/routes/assessment/purpose-discovery.ts`, `server/routes/assessment/action-plan.ts`
-**Step Dependencies**: Step 21.5
+This final phase provides developers with the tools to effectively debug and replicate AI failures.
 
 ---
 
