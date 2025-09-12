@@ -469,11 +469,10 @@ This phase removes all deprecated code to finalize the AI SDK-only architecture,
   - **Suggested Files for Context**: `client/src/pages/action-plan.tsx`
   - **Step Dependencies**: None
 
-- [ ] Step 22.2: Remove `any` Types from Database Utilities
+- [X] Step 22.2: Remove `any` Types from Database Utilities
   - **Task**: Define `IkigaiAlignment` and `CoreDriversAnalysis` interfaces in `shared/types.ts` (new file, browser-safe). Update `atomicPurposePathUpdate` and `atomicActionPlanUpdate` in `server/routes/assessment/utils.ts` to use these types instead of `any`. This improves type safety for core data structures.
   - **Suggested Files for Context**: `server/routes/assessment/utils.ts`, `server/ai/schemas.ts`, `shared/schema.ts`
   - **Step Dependencies**: None
-  - **Why**: `any` types bypass TypeScript's safety net and can hide bugs that only appear at runtime
 
 ### Schema Synchronization & Maintenance
 

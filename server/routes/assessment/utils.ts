@@ -8,6 +8,7 @@
 import type { Response } from "express";
 import { storage, type HydratedAssessmentSession } from "../../storage";
 import type { PurposePath, ActionPlan } from "@shared/schema";
+import type { IkigaiAlignment, CoreDriversAnalysis } from "@shared/types";
 import { db } from "../../db";
 import { eq } from "drizzle-orm";
 import { purposePaths, assessmentSessions } from "@shared/schema";
@@ -83,10 +84,10 @@ export async function atomicPurposePathUpdate(
   newPaths: Array<{
     title: string;
     description: string;
-    ikigaiAlignment: any;
+    ikigaiAlignment: IkigaiAlignment;
     actionStrategy: string;
   }>,
-  coreDriversAnalysis?: any
+  coreDriversAnalysis?: CoreDriversAnalysis
 ): Promise<PurposePath[]> {
   try {
     return await db.transaction(async (tx) => {
