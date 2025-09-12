@@ -463,11 +463,11 @@ This phase removes all deprecated code to finalize the AI SDK-only architecture,
 
 ### Critical Bug Fixes & Type Safety
 
-- [ ] Step 22.1: Fix SessionStorage Key Collision
-  - **Task**: Update both pages to use separate sessionStorage keys to prevent data conflicts. Change Results page to use `'results-streaming-session'` and Action Plan to use `'action-plan-streaming-session'`. Update the `useGetSession` hook to accept an optional `storageKey` parameter that defaults to `'session'` for backward compatibility. This prevents data corruption when navigating between pages.
-  - **Suggested Files for Context**: `client/src/pages/results.tsx`, `client/src/pages/action-plan.tsx`, `client/src/hooks/use-get-session.ts`, `client/src/hooks/use-session-storage.ts`
+[X] Step 22.1: Prevent Navigation During Streaming to Avoid SessionStorage Collision
+  - **Task**: Disable back navigation buttons in Action Plan page during streaming to prevent the rare edge case where users navigate back to Results while Action Plan streaming is in progress, which could theoretically cause sessionStorage conflicts.
+  - **Implementation**: Added `disabled={isStreamingLoading}` prop to both back navigation buttons in `client/src/pages/action-plan.tsx` (lines 475 and 587). This prevents navigation during streaming and follows standard UX patterns for loading states.
+  - **Suggested Files for Context**: `client/src/pages/action-plan.tsx`
   - **Step Dependencies**: None
-  - **Why**: Real bug that could cause data loss or UI inconsistencies when users navigate between Results and Action Plan pages
 
 - [ ] Step 22.2: Remove `any` Types from Database Utilities
   - **Task**: Define `IkigaiAlignment` and `CoreDriversAnalysis` interfaces in `shared/types.ts` (new file, browser-safe). Update `atomicPurposePathUpdate` and `atomicActionPlanUpdate` in `server/routes/assessment/utils.ts` to use these types instead of `any`. This improves type safety for core data structures.

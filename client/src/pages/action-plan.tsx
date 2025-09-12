@@ -472,6 +472,7 @@ export function ActionPlan({
           <Button
             onClick={() => navigate('/results')}
             size="lg"
+            disabled={isStreamingLoading}
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
             {t('actionPlan.backToResults', language)}
@@ -583,6 +584,7 @@ export function ActionPlan({
           onClick={() => navigate('/results')}
           variant="outline"
           className="order-last sm:order-first"
+          disabled={isStreamingLoading}
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
           {t('actionPlan.backToPaths', language)}
