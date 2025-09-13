@@ -24,6 +24,7 @@ import {
   atomicActionPlanUpdate 
 } from "./utils";
 import { TransactionError, ValidationError, YouTubeEnrichmentError } from "../../utils/errors";
+import { logAIStreamError } from "../../utils/ai-logger";
 import { validateSessionForActionPlan } from "../../utils/validation";
 
 export const actionPlanRouter = Router();
@@ -53,9 +54,13 @@ actionPlanRouter.post("/action-plan/stream", async (req, res) => {
     return; // Response already sent by setupStreamConcurrencyControl
   }
 
+  let session: HydratedAssessmentSession | null = null;
+  let chosenPath: PurposePath | undefined;
+
   try {
     // Get the session data
-    const session = await storage.getAssessmentSessionBySessionId(sessionId);
+    const sessionData = await storage.getAssessmentSessionBySessionId(sessionId);
+    session = sessionData || null;
     if (!session) {
       return res.status(404).json({ error: "Session not found" });
     }
@@ -65,7 +70,6 @@ actionPlanRouter.post("/action-plan/stream", async (req, res) => {
     validateSessionForActionPlan(session);
     
     // Resolve the chosen path
-    let chosenPath: PurposePath | undefined;
     
     // Use provided pathId or fallback to session's chosenPathId
     const effectivePathId = pathId || session.chosenPathId;
@@ -86,7 +90,7 @@ actionPlanRouter.post("/action-plan/stream", async (req, res) => {
     try {
       // Get streamObject result with concurrency limiting
       const result = await aiLimiter(() => 
-        getActionPlanStreamChain(chosenPath as PurposePath, session.language!)
+        getActionPlanStreamChain(chosenPath as PurposePath, session!.language!)
       );
 
       // Stream to client using AI SDK's text stream protocol
@@ -161,11 +165,13 @@ actionPlanRouter.post("/action-plan/stream", async (req, res) => {
               timestamp: new Date().toISOString()
             });
           } else {
-            console.error('Unexpected error during YouTube enrichment:', {
+            logAIStreamError({
+              error: enrichmentError,
               sessionId,
-              error: enrichmentError instanceof Error ? enrichmentError.message : enrichmentError,
-              type: typeof enrichmentError,
-              timestamp: new Date().toISOString()
+              endpoint: 'action-plan',
+              phase: 'enrichment',
+              userInput: chosenPath,
+              language: session.language!,
             });
           }
           
@@ -174,7 +180,14 @@ actionPlanRouter.post("/action-plan/stream", async (req, res) => {
         }
         
         // Save the enriched (or base) action plan to database atomically
-        await atomicActionPlanUpdate(sessionId, enrichedData, chosenPath.id);
+        // Cast to ActionPlan type to handle optional skills difference
+        const actionPlanData = {
+          milestones: enrichedData.milestones.map(milestone => ({
+            ...milestone,
+            skills: milestone.skills || []
+          }))
+        };
+        await atomicActionPlanUpdate(sessionId, actionPlanData, chosenPath.id);
       } else {
         throw new Error('Failed to get final object from stream');
       }
@@ -183,10 +196,13 @@ actionPlanRouter.post("/action-plan/stream", async (req, res) => {
       if (error instanceof TransactionError) {
         console.error('Streaming or database transaction error:', error.toJSON());
       } else {
-        console.error('Streaming error:', {
+        logAIStreamError({
+          error,
           sessionId,
-          error: error instanceof Error ? error.message : error,
-          stack: error instanceof Error ? error.stack : undefined
+          endpoint: 'action-plan',
+          phase: 'streaming',
+          userInput: chosenPath,
+          language: session.language!,
         });
       }
       // Don't send additional responses - streaming may have already started
@@ -200,12 +216,25 @@ actionPlanRouter.post("/action-plan/stream", async (req, res) => {
         console.error('Validation error during stream setup:', error.toJSON());
         res.status(400).json(error.toResponse());
       } else {
-        console.error('Stream setup error:', error);
+        logAIStreamError({
+          error,
+          sessionId,
+          endpoint: 'action-plan',
+          phase: 'setup',
+          language: session?.language,
+        });
         res.status(500).json({ error: 'Failed to start stream' });
       }
     } else {
       // If headers already sent (streaming started), just log the error
-      console.error('Error after streaming started:', error);
+      logAIStreamError({
+        error,
+        sessionId,
+        endpoint: 'action-plan',
+        phase: 'streaming',
+        userInput: chosenPath,
+        language: session?.language,
+      });
     }
   } finally {
     // Always clean up the active stream marker

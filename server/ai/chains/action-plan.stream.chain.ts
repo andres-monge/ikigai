@@ -55,7 +55,13 @@ export async function getActionPlanStreamChain(
 
     } catch (error) {
       lastError = error as Error;
-      console.error(`Action-Plan streaming attempt ${attempt} failed:`, error);
+      console.error(`Action-Plan streaming attempt ${attempt}/${maxRetries} failed:`, {
+        error: error instanceof Error ? error.message : error,
+        attempt,
+        language,
+        pathTitle: chosenPath.title,
+        modelId: env.GEMINI_REASONING_MODEL,
+      });
       
       if (attempt < maxRetries) {
         // Wait before retrying
@@ -65,6 +71,6 @@ export async function getActionPlanStreamChain(
   }
 
   throw new Error(
-    `AI streaming chain failed after ${maxRetries} attempts. Last error: ${lastError?.message}`,
+    `Action Plan AI streaming failed after ${maxRetries} attempts. Model: ${env.GEMINI_REASONING_MODEL}, Language: ${language}, Path: ${chosenPath.title}, Last error: ${lastError?.message}`,
   );
 }

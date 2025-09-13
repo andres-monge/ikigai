@@ -55,7 +55,12 @@ export async function getPurposeDiscoveryStreamChain(
 
     } catch (error) {
       lastError = error as Error;
-      console.error(`Purpose-Discovery streaming attempt ${attempt} failed:`, error);
+      console.error(`Purpose-Discovery streaming attempt ${attempt}/${maxRetries} failed:`, {
+        error: error instanceof Error ? error.message : error,
+        attempt,
+        language,
+        modelId: env.GEMINI_REASONING_MODEL,
+      });
       
       if (attempt < maxRetries) {
         // Wait before retrying
@@ -65,6 +70,6 @@ export async function getPurposeDiscoveryStreamChain(
   }
 
   throw new Error(
-    `AI streaming chain failed after ${maxRetries} attempts. Last error: ${lastError?.message}`,
+    `Purpose Discovery AI streaming failed after ${maxRetries} attempts. Model: ${env.GEMINI_REASONING_MODEL}, Language: ${language}, Last error: ${lastError?.message}`,
   );
 }

@@ -26,6 +26,7 @@ import {
   atomicPurposePathUpdate 
 } from "./utils";
 import { TransactionError, ValidationError, wrapTransactionError } from "../../utils/errors";
+import { logAIStreamError } from "../../utils/ai-logger";
 import { validateSessionForAI } from "../../utils/validation";
 import { db } from "../../db";
 import { eq, inArray } from "drizzle-orm";
@@ -52,9 +53,12 @@ purposeDiscoveryRouter.post("/analyze/stream", async (req, res) => {
     return; // Response already sent by setupStreamConcurrencyControl
   }
 
+  let session: HydratedAssessmentSession | null = null;
+  
   try {
     // Get the session data
-    const session = await storage.getAssessmentSessionBySessionId(sessionId);
+    const sessionData = await storage.getAssessmentSessionBySessionId(sessionId);
+    session = sessionData || null;
     if (!session) {
       return res.status(404).json({ error: "Session not found" });
     }
@@ -67,7 +71,7 @@ purposeDiscoveryRouter.post("/analyze/stream", async (req, res) => {
     try {
       // Get streamObject result with concurrency limiting
       const result = await aiLimiter(() => 
-        getPurposeDiscoveryStreamChain(session.responses as QuestionnaireResponses, session.language!)
+        getPurposeDiscoveryStreamChain(session!.responses as QuestionnaireResponses, session!.language!)
       );
 
       // Stream to client using AI SDK's text stream protocol
@@ -92,10 +96,13 @@ purposeDiscoveryRouter.post("/analyze/stream", async (req, res) => {
       if (error instanceof TransactionError) {
         console.error('Streaming or database transaction error:', error.toJSON());
       } else {
-        console.error('Streaming error:', {
+        logAIStreamError({
+          error,
           sessionId,
-          error: error instanceof Error ? error.message : error,
-          stack: error instanceof Error ? error.stack : undefined
+          endpoint: 'purpose-discovery',
+          phase: 'streaming',
+          userInput: session.responses as QuestionnaireResponses,
+          language: session.language!,
         });
       }
       // Don't send additional responses - streaming may have already started
@@ -109,12 +116,25 @@ purposeDiscoveryRouter.post("/analyze/stream", async (req, res) => {
         console.error('Validation error during stream setup:', error.toJSON());
         res.status(400).json(error.toResponse());
       } else {
-        console.error('Stream setup error:', error);
+        logAIStreamError({
+          error,
+          sessionId,
+          endpoint: 'purpose-discovery',
+          phase: 'setup',
+          language: session?.language,
+        });
         res.status(500).json({ error: 'Failed to start stream' });
       }
     } else {
       // If headers already sent (streaming started), just log the error
-      console.error('Error after streaming started:', error);
+      logAIStreamError({
+        error,
+        sessionId,
+        endpoint: 'purpose-discovery',
+        phase: 'streaming',
+        userInput: session?.responses as QuestionnaireResponses,
+        language: session?.language,
+      });
     }
   } finally {
     // Always clean up the active stream marker

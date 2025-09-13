@@ -140,6 +140,7 @@ My_Directory_Structure/
 │ │ ├── index.ts # Service exports
 │ │ └── youtube.ts # YouTube API service
 │ ├── utils/ # Server utilities
+│ │ ├── ai-logger.ts # Enhanced AI error logging with structured context
 │ │ ├── errors.ts # Structured error handling
 │ │ ├── test-app.ts # Test application utilities
 │ │ └── validation.ts # Input validation utilities
