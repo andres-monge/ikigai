@@ -23,7 +23,7 @@ import {
   setupStreamConcurrencyControl,
   atomicActionPlanUpdate 
 } from "./utils";
-import { TransactionError, ValidationError, YouTubeEnrichmentError } from "../../utils/errors";
+import { TransactionError, ValidationError, YouTubeEnrichmentError, ERROR_CODES } from "../../utils/errors";
 import { logAIStreamError } from "../../utils/ai-logger";
 import { validateSessionForActionPlan } from "../../utils/validation";
 
@@ -32,6 +32,18 @@ export const actionPlanRouter = Router();
 
 /* --------------------- POST /api/action-plan/stream ---------------------- */
 
+/**
+ * @route POST /api/action-plan/stream
+ * @description Streams AI-generated action plan with YouTube video enrichment.
+ * 
+ * Error Response Strategy:
+ * - VALIDATION_ERROR: Request validation, session not found, pathId issues, chosen path not found
+ * - STREAMING_ERROR: AI generation failures, streaming interruptions
+ * - CONCURRENCY_LIMIT_REACHED: Multiple streams for same session (handled by utils)
+ * - YOUTUBE_ENRICHMENT_FAILED: YouTube API failures (graceful degradation, not sent to client)
+ * 
+ * All error responses include structured metadata for frontend error handling.
+ */
 actionPlanRouter.post("/action-plan/stream", async (req, res) => {
   // Validate request body
   const bodyValidation = z.object({
@@ -42,7 +54,7 @@ actionPlanRouter.post("/action-plan/stream", async (req, res) => {
   if (!bodyValidation.success) {
     return res.status(400).json({
       error: "Invalid request body",
-      code: "VALIDATION_ERROR",
+      code: ERROR_CODES.VALIDATION_ERROR,
       details: bodyValidation.error.errors 
     });
   }
@@ -62,7 +74,10 @@ actionPlanRouter.post("/action-plan/stream", async (req, res) => {
     const sessionData = await storage.getAssessmentSessionBySessionId(sessionId);
     session = sessionData || null;
     if (!session) {
-      return res.status(404).json({ error: "Session not found" });
+      return res.status(404).json({ 
+        error: "Session not found",
+        code: ERROR_CODES.VALIDATION_ERROR
+      });
     }
 
     // Validate session data before expensive AI processing
@@ -75,14 +90,16 @@ actionPlanRouter.post("/action-plan/stream", async (req, res) => {
     const effectivePathId = pathId || session.chosenPathId;
     if (!effectivePathId) {
       return res.status(400).json({ 
-        error: "pathId is required when not previously set in session" 
+        error: "pathId is required when not previously set in session",
+        code: ERROR_CODES.VALIDATION_ERROR
       });
     }
     
     chosenPath = session.purposePaths.find((p) => p.id === effectivePathId);
     if (!chosenPath) {
       return res.status(404).json({ 
-        error: "Chosen path not found for this session" 
+        error: "Chosen path not found for this session",
+        code: ERROR_CODES.VALIDATION_ERROR
       });
     }
 
@@ -106,7 +123,7 @@ actionPlanRouter.post("/action-plan/stream", async (req, res) => {
         if (!res.headersSent) {
           return res.status(500).json({ 
             error: 'Failed to start streaming',
-            code: 'STREAMING_ERROR'
+            code: ERROR_CODES.STREAMING_ERROR
           });
         }
         // If streaming already started, we can't send JSON response
@@ -223,7 +240,10 @@ actionPlanRouter.post("/action-plan/stream", async (req, res) => {
           phase: 'setup',
           language: session?.language,
         });
-        res.status(500).json({ error: 'Failed to start stream' });
+        res.status(500).json({ 
+          error: 'Failed to start stream',
+          code: ERROR_CODES.STREAMING_ERROR
+        });
       }
     } else {
       // If headers already sent (streaming started), just log the error

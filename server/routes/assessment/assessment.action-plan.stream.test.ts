@@ -21,6 +21,7 @@ import { assessmentSessions, purposePaths } from '../../../shared/schema.js';
 import type { QuestionnaireResponses } from '../../../shared/schema.js';
 import { storage } from '../../storage.js';
 import { createTestApp } from '../../utils/test-app.js';
+import { ERROR_CODES } from '../../utils/errors.js';
 
 // Import the functions we'll be mocking before setting up the mock
 import { getActionPlanStreamChain } from '../../ai/chains';
@@ -641,7 +642,7 @@ describe('Action Plan Streaming Endpoint - POST /api/action-plan/stream (AI SDK)
       .expect(400);
 
     expect(response.body.error).toBe('Invalid request body');
-    expect(response.body.code).toBe('VALIDATION_ERROR');
+    expect(response.body.code).toBe(ERROR_CODES.VALIDATION_ERROR);
   });
 
   it('should return 400 for invalid pathId format', async () => {
@@ -659,7 +660,7 @@ describe('Action Plan Streaming Endpoint - POST /api/action-plan/stream (AI SDK)
       .expect(400);
 
     expect(response.body.error).toBe('Invalid request body');
-    expect(response.body.code).toBe('VALIDATION_ERROR');
+    expect(response.body.code).toBe(ERROR_CODES.VALIDATION_ERROR);
   });
 
   it('should return 404 when pathId not found in session', async () => {

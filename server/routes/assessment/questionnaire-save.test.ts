@@ -249,6 +249,7 @@ describe('POST /api/questionnaire/save', () => {
 
     expect(invalidRequest1.status).toBe(400);
     expect(invalidRequest1.body.error).toBe("Invalid request data");
+    expect(invalidRequest1.body.code).toBe("VALIDATION_ERROR");
     expect(invalidRequest1.body.details).toBeDefined();
 
     // Test invalid language

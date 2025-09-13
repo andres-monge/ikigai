@@ -23,6 +23,7 @@ import { assessmentSessions, purposePaths } from '../../../shared/schema.js';
 import type { QuestionnaireResponses } from '../../../shared/schema.js';
 import { storage } from '../../storage.js';
 import { createTestApp } from '../../utils/test-app.js';
+import { ERROR_CODES } from '../../utils/errors.js';
 
 // Import the functions we'll be mocking before setting up the mock
 import { getPurposeDiscoveryStreamChain } from '../../ai/chains';
@@ -516,7 +517,7 @@ describe('Purpose Discovery Streaming Endpoint - /api/analyze/stream', () => {
       .expect(400);
 
     expect(response.body.error).toBe('Questionnaire responses are required before AI processing');
-    expect(response.body.code).toBe('VALIDATION_ERROR');
+    expect(response.body.code).toBe(ERROR_CODES.VALIDATION_ERROR);
   });
 
   it('should return 400 when sessionId is missing', async () => {

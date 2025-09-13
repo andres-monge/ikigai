@@ -25,7 +25,7 @@ import {
   setupStreamConcurrencyControl, 
   atomicPurposePathUpdate 
 } from "./utils";
-import { TransactionError, ValidationError, wrapTransactionError } from "../../utils/errors";
+import { TransactionError, ValidationError, wrapTransactionError, ERROR_CODES } from "../../utils/errors";
 import { logAIStreamError } from "../../utils/ai-logger";
 import { validateSessionForAI } from "../../utils/validation";
 import { db } from "../../db";
@@ -36,12 +36,24 @@ export const purposeDiscoveryRouter = Router();
 
 /* ----------------------- POST /api/analyze/stream ------------------------ */
 
+/**
+ * @route POST /api/analyze/stream
+ * @description Streams AI-generated purpose discovery analysis using Vercel AI SDK.
+ * 
+ * Error Response Strategy:
+ * - VALIDATION_ERROR: Request validation, session not found, invalid session data
+ * - STREAMING_ERROR: AI generation failures, streaming interruptions
+ * - CONCURRENCY_LIMIT_REACHED: Multiple streams for same session (handled by utils)
+ * 
+ * All error responses include structured metadata for frontend error handling.
+ */
 purposeDiscoveryRouter.post("/analyze/stream", async (req, res) => {
   // Validate request body
   const bodyValidation = z.object({ sessionId: z.string() }).safeParse(req.body);
   if (!bodyValidation.success) {
     return res.status(400).json({ 
-      error: "Invalid request body", 
+      error: "Invalid request body",
+      code: ERROR_CODES.VALIDATION_ERROR,
       details: bodyValidation.error.errors 
     });
   }
@@ -60,7 +72,10 @@ purposeDiscoveryRouter.post("/analyze/stream", async (req, res) => {
     const sessionData = await storage.getAssessmentSessionBySessionId(sessionId);
     session = sessionData || null;
     if (!session) {
-      return res.status(404).json({ error: "Session not found" });
+      return res.status(404).json({ 
+        error: "Session not found",
+        code: ERROR_CODES.VALIDATION_ERROR
+      });
     }
 
     // Validate session data before expensive AI processing
@@ -123,7 +138,10 @@ purposeDiscoveryRouter.post("/analyze/stream", async (req, res) => {
           phase: 'setup',
           language: session?.language,
         });
-        res.status(500).json({ error: 'Failed to start stream' });
+        res.status(500).json({ 
+          error: 'Failed to start stream',
+          code: ERROR_CODES.STREAMING_ERROR
+        });
       }
     } else {
       // If headers already sent (streaming started), just log the error
@@ -164,6 +182,7 @@ purposeDiscoveryRouter.post("/questionnaire/save", async (req, res, next) => {
     if (!validation.success) {
       return res.status(400).json({
         error: "Invalid request data",
+        code: ERROR_CODES.VALIDATION_ERROR,
         details: validation.error.errors,
       });
     }

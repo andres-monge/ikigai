@@ -493,23 +493,22 @@ This phase removes all deprecated code to finalize the AI SDK-only architecture,
   - **Step Dependencies**: None
   - **Why**: When AI streaming fails, we need complete context to debug. 
 
-- [ ] Step 22.5: Standardize Error Response Format
-  - **Task**: Ensure both streaming endpoints return consistent error shapes. The `/api/analyze/stream` endpoint should include `code: 'VALIDATION_ERROR'` in validation errors like action-plan already does. When streaming fails, include structured metadata (without exposing sensitive data) to help frontend handle errors gracefully.
+[X] Step 22.5: Standardize Error Response Format
+  - **Task**: Ensure both streaming endpoints return consistent error shapes. The `/api/analyze/stream` endpoint should include `code: 'VALIDATION_ERROR'` in validation errors like action-plan already does. When streaming fails, include structured metadata to help frontend handle errors gracefully.
   - **Suggested Files for Context**: `server/routes/assessment/purpose-discovery.ts`, `server/routes/assessment/action-plan.ts`, `server/utils/errors.ts`
   - **Step Dependencies**: Step 22.4
   - **Why**: Inconsistent error formats make it harder for the frontend to handle failures gracefully
-
-### Test Reliability & Database Isolation
-
-- [ ] Step 22.6: Fix Test Database Race Conditions
-  - **Task**: Add unique test prefixes to sessionIds in each test to prevent collision (e.g., `test-${Date.now()}-${Math.random()}`). Wrap database operations in tests with transactions where possible. Add `afterEach` cleanup that's more thorough - delete only test-prefixed sessions. In test setup, add a small delay between database cleanup and test start to ensure cleanup completes.
-  - **Suggested Files for Context**: `server/routes/assessment/assessment.purpose-discovery.stream.test.ts`, `server/routes/assessment/assessment.action-plan.stream.test.ts`, `server/routes/assessment/questionnaire-save.test.ts`
-  - **Step Dependencies**: None
-  - **Why**: Intermittent test failures indicate race conditions. Tests running in parallel can interfere when they share sessionIds or when cleanup hasn't completed
+  - **Implementation Notes**: 
+    - **Standardized Error Codes**: Both streaming endpoints now return consistent error shapes with proper error codes from `ERROR_CODES` enum
+    - **Purpose Discovery Endpoint Updates**: Added `ERROR_CODES.VALIDATION_ERROR` to body validation (line 45) and session not found (line 66) errors, `ERROR_CODES.STREAMING_ERROR` to generic server errors (line 132)
+    - **Action Plan Endpoint Updates**: Added `ERROR_CODES.VALIDATION_ERROR` to session not found (line 67), missing pathId (line 82), and chosen path not found (line 90) errors, `ERROR_CODES.STREAMING_ERROR` to streaming errors (line 114, 233)
+    - **Consistent Import Pattern**: Both endpoints now import `ERROR_CODES` from `server/utils/errors.ts` for type safety and single source of truth
+    - **Manual Testing Verified**: All error responses include proper error codes: validation errors return `VALIDATION_ERROR`, streaming errors return `STREAMING_ERROR`
+    - **Test Suite Passed**: All 87 tests pass, confirming no regressions introduced by error standardization changes
 
 ### Code Organization
 
-- [ ] Step 22.7: Extract Common Streaming Logic
+- [ ] Step 22.6: Extract Common Streaming Logic
   - **Task**: Create `client/src/hooks/use-streaming-state.ts` with a hook that handles the common pattern: initial session fetch, streaming detection logic (missing data check), and session storage management. Both Results and Action Plan pages can use this to reduce duplication while keeping their specific business logic. Don't over-abstract - just extract the truly common initialization and detection patterns.
   - **Suggested Files for Context**: `client/src/pages/results.tsx`, `client/src/pages/action-plan.tsx`
   - **Step Dependencies**: Steps 22.1, 22.3
