@@ -488,7 +488,7 @@ This phase removes all deprecated code to finalize the AI SDK-only architecture,
 ### Error Handling & Observability
 
 - [X] Step 22.4: Implement Enhanced AI Error Logging
-  - **Task**: Create `server/utils/ai-logger.ts` with `logAIStreamError` function that captures: error details, user input (questionnaire responses or chosen path), streaming metadata (partial object if available, finish reason), sessionId, timestamp, and model configuration. Update catch blocks in both `/api/analyze/stream` and `/api/action-plan/stream` to use this structured logging. Include the partial streaming state to debug where streams fail.
+  - **Task**: Create `server/utils/ai-logger.ts` with `logAIStreamError` function that captures: error details, user input (questionnaire responses or chosen path), sessionId, timestamp, and model configuration. Update catch blocks in both `/api/analyze/stream` and `/api/action-plan/stream` to use this structured logging. Include the partial streaming state to debug where streams fail.
   - **Suggested Files for Context**: `server/routes/assessment/purpose-discovery.ts`, `server/routes/assessment/action-plan.ts`, `server/ai/chains/purpose-discovery.stream.chain.ts`, `server/ai/chains/action-plan.stream.chain.ts`
   - **Step Dependencies**: None
   - **Why**: When AI streaming fails, we need complete context to debug. 
