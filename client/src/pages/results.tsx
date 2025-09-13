@@ -23,7 +23,7 @@
  * - @/types/assessment: For the `FullAssessment` type.
  */
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation } from 'wouter';
 import { Download, RotateCcw, Rocket, Users, Code } from 'lucide-react';
 import { experimental_useObject as useObject } from '@ai-sdk/react';
@@ -35,9 +35,8 @@ import { CoreDriversSummary } from '@/components/results/core-drivers-summary';
 import { PurposePaths } from '@/components/results/purpose-paths';
 import { t, type Language } from '@/lib/i18n';
 import { exportToPDF } from '@/lib/pdf-export';
-import { useSessionStorage } from '@/hooks/use-session-storage';
+import { useStreamingState } from '@/hooks/use-streaming-state';
 import { useToast } from '@/hooks/use-toast';
-import { apiRequest } from '@/lib/queryClient';
 import type { FullAssessment } from '@/types/assessment';
 
 /* -------------------------------------------------------------------------- */
@@ -58,17 +57,18 @@ export function Results({
   language,
   sessionId,
 }: ResultsProps) {
-  const [session, setSession] = useSessionStorage<FullAssessment | null>(
-    'session',
-    null,
-  );
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [needsStreaming, setNeedsStreaming] = useState(false);
-  const [isFetchingSession, setIsFetchingSession] = useState(false);
   
-  // One-shot streaming trigger to prevent infinite loops
-  const hasInitiatedStreamingRef = useRef(false);
+  // Shared session management and streaming control
+  const { 
+    session, 
+    setSession, 
+    isFetchingSession, 
+    isFetchingRef, 
+    hasInitiatedStreamingRef 
+  } = useStreamingState({ sessionId, language });
 
   // useObject hook for purpose discovery streaming
   const { object, submit, isLoading, error } = useObject({
@@ -147,13 +147,8 @@ export function Results({
   });
 
 
-  /* Unified session management and streaming trigger with one-shot pattern */
+  /* Streaming trigger logic - session management handled by hook */
   useEffect(() => {
-    // Reset streaming ref if sessionId changes (new assessment)
-    if (!sessionId || (session && session.sessionId !== sessionId)) {
-      hasInitiatedStreamingRef.current = false;
-    }
-
     // No sessionId means we can't proceed at all
     if (!sessionId) {
       navigate('/');
@@ -165,46 +160,21 @@ export function Results({
       return;
     }
 
-    // Clear stale session data if sessionId mismatch
-    if (session && session.sessionId !== sessionId) {
-      if (process.env.NODE_ENV === 'development') {
-        console.log('SessionId mismatch detected, clearing stale session data');
-      }
-      setSession(null);
-      return; // Let the effect re-run with cleared session
+    // Don't navigate while still fetching session from server
+    if (isFetchingRef.current) {
+      return;
     }
 
-    // Need to fetch from server if session is missing or has wrong sessionId
-    if (!isFetchingSession && !needsStreaming && (!session || session.sessionId !== sessionId)) {
-      setIsFetchingSession(true);
-      
-      apiRequest('GET', `/api/session/${sessionId}`)
-        .then(async (res) => {
-          if (res.ok) {
-            const serverSession = await res.json();
-            setSession(serverSession);
-          } else if (res.status === 404) {
-            // Session doesn't exist on server, redirect to home
-            navigate('/');
-            return;
-          } else {
-            throw new Error(`Server returned ${res.status}`);
-          }
-        })
-        .catch((error) => {
-          console.error('Failed to fetch session from server:', error);
-          toast({
-            title: t('common.error', language),
-            description: t('results.loadSessionError', language),
-            variant: 'destructive',
-          });
-          // Delay navigation slightly to allow user to see the toast
-          setTimeout(() => navigate('/'), 2000);
-        })
-        .finally(() => {
-          setIsFetchingSession(false);
-        });
-      return; // Don't continue to streaming logic while fetching
+    // If session fetch completed but returned null (404), redirect home with toast
+    if (!isFetchingSession && !session) {
+      toast({
+        title: t('common.error', language),
+        description: t('results.loadSessionError', language),
+        variant: 'destructive',
+      });
+      // Delay navigation slightly to allow user to see the toast
+      setTimeout(() => navigate('/'), 2000);
+      return;
     }
 
     // One-shot streaming trigger: only initiate streaming once per session
@@ -227,7 +197,6 @@ export function Results({
     isFetchingSession,
     needsStreaming,
     navigate,
-    setSession,
     toast,
     language
     // Note: submit intentionally omitted from deps to prevent infinite loops

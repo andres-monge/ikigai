@@ -16,7 +16,7 @@
  * - wouter, lucide-react, @/hooks, @/components, @/lib, @/types
  */
 
-import { useEffect, useMemo, useState, useRef } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useSearch } from 'wouter';
 import {
   Lightbulb,
@@ -37,7 +37,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { useGetSession } from '@/hooks/use-get-session';
+import { useStreamingState } from '@/hooks/use-streaming-state';
 import { t, type Language } from '@/lib/i18n';
 import { Skeleton } from '@/components/ui/skeleton';
 import { exportActionPlanToPDF } from '@/lib/pdf-export';
@@ -65,10 +65,14 @@ export function ActionPlan({
   const [needsStreaming, setNeedsStreaming] = useState(false);
   const [sessionData, setSessionData] = useState<FullAssessment | null>(null);
   
-  // One-shot streaming trigger to prevent infinite loops
-  const hasInitiatedStreamingRef = useRef(false);
-
-  const { data: session, isLoading: isSessionLoading, isError } = useGetSession(sessionId);
+  // Shared session management and streaming control
+  const { 
+    session, 
+    setSession, 
+    isFetchingSession, 
+    isFetchingRef, 
+    hasInitiatedStreamingRef 
+  } = useStreamingState({ sessionId, language });
 
   // Extract pathId from URL query parameters and resolve effective pathId
   const searchString = useSearch();
@@ -126,8 +130,8 @@ export function ActionPlan({
         setSessionData(updatedSession);
         setNeedsStreaming(false);
         
-        // Persist to sessionStorage for consistency and page refresh support
-        sessionStorage.setItem('session', JSON.stringify(updatedSession));
+        // Update the hook's session state (which handles sessionStorage automatically)
+        setSession(updatedSession);
         
         // Fetch enriched data with real YouTube videos after a delay
         setTimeout(async () => {
@@ -146,7 +150,7 @@ export function ActionPlan({
                 );
                 if (hasRealYouTubeData || enrichedSession.actionPlan.milestones.length > cleanedObject.milestones.length) {
                   setSessionData(enrichedSession);
-                  sessionStorage.setItem('session', JSON.stringify(enrichedSession));
+                  setSession(enrichedSession);
                 }
               }
             }
@@ -176,18 +180,24 @@ export function ActionPlan({
   });
 
 
-  /* Unified session management and streaming trigger with one-shot pattern */
+  /* Streaming trigger logic with path validation - session management handled by hook */
   useEffect(() => {
-    // Reset streaming ref if sessionId or pathId changes (new assessment or path selection)
-    if (!sessionId || !effectivePathId || (session && session.sessionId !== sessionId)) {
-      hasInitiatedStreamingRef.current = false;
-    }
-
     const currentSession = sessionData || session;
 
     // No sessionId means we can't proceed at all
     if (!sessionId) {
       navigate('/');
+      return;
+    }
+
+    // Don't make navigation decisions while still fetching session
+    if (isFetchingRef.current) {
+      return;
+    }
+
+    // If session fetch completed but returned null (404), redirect to results
+    if (!isFetchingSession && !currentSession) {
+      navigate('/results');
       return;
     }
 
@@ -224,6 +234,7 @@ export function ActionPlan({
       currentSession.sessionId === sessionId &&
       (!currentSession.actionPlan || queryPathId !== null) &&
       effectivePathId &&
+      !isFetchingSession &&
       !hasInitiatedStreamingRef.current;
 
     if (shouldStream) {
@@ -236,7 +247,9 @@ export function ActionPlan({
     effectivePathId,
     session?.sessionId,
     !!session?.actionPlan,  // Boolean coercion for stability
+    sessionData?.actionPlan,  // Track sessionData changes too
     queryPathId,
+    isFetchingSession,
     navigate
     // Note: submit and setSessionData intentionally omitted from deps to prevent infinite loops
   ]);
@@ -246,7 +259,7 @@ export function ActionPlan({
     return language === 'es' ? 'Generando tu plan de acción...' : 'Generating your action plan...';
   };
 
-  if (isSessionLoading) {
+  if (isFetchingSession) {
     return <ActionPlanSkeleton />;
   }
 
@@ -383,7 +396,7 @@ export function ActionPlan({
   const currentChosenPath = chosenPath;
 
   // Only return null if there's truly no action plan data
-  if (isError || !currentActionPlan) {
+  if (!currentActionPlan) {
     return null;
   }
 
