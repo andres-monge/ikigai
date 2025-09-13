@@ -13,7 +13,7 @@
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { streamObject } from 'ai';
 import type { Language, PurposePath } from '@shared/schema';
-import { actionPlanResultSchema } from '../schemas';
+import { actionPlanResultSchema } from '@shared/streaming-schemas';
 import { getActionPlanSystemPrompt } from '../prompts';
 import { env } from '../../env.js';
 

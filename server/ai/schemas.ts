@@ -1,48 +1,29 @@
 /**
  * @description
- * This file contains all Zod validation schemas and OpenAPI schemas used by the AI chains.
- * Extracted from chains.ts to isolate data structure definitions from orchestration logic.
+ * This file contains OpenAPI schemas and server-specific validation schemas.
+ * 
+ * Streaming result schemas have been moved to @shared/streaming-schemas for 
+ * single source of truth between frontend and backend. This file re-exports
+ * them for backward compatibility.
  * 
  * @dependencies
  * - zod: For runtime validation schemas
- * - @shared/schema: For shared application schemas
+ * - @shared/streaming-schemas: For streaming result schemas
  */
 
 import { z } from 'zod';
-import { actionPlanSchema } from '@shared/schema';
 
-// ========= INTERNAL ZOD SCHEMAS FOR AI OUTPUT VALIDATION =========
+// ========= STREAMING SCHEMAS (RE-EXPORTED FROM SHARED) =========
 
+// Re-export streaming schemas from shared location for backward compatibility
+export {
+  purposeDiscoveryResultSchema,
+  actionPlanResultSchema,
+  type PurposeDiscoveryResult,
+  type ActionPlanResult
+} from '@shared/streaming-schemas';
 
-
-export const purposeDiscoveryResultSchema = z.object({
-  coreDriversAnalysis: z.object({
-    statementSentence: z.string(),
-    coreThreads: z.string(),
-  }),
-  purposePaths: z
-    .array(
-      z.object({
-        title: z.string(),
-        description: z.string(),
-        ikigaiAlignment: z.object({
-          love: z.string(),
-          goodAt: z.string(),
-          worldNeeds: z.string(),
-          pay: z.string(),
-        }),
-        actionStrategy: z.string(),
-      }),
-    )
-    .length(3, 'The AI must generate exactly 3 purpose paths.'),
-});
-export type PurposeDiscoveryResult = z.infer<
-  typeof purposeDiscoveryResultSchema
->;
-
-// Zod schema for the result of the Action Plan chain, mirroring shared/schema.ts
-export const actionPlanResultSchema = actionPlanSchema;
-export type ActionPlanResult = z.infer<typeof actionPlanResultSchema>;
+// ========= SERVER-ONLY SCHEMAS =========
 
 export const youtubeFunctionArgSchema = z.object({
   skills: z

@@ -13,7 +13,7 @@
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { streamObject } from 'ai';
 import type { Language, QuestionnaireResponses } from '@shared/schema';
-import { purposeDiscoveryResultSchema } from '../schemas';
+import { purposeDiscoveryResultSchema } from '@shared/streaming-schemas';
 import { getPurposeDiscoverySystemPrompt } from '../prompts';
 import { env } from '../../env.js';
 

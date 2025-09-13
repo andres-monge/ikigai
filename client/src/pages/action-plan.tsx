@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { experimental_useObject as useObject } from '@ai-sdk/react';
 import { z } from 'zod';
+import { actionPlanResultSchema } from '@shared/streaming-schemas';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -50,37 +51,10 @@ interface ActionPlanProps {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Streaming Schema for useObject Hook                                       */
+/* Streaming Schema - Imported from Shared Source of Truth                  */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Zod schema for the action plan result structure
- * 
- * IMPORTANT: This schema must stay synchronized with the backend's 
- * actionPlanResultSchema in server/ai/schemas.ts
- * Any changes to the backend schema structure must be reflected here.
- */
-const actionPlanSchema = z.object({
-  milestones: z.array(
-    z.object({
-      title: z.string(),
-      timeline: z.string(),
-      actions: z.array(z.string()),
-      skills: z.array(
-        z.object({
-          skill: z.string(),
-          youtubeLinks: z.array(
-            z.object({
-              title: z.string(),
-              url: z.string(),
-              thumbnailUrl: z.string(),
-            })
-          ),
-        })
-      ).optional(),
-    })
-  ),
-});
+// Schema imported from shared location - no more manual synchronization needed!
 
 export function ActionPlan({
   language,
@@ -117,7 +91,7 @@ export function ActionPlan({
   // useObject hook for action plan streaming
   const { object, submit, isLoading: isStreamingLoading, error } = useObject({
     api: '/api/action-plan/stream',
-    schema: actionPlanSchema,
+    schema: actionPlanResultSchema,
     onFinish: async ({ object }) => {
       // Always preserve streamed data, regardless of session state (fixes race condition)
       if (object) {

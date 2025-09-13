@@ -28,6 +28,7 @@ import { useLocation } from 'wouter';
 import { Download, RotateCcw, Rocket, Users, Code } from 'lucide-react';
 import { experimental_useObject as useObject } from '@ai-sdk/react';
 import { z } from 'zod';
+import { purposeDiscoveryResultSchema } from '@shared/streaming-schemas';
 import { Button } from '@/components/ui/button';
 import { LoadingState } from '@/components/ui/loading-state';
 import { CoreDriversSummary } from '@/components/results/core-drivers-summary';
@@ -40,35 +41,10 @@ import { apiRequest } from '@/lib/queryClient';
 import type { FullAssessment } from '@/types/assessment';
 
 /* -------------------------------------------------------------------------- */
-/* Streaming Schema for useObject Hook                                       */
+/* Streaming Schema - Imported from Shared Source of Truth                  */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Zod schema for the purpose discovery result structure
- * 
- * IMPORTANT: This schema must stay synchronized with the backend's 
- * purposeDiscoveryResultSchema in server/ai/schemas.ts (lines 38-61)
- * Any changes to the backend schema structure must be reflected here.
- */
-const purposeDiscoverySchema = z.object({
-  coreDriversAnalysis: z.object({
-    statementSentence: z.string(),
-    coreThreads: z.string(),
-  }),
-  purposePaths: z.array(
-    z.object({
-      title: z.string(),
-      description: z.string(),
-      ikigaiAlignment: z.object({
-        love: z.string(),
-        goodAt: z.string(),
-        worldNeeds: z.string(),
-        pay: z.string(),
-      }),
-      actionStrategy: z.string(),
-    })
-  ),
-});
+// Schema imported from shared location - no more manual synchronization needed!
 
 interface ResultsProps {
   onStartOver: () => void;
@@ -97,7 +73,7 @@ export function Results({
   // useObject hook for purpose discovery streaming
   const { object, submit, isLoading, error } = useObject({
     api: '/api/analyze/stream',
-    schema: purposeDiscoverySchema,
+    schema: purposeDiscoveryResultSchema,
     onFinish: async ({ object }) => {
       // Always use streamed data, regardless of session state (fixes race condition)
       if (object) {
