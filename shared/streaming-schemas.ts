@@ -76,7 +76,7 @@ const milestoneSchema = z.object({
   title: z.string(),
   timeline: z.string(),
   actions: z.array(z.string()).min(1),
-  skills: z.array(skillToLearnSchema).optional().default([]),
+  skills: z.array(skillToLearnSchema).optional(),
 });
 
 /**

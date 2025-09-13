@@ -122,7 +122,7 @@ My_Directory_Structure/
 │ │ │ └── purpose-discovery.stream.chain.ts # Logic for streaming results
 │ │ ├── limiter.ts # Concurrency control for AI requests
 │ │ ├── prompts.ts # Manages system prompt generation & persona
-│ │ ├── schemas.ts # Zod schemas for AI SDK streamObject validation
+│ │ ├── schemas.ts # Re-exports streaming schemas from shared location
 │ │ ├── tools.ts # Function-calling tool definitions
 │ │ ├── types.ts # TypeScript types for the Gemini API
 │ │ └── wrapper.ts # Low-level Gemini API client wrapper
@@ -146,7 +146,8 @@ My_Directory_Structure/
 │ ├── cache.ts # In-memory cache implementation
 │ └── storage.ts # PostgreSQL storage class using Drizzle
 ├── shared/ # Isomorphic code
-│ └── schema.ts # Drizzle/Zod schemas
+│ ├── schema.ts # Drizzle/Zod schemas
+│ └── streaming-schemas.ts # Browser-safe Zod schemas for AI streaming (single source of truth)
 └── .env.example
 ```
 
@@ -216,17 +217,13 @@ The strategy is updated to leverage the best model for each task while simplifyi
 | **Purpose Discovery** | • Generate structured career analysis with core drivers and three purpose paths \<br\>• Include salary information narratively embedded | **`GEMINI_REASONING_MODEL`** | Single `streamObject` call with Zod schema validation. Simplified prompt focuses on JSON structure matching UI expectations. |
 | **Action Plan** | • Generate detailed milestone-based action plan \<br\>• Structure ready for YouTube video enrichment | **`GEMINI_REASONING_MODEL`** | Single `streamObject` call followed by post-processing to add YouTube videos. Maintains coherent narrative. |
 
-#### **Strategy Benefits**
 
-  - **Reliability:** AI SDK handles parsing and validation automatically, eliminating custom delimiter issues.
-  - **Type Safety:** Zod schemas ensure consistent data structure between frontend and backend.
-  - **Simplified Architecture:** Single model calls reduce complexity while maintaining quality.
-  - **YouTube Data API Integration:** Post-processing approach provides valid links and rich metadata without complicating the streaming.
 
 ### 5.3 AI SDK Integration (`server/ai/`)
 
   - **Description:** Simplified AI integration using Vercel AI SDK for reliable structured streaming.
-  - `schemas.ts`: Zod schemas that define the expected structure for purpose discovery and action plan objects.
+  - `schemas.ts`: Re-exports streaming schemas from `shared/streaming-schemas.ts` for backward compatibility.
+  - **Single Source of Truth:** All streaming schemas are defined in `shared/streaming-schemas.ts` to prevent drift between frontend and backend. This browser-safe file contains only Zod schemas with no Node.js dependencies.
   - Streaming endpoints use `streamObject` directly in route handlers, eliminating the need for complex chain orchestration.
   - Post-processing (like YouTube video enrichment) happens after the main content streams, keeping the architecture simple.
 
@@ -266,7 +263,7 @@ The strategy is updated to leverage the best model for each task while simplifyi
 
   - **Client ↔ Server: Vercel AI SDK Protocol** powers the streaming interface using Server-Sent Events (SSE) with automatic parsing and validation. Standard REST API calls (POST, GET) are used for initial data submission (questionnaire) and session management.
   - **Server-Side:** Route handlers use `streamObject` directly with Zod schemas for validation. The AI SDK handles the streaming protocol automatically, eliminating the need for custom parsers or delimiter handling.
-  - **State Management:** Client-side streaming is managed by the AI SDK's `useObject` hook, which provides partial data as it arrives. TanStack Query is used for non-streaming server state. Data is persisted in sessionStorage on stream completion to handle page refreshes gracefully.
+  - **State Management:** Client-side streaming is managed by the AI SDK's `useObject` hook, which provides partial data as it arrives. Both frontend and backend use identical Zod schemas from `shared/streaming-schemas.ts` to ensure type safety and validation consistency. TanStack Query is used for non-streaming server state. Data is persisted in sessionStorage on stream completion to handle page refreshes gracefully.
 
 ## 10\. Environment Variables
 

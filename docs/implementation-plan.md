@@ -476,28 +476,14 @@ This phase removes all deprecated code to finalize the AI SDK-only architecture,
 
 ### Schema Synchronization & Maintenance
 
-- [ ] Step 22.3: Create Single Source of Truth for Streaming Schemas
+- [X] Step 22.3: Create Single Source of Truth for Streaming Schemas
   - **Task**: Create `shared/streaming-schemas.ts` that exports ONLY the Zod schemas needed by both frontend and backend (no Drizzle imports). Move `purposeDiscoveryResultSchema` and `actionPlanResultSchema` from `server/ai/schemas.ts` to this shared location. Update both server files to import from shared. Replace inline schemas in `client/src/pages/results.tsx` and `action-plan.tsx` with imports from shared. Add a comment block explaining this is the single source of truth to prevent drift.
   - **Suggested Files for Context**: `server/ai/schemas.ts`, `client/src/pages/results.tsx`, `client/src/pages/action-plan.tsx`
   - **Step Dependencies**: Step 22.2
   - **Implementation Notes**:
-    - **Import Path**: MUST use `import { actionPlanSchema } from '@shared/schema'` NOT `'./schema'`. Using relative imports will break production builds. Always use the `@shared/` alias for reliable module resolution.
+    - **Import Path**: MUST use `import { actionPlanResultSchema } from '@shared/streaming-schemas'` NOT `'./schema'`. Using relative imports will break production builds. Always use the `@shared/` alias for reliable module resolution.
     - **Browser Safety**: Keep file browser-safe (no Node/Drizzle imports)
     - **Production Testing**: Run `npm run build` immediately after implementation to verify imports work.
-
-- [ ] Step 22.3.5: Fix "Get Action Plan" Immediate Click Errors with Backend Negative ID Support
-  - **Task**: Fix the 404 error when users click "Get Action Plan" immediately after results streaming by making the backend accept negative path IDs. Modify `/api/action-plan/stream` endpoint in `server/routes/assessment/action-plan.ts` to handle negative pathIds as array indices. When `effectivePathId < 0`, treat as array index using `Math.abs(pathId) - 1`. Keep existing positive ID handling for database IDs. No frontend changes required.
-  - **Suggested Files for Context**: `server/routes/assessment/action-plan.ts` (around line 78)
-  - **Step Dependencies**: Step 22.3
-  - **Implementation Notes**:
-    - ⚠️ **Minimal Change**: Only modify 5 lines in backend - no frontend changes
-    - ⚠️ **Array Index Logic**: `effectivePathId < 0` → use `session.purposePaths[Math.abs(effectivePathId) - 1]`
-    - ⚠️ **Preserve Existing**: Keep positive ID handling for database IDs unchanged
-  - **Pitfalls to Avoid**: 
-    - ❌ Don't change frontend ID generation (leaves existing negative ID pattern working)
-    - ❌ Don't add YouTube data manipulation (backend enrichment works correctly)
-    - ❌ Don't add complex retry logic (simple backend fix solves the root cause)
-    - ❌ Don't mix array indices with database IDs in frontend (creates confusion)
 
 ### Error Handling & Observability
 
