@@ -515,6 +515,21 @@ This phase removes all deprecated code to finalize the AI SDK-only architecture,
   - **Why**: Both pages have nearly identical session loading and streaming detection logic. Extracting reduces maintenance burden
   - **Implementation Notes**: Additionally addressed negative path ID race condition bug. The solution replaces a single 1-second timeout with an intelligent exponential backoff polling system that gives the database adequate time to save data while still responding quickly when possible. See Results and Action Plan page JSDoc for details.
 
+### YouTube Feature Deletion
+
+- [X] Step 22.7: Remove YouTube Video Recommendation Feature
+  - **Task**: Remove the YouTube video recommendation feature from action plans to simplify the architecture and eliminate external API dependencies. Delete `server/services/youtube.ts` and remove all YouTube enrichment post-processing logic from the action plan streaming endpoint. Update schemas to remove `youtubeVideoSchema` and simplify `skillToLearnSchema` to just `{ skill: string }`. Remove YouTube polling logic from the frontend and update UI to display skills as a simple list. Update tests to remove YouTube mocks and assertions. Remove `YOUTUBE_API_KEY` from environment configuration and all documentation.
+  - **Suggested Files for Context**: `server/services/youtube.ts`, `server/routes/assessment/action-plan.ts`, `shared/schema.ts`, `shared/streaming-schemas.ts`, `client/src/pages/action-plan.tsx`, `server/env.ts`, `docs/tech-spec.md`
+  - **Step Dependencies**: None
+  - **Why**: The YouTube enrichment added complexity (post-processing, caching, polling) and an external API dependency without providing sufficient value. Removing it simplifies the streaming architecture to a single-phase flow: stream → save.
+  - **Implementation Notes**:
+    - **Backend Changes**: Deleted `server/services/youtube.ts`, removed 60+ lines of enrichment logic from action plan route, removed YouTubeEnrichmentError class, simplified action plan prompt to not mention videos
+    - **Schema Updates**: Removed `youtubeVideoSchema` and `youtubeLinks` from skill schemas in both `shared/schema.ts` and `shared/streaming-schemas.ts`
+    - **Frontend Simplification**: Removed YouTube polling logic (~60 lines) from action plan page, removed video thumbnail grid UI, simplified skills to bulleted list display
+    - **Environment**: Removed `YOUTUBE_API_KEY` from `server/env.ts` validation schema and `.env.example`
+    - **Cache Cleanup**: Renamed `Cache` class to `SimpleCache` to avoid TypeScript built-in type conflict, kept generic cache infrastructure for future use
+    - **Test Updates**: Updated all action plan tests to remove YouTube mocks and video-related assertions, simplified mock data structures
+
 ---
 
 ## Phase 6: Final Hardening and Debugging

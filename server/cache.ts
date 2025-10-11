@@ -1,8 +1,8 @@
 /**
  * @description
  * This file provides a simple in-memory cache implementation with Time-to-Live (TTL) support.
- * It's designed to be a generic cache, with a specific instance for caching YouTube video data exported.
- * This helps to reduce latency and API costs by temporarily storing frequently requested data.
+ * It's designed to be a generic cache for temporarily storing frequently requested data.
+ * This helps to reduce latency and API costs.
  *
  * Key features:
  * - Stores any type of data with a specific TTL.
@@ -23,10 +23,10 @@ interface CacheEntry<T> {
 }
 
 /**
- * @class Cache
+ * @class SimpleCache
  * @description A generic in-memory cache class.
  */
-class Cache {
+export class SimpleCache {
   private store = new Map<string, CacheEntry<any>>();
 
   /**
@@ -83,9 +83,5 @@ class Cache {
   }
 }
 
-/**
- * Singleton instance of the Cache class specifically for YouTube video search results.
- */
-export const youtubeCache = new Cache();
-export const YOUTUBE_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-
+// Generic cache instance available for future use
+// Example: export const myCache = new SimpleCache();

@@ -53,20 +53,10 @@ export type PurposeDiscoveryResult = z.infer<typeof purposeDiscoveryResultSchema
 /* -------------------------------------------------------------------------- */
 
 /**
- * YouTube video schema for learning resources.
- */
-const youtubeVideoSchema = z.object({
-  title: z.string(),
-  url: z.string().url(),
-  thumbnailUrl: z.string().url(),
-});
-
-/**
- * Skill to learn schema with optional YouTube resources.
+ * Skill to learn schema.
  */
 const skillToLearnSchema = z.object({
   skill: z.string(),
-  youtubeLinks: z.array(youtubeVideoSchema),
 });
 
 /**
@@ -88,6 +78,5 @@ export const actionPlanResultSchema = z.object({
 });
 
 export type ActionPlanResult = z.infer<typeof actionPlanResultSchema>;
-export type YoutubeVideo = z.infer<typeof youtubeVideoSchema>;
 export type SkillToLearn = z.infer<typeof skillToLearnSchema>;
 export type Milestone = z.infer<typeof milestoneSchema>;

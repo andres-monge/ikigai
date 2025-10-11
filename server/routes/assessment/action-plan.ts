@@ -2,10 +2,9 @@
  * @description
  * Action plan generation endpoints:
  *  • POST /api/action-plan/stream - generates step-by-step plan (streaming)
- * 
+ *
  * These endpoints handle the second phase where users receive detailed
- * milestone-based action plans for their chosen career path, including
- * YouTube video recommendations for skill development.
+ * milestone-based action plans for their chosen career path.
  */
 
 import { Router } from "express";
@@ -17,13 +16,12 @@ import {
 } from "@shared/schema";
 import { getActionPlanStreamChain } from "../../ai/chains";
 import { aiLimiter } from "../../ai/limiter";
-import { getYoutubeVideosForSkills } from "../../services/youtube";
-import { 
-  activeStreams, 
+import {
+  activeStreams,
   setupStreamConcurrencyControl,
-  atomicActionPlanUpdate 
+  atomicActionPlanUpdate
 } from "./utils";
-import { TransactionError, ValidationError, YouTubeEnrichmentError, ERROR_CODES } from "../../utils/errors";
+import { TransactionError, ValidationError, ERROR_CODES } from "../../utils/errors";
 import { logAIStreamError } from "../../utils/ai-logger";
 import { validateSessionForActionPlan } from "../../utils/validation";
 
@@ -34,14 +32,13 @@ export const actionPlanRouter = Router();
 
 /**
  * @route POST /api/action-plan/stream
- * @description Streams AI-generated action plan with YouTube video enrichment.
- * 
+ * @description Streams AI-generated action plan.
+ *
  * Error Response Strategy:
  * - VALIDATION_ERROR: Request validation, session not found, pathId issues, chosen path not found
  * - STREAMING_ERROR: AI generation failures, streaming interruptions
  * - CONCURRENCY_LIMIT_REACHED: Multiple streams for same session (handled by utils)
- * - YOUTUBE_ENRICHMENT_FAILED: YouTube API failures (graceful degradation, not sent to client)
- * 
+ *
  * All error responses include structured metadata for frontend error handling.
  */
 actionPlanRouter.post("/action-plan/stream", async (req, res) => {
@@ -132,74 +129,11 @@ actionPlanRouter.post("/action-plan/stream", async (req, res) => {
 
       // Concurrently wait for the final validated object
       const finalObject = await result.object;
-      
+
       if (finalObject) {
-        // YouTube enrichment post-processing
-        let enrichedData = finalObject;
-        
-        try {
-          // Extract all unique skills across milestones
-          const allSkills = new Set<string>();
-          finalObject.milestones.forEach(milestone => {
-            if (milestone.skills) {
-              milestone.skills.forEach(skillObj => {
-                allSkills.add(skillObj.skill);
-              });
-            }
-          });
-          
-          // Fetch YouTube videos for all skills in one batch
-          if (allSkills.size > 0) {
-            const skillsArray = Array.from(allSkills);
-            const youtubeData = await getYoutubeVideosForSkills(skillsArray, session.language!);
-            
-            // Create a map for easy lookup
-            const youtubeMap = new Map(
-              youtubeData.map(item => [item.skill, item.videos])
-            );
-            
-            // Enrich the validated data with YouTube videos
-            enrichedData = {
-              ...finalObject,
-              milestones: finalObject.milestones.map(milestone => ({
-                ...milestone,
-                skills: milestone.skills?.map(skillObj => ({
-                  skill: skillObj.skill,
-                  youtubeLinks: youtubeMap.get(skillObj.skill) || [],
-                })) || [],
-              })),
-            };
-          }
-        } catch (enrichmentError) {
-          // Handle specific YouTube enrichment errors with detailed logging
-          if (enrichmentError instanceof YouTubeEnrichmentError) {
-            console.error('YouTube API enrichment failed:', enrichmentError.toJSON());
-          } else if (enrichmentError instanceof Error && enrichmentError.message.includes('YouTube')) {
-            console.error('YouTube service error during enrichment:', {
-              sessionId,
-              error: enrichmentError.message,
-              stack: enrichmentError.stack?.split('\n').slice(0, 3),
-              timestamp: new Date().toISOString()
-            });
-          } else {
-            logAIStreamError({
-              error: enrichmentError,
-              sessionId,
-              endpoint: 'action-plan',
-              phase: 'enrichment',
-              userInput: chosenPath,
-              language: session.language!,
-            });
-          }
-          
-          // Graceful degradation: use the base action plan without videos
-          enrichedData = finalObject;
-        }
-        
-        // Save the enriched (or base) action plan to database atomically
-        // Cast to ActionPlan type to handle optional skills difference
+        // Save the action plan to database atomically
         const actionPlanData = {
-          milestones: enrichedData.milestones.map(milestone => ({
+          milestones: finalObject.milestones.map(milestone => ({
             ...milestone,
             skills: milestone.skills || []
           }))

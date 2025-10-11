@@ -1,14 +1,13 @@
 /**
  * @description
  * Integration tests for the action plan streaming endpoint `/api/action-plan/stream` (AI SDK Protocol).
- * 
+ *
  * This test suite covers the complete action plan streaming flow using Vercel AI SDK:
  * - AI-generated milestone streaming with structured validation
- * - YouTube enrichment for skills
  * - Database persistence with transactions
  * - Error handling and graceful degradation
  * - Concurrency control between sessions
- * 
+ *
  * Migrated from SSE protocol to AI SDK's streamObject in Step 17.2.
  */
 
@@ -25,17 +24,11 @@ import { ERROR_CODES } from '../../utils/errors.js';
 
 // Import the functions we'll be mocking before setting up the mock
 import { getActionPlanStreamChain } from '../../ai/chains';
-import { getYoutubeVideosForSkills } from '../../services/youtube';
 
 // Mock the AI chains
 vi.mock('../../ai/chains', () => ({
   getPurposeDiscoveryStreamChain: vi.fn(),
   getActionPlanStreamChain: vi.fn(),
-}));
-
-// Mock the YouTube service for action plan enrichment
-vi.mock('../../services/youtube', () => ({
-  getYoutubeVideosForSkills: vi.fn(),
 }));
 
 /* ------------------------------------------------------------------ */
@@ -88,26 +81,8 @@ const mockActionPlanFinalObject = {
         "Deploy a simple 'Hello World' app to production"
       ],
       skills: [
-        {
-          skill: "React fundamentals",
-          youtubeLinks: [
-            {
-              title: "React Tutorial for Beginners",
-              url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-              thumbnailUrl: "https://img.youtube.com/vi/dQw4w9WgXcQ/mqdefault.jpg"
-            }
-          ]
-        },
-        {
-          skill: "Modern JavaScript",
-          youtubeLinks: [
-            {
-              title: "ES6+ Features Explained",
-              url: "https://www.youtube.com/watch?v=oEX2yKr8Wxo",
-              thumbnailUrl: "https://img.youtube.com/vi/oEX2yKr8Wxo/mqdefault.jpg"
-            }
-          ]
-        }
+        { skill: "React fundamentals" },
+        { skill: "Modern JavaScript" }
       ]
     },
     {
@@ -119,16 +94,7 @@ const mockActionPlanFinalObject = {
         "Practice API integration and data fetching"
       ],
       skills: [
-        {
-          skill: "State management",
-          youtubeLinks: [
-            {
-              title: "Redux vs Context API",
-              url: "https://www.youtube.com/watch?v=OvM4hIxrqAw",
-              thumbnailUrl: "https://img.youtube.com/vi/OvM4hIxrqAw/mqdefault.jpg"
-            }
-          ]
-        }
+        { skill: "State management" }
       ]
     },
     {
@@ -140,16 +106,7 @@ const mockActionPlanFinalObject = {
         "Start networking with professionals in the industry"
       ],
       skills: [
-        {
-          skill: "Full-stack development",
-          youtubeLinks: [
-            {
-              title: "MERN Stack Tutorial",
-              url: "https://www.youtube.com/watch?v=7CqJlxBYj-M",
-              thumbnailUrl: "https://img.youtube.com/vi/7CqJlxBYj-M/mqdefault.jpg"
-            }
-          ]
-        }
+        { skill: "Full-stack development" }
       ]
     }
   ]
@@ -163,12 +120,9 @@ beforeEach(async () => {
   // Clean tables in correct order (foreign keys first)
   await db.delete(purposePaths);
   await db.delete(assessmentSessions);
-  
+
   // Reset all mocks
   vi.clearAllMocks();
-  
-  // Explicitly reset YouTube service mock to ensure consistency
-  (getYoutubeVideosForSkills as any).mockReset();
 });
 
 afterAll(async () => {
@@ -227,78 +181,6 @@ const testResponses: QuestionnaireResponses = {
   ]
 };
 
-/**
- * Mock YouTube video data that the service would return for each skill.
- * Uses realistic YouTube URL patterns for better production matching.
- */
-const mockYouTubeVideoData = [
-  {
-    skill: 'React fundamentals',
-    videos: [
-      {
-        title: 'React Tutorial for Beginners',
-        url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-        thumbnailUrl: 'https://img.youtube.com/vi/dQw4w9WgXcQ/mqdefault.jpg'
-      },
-      {
-        title: 'Complete React Course 2024',
-        url: 'https://www.youtube.com/watch?v=SqcY0GlETPk',
-        thumbnailUrl: 'https://img.youtube.com/vi/SqcY0GlETPk/mqdefault.jpg'
-      }
-    ]
-  },
-  {
-    skill: 'Modern JavaScript',
-    videos: [
-      {
-        title: 'ES6+ Features Explained',
-        url: 'https://www.youtube.com/watch?v=oEX2yKr8Wxo',
-        thumbnailUrl: 'https://img.youtube.com/vi/oEX2yKr8Wxo/mqdefault.jpg'
-      }
-    ]
-  },
-  {
-    skill: 'State management',
-    videos: [
-      {
-        title: 'Redux vs Context API',
-        url: 'https://www.youtube.com/watch?v=OvM4hIxrqAw',
-        thumbnailUrl: 'https://img.youtube.com/vi/OvM4hIxrqAw/mqdefault.jpg'
-      }
-    ]
-  },
-  {
-    skill: 'API integration',
-    videos: [
-      {
-        title: 'Fetch API vs Axios',
-        url: 'https://www.youtube.com/watch?v=6LyagkoRWYA',
-        thumbnailUrl: 'https://img.youtube.com/vi/6LyagkoRWYA/mqdefault.jpg'
-      }
-    ]
-  },
-  {
-    skill: 'Full-stack development',
-    videos: [
-      {
-        title: 'MERN Stack Tutorial',
-        url: 'https://www.youtube.com/watch?v=7CqJlxBYj-M',
-        thumbnailUrl: 'https://img.youtube.com/vi/7CqJlxBYj-M/mqdefault.jpg'
-      }
-    ]
-  },
-  {
-    skill: 'Open source contribution',
-    videos: [
-      {
-        title: 'How to Contribute to Open Source',
-        url: 'https://www.youtube.com/watch?v=yzeVMecydCE',
-        thumbnailUrl: 'https://img.youtube.com/vi/yzeVMecydCE/mqdefault.jpg'
-      }
-    ]
-  }
-];
-
 /* ------------------------------------------------------------------ */
 /*                    Action Plan Streaming Tests                    */
 /* ------------------------------------------------------------------ */
@@ -310,7 +192,7 @@ describe('Action Plan Streaming Endpoint - POST /api/action-plan/stream (AI SDK)
     app = createTestApp();
   });
 
-  it('should successfully stream action plan with enrichment and persist to database', async () => {
+  it('should successfully stream action plan and persist to database', async () => {
     // 1. Create a test session with purpose paths (simulating completed Step 9)
     const sessionId = 'action-plan-test-' + Date.now();
     const testSession = await storage.createAssessmentSession({
@@ -342,14 +224,7 @@ describe('Action Plan Streaming Endpoint - POST /api/action-plan/stream (AI SDK)
       createMockActionPlanStreamResult(mockActionPlanFinalObject)
     );
 
-    // 3. Mock the YouTube service
-    (getYoutubeVideosForSkills as any).mockImplementation(async (skills: string[]) => {
-      return mockYouTubeVideoData.filter(item => 
-        skills.some(skill => skill.toLowerCase().includes(item.skill.toLowerCase()))
-      );
-    });
-
-    // 4. Make the streaming request (now POST with body)
+    // 3. Make the streaming request (now POST with body)
     const response = await request(app)
       .post('/api/action-plan/stream')
       .send({ sessionId, pathId: purposePath1.id })
@@ -377,20 +252,18 @@ describe('Action Plan Streaming Endpoint - POST /api/action-plan/stream (AI SDK)
     // Verify milestones were parsed correctly
     const actionPlan = updatedSession!.actionPlan!;
     expect(actionPlan.milestones).toHaveLength(3);
-    
+
     const milestone1 = actionPlan.milestones[0];
     expect(milestone1.title).toBe('Build Your Foundation');
     expect(milestone1.timeline).toBe('Weeks 1-2');
     expect(milestone1.actions).toContain('Set up your development environment with latest tools');
-    
-    // Verify YouTube enrichment worked
+
+    // Verify skills were parsed correctly
     expect(milestone1.skills).toHaveLength(2);
     const reactSkill = milestone1.skills.find(s => s.skill === 'React fundamentals');
     expect(reactSkill).toBeDefined();
-    expect(reactSkill!.youtubeLinks.length).toBeGreaterThan(0); // Should have YouTube videos
-    expect(reactSkill!.youtubeLinks[0].title).toBe('React Tutorial for Beginners');
-    expect(reactSkill!.youtubeLinks[0].url).toBe('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
-    
+    expect(reactSkill!.skill).toBe('React fundamentals');
+
     // Verify complete ikigai data structure and timestamps
     expect(updatedSession!.responses).toEqual(testResponses);
     expect(updatedSession!.language).toBe('en');
@@ -442,10 +315,7 @@ describe('Action Plan Streaming Endpoint - POST /api/action-plan/stream (AI SDK)
       };
     });
 
-    // 3. Mock YouTube service
-    (getYoutubeVideosForSkills as any).mockImplementation(async () => []);
-
-    // 4. Start a real HTTP server
+    // 3. Start a real HTTP server
     const testApp = createTestApp();
     const server = testApp.listen(0);
     const { port } = server.address() as AddressInfo;
@@ -536,19 +406,16 @@ describe('Action Plan Streaming Endpoint - POST /api/action-plan/stream (AI SDK)
           title: "Quick test",
           timeline: "Week 1",
           actions: ["Test action"],
-          skills: [{ skill: "Test skill", youtubeLinks: [] }]
+          skills: [{ skill: "Test skill" }]
         }
       ]
     };
-    
+
     (getActionPlanStreamChain as any).mockResolvedValue(
       createMockActionPlanStreamResult(minimalActionPlan)
     );
 
-    // 3. Mock YouTube service
-    (getYoutubeVideosForSkills as any).mockImplementation(async () => []);
-
-    // 4. Start both streams sequentially to ensure clean database operations
+    // 3. Start both streams sequentially to ensure clean database operations
     const response1 = await request(app).post('/api/action-plan/stream').send({ sessionId: sessionId1, pathId: purposePath1.id });
     const response2 = await request(app).post('/api/action-plan/stream').send({ sessionId: sessionId2, pathId: purposePath2.id });
 

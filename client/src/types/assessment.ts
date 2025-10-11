@@ -8,7 +8,7 @@
  * ✨ **Updates in Step 21** ✨
  * - Replaced the incomplete `AssessmentResults` type with the comprehensive
  * `FullAssessment` type, which mirrors the backend's hydrated session object.
- * - Added `ActionPlan` and its related types (`YoutubeVideo`, `SkillToLearn`)
+ * - Added `ActionPlan` and its related types (`SkillToLearn`)
  * to strongly type the action plan data.
  *
  * @dependencies
@@ -55,20 +55,13 @@ export interface PurposePath {
 }
 
 
-export interface YoutubeVideo {
-  title: string;
-  url: string;
-  thumbnailUrl: string;
-}
-
 export interface SkillToLearn {
   skill: string;
-  youtubeLinks: YoutubeVideo[];
 }
 
 /**
  * One milestone – a phase in the roadmap with its own set of tasks and
- * optionally embedded skills + learning resources.
+ * optionally embedded skills.
  */
 export interface Milestone {
   title: string;

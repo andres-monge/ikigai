@@ -84,59 +84,15 @@ export class ValidationError extends TransactionError {
 }
 
 /**
- * Custom error class for YouTube enrichment failures
- * Allows graceful degradation when video enrichment fails
- */
-export class YouTubeEnrichmentError extends Error {
-  public readonly code: string;
-  public readonly details: any;
-  public readonly skill?: string;
-  public readonly apiStatus?: number;
-  public readonly isTestMode: boolean;
-
-  constructor(
-    message: string,
-    details?: any,
-    skill?: string,
-    apiStatus?: number
-  ) {
-    super(message);
-    this.name = 'YouTubeEnrichmentError';
-    this.code = ERROR_CODES.YOUTUBE_ENRICHMENT_FAILED;
-    this.details = details;
-    this.skill = skill;
-    this.apiStatus = apiStatus;
-    this.isTestMode = process.env.VITEST === 'true' || process.env.NODE_ENV === 'test';
-  }
-
-  /**
-   * Returns error object appropriate for logging
-   */
-  toJSON() {
-    const base = {
-      error: this.message,
-      code: this.code,
-      ...(this.skill && { skill: this.skill }),
-      ...(this.apiStatus && { apiStatus: this.apiStatus })
-    };
-    
-    return this.isTestMode 
-      ? { ...base, details: this.details }
-      : base;
-  }
-}
-
-/**
  * Error codes for consistent error categorization
  */
 export const ERROR_CODES = {
   // Standardized error codes for self-verifying loop
   VALIDATION_ERROR: 'VALIDATION_ERROR',
-  TRANSACTION_ERROR: 'TRANSACTION_ERROR', 
+  TRANSACTION_ERROR: 'TRANSACTION_ERROR',
   STREAMING_ERROR: 'STREAMING_ERROR',
   CONCURRENCY_LIMIT_REACHED: 'CONCURRENCY_LIMIT_REACHED',
-  YOUTUBE_ENRICHMENT_FAILED: 'YOUTUBE_ENRICHMENT_FAILED',
-  
+
   // Legacy codes (maintain backward compatibility)
   PURPOSE_PATH_UPDATE_FAILED: 'PURPOSE_PATH_UPDATE_FAILED',
   ACTION_PLAN_UPDATE_FAILED: 'ACTION_PLAN_UPDATE_FAILED',

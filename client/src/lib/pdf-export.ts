@@ -11,7 +11,7 @@
  * - This new function generates a multi-page PDF for the user's chosen action plan.
  * - It uses the i18n `t` function for proper localization of headers.
  * - It formats the plan into sections: Side Projects, Skills, and Networking.
- * - YouTube video URLs in the "Skills" section are rendered as clickable links.
+ * - Skills are rendered as a bulleted list.
  * - Includes automatic pagination and a consistent footer.
  *
  * @dependencies
@@ -283,28 +283,6 @@ export function exportActionPlanToPDF(
         pdf.text(skillLines, pageMargin + 5, currentY);
         currentY += skillLines.length * 5 + 5;
 
-        // YouTube videos
-        skill.youtubeLinks.forEach((link) => {
-          if (currentY > pageHeight - 30) {
-            pdf.addPage();
-            currentY = pageMargin;
-          }
-          
-          // Video title
-          pdf.setFont('helvetica', 'normal');
-          pdf.setFontSize(10);
-          pdf.setTextColor(75, 85, 99);
-          const linkLines = pdf.splitTextToSize(`  - ${link.title}`, contentWidth - 10);
-          pdf.text(linkLines, pageMargin + 10, currentY);
-          currentY += linkLines.length * 4 + 3;
-          
-          // Video URL as link
-          pdf.setTextColor(59, 130, 246); // Blue for links
-          pdf.setFontSize(9);
-          const urlText = link.url.length > 60 ? link.url.substring(0, 57) + '...' : link.url;
-          pdf.textWithLink(urlText, pageMargin + 15, currentY, { url: link.url });
-          currentY += 7;
-        });
         currentY += 3;
       });
     }

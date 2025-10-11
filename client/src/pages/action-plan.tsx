@@ -42,7 +42,7 @@ import { t, type Language } from '@/lib/i18n';
 import { Skeleton } from '@/components/ui/skeleton';
 import { exportActionPlanToPDF } from '@/lib/pdf-export';
 import { useToast } from '@/hooks/use-toast';
-import type { FullAssessment, ActionPlan, PurposePath, Milestone, SkillToLearn, YoutubeVideo } from '@/types/assessment';
+import type { FullAssessment, ActionPlan, PurposePath, Milestone, SkillToLearn } from '@/types/assessment';
 
 interface ActionPlanProps {
   language: Language;
@@ -66,16 +66,13 @@ export function ActionPlan({
   const [sessionData, setSessionData] = useState<FullAssessment | null>(null);
   
   // Shared session management and streaming control
-  const { 
-    session, 
-    setSession, 
-    isFetchingSession, 
-    isFetchingRef, 
-    hasInitiatedStreamingRef 
+  const {
+    session,
+    setSession,
+    isFetchingSession,
+    isFetchingRef,
+    hasInitiatedStreamingRef
   } = useStreamingState({ sessionId, language });
-  
-  // Polling timeout ref for proper cleanup
-  const pollingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Extract pathId from URL query parameters and resolve effective pathId
   const searchString = useSearch();
@@ -116,18 +113,9 @@ export function ActionPlan({
           updatedAt: new Date().toISOString()
         };
         
-        // Clean any fake YouTube data that might have been generated during streaming
-        const cleanedObject = {
-          ...object,
-          milestones: object.milestones.map(m => ({
-            ...m,
-            skills: m.skills?.map(s => ({ skill: s.skill, youtubeLinks: [] })) || []
-          }))
-        };
-        
         const updatedSession = {
           ...baseSession,
-          actionPlan: cleanedObject,
+          actionPlan: object,
           chosenPathId: effectivePathId || baseSession?.chosenPathId || null
         };
         setSessionData(updatedSession);
@@ -135,74 +123,6 @@ export function ActionPlan({
         
         // Update the hook's session state (which handles sessionStorage automatically)
         setSession(updatedSession);
-        
-        /**
-         * Smart polling for YouTube video enrichment
-         *
-         * Background: After the action plan streaming completes, the backend performs
-         * post-processing to enrich each skill with real YouTube video links. This
-         * enrichment happens asynchronously after the initial streaming is done.
-         *
-         * This polling function checks the database at exponential intervals (500ms, 1000ms,
-         * 2000ms, 4000ms, 8000ms) until YouTube videos appear in the data, then updates
-         * the UI with the enriched content.
-         */
-        const startEnrichmentPolling = () => {
-          const delays = createPollingSchedule(); // [500, 1000, 2000, 4000, 8000]
-
-          const pollForEnrichedData = async (attemptIndex: number) => {
-            try {
-              const res = await fetch(`/api/session/${sessionId}?t=${Date.now()}`, {
-                cache: 'no-store',
-                credentials: 'include'
-              });
-              if (res.ok) {
-                const enrichedSession = await res.json();
-
-                // Check for complete enriched data with YouTube videos
-                if (enrichedSession.actionPlan?.milestones?.length > 0) {
-                  const hasRealYouTubeData = enrichedSession.actionPlan.milestones.some((m: Milestone) =>
-                    m.skills?.some((s: SkillToLearn) => s.youtubeLinks && s.youtubeLinks.length > 0)
-                  );
-
-                  if (hasRealYouTubeData || enrichedSession.actionPlan.milestones.length > cleanedObject.milestones.length) {
-                    // Success! Update with enriched data
-                    setSessionData(enrichedSession);
-                    setSession(enrichedSession);
-                    pollingTimeoutRef.current = null;
-                    return; // Success, stop polling
-                  }
-                }
-
-                // Data not enriched yet, continue polling if attempts remain
-                if (attemptIndex < delays.length - 1) {
-                  pollingTimeoutRef.current = setTimeout(() => {
-                    pollForEnrichedData(attemptIndex + 1);
-                  }, delays[attemptIndex]);
-                } else {
-                  // All retries exhausted - continue without YouTube videos (graceful degradation)
-                  pollingTimeoutRef.current = null;
-                }
-              }
-            } catch (error) {
-              // Network error - still try again if attempts remain
-              if (attemptIndex < delays.length - 1) {
-                pollingTimeoutRef.current = setTimeout(() => {
-                  pollForEnrichedData(attemptIndex + 1);
-                }, delays[attemptIndex]);
-              } else {
-                pollingTimeoutRef.current = null;
-              }
-            }
-          };
-
-          // Start with first delay (500ms)
-          pollingTimeoutRef.current = setTimeout(() => {
-            pollForEnrichedData(0);
-          }, delays[0]);
-        };
-        
-        startEnrichmentPolling();
       } else {
         // Object is missing - this should not happen with AI SDK but handle gracefully
         toast({
@@ -299,16 +219,6 @@ export function ActionPlan({
     // Note: submit and setSessionData intentionally omitted from deps to prevent infinite loops
   ]);
 
-  // Cleanup polling timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (pollingTimeoutRef.current) {
-        clearTimeout(pollingTimeoutRef.current);
-        pollingTimeoutRef.current = null;
-      }
-    };
-  }, []);
-
   // Helper function to get streaming status message
   const getStreamingMessage = (): string => {
     return language === 'es' ? 'Generando tu plan de acción...' : 'Generating your action plan...';
@@ -404,8 +314,7 @@ export function ActionPlan({
                       <div className="space-y-3">
                         {milestone?.skills?.map((skill, i: number) => skill && (
                           <div key={i}>
-                            <p className="font-medium text-slate-700 mb-1">{skill.skill}</p>
-                            <div className="text-sm text-slate-500">Learning resources will be added...</div>
+                            <p className="font-medium text-slate-700">{skill.skill}</p>
                           </div>
                         )) || (
                           <div>
@@ -586,33 +495,11 @@ export function ActionPlan({
                     <GraduationCap className="w-4 h-4" />
                     {t('actionPlan.skills', language)}
                   </h4>
-                  <div className="space-y-3">
+                  <ul className="list-disc list-inside space-y-1 text-slate-700">
                     {ms.skills.map((skill: SkillToLearn, i: number) => (
-                      <div key={i}>
-                        <p className="font-medium text-slate-700 mb-1">{skill.skill}</p>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                          {skill.youtubeLinks.map((video: YoutubeVideo, j: number) => (
-                            <a
-                              key={j}
-                              href={video.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="block group"
-                            >
-                              <img
-                                src={video.thumbnailUrl}
-                                alt={video.title}
-                                className="w-full h-32 object-cover rounded-lg shadow-sm group-hover:opacity-90 transition-opacity"
-                              />
-                              <p className="mt-1 text-sm text-slate-700 group-hover:text-primary transition-colors">
-                                {video.title}
-                              </p>
-                            </a>
-                          ))}
-                        </div>
-                      </div>
+                      <li key={i}>{skill.skill}</li>
                     ))}
-                  </div>
+                  </ul>
                 </div>
               )}
             </CardContent>

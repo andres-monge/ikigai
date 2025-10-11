@@ -153,19 +153,17 @@ import type {
   • A short, evocative **title** that conveys the purpose of this phase.
   • A **timeline** (e.g., "Weeks 1-2", "Month 3") communicating when to focus on it.
   • A bulleted list of concrete **actions** the user can perform.
-  • (Optional) Embedded **skills** the user should learn *during* this milestone, each paired with 3 curated YouTube videos returned via function call.
-  
+  • (Optional) Embedded **skills** the user should learn *during* this milestone.
+
   When providing your answer, speak directly to the user ("You should…"). The very first milestone should include something they can do *today*.
-  
+
   Your Process:
-  Step 1: **Internal Monologue (before calling function)**:
-      - Derive a logical sequence of 3-6 milestones that takes the user from zero to meaningful progress.
+  Step 1: **Derive milestones**:
+      - Create a logical sequence of 3-6 milestones that takes the user from zero to meaningful progress.
       - Identify the 2-3 most critical skills required in the *early* milestones.
-  Step 2: **Function Call**:
-      - Call the \`getYoutubeVideosForSkills\` function with the skills you identified so you can embed learning resources inside the relevant milestone(s).
-  Step 3: **Generate Final JSON**:
+  Step 2: **Generate Final JSON**:
       - Return a JSON object that matches the *milestone-based* schema (no top-level \`sideProjectIdeas\`, \`skillsToLearn\`, or \`peopleToNetworkWith\`).
-      - **IMPORTANT**: Do NOT generate YouTube video data. Only provide skill names. YouTube videos will be added automatically after streaming completes.
+      - For skills, only provide the skill name as a string.
   
   ${langInstruction}`;
   };

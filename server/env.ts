@@ -42,12 +42,6 @@ const envSchema = z.object({
     .string()
     .min(1, 'GEMINI_REASONING_MODEL cannot be empty'),
 
-
-  // YouTube Data API Configuration
-  YOUTUBE_API_KEY: z
-    .string()
-    .min(10, 'YOUTUBE_API_KEY must be at least 10 characters long'),
-
   // Optional Environment Metadata
   NODE_ENV: z
     .enum(['development', 'production', 'test'])

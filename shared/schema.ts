@@ -89,23 +89,8 @@ export type QuestionnaireResponses = z.infer<
 
 /* ----------------------- Action-plan-specific schemas ---------------------- */
 
-export const youtubeVideoSchema = z.object({
-  title: z.string(),
-  url: z.string().url(),
-  /** Medium-quality thumbnail URL for display purposes. */
-  thumbnailUrl: z.string().url(),
-});
-export type YoutubeVideo = z.infer<typeof youtubeVideoSchema>;
-
 export const skillToLearnSchema = z.object({
   skill: z.string(),
-  /** 
-   * YouTube learning videos for this skill. 
-   * Empty arrays are allowed for graceful degradation when YouTube API fails
-   * or no suitable videos are found, ensuring action plans are still delivered
-   * even when video enrichment is unavailable.
-   */
-  youtubeLinks: z.array(youtubeVideoSchema),
 });
 export type SkillToLearn = z.infer<typeof skillToLearnSchema>;
 

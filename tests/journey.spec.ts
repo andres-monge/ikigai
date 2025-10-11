@@ -260,12 +260,6 @@ test.describe('Core User Journey', () => {
         console.log('Back button not found - may be below fold or different text');
       }
       
-      // Check for YouTube video thumbnails (visible in the completed action plan)
-      const videoThumbnails = page.locator('img[src*="youtube"], img[src*="ytimg"]');
-      if (await videoThumbnails.first().isVisible({ timeout: 10000 }).catch(() => false)) {
-        console.log('YouTube enrichment completed successfully');
-      }
-      
       // Take final screenshot
       await page.screenshot({ path: 'test-screenshots/06-complete-journey.png', fullPage: true });
     });
