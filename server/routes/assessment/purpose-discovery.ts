@@ -94,12 +94,12 @@ purposeDiscoveryRouter.post("/analyze/stream", async (req, res) => {
 
       // Concurrently wait for the final validated object and save to database
       const finalObject = await result.object;
-      
+
       if (finalObject) {
         // Save to database using atomic transaction (includes both paths and analysis)
         await atomicPurposePathUpdate(
-          sessionId, 
-          session, 
+          sessionId,
+          session,
           finalObject.purposePaths,
           finalObject.coreDriversAnalysis
         );

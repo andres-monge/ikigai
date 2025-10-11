@@ -16,7 +16,7 @@
  * - wouter, lucide-react, @/hooks, @/components, @/lib, @/types
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useLocation, useSearch } from 'wouter';
 import {
   Lightbulb,
@@ -37,7 +37,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { useStreamingState } from '@/hooks/use-streaming-state';
+import { useStreamingState, createPollingSchedule, hasPositiveIds } from '@/hooks/use-streaming-state';
 import { t, type Language } from '@/lib/i18n';
 import { Skeleton } from '@/components/ui/skeleton';
 import { exportActionPlanToPDF } from '@/lib/pdf-export';
@@ -73,6 +73,9 @@ export function ActionPlan({
     isFetchingRef, 
     hasInitiatedStreamingRef 
   } = useStreamingState({ sessionId, language });
+  
+  // Polling timeout ref for proper cleanup
+  const pollingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Extract pathId from URL query parameters and resolve effective pathId
   const searchString = useSearch();
@@ -133,31 +136,73 @@ export function ActionPlan({
         // Update the hook's session state (which handles sessionStorage automatically)
         setSession(updatedSession);
         
-        // Fetch enriched data with real YouTube videos after a delay
-        setTimeout(async () => {
-          try {
-            const res = await fetch(`/api/session/${sessionId}?t=${Date.now()}`, {
-              cache: 'no-store',
-              credentials: 'include'
-            });
-            if (res.ok) {
-              const enrichedSession = await res.json();
-              // Only apply enriched data if it's complete with real YouTube videos
-              if (enrichedSession.actionPlan?.milestones?.length > 0) {
-                // Verify we're getting enrichment, not a downgrade
-                const hasRealYouTubeData = enrichedSession.actionPlan.milestones.some((m: Milestone) =>
-                  m.skills?.some((s: SkillToLearn) => s.youtubeLinks && s.youtubeLinks.length > 0)
-                );
-                if (hasRealYouTubeData || enrichedSession.actionPlan.milestones.length > cleanedObject.milestones.length) {
-                  setSessionData(enrichedSession);
-                  setSession(enrichedSession);
+        /**
+         * Smart polling for YouTube video enrichment
+         *
+         * Background: After the action plan streaming completes, the backend performs
+         * post-processing to enrich each skill with real YouTube video links. This
+         * enrichment happens asynchronously after the initial streaming is done.
+         *
+         * This polling function checks the database at exponential intervals (500ms, 1000ms,
+         * 2000ms, 4000ms, 8000ms) until YouTube videos appear in the data, then updates
+         * the UI with the enriched content.
+         */
+        const startEnrichmentPolling = () => {
+          const delays = createPollingSchedule(); // [500, 1000, 2000, 4000, 8000]
+
+          const pollForEnrichedData = async (attemptIndex: number) => {
+            try {
+              const res = await fetch(`/api/session/${sessionId}?t=${Date.now()}`, {
+                cache: 'no-store',
+                credentials: 'include'
+              });
+              if (res.ok) {
+                const enrichedSession = await res.json();
+
+                // Check for complete enriched data with YouTube videos
+                if (enrichedSession.actionPlan?.milestones?.length > 0) {
+                  const hasRealYouTubeData = enrichedSession.actionPlan.milestones.some((m: Milestone) =>
+                    m.skills?.some((s: SkillToLearn) => s.youtubeLinks && s.youtubeLinks.length > 0)
+                  );
+
+                  if (hasRealYouTubeData || enrichedSession.actionPlan.milestones.length > cleanedObject.milestones.length) {
+                    // Success! Update with enriched data
+                    setSessionData(enrichedSession);
+                    setSession(enrichedSession);
+                    pollingTimeoutRef.current = null;
+                    return; // Success, stop polling
+                  }
+                }
+
+                // Data not enriched yet, continue polling if attempts remain
+                if (attemptIndex < delays.length - 1) {
+                  pollingTimeoutRef.current = setTimeout(() => {
+                    pollForEnrichedData(attemptIndex + 1);
+                  }, delays[attemptIndex]);
+                } else {
+                  // All retries exhausted - continue without YouTube videos (graceful degradation)
+                  pollingTimeoutRef.current = null;
                 }
               }
+            } catch (error) {
+              // Network error - still try again if attempts remain
+              if (attemptIndex < delays.length - 1) {
+                pollingTimeoutRef.current = setTimeout(() => {
+                  pollForEnrichedData(attemptIndex + 1);
+                }, delays[attemptIndex]);
+              } else {
+                pollingTimeoutRef.current = null;
+              }
             }
-          } catch (error) {
-            console.error('Failed to fetch enriched session:', error);
-          }
-        }, 2000);
+          };
+
+          // Start with first delay (500ms)
+          pollingTimeoutRef.current = setTimeout(() => {
+            pollForEnrichedData(0);
+          }, delays[0]);
+        };
+        
+        startEnrichmentPolling();
       } else {
         // Object is missing - this should not happen with AI SDK but handle gracefully
         toast({
@@ -253,6 +298,16 @@ export function ActionPlan({
     navigate
     // Note: submit and setSessionData intentionally omitted from deps to prevent infinite loops
   ]);
+
+  // Cleanup polling timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingTimeoutRef.current) {
+        clearTimeout(pollingTimeoutRef.current);
+        pollingTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   // Helper function to get streaming status message
   const getStreamingMessage = (): string => {

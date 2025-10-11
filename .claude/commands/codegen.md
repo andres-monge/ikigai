@@ -1,9 +1,9 @@
-We are in the process of building the project described in docs/tech-spec.md.
-We are doing this by going through the steps described in docs/implementation-plan.md.
+We are in the process of building the project described in @docs/tech-spec.md.
+We are doing this by going through the steps described in @docs/implementation-plan.md.
 
 ## Instructions
 
-For the next unchecked step in docs/implementation-plan.md, follow the exploreâ†’planâ†’code framework to ensure a systematic and thorough implementation approach:
+For the next unchecked step in @docs/implementation-plan.md, follow the exploreâ†’planâ†’code framework to ensure a systematic and thorough implementation approach:
 
 ### 1. EXPLORE Phase
 - Use search tools to understand the codebase structure  
@@ -22,8 +22,8 @@ For the next unchecked step in docs/implementation-plan.md, follow the exploreâ†
 - Consider edge cases and error handling  
 - Plan for testing and validation 
 - PLEASE: Ask any clarifying questions you need to deliver the best possible version of the task. IMPORTANT: For each question, you must provide your recommendation.
-- Explain your plan (including an overview of the relevant programming concepts) for a beginner so they can understand what your code will be doing and are able to evaluate the implementation of the step.
-- Go back and forth with me until we have a clear, complete understanding of the task and the plan.
+- Present your plan. IMPORTANT: you must explain and present your plan in a beginner-friendly way, with the goal that I am able to fully understand, evaluate, and if necessary, steer the implementation of the plan.
+- If necessary, we will go back and forth until we have a clear, complete understanding of the task and the plan.
 - Do not write code until we have a complete plan and I approve the plan. Once I approve the plan, move on to the CODE Phase.
 
 
@@ -31,7 +31,7 @@ For the next unchecked step in docs/implementation-plan.md, follow the exploreâ†
 - Work through your todo list systematically    
 - Follow existing code conventions and patterns discovered during exploration    
 - Verify the solution works as expected by testing it.
-- Mark task as completed after verification & note decisions/bugs in @implementation-plan.md
+- Mark task as completed after verification & note decisions in @implementation-plan.md
 - Do not proceed to work on the next step, I will want to verify the implementation of the existing step first.
 
 **Remember:**  
@@ -40,4 +40,4 @@ For the next unchecked step in docs/implementation-plan.md, follow the exploreâ†
 - Follow existing patterns and conventions  
 - Test and validate your implementation  
 - Keep the user informed of your progress  
-- You also have permission to modify and update the implementation plan or tech spec if needed, but ask for permission before you do so
+- You can modify and update the implementation plan or tech spec if needed, but ask for permission before you do so

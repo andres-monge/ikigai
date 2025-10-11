@@ -23,7 +23,7 @@
  * - @/types/assessment: For the `FullAssessment` type.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useLocation } from 'wouter';
 import { Download, RotateCcw, Rocket, Users, Code } from 'lucide-react';
 import { experimental_useObject as useObject } from '@ai-sdk/react';
@@ -35,9 +35,9 @@ import { CoreDriversSummary } from '@/components/results/core-drivers-summary';
 import { PurposePaths } from '@/components/results/purpose-paths';
 import { t, type Language } from '@/lib/i18n';
 import { exportToPDF } from '@/lib/pdf-export';
-import { useStreamingState } from '@/hooks/use-streaming-state';
+import { useStreamingState, createPollingSchedule, hasPositiveIds } from '@/hooks/use-streaming-state';
 import { useToast } from '@/hooks/use-toast';
-import type { FullAssessment } from '@/types/assessment';
+import type { FullAssessment, PurposePath } from '@/types/assessment';
 
 /* -------------------------------------------------------------------------- */
 /* Streaming Schema - Imported from Shared Source of Truth                  */
@@ -69,6 +69,9 @@ export function Results({
     isFetchingRef, 
     hasInitiatedStreamingRef 
   } = useStreamingState({ sessionId, language });
+  
+  // Polling timeout ref for proper cleanup
+  const pollingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // useObject hook for purpose discovery streaming
   const { object, submit, isLoading, error } = useObject({
@@ -106,25 +109,69 @@ export function Results({
         setSession(updatedSession);
         setNeedsStreaming(false);
         
-        // Background fetch to get DB-persisted version after delay
-        setTimeout(async () => {
-          try {
-            const res = await fetch(`/api/session/${sessionId}`, { 
-              cache: 'no-store', 
-              credentials: 'include' 
-            });
-            if (res.ok) {
-              const dbSession = await res.json();
-              
-              // Only apply DB session if it has complete data (prevent downgrades)
-              if (dbSession.coreDriversAnalysis && dbSession.purposePaths?.length === 3) {
-                setSession(dbSession);
+        /**
+         * Smart polling to replace temporary negative IDs with real database IDs
+         *
+         * Background: After streaming completes, the frontend immediately assigns temporary
+         * negative IDs (-1, -2, -3) to allow UI rendering. Meanwhile, the backend saves
+         * the data to the database with real positive IDs. This process can take 20-25 seconds.
+         *
+         * This polling function checks the database at exponential intervals (500ms, 1000ms,
+         * 2000ms, 4000ms, 8000ms) until positive IDs are found, then replaces the temporary
+         * negative IDs with the real ones. This prevents 404 errors when users navigate to
+         * the Action Plan page.
+         */
+        const startSmartPolling = () => {
+          const delays = createPollingSchedule(); // [500, 1000, 2000, 4000, 8000]
+
+          const pollForPositiveIds = async (attemptIndex: number) => {
+            try {
+              const res = await fetch(`/api/session/${sessionId}`, {
+                cache: 'no-store',
+                credentials: 'include'
+              });
+              if (res.ok) {
+                const dbSession = await res.json();
+
+                // Check for complete data with positive IDs
+                if (dbSession.coreDriversAnalysis &&
+                    dbSession.purposePaths?.length === 3 &&
+                    hasPositiveIds(dbSession.purposePaths)) {
+                  // Success! Replace negative IDs with positive database IDs
+                  setSession(dbSession);
+                  pollingTimeoutRef.current = null;
+                  return; // Success, stop polling
+                }
+
+                // Data not ready yet, continue polling if attempts remain
+                if (attemptIndex < delays.length - 1) {
+                  pollingTimeoutRef.current = setTimeout(() => {
+                    pollForPositiveIds(attemptIndex + 1);
+                  }, delays[attemptIndex]);
+                } else {
+                  // All retries exhausted - continue with negative IDs (graceful degradation)
+                  pollingTimeoutRef.current = null;
+                }
+              }
+            } catch (error) {
+              // Network error - still try again if attempts remain
+              if (attemptIndex < delays.length - 1) {
+                pollingTimeoutRef.current = setTimeout(() => {
+                  pollForPositiveIds(attemptIndex + 1);
+                }, delays[attemptIndex]);
+              } else {
+                pollingTimeoutRef.current = null;
               }
             }
-          } catch (error) {
-            console.error('Background session fetch failed (non-critical):', error);
-          }
-        }, 1000);
+          };
+
+          // Start with first delay (500ms)
+          pollingTimeoutRef.current = setTimeout(() => {
+            pollForPositiveIds(0);
+          }, delays[0]);
+        };
+        
+        startSmartPolling();
       } else {
         // Object is missing - this should not happen with AI SDK but handle gracefully
         toast({
@@ -201,6 +248,16 @@ export function Results({
     language
     // Note: submit intentionally omitted from deps to prevent infinite loops
   ]);
+
+  // Cleanup polling timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingTimeoutRef.current) {
+        clearTimeout(pollingTimeoutRef.current);
+        pollingTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   const handleChoosePath = (pathId: number) => {
     if (typeof pathId !== 'number') return;

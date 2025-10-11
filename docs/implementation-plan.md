@@ -508,11 +508,12 @@ This phase removes all deprecated code to finalize the AI SDK-only architecture,
 
 ### Code Organization
 
-- [ ] Step 22.6: Extract Common Streaming Logic
+- [X] Step 22.6: Extract Common Streaming Logic
   - **Task**: Create `client/src/hooks/use-streaming-state.ts` with a hook that handles the common pattern: initial session fetch, streaming detection logic (missing data check), and session storage management. Both Results and Action Plan pages can use this to reduce duplication while keeping their specific business logic. Don't over-abstract - just extract the truly common initialization and detection patterns.
   - **Suggested Files for Context**: `client/src/pages/results.tsx`, `client/src/pages/action-plan.tsx`
   - **Step Dependencies**: Steps 22.1, 22.3
   - **Why**: Both pages have nearly identical session loading and streaming detection logic. Extracting reduces maintenance burden
+  - **Implementation Notes**: Additionally addressed negative path ID race condition bug. The solution replaces a single 1-second timeout with an intelligent exponential backoff polling system that gives the database adequate time to save data while still responding quickly when possible. See Results and Action Plan page JSDoc for details.
 
 ---
 

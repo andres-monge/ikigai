@@ -166,3 +166,19 @@ export function useStreamingState({
     clearSessionStorage
   };
 }
+
+/**
+ * Generate exponential backoff delays for smart polling
+ * Returns: [500, 1000, 2000, 4000, 8000] (total ~15.5 seconds max wait)
+ */
+export const createPollingSchedule = (): number[] => {
+  return [500, 1000, 2000, 4000, 8000];
+};
+
+/**
+ * Check if all purpose paths have positive database IDs (not temporary negative IDs)
+ */
+export const hasPositiveIds = (purposePaths: Array<{ id: number }> | undefined): boolean => {
+  if (!purposePaths || purposePaths.length === 0) return false;
+  return purposePaths.every(path => path.id > 0);
+};
