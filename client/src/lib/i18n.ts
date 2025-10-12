@@ -56,7 +56,7 @@ export const translations: Record<string, Record<string, string>> = {
     'actionPlan.exportPdf': 'Export as PDF',
     'actionPlan.backToPaths': 'Back to Paths',
     'actionPlan.actions': 'Actions',
-    'actionPlan.skills': 'Learn What You Need',
+    'actionPlan.skills': 'Skills You\'ll Develop',
 
     // Ikigai
     'ikigai.alignment': 'Ikigai Alignment',
@@ -114,7 +114,7 @@ export const translations: Record<string, Record<string, string>> = {
     'actionPlan.exportPdf': 'Exportar como PDF',
     'actionPlan.backToPaths': 'Volver a los caminos',
     'actionPlan.actions': 'Acciones',
-    'actionPlan.skills': 'Aprende lo que necesitas',
+    'actionPlan.skills': 'Habilidades que desarrollarás',
 
     // Ikigai
     'ikigai.alignment': 'Encaje Ikigai',

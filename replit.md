@@ -37,30 +37,30 @@ Preferred communication style: Simple, everyday language.
 1. **SinglePageQuestionnaire**: All 8 questions on one page with auto-sizing textareas
 3. **LoadingOverlay**: Full-screen loading states during AI processing
 4. **Results Components**: Core drivers summary and purpose path selection
-5. **ActionPlan**: Detailed step-by-step guidance with YouTube video integration
+5. **ActionPlan**: Detailed step-by-step guidance with milestone-based roadmap
 
 ### Backend Modules
 1. **AI Chains**: Modular AI processing pipelines
    - Purpose Discovery Chain: Generates core drivers and 3 purpose paths
    - Action Plan Chain: Creates detailed implementation steps
-2. **Storage Layer**: Abstract interface with in-memory implementation
-3. **Cache System**: TTL-based caching for salary data and YouTube videos
+2. **Storage Layer**: Abstract interface with PostgreSQL implementation
+3. **Cache System**: Generic TTL-based caching infrastructure
 
 ### AI Integration Strategy
-- **Two-Call Chain**: Specialized models for research (facts) vs. analysis (reasoning)
-- **Function Calling**: Structured tool use for salary lookup and YouTube search
+- **Vercel AI SDK**: Structured streaming with `streamObject` for reliable output
+- **Single Model**: GEMINI_REASONING_MODEL for all AI generation tasks
 - **Prompt Engineering**: Separate prompt templates for different AI tasks
-- **Error Handling**: Exponential backoff retry logic for API reliability
+- **Error Handling**: Comprehensive error logging and graceful degradation
 
 ## Data Flow
 
 ### User Journey Flow
 1. **Landing**: User sees questionnaire directly on home page
-2. **Assessment**: 8 questions submitted as single payload to `/api/analyze`
-3. **AI Processing**: Backend runs purpose discovery chain with salary research
-4. **Results**: User reviews 3 purpose paths with salary benchmarks
-5. **Path Selection**: User chooses path, triggers action plan generation
-6. **Action Plan**: Detailed implementation steps with YouTube resources
+2. **Assessment**: 8 questions submitted to `/api/questionnaire/save`
+3. **AI Processing**: Backend streams purpose discovery with real-time updates
+4. **Results**: User reviews 3 purpose paths with ikigai alignment
+5. **Path Selection**: User chooses path, triggers action plan streaming
+6. **Action Plan**: Detailed milestone-based implementation roadmap
 
 ### Data Storage Pattern
 - **Session Storage**: Client-side persistence of assessment results
@@ -69,20 +69,16 @@ Preferred communication style: Simple, everyday language.
 
 ### AI Processing Pipeline
 1. **Questionnaire Parsing**: Convert user responses to structured format
-2. **Salary Research**: Use search-enabled model for current market data
-3. **Purpose Analysis**: Apply reasoning model to generate insights
-4. **Action Planning**: Create detailed implementation steps
-5. **YouTube Integration**: Fetch relevant tutorial videos for skills
+2. **Purpose Analysis**: Stream AI-generated insights with Zod validation
+3. **Database Persistence**: Save validated results with atomic transactions
+4. **Action Planning**: Stream milestone-based roadmap with skills to learn
 
 ## External Dependencies
 
 ### AI Services
-- **Google Gemini API**: Primary reasoning and search capabilities
-- **Model Configuration**: Separate reasoning and facts models
-- **Function Calling**: Structured tool integration for external data
-
-### Third-Party APIs
-- **YouTube Data API v3**: Educational video recommendations
+- **Google Gemini API**: Primary AI generation via Vercel AI SDK
+- **Model Configuration**: Single GEMINI_REASONING_MODEL for all tasks
+- **Structured Streaming**: Real-time validated output with `streamObject`
 
 ### Development Tools
 - **Drizzle Kit**: Database migrations and schema management
@@ -106,8 +102,7 @@ Preferred communication style: Simple, everyday language.
 ### Environment Variables
 - `GEMINI_API_KEY`: Google AI authentication
 - `GEMINI_REASONING_MODEL`: Primary analysis model
-- `YOUTUBE_API_KEY`: Video recommendations
-- `DATABASE_URL`: PostgreSQL connection (future migration)
+- `DATABASE_URL`: PostgreSQL connection string
 
 ### File Structure
 ```

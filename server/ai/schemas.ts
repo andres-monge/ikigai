@@ -23,15 +23,6 @@ export {
   type ActionPlanResult
 } from '@shared/streaming-schemas';
 
-// ========= SERVER-ONLY SCHEMAS =========
-
-export const youtubeFunctionArgSchema = z.object({
-  skills: z
-    .array(z.string().describe("A specific skill to learn, e.g., 'React'"))
-    .min(1),
-});
-export type YoutubeFunctionArgs = z.infer<typeof youtubeFunctionArgSchema>;
-
 // ========= OPENAPI SCHEMAS FOR FORCED JSON OUTPUT =========
 
 export const purposeDiscoveryOpenApiSchema = {
@@ -135,23 +126,11 @@ export const actionPlanOpenApiSchema = {
           skills: {
             type: 'ARRAY',
             description:
-              'Optional list of skills relevant to this milestone, each with embedded YouTube resources.',
+              'Optional list of skills relevant to this milestone.',
             items: {
               type: 'OBJECT',
               properties: {
                 skill: { type: 'STRING' },
-                youtubeLinks: {
-                  type: 'ARRAY',
-                  items: {
-                    type: 'OBJECT',
-                    properties: {
-                      title: { type: 'STRING' },
-                      url: { type: 'STRING' },
-                      thumbnailUrl: { type: 'STRING' },
-                    },
-                    required: ['title', 'url', 'thumbnailUrl'],
-                  },
-                },
               },
               required: ['skill'],
             },
