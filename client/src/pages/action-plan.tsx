@@ -25,6 +25,7 @@ import {
   MessageCircle,
   ArrowLeft,
   ClipboardCheck,
+  RotateCcw,
 } from 'lucide-react';
 import { experimental_useObject as useObject } from '@ai-sdk/react';
 import { z } from 'zod';
@@ -59,6 +60,7 @@ interface ActionPlanProps {
 export function ActionPlan({
   language,
   sessionId,
+  onStartOver,
 }: ActionPlanProps) {
   const [location, navigate] = useLocation();
   const { toast } = useToast();
@@ -221,7 +223,7 @@ export function ActionPlan({
 
   // Helper function to get streaming status message
   const getStreamingMessage = (): string => {
-    return language === 'es' ? 'Generando tu plan de acción...' : 'Generating your action plan...';
+    return language === 'es' ? 'Generando tu Plan de acción...' : 'Generating your Action Plan...';
   };
 
   if (isFetchingSession) {
@@ -428,6 +430,14 @@ export function ActionPlan({
             <ArrowLeft className="w-4 h-4 mr-2" />
             {t('actionPlan.backToResults', language)}
           </Button>
+          <Button
+            onClick={onStartOver}
+            variant="outline"
+            className="border border-slate-300 text-slate-700 px-8 py-4 rounded-xl font-semibold hover:bg-slate-50 transition-all duration-200"
+          >
+            <RotateCcw className="w-4 h-4 mr-2" />
+            {t('results.startOver', language)}
+          </Button>
         </div>
       </div>
     );
@@ -521,6 +531,14 @@ export function ActionPlan({
         <Button onClick={handleExportPDF} size="lg">
           <Download className="w-4 h-4 mr-2" />
           {t('actionPlan.exportPdf', language)}
+        </Button>
+        <Button
+          onClick={onStartOver}
+          variant="outline"
+          className="border border-slate-300 text-slate-700 px-8 py-4 rounded-xl font-semibold hover:bg-slate-50 transition-all duration-200"
+        >
+          <RotateCcw className="w-4 h-4 mr-2" />
+          {t('results.startOver', language)}
         </Button>
       </div>
     </div>
