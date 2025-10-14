@@ -33,6 +33,16 @@ export function CoreDriversSummary({
   analysis,
   language,
 }: CoreDriversSummaryProps) {
+  /**
+   * Normalize the coreThreads text to ensure proper markdown formatting.
+   * The AI sometimes generates inline numbered lists like "1. Text 2. Text 3. Text"
+   * instead of properly formatted markdown with line breaks between items.
+   * This function ensures each numbered item starts on a new line.
+   */
+  const normalizedCoreThreads = analysis.coreThreads
+    .replace(/(\d+\.)/g, '\n$1') // Add newline before each number
+    .trim(); // Remove leading/trailing whitespace
+
   return (
     <div className="bg-white rounded-2xl shadow-lg p-8 mb-8">
 
@@ -48,14 +58,14 @@ export function CoreDriversSummary({
                 <p className="text-slate-600" {...props} />
               ),
               ol: ({ node, ...props }) => (
-                <ol className="list-decimal list-inside space-y-2" {...props} />
+                <ol className="list-decimal list-outside ml-6 space-y-3" {...props} />
               ),
               li: ({ node, ...props }) => (
-                <li className="text-slate-600" {...props} />
+                <li className="text-slate-600 pl-2" {...props} />
               ),
             }}
           >
-            {analysis.coreThreads}
+            {normalizedCoreThreads}
           </ReactMarkdown>
         </div>
       </div>
