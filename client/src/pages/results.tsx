@@ -219,8 +219,7 @@ export function Results({
         description: t('results.loadSessionError', language),
         variant: 'destructive',
       });
-      // Delay navigation slightly to allow user to see the toast
-      setTimeout(() => navigate('/'), 2000);
+      navigate('/');
       return;
     }
 

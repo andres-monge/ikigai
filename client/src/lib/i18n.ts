@@ -28,6 +28,7 @@ export const translations: Record<string, Record<string, string>> = {
 
     // Home
     'home.questionnaireTitle': 'Answer 8 questions, let our AI change your life.',
+    'home.returnToPaths': 'Return to Purpose Paths',
 
     // Questionnaire
     'questionnaire.complete': 'Show Me My Purpose',
@@ -86,6 +87,7 @@ export const translations: Record<string, Record<string, string>> = {
 
     // Home
     'home.questionnaireTitle': 'Responde 8 preguntas, deja que nuestra IA cambie tu vida.',
+    'home.returnToPaths': 'Volver a tus caminos',
 
     // Questionnaire
     'questionnaire.complete': 'Enséñame mi propósito',

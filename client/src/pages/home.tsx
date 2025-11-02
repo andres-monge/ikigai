@@ -7,10 +7,13 @@
  * completely self-contained inside the router.
  */
 
-import { UserX } from 'lucide-react';
+import { UserX, ArrowRight } from 'lucide-react';
 import React from 'react';
+import { useLocation } from 'wouter';
 import { t, type Language } from '@/lib/i18n';
 import { SinglePageQuestionnaire } from '@/components/questionnaire/single-page-questionnaire';
+import { useSessionStorage } from '@/hooks/use-session-storage';
+import type { FullAssessment } from '@/types/assessment';
 
 interface HomeProps {
   /** Current UI language */
@@ -20,10 +23,28 @@ interface HomeProps {
 }
 
 export function Home({ language, sessionId }: HomeProps) {
+  const [, navigate] = useLocation();
+  const [session] = useSessionStorage<FullAssessment | null>('session', null);
+
+  // Check if user has existing results (only check local cache, don't fetch from server)
+  const hasResults = session?.coreDriversAnalysis || (session?.purposePaths?.length ?? 0) > 0;
 
   return (
     <div className="text-center mb-12">
       <div className="max-w-3xl mx-auto">
+        {/* Resume banner - only show if results exist */}
+        {hasResults && (
+          <div className="bg-blue-50 border-2 border-blue-300 rounded-xl p-4 mb-6 flex items-center justify-center">
+            <button
+              onClick={() => navigate('/results')}
+              className="text-blue-900 font-medium hover:text-blue-700 transition-colors flex items-center gap-2"
+            >
+              {t('home.returnToPaths', language)}
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
         {/* Hero */}
         <div
           className="relative mb-8 rounded-2xl overflow-hidden shadow-xl p-6"
