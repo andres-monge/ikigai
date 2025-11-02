@@ -92,7 +92,7 @@ export function logAIStreamError(context: AIStreamErrorContext): void {
     input: userInput ? sanitizeInput(userInput) : undefined,
     model: {
       id: env.GEMINI_REASONING_MODEL,
-      temperature: 0.3, // Match the temperature used in streaming chains
+      temperature: env.GEMINI_TEMPERATURE,
     },
   };
 

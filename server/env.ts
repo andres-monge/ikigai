@@ -42,6 +42,15 @@ const envSchema = z.object({
     .string()
     .min(1, 'GEMINI_REASONING_MODEL cannot be empty'),
 
+  // Gemini Model Configuration
+  GEMINI_TEMPERATURE: z
+    .string()
+    .default('0.3')
+    .transform((val) => parseFloat(val))
+    .refine((val) => !isNaN(val) && val >= 0 && val <= 1, {
+      message: 'GEMINI_TEMPERATURE must be a number between 0 and 1',
+    }),
+
   // Optional Environment Metadata
   NODE_ENV: z
     .enum(['development', 'production', 'test'])

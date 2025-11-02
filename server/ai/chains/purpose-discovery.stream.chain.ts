@@ -48,7 +48,7 @@ export async function getPurposeDiscoveryStreamChain(
         model: google(env.GEMINI_REASONING_MODEL),
         schema: purposeDiscoveryResultSchema,
         prompt: systemPrompt,
-        temperature: 0.3, // Lower temperature for more consistent structured output
+        temperature: env.GEMINI_TEMPERATURE,
       });
 
       return result;
