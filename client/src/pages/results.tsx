@@ -273,7 +273,7 @@ export function Results({
 
   // Helper function to get streaming status message
   const getStreamingMessage = (): string => {
-    return language === 'es' ? 'Generando tu análisis...' : 'Generating your analysis...';
+    return t('results.streaming', language);
   };
 
   // Show loading UI if we're fetching session from server

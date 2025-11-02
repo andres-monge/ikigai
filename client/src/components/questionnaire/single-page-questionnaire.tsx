@@ -30,7 +30,6 @@ import { useLocation } from 'wouter';
 import TextareaAutosize from 'react-textarea-autosize';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { LoadingOverlay } from '@/components/loading-overlay';
 import { useSessionStorage } from '@/hooks/use-session-storage';
 import { useCreateAssessment } from '@/hooks/use-create-assessment';
 import { useToast } from '@/hooks/use-toast';
@@ -171,12 +170,11 @@ export function SinglePageQuestionnaire({
 
       <Button
         onClick={handleSubmit}
-        className="mt-8 px-8 py-4 font-semibold shadow-lg hover:shadow-xl transition-all duration-200 bg-purple-600 hover:bg-purple-700 text-white"
+        disabled={isPending}
+        className="mt-8 px-8 py-4 font-semibold shadow-lg hover:shadow-xl transition-all duration-200 bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {t('questionnaire.complete', language)}
+        {isPending ? t('questionnaire.saving', language) : t('questionnaire.complete', language)}
       </Button>
-
-      <LoadingOverlay isVisible={isPending} language={language} />
     </div>
   );
 } 

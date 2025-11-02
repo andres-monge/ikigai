@@ -32,6 +32,7 @@ export const translations: Record<string, Record<string, string>> = {
 
     // Questionnaire
     'questionnaire.complete': 'Show Me My Purpose',
+    'questionnaire.saving': 'Saving...',
 
 
 
@@ -43,11 +44,12 @@ export const translations: Record<string, Record<string, string>> = {
     'results.choosePathAndGetPlan': 'Get Action Plan',
     'results.actionStrategy': 'Action Strategy',
     'results.actionPlanError':
-      'Could not generate an action plan. Please try again.',
+      'Could not generate an Action Plan. Please try again.',
     'results.loadingSession': 'Loading your session...',
     'results.loadSessionError': 'Failed to load your session. Please try again.',
     'results.saveAnalysisError': 'Failed to save analysis results.',
     'results.analysisFailedError': 'Analysis failed. Please try again.',
+    'results.streaming': 'Cooking up some options for you...',
 
     // Action Plan
     'actionPlan.title': 'Your Action Plan',
@@ -58,6 +60,7 @@ export const translations: Record<string, Record<string, string>> = {
     'actionPlan.backToPaths': 'Back to Paths',
     'actionPlan.actions': 'Actions',
     'actionPlan.skills': 'Skills You\'ll Develop',
+    'actionPlan.streaming': 'A goal without a plan is just a wish...',
 
     // Ikigai
     'ikigai.alignment': 'Ikigai Alignment',
@@ -65,12 +68,6 @@ export const translations: Record<string, Record<string, string>> = {
     'ikigai.goodAt': 'Good At',
     'ikigai.worldNeeds': 'Meaningful',
     'ikigai.pay': 'Pay',
-
-
-
-    // Loading
-    'loading.title': 'Our AIs are cooking.',
-    'loading.description': 'This will only take a minute.',
 
     // Common
     'common.error': 'Something went wrong. Please try again.',
@@ -91,6 +88,7 @@ export const translations: Record<string, Record<string, string>> = {
 
     // Questionnaire
     'questionnaire.complete': 'Enséñame mi propósito',
+    'questionnaire.saving': 'Guardando...',
 
 
 
@@ -107,6 +105,7 @@ export const translations: Record<string, Record<string, string>> = {
     'results.loadSessionError': 'No se pudo cargar tu sesión. Por favor, inténtalo de nuevo.',
     'results.saveAnalysisError': 'No se pudieron guardar los resultados del análisis.',
     'results.analysisFailedError': 'El análisis falló. Por favor, inténtalo de nuevo.',
+    'results.streaming': 'Preparándote unas cuantas opciones...',
 
     // Action Plan
     'actionPlan.title': 'Tu Plan de acción',
@@ -117,6 +116,7 @@ export const translations: Record<string, Record<string, string>> = {
     'actionPlan.backToPaths': 'Volver a los caminos',
     'actionPlan.actions': 'Acciones',
     'actionPlan.skills': 'Habilidades que desarrollarás',
+    'actionPlan.streaming': 'Un objetivo sin un plan es solo un deseo...',
 
     // Ikigai
     'ikigai.alignment': 'Encaje Ikigai',
@@ -124,12 +124,6 @@ export const translations: Record<string, Record<string, string>> = {
     'ikigai.goodAt': 'Se te da bien',
     'ikigai.worldNeeds': 'Gratificante',
     'ikigai.pay': 'Paga',
-
-
-
-    // Loading
-    'loading.title': 'Las IAs están cocinando',
-    'loading.description': 'Tardará un minuto.',
 
     // Common
     'common.error': 'Algo salió mal. Por favor inténtalo de nuevo.',

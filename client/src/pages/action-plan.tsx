@@ -223,7 +223,7 @@ export function ActionPlan({
 
   // Helper function to get streaming status message
   const getStreamingMessage = (): string => {
-    return language === 'es' ? 'Generando tu Plan de acción...' : 'Generating your Action Plan...';
+    return t('actionPlan.streaming', language);
   };
 
   if (isFetchingSession) {
