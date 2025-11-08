@@ -241,7 +241,6 @@ export function Results({
     session?.sessionId,
     !!session?.coreDriversAnalysis,  // Boolean coercion for stability
     isFetchingSession,
-    needsStreaming,
     navigate,
     toast,
     language

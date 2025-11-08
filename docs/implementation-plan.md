@@ -560,10 +560,20 @@ This phase adds delightful audio feedback to enhance user experience during inte
 
 ---
 
-[ ] Step 25: Implement Background Music Hook
+[X] Step 25: Implement Background Music Hook
 **Task**: Create a new custom React hook `client/src/hooks/use-background-music.ts` that plays background music selected randomly during waiting periods. The hook should accept an array of track file paths and return `{ play, stop }` functions. The `play` function should randomly select a track from the array, create a new `HTMLAudioElement`, set volume to 0.3 (quieter than click sounds), and start playback. The `stop` function should pause the current audio, reset `currentTime` to 0, and clear the audio reference. Use `useRef` to store the current audio instance and `useCallback` to memoize the functions. Add cleanup logic with `useEffect` to stop music when the component unmounts. Test immediately with existing audio files.
 **Suggested Files for Context**: `client/src/hooks/use-sound-effect.ts`, `client/src/hooks/use-session-storage.ts` (for React patterns)
 **Step Dependencies**: Step 24
+**Implementation Notes**:
+- Created `client/src/hooks/use-background-music.ts` with complete hook implementation
+- Implemented random track selection from array using `Math.floor(Math.random() * tracks.length)`
+- Added looping functionality (`audio.loop = true`) so music continues until explicitly stopped
+- Implemented graceful empty array handling with console warning
+- Used `useCallback` to memoize `play` and `stop` functions for performance
+- Added cleanup logic in `useEffect` to stop music on component unmount
+- Volume set to 0.3 (30%) - quieter than sound effects at 0.5 (50%)
+- Creates new audio element on each `play()` call (unlike sound effects which cache one element)
+- Stops any currently playing music before starting new track to prevent overlaps
 
 ---
 
