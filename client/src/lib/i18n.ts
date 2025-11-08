@@ -27,7 +27,7 @@ export const translations: Record<string, Record<string, string>> = {
     'welcome.noAccount': 'No account required',
 
     // Home
-    'home.questionnaireTitle': 'Answer 8 questions, let our AI change your life.',
+    'home.questionnaireTitle': 'Answer 8 questions, change your life.',
     'home.returnToPaths': 'Return to Purpose Paths',
 
     // Questionnaire
@@ -49,7 +49,7 @@ export const translations: Record<string, Record<string, string>> = {
     'results.loadSessionError': 'Failed to load your session. Please try again.',
     'results.saveAnalysisError': 'Failed to save analysis results.',
     'results.analysisFailedError': 'Analysis failed. Please try again.',
-    'results.streaming': 'Cooking up some options for you...',
+    'results.streaming': 'Cooking up some options. It\'s better to climb slowly up the right mountain than fast up the wrong one',
 
     // Action Plan
     'actionPlan.title': 'Your Action Plan',
@@ -83,7 +83,7 @@ export const translations: Record<string, Record<string, string>> = {
     'welcome.noAccount': 'No requiere cuenta',
 
     // Home
-    'home.questionnaireTitle': 'Responde 8 preguntas, deja que nuestra IA cambie tu vida.',
+    'home.questionnaireTitle': 'Responde 8 preguntas, cambia tu vida.',
     'home.returnToPaths': 'Volver a tus caminos',
 
     // Questionnaire
@@ -104,8 +104,8 @@ export const translations: Record<string, Record<string, string>> = {
     'results.loadingSession': 'Cargando tu sesión...',
     'results.loadSessionError': 'No se pudo cargar tu sesión. Por favor, inténtalo de nuevo.',
     'results.saveAnalysisError': 'No se pudieron guardar los resultados del análisis.',
-    'results.analysisFailedError': 'El análisis falló. Por favor, inténtalo de nuevo.',
-    'results.streaming': 'Preparándote unas cuantas opciones...',
+    'results.analysisFailedError': 'El análisis tuvo un error. Por favor, inténtalo de nuevo.',
+    'results.streaming': 'Preparándote opciones. Es mejor escalar la montaña correcta lentamente que la incorrecta rápidamente',
 
     // Action Plan
     'actionPlan.title': 'Tu Plan de acción',
