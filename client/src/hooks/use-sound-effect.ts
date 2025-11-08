@@ -26,9 +26,10 @@ export function useSoundEffect(soundPath: string) {
   useEffect(() => {
     // Create audio element and configure it
     const audio = new Audio(soundPath);
-    audio.volume = 0.5; // Set volume to 50%
+    audio.volume = 0.3; // Set volume to 30%
     audio.preload = 'auto'; // Preload audio for immediate playback
-    
+    audio.load(); // Explicitly force loading (preload='auto' is just a hint)
+
     audioRef.current = audio;
 
     // Cleanup: pause and remove reference when component unmounts

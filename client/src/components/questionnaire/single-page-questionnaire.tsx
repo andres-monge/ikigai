@@ -33,6 +33,7 @@ import { Button } from '@/components/ui/button';
 import { useSessionStorage } from '@/hooks/use-session-storage';
 import { useCreateAssessment } from '@/hooks/use-create-assessment';
 import { useToast } from '@/hooks/use-toast';
+import { useSoundEffect } from '@/hooks/use-sound-effect';
 import { t, type Language } from '@/lib/i18n';
 import { QUESTIONS, buildFlatQuestionList } from './questions';
 import type {
@@ -79,6 +80,7 @@ export function SinglePageQuestionnaire({
 
   const { toast } = useToast();
   const [, navigate] = useLocation();
+  const { play: playPrimarySound } = useSoundEffect('/sounds/click-primary.mp3');
 
   /* ------------------------------ Build UI list --------------------------- */
   const flatQuestions = useMemo(() => buildFlatQuestionList(language), [language]);
@@ -110,6 +112,7 @@ export function SinglePageQuestionnaire({
   };
 
   const handleSubmit = () => {
+
     // Basic validation: ensure every required field is filled.
     const unanswered = flatQuestions.find(({ id }) => !answers[id]?.trim());
     if (unanswered) {
@@ -159,7 +162,7 @@ export function SinglePageQuestionnaire({
               onChange={(e: ChangeEvent<HTMLTextAreaElement>) =>
                 handleTextareaChange(id, e.target.value)
               }
-              className="w-full resize-none border rounded-md p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="w-full resize-none border rounded-md p-3 bg-background text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               minRows={3}
               maxRows={10}
               required
@@ -169,6 +172,7 @@ export function SinglePageQuestionnaire({
       </div>
 
       <Button
+        onPointerDown={playPrimarySound}
         onClick={handleSubmit}
         disabled={isPending}
         className="mt-8 px-8 py-4 font-semibold shadow-lg hover:shadow-xl transition-all duration-200 bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"

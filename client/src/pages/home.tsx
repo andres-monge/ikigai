@@ -13,6 +13,7 @@ import { useLocation } from 'wouter';
 import { t, type Language } from '@/lib/i18n';
 import { SinglePageQuestionnaire } from '@/components/questionnaire/single-page-questionnaire';
 import { useSessionStorage } from '@/hooks/use-session-storage';
+import { useSoundEffect } from '@/hooks/use-sound-effect';
 import type { FullAssessment } from '@/types/assessment';
 
 interface HomeProps {
@@ -25,9 +26,14 @@ interface HomeProps {
 export function Home({ language, sessionId }: HomeProps) {
   const [, navigate] = useLocation();
   const [session] = useSessionStorage<FullAssessment | null>('session', null);
+  const { play: playReturnSound } = useSoundEffect('/sounds/click-return.mp3');
 
   // Check if user has existing results (only check local cache, don't fetch from server)
   const hasResults = session?.coreDriversAnalysis || (session?.purposePaths?.length ?? 0) > 0;
+
+  const handleReturnToPaths = () => {
+    navigate('/results');
+  };
 
   return (
     <div className="text-center mb-12">
@@ -36,7 +42,8 @@ export function Home({ language, sessionId }: HomeProps) {
         {hasResults && (
           <div className="bg-blue-50 border-2 border-blue-300 rounded-xl p-4 mb-6 flex items-center justify-center">
             <button
-              onClick={() => navigate('/results')}
+              onPointerDown={playReturnSound}
+              onClick={handleReturnToPaths}
               className="text-blue-900 font-medium hover:text-blue-700 transition-colors flex items-center gap-2"
             >
               {t('home.returnToPaths', language)}

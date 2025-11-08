@@ -49,7 +49,7 @@ export const translations: Record<string, Record<string, string>> = {
     'results.loadSessionError': 'Failed to load your session. Please try again.',
     'results.saveAnalysisError': 'Failed to save analysis results.',
     'results.analysisFailedError': 'Analysis failed. Please try again.',
-    'results.streaming': 'Cooking up some options. It\'s better to climb slowly up the right mountain than fast up the wrong one',
+    'results.streaming': 'Cooking up some options...',
 
     // Action Plan
     'actionPlan.title': 'Your Action Plan',
@@ -105,7 +105,7 @@ export const translations: Record<string, Record<string, string>> = {
     'results.loadSessionError': 'No se pudo cargar tu sesión. Por favor, inténtalo de nuevo.',
     'results.saveAnalysisError': 'No se pudieron guardar los resultados del análisis.',
     'results.analysisFailedError': 'El análisis tuvo un error. Por favor, inténtalo de nuevo.',
-    'results.streaming': 'Preparándote opciones. Es mejor escalar la montaña correcta lentamente que la incorrecta rápidamente',
+    'results.streaming': 'Preparándote opciones...',
 
     // Action Plan
     'actionPlan.title': 'Tu Plan de acción',

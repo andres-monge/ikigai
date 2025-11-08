@@ -17,6 +17,7 @@
 import { Rocket, Users, Code, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { t, type Language } from '@/lib/i18n';
+import { useSoundEffect } from '@/hooks/use-sound-effect';
 import type { PurposePath } from '@/types/assessment';
 
 interface PurposePathsProps {
@@ -38,6 +39,12 @@ export function PurposePaths({
   onChoosePath,
   isChoosing,
 }: PurposePathsProps) {
+  const { play: playSecondarySound } = useSoundEffect('/sounds/click-secondary.mp3');
+
+  const handleChoosePath = (pathId: number) => {
+    onChoosePath(pathId);
+  };
+
   const getIcon = (index: number) => {
     const icons = [Rocket, Users, Code];
     return icons[index] || Rocket;
@@ -133,7 +140,8 @@ export function PurposePaths({
               <div className="p-6 pt-0">
                 {typeof path.id === 'number' && (
                   <Button
-                    onClick={() => onChoosePath(path.id!)}
+                    onPointerDown={playSecondarySound}
+                    onClick={() => handleChoosePath(path.id!)}
                     variant="secondary"
                     className="w-full font-semibold shadow-lg hover:shadow-xl transition-all duration-200 mb-3"
                     disabled={isChoosing}

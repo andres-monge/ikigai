@@ -546,7 +546,7 @@ This phase adds delightful audio feedback to enhance user experience during inte
 ---
 
 [X] Step 24: Create Sound Effects Hook
-**Task**: Create a new custom React hook `client/src/hooks/use-sound-effect.ts` that plays short audio clips when called. The hook should accept a sound file path, create and cache an `HTMLAudioElement` instance using `useRef`, and return a `play()` function. The play function should check if audio is already playing and ignore the call if it is (to prevent overlapping sounds). If not playing, it should start playback from the beginning (`currentTime = 0`), set volume to 0.5, and gracefully handle play failures with `.catch()`. Test the hook immediately by temporarily adding it to a button and verifying the sound plays.
+**Task**: Create a new custom React hook `client/src/hooks/use-sound-effect.ts` that plays short audio clips when called. The hook should accept a sound file path, create and cache an `HTMLAudioElement` instance using `useRef`, and return a `play()` function. The play function should check if audio is already playing and ignore the call if it is (to prevent overlapping sounds). If not playing, it should start playback from the beginning (`currentTime = 0`), set volume to 0.3, and gracefully handle play failures with `.catch()`. Test the hook immediately by temporarily adding it to a button and verifying the sound plays.
 **Suggested Files for Context**: `client/src/hooks/use-mobile.tsx` (for React hook patterns)
 **Step Dependencies**: Step 23
 **Implementation Notes**: 
@@ -554,7 +554,7 @@ This phase adds delightful audio feedback to enhance user experience during inte
 - Implemented `play()` function that checks `audioRef.current.paused` to detect if audio is already playing
 - If audio is playing, the function returns early (ignores the call) to prevent overlapping sounds
 - If not playing, resets `currentTime` to 0 and calls `play()` with error handling via `.catch()`
-- Audio element initialized in `useEffect` with volume 0.5 and `preload='auto'` for immediate playback
+- Audio element initialized in `useEffect` with volume 0.3 and `preload='auto'` for immediate playback
 - Added cleanup logic to pause and clear audio reference on component unmount
 - Tested successfully with temporary button - rapid clicks are properly ignored while audio is playing
 
@@ -577,7 +577,7 @@ This phase adds delightful audio feedback to enhance user experience during inte
 
 ---
 
-[ ] Step 26: Add Sound Effects to All Buttons
+[X] Step 26: Add Sound Effects to All Buttons
 **Task**: Integrate the `use-sound-effect.ts` hook into all user interaction points across the application. For each button, import the hook, call it with the appropriate sound file path, and invoke the returned play function at the start of the existing onClick handler (e.g., `onClick={() => { playSound(); handleAction(); }}`). The sound should play immediately when clicked, before any async operations begin.
 
 **Complete Button-to-Sound Mapping:**
@@ -586,6 +586,9 @@ This phase adds delightful audio feedback to enhance user experience during inte
 - "Show Me My Purpose" (questionnaire submit button) → `click-primary.mp3` (line 171-177 in single-page-questionnaire.tsx)
 - "Return to Purpose Paths" (top banner link) → `click-return.mp3` (line 38-44)
 - "Ikigai Finder" Header (logo/title) → `click-return.mp3` (App.tsx handleNavigateHome)
+
+**Header Component** (`client/src/components/header.tsx`):
+- Language toggle buttons (EN/ES) → `click-secondary.mp3` (added per user request)
 
 **Results Page** (`client/src/pages/results.tsx`, `client/src/components/results/purpose-paths.tsx`):
 - "Download PDF" → `click-secondary.mp3` (line 492-498)
@@ -599,7 +602,13 @@ This phase adds delightful audio feedback to enhance user experience during inte
 
 **Suggested Files for Context**: `client/src/pages/results.tsx`, `client/src/pages/action-plan.tsx`, `client/src/pages/home.tsx`, `client/src/components/questionnaire/single-page-questionnaire.tsx`, `client/src/components/results/purpose-paths.tsx`, `client/src/App.tsx`
 **Step Dependencies**: Step 25
-**Implementation Notes**: Test each button after adding sounds to ensure immediate audio feedback. The onClick handlers should call the play function synchronously before any async operations to satisfy browser autoplay policies.
+**Implementation Notes**:
+- Successfully integrated sound effects across all 11 button interaction points
+- Created wrapper handler functions (e.g., `handleNavigateHome`, `handleReturnToPaths`) to ensure sounds play synchronously before async operations
+- Questionnaire submit button plays sound immediately on click, even before validation (satisfies browser autoplay policies)
+- All sound effects use the `useSoundEffect` hook with appropriate sound file paths
+- Language toggle buttons added with `click-secondary.mp3` sound effect
+- Eliminated initial audio delay by adding explicit `audio.load()` call in `use-sound-effect.ts` and changing all buttons to use `onPointerDown` instead of playing sounds in `onClick` handlers. `pointerdown` fires 50-100ms earlier than `click`, making audio feel instant with zero architectural complexity.
 
 ---
 

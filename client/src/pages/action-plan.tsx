@@ -43,6 +43,7 @@ import { t, type Language } from '@/lib/i18n';
 import { Skeleton } from '@/components/ui/skeleton';
 import { exportActionPlanToPDF } from '@/lib/pdf-export';
 import { useToast } from '@/hooks/use-toast';
+import { useSoundEffect } from '@/hooks/use-sound-effect';
 import type { FullAssessment, ActionPlan, PurposePath, Milestone, SkillToLearn } from '@/types/assessment';
 
 interface ActionPlanProps {
@@ -66,6 +67,8 @@ export function ActionPlan({
   const { toast } = useToast();
   const [needsStreaming, setNeedsStreaming] = useState(false);
   const [sessionData, setSessionData] = useState<FullAssessment | null>(null);
+  const { play: playReturnSound } = useSoundEffect('/sounds/click-return.mp3');
+  const { play: playSecondarySound } = useSoundEffect('/sounds/click-secondary.mp3');
   
   // Shared session management and streaming control
   const {
@@ -423,7 +426,8 @@ export function ActionPlan({
         {/* Action buttons */}
         <div className="flex flex-col sm:flex-row gap-4 justify-center mt-12">
           <Button
-            onClick={() => navigate('/results')}
+            onPointerDown={playReturnSound}
+            onClick={handleBackToPaths}
             size="lg"
             disabled={isStreamingLoading}
           >
@@ -431,7 +435,8 @@ export function ActionPlan({
             {t('actionPlan.backToResults', language)}
           </Button>
           <Button
-            onClick={onStartOver}
+            onPointerDown={playReturnSound}
+            onClick={handleStartOver}
             variant="outline"
             className="border border-slate-300 text-slate-700 px-8 py-4 rounded-xl font-semibold hover:bg-slate-50 transition-all duration-200"
           >
@@ -449,6 +454,14 @@ export function ActionPlan({
     if (!currentActionPlan || !currentChosenPath) return;
 
     exportActionPlanToPDF(currentActionPlan, currentChosenPath.title, language);
+  };
+
+  const handleBackToPaths = () => {
+    navigate('/results');
+  };
+
+  const handleStartOver = () => {
+    onStartOver();
   };
 
   return (
@@ -520,7 +533,8 @@ export function ActionPlan({
       {/* Action Buttons */}
       <div className="mt-12 flex flex-col sm:flex-row gap-4 justify-center">
         <Button
-          onClick={() => navigate('/results')}
+          onPointerDown={playReturnSound}
+          onClick={handleBackToPaths}
           variant="outline"
           className="order-last sm:order-first"
           disabled={isStreamingLoading}
@@ -528,12 +542,17 @@ export function ActionPlan({
           <ArrowLeft className="w-4 h-4 mr-2" />
           {t('actionPlan.backToPaths', language)}
         </Button>
-        <Button onClick={handleExportPDF} size="lg">
+        <Button
+          onPointerDown={playSecondarySound}
+          onClick={handleExportPDF}
+          size="lg"
+        >
           <Download className="w-4 h-4 mr-2" />
           {t('actionPlan.exportPdf', language)}
         </Button>
         <Button
-          onClick={onStartOver}
+          onPointerDown={playReturnSound}
+          onClick={handleStartOver}
           variant="outline"
           className="border border-slate-300 text-slate-700 px-8 py-4 rounded-xl font-semibold hover:bg-slate-50 transition-all duration-200"
         >
