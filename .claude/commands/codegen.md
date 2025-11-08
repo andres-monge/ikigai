@@ -15,7 +15,7 @@ For the next unchecked step in @docs/implementation-plan.md, follow the exploreâ
 - Document key findings that will inform your implementation
 
 ### 2. PLAN Phase
-- Use TodoWrite to create a detailed task list  
+- Create a detailed task list  
 - Break down the complex task into smaller, manageable steps  
 - Identify potential challenges or dependencies  
 - Determine the order of implementation  

@@ -545,19 +545,25 @@ This phase adds delightful audio feedback to enhance user experience during inte
 
 ---
 
-[ ] Step 24: Create Sound Effects Hook
-**Task**: Create a new custom React hook `client/src/hooks/use-sound-effect.ts` that plays short audio clips when called. The hook should accept a sound file path, create and cache an `HTMLAudioElement` instance using `useRef`, and return a `play()` function. The play function should restart the audio from the beginning on each call (`currentTime = 0`) to handle rapid clicks, set volume to 0.5, and gracefully handle play failures with `.catch()`. Test the hook immediately by temporarily adding it to a button and verifying the sound plays.
+[X] Step 24: Create Sound Effects Hook
+**Task**: Create a new custom React hook `client/src/hooks/use-sound-effect.ts` that plays short audio clips when called. The hook should accept a sound file path, create and cache an `HTMLAudioElement` instance using `useRef`, and return a `play()` function. The play function should check if audio is already playing and ignore the call if it is (to prevent overlapping sounds). If not playing, it should start playback from the beginning (`currentTime = 0`), set volume to 0.5, and gracefully handle play failures with `.catch()`. Test the hook immediately by temporarily adding it to a button and verifying the sound plays.
 **Suggested Files for Context**: `client/src/hooks/use-mobile.tsx` (for React hook patterns)
 **Step Dependencies**: Step 23
-**Implementation Notes**: Since audio files exist from Step 23, you can test this hook immediately by adding a temporary test button that plays `/sounds/click-primary.mp3`. Remove the test code after verifying it works.
+**Implementation Notes**: 
+- Created `client/src/hooks/use-sound-effect.ts` with HTMLAudioElement caching using `useRef`
+- Implemented `play()` function that checks `audioRef.current.paused` to detect if audio is already playing
+- If audio is playing, the function returns early (ignores the call) to prevent overlapping sounds
+- If not playing, resets `currentTime` to 0 and calls `play()` with error handling via `.catch()`
+- Audio element initialized in `useEffect` with volume 0.5 and `preload='auto'` for immediate playback
+- Added cleanup logic to pause and clear audio reference on component unmount
+- Tested successfully with temporary button - rapid clicks are properly ignored while audio is playing
 
 ---
 
 [ ] Step 25: Implement Background Music Hook
-**Task**: Create a new custom React hook `client/src/hooks/use-background-music.ts` that plays random background music during waiting periods. The hook should accept an array of track file paths and return `{ play, stop }` functions. The `play` function should randomly select a track from the array, create a new `HTMLAudioElement`, set volume to 0.3 (quieter than click sounds), and start playback. The `stop` function should pause the current audio, reset `currentTime` to 0, and clear the audio reference. Use `useRef` to store the current audio instance and `useCallback` to memoize the functions. Add cleanup logic with `useEffect` to stop music when the component unmounts. Test immediately with existing audio files.
+**Task**: Create a new custom React hook `client/src/hooks/use-background-music.ts` that plays background music selected randomly during waiting periods. The hook should accept an array of track file paths and return `{ play, stop }` functions. The `play` function should randomly select a track from the array, create a new `HTMLAudioElement`, set volume to 0.3 (quieter than click sounds), and start playback. The `stop` function should pause the current audio, reset `currentTime` to 0, and clear the audio reference. Use `useRef` to store the current audio instance and `useCallback` to memoize the functions. Add cleanup logic with `useEffect` to stop music when the component unmounts. Test immediately with existing audio files.
 **Suggested Files for Context**: `client/src/hooks/use-sound-effect.ts`, `client/src/hooks/use-session-storage.ts` (for React patterns)
 **Step Dependencies**: Step 24
-**Implementation Notes**: Background music volume is intentionally lower (0.3) than click sounds (0.5) to avoid overwhelming the UI. Each page load randomly selects one track.
 
 ---
 
