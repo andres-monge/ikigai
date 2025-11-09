@@ -612,11 +612,17 @@ This phase adds delightful audio feedback to enhance user experience during inte
 
 ---
 
-[ ] Step 27: Integrate Background Music During AI Streaming
-**Task**: Add background music to the AI streaming experience on both Results and Action Plan pages. In `client/src/pages/results.tsx`, import `use-background-music.ts` and initialize it with the music track paths (`/sounds/music-wait-1.mp3` through `music-wait-4.mp3`). Call `play()` when streaming begins (triggered by user action - questionnaire submission or path selection), and call `stop()` in the `onFinish` callback after streaming completes. Apply the same pattern to `client/src/pages/action-plan.tsx`. The music starts on the same user gesture that initiates streaming (satisfying browser autoplay policies) and stops cleanly when results appear. Use the `useRef` pattern to ensure music controls don't cause re-render loops.
+[X] Step 27: Integrate Background Music During AI Streaming
+**Task**: Add background music to the AI streaming experience on both Results and Action Plan pages. In `client/src/pages/results.tsx`, import `use-background-music.ts` and initialize it with the music track paths (`/sounds/music-wait-song-name.mp3`). Call `play()` when streaming begins (triggered by user action - questionnaire submission or path selection), and call `stop()` in the `onFinish` callback after streaming completes. Apply the same pattern to `client/src/pages/action-plan.tsx`. The music starts on the same user gesture that initiates streaming (satisfying browser autoplay policies) and stops cleanly when results appear. Use the `useRef` pattern to ensure music controls don't cause re-render loops.
 **Suggested Files for Context**: `client/src/pages/results.tsx`, `client/src/pages/action-plan.tsx`
 **Step Dependencies**: Step 26
-**Implementation Notes**: Music plays at 30% volume (0.3) to stay in the background. Each streaming session randomly selects one track. The key is calling `play()` synchronously within the user-initiated action (questionnaire submit or path selection click) to satisfy browser autoplay restrictions.
+**Implementation Notes**: 
+- Music plays at 30% volume (0.3) to stay in the background. Each streaming session randomly selects one track from 4 available tracks (lady-brown, feather, cats-on-mars, lost-woods).
+- Music loops automatically (handled by hook from Step 25 with `audio.loop = true`).
+- Music starts when streaming begins: `play()` called synchronously in the same `useEffect` where `submit()` is called, satisfying browser autoplay policies by being part of the user interaction chain.
+- Music stops cleanly: `stop()` called in both `onFinish` (success) and `onError` (failure) callbacks.
+- Music stops on component unmount: handled automatically by hook's cleanup logic.
+- Integration points: Results page (lines 69-74, 255, 94, 202), Action Plan page (lines 75-80, 228, 115, 155).
 
 ---
 

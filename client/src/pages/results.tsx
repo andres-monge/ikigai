@@ -38,6 +38,7 @@ import { exportToPDF } from '@/lib/pdf-export';
 import { useStreamingState, createPollingSchedule, hasPositiveIds } from '@/hooks/use-streaming-state';
 import { useToast } from '@/hooks/use-toast';
 import { useSoundEffect } from '@/hooks/use-sound-effect';
+import { useBackgroundMusic } from '@/hooks/use-background-music';
 import type { FullAssessment, PurposePath } from '@/types/assessment';
 
 /* -------------------------------------------------------------------------- */
@@ -64,6 +65,14 @@ export function Results({
   const { play: playSecondarySound } = useSoundEffect('/sounds/click-secondary.mp3');
   const { play: playReturnSound } = useSoundEffect('/sounds/click-return.mp3');
   
+  // Background music for streaming experience
+  const { play: playBackgroundMusic, stop: stopBackgroundMusic } = useBackgroundMusic([
+    '/sounds/music-wait-lady-brown.mp3',
+    '/sounds/music-wait-feather.mp3',
+    '/sounds/music-wait-cats-on-mars.mp3',
+    '/sounds/music-wait-lost-woods.mp3',
+  ]);
+  
   // Shared session management and streaming control
   const { 
     session, 
@@ -81,6 +90,9 @@ export function Results({
     api: '/api/analyze/stream',
     schema: purposeDiscoveryResultSchema,
     onFinish: async ({ object }) => {
+      // Stop background music when streaming completes
+      stopBackgroundMusic();
+      
       // Always use streamed data, regardless of session state (fixes race condition)
       if (object) {
         // Create base session from existing or minimal data
@@ -186,6 +198,8 @@ export function Results({
       }
     },
     onError: (error) => {
+      // Stop background music on streaming error
+      stopBackgroundMusic();
       console.error('Streaming error:', error);
       toast({
         title: t('common.error', language),
@@ -237,6 +251,8 @@ export function Results({
     if (shouldStream) {
       hasInitiatedStreamingRef.current = true;
       setNeedsStreaming(true);
+      // Start background music when streaming begins (satisfies browser autoplay policies)
+      playBackgroundMusic();
       submit({ sessionId });
     }
   }, [

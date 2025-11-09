@@ -44,6 +44,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { exportActionPlanToPDF } from '@/lib/pdf-export';
 import { useToast } from '@/hooks/use-toast';
 import { useSoundEffect } from '@/hooks/use-sound-effect';
+import { useBackgroundMusic } from '@/hooks/use-background-music';
 import type { FullAssessment, ActionPlan, PurposePath, Milestone, SkillToLearn } from '@/types/assessment';
 
 interface ActionPlanProps {
@@ -69,6 +70,14 @@ export function ActionPlan({
   const [sessionData, setSessionData] = useState<FullAssessment | null>(null);
   const { play: playReturnSound } = useSoundEffect('/sounds/click-return.mp3');
   const { play: playSecondarySound } = useSoundEffect('/sounds/click-secondary.mp3');
+  
+  // Background music for streaming experience
+  const { play: playBackgroundMusic, stop: stopBackgroundMusic } = useBackgroundMusic([
+    '/sounds/music-wait-lady-brown.mp3',
+    '/sounds/music-wait-feather.mp3',
+    '/sounds/music-wait-cats-on-mars.mp3',
+    '/sounds/music-wait-lost-woods.mp3',
+  ]);
   
   // Shared session management and streaming control
   const {
@@ -102,6 +111,9 @@ export function ActionPlan({
     api: '/api/action-plan/stream',
     schema: actionPlanResultSchema,
     onFinish: async ({ object }) => {
+      // Stop background music when streaming completes
+      stopBackgroundMusic();
+      
       // Always preserve streamed data, regardless of session state (fixes race condition)
       if (object) {
         // Create base session from existing data or minimal fallback
@@ -139,6 +151,8 @@ export function ActionPlan({
       }
     },
     onError: (error) => {
+      // Stop background music on streaming error
+      stopBackgroundMusic();
       console.error('Streaming error:', error);
       toast({
         title: t('common.error', language),
@@ -210,6 +224,8 @@ export function ActionPlan({
     if (shouldStream) {
       hasInitiatedStreamingRef.current = true;
       setNeedsStreaming(true);
+      // Start background music when streaming begins (satisfies browser autoplay policies)
+      playBackgroundMusic();
       submit({ sessionId, pathId: effectivePathId });
     }
   }, [
