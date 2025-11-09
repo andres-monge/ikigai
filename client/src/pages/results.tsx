@@ -66,7 +66,7 @@ export function Results({
   const { play: playReturnSound } = useSoundEffect('/sounds/click-return.mp3');
   
   // Background music for streaming experience
-  const { play: playBackgroundMusic, stop: stopBackgroundMusic } = useBackgroundMusic([
+  const { play: playBackgroundMusic, stop: stopBackgroundMusic, fadeOut: fadeOutBackgroundMusic } = useBackgroundMusic([
     '/sounds/music-wait-lady-brown.mp3',
     '/sounds/music-wait-feather.mp3',
     '/sounds/music-wait-cats-on-mars.mp3',
@@ -275,6 +275,13 @@ export function Results({
       }
     };
   }, []);
+
+  // Fade out music when streaming content starts appearing
+  useEffect(() => {
+    if (object && needsStreaming) {
+      fadeOutBackgroundMusic(500); // 500ms smooth fade
+    }
+  }, [object, needsStreaming, fadeOutBackgroundMusic]);
 
   const handleChoosePath = (pathId: number) => {
     if (typeof pathId !== 'number') return;

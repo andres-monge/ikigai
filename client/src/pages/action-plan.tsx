@@ -72,7 +72,7 @@ export function ActionPlan({
   const { play: playSecondarySound } = useSoundEffect('/sounds/click-secondary.mp3');
   
   // Background music for streaming experience
-  const { play: playBackgroundMusic, stop: stopBackgroundMusic } = useBackgroundMusic([
+  const { play: playBackgroundMusic, stop: stopBackgroundMusic, fadeOut: fadeOutBackgroundMusic } = useBackgroundMusic([
     '/sounds/music-wait-lady-brown.mp3',
     '/sounds/music-wait-feather.mp3',
     '/sounds/music-wait-cats-on-mars.mp3',
@@ -240,9 +240,33 @@ export function ActionPlan({
     // Note: submit and setSessionData intentionally omitted from deps to prevent infinite loops
   ]);
 
+  // Fade out music when streaming content starts appearing
+  useEffect(() => {
+    if (object && needsStreaming) {
+      fadeOutBackgroundMusic(500); // 500ms smooth fade
+    }
+  }, [object, needsStreaming, fadeOutBackgroundMusic]);
+
   // Helper function to get streaming status message
   const getStreamingMessage = (): string => {
     return t('actionPlan.streaming', language);
+  };
+
+  // Handler functions (defined before early returns to avoid hoisting issues)
+  const handleExportPDF = () => {
+    // This check is for TypeScript, but the button is only rendered when this
+    // data is available anyway.
+    if (!currentActionPlan || !currentChosenPath) return;
+
+    exportActionPlanToPDF(currentActionPlan, currentChosenPath.title, language);
+  };
+
+  const handleBackToPaths = () => {
+    navigate('/results');
+  };
+
+  const handleStartOver = () => {
+    onStartOver();
   };
 
   if (isFetchingSession) {
@@ -463,22 +487,6 @@ export function ActionPlan({
       </div>
     );
   }
-
-  const handleExportPDF = () => {
-    // This check is for TypeScript, but the button is only rendered when this
-    // data is available anyway.
-    if (!currentActionPlan || !currentChosenPath) return;
-
-    exportActionPlanToPDF(currentActionPlan, currentChosenPath.title, language);
-  };
-
-  const handleBackToPaths = () => {
-    navigate('/results');
-  };
-
-  const handleStartOver = () => {
-    onStartOver();
-  };
 
   return (
     <div className="max-w-4xl mx-auto py-8 px-4">

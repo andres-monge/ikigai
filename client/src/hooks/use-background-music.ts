@@ -9,22 +9,6 @@ import { useRef, useCallback, useEffect } from 'react';
  * 
  * @param tracks - Array of paths to audio files (e.g., ['/sounds/music-wait-1.mp3', ...])
  * @returns Object with `play` and `stop` functions to control music playback
- * 
- * @example
- * ```tsx
- * const { play, stop } = useBackgroundMusic([
- *   '/sounds/music-wait-1.mp3',
- *   '/sounds/music-wait-2.mp3'
- * ]);
- * 
- * // Start music when streaming begins
- * useEffect(() => {
- *   if (isStreaming) {
- *     play();
- *   } else {
- *     stop();
- *   }
- * }, [isStreaming, play, stop]);
  * ```
  */
 export function useBackgroundMusic(tracks: string[]) {
@@ -40,6 +24,36 @@ export function useBackgroundMusic(tracks: string[]) {
       audioRef.current.currentTime = 0;
       audioRef.current = null;
     }
+  }, []);
+
+  /**
+   * Gradually fades out the currently playing music over the specified duration.
+   * Uses smooth volume reduction with 20 steps for imperceptible transitions.
+   * After fade completes, pauses and clears the audio reference.
+   * Memoized with useCallback to prevent unnecessary re-renders.
+   *
+   * @param duration - Fade duration in milliseconds (default: 1000ms)
+   */
+  const fadeOut = useCallback((duration = 1000) => {
+    if (!audioRef.current) return;
+
+    const audio = audioRef.current;
+    const startVolume = audio.volume;
+    const fadeSteps = 20; // Smooth fade with 20 steps
+    const stepDuration = duration / fadeSteps;
+    const volumeStep = startVolume / fadeSteps;
+
+    const fadeInterval = setInterval(() => {
+      if (audio.volume > volumeStep) {
+        audio.volume -= volumeStep;
+      } else {
+        // Fade complete - stop the music
+        audio.pause();
+        audio.currentTime = 0;
+        clearInterval(fadeInterval);
+        audioRef.current = null;
+      }
+    }, stepDuration);
   }, []);
 
   /**
@@ -86,6 +100,6 @@ export function useBackgroundMusic(tracks: string[]) {
     };
   }, [stop]);
 
-  return { play, stop };
+  return { play, stop, fadeOut };
 }
 
