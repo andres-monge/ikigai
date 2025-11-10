@@ -37,7 +37,6 @@ import { t, type Language } from '@/lib/i18n';
 import { exportToPDF } from '@/lib/pdf-export';
 import { useStreamingState, createPollingSchedule, hasPositiveIds } from '@/hooks/use-streaming-state';
 import { useToast } from '@/hooks/use-toast';
-import { useSoundEffect } from '@/hooks/use-sound-effect';
 import { useBackgroundMusic } from '@/hooks/use-background-music';
 import type { FullAssessment, PurposePath } from '@/types/assessment';
 
@@ -62,9 +61,7 @@ export function Results({
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [needsStreaming, setNeedsStreaming] = useState(false);
-  const { play: playSecondarySound } = useSoundEffect('/sounds/click-secondary.mp3');
-  const { play: playReturnSound } = useSoundEffect('/sounds/click-return.mp3');
-  
+
   // Background music for streaming experience
   const { play: playBackgroundMusic, stop: stopBackgroundMusic, fadeOut: fadeOutBackgroundMusic } = useBackgroundMusic([
     '/sounds/music-wait-lady-brown.mp3',
@@ -519,7 +516,6 @@ export function Results({
         {/* Export and Start Over Actions */}
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
           <Button
-            onPointerDown={playSecondarySound}
             onClick={handleExportPDF}
             size="lg"
           >
@@ -528,7 +524,6 @@ export function Results({
           </Button>
 
           <Button
-            onPointerDown={playReturnSound}
             onClick={handleStartOver}
             variant="outline"
             className="border border-slate-300 text-slate-700 px-8 py-4 rounded-xl font-semibold hover:bg-slate-50 transition-all duration-200"

@@ -539,7 +539,7 @@ This phase adds delightful audio feedback to enhance user experience during inte
 ---
 
 [X] Step 23: Add Audio Files and Create Directory Structure
-**Task**: Create the directory structure `client/public/sounds/` and add all audio files needed for the feature. The required audio files are: `click-primary.mp3` (for main actions like "Show Me My Purpose"), `click-secondary.mp3` (for supporting actions like "Download PDF"), `click-return.mp3` (for navigation/reset actions like "Start Over" and "Back to Paths"), and 3-4 background music tracks named `music-wait-1.mp3` through `music-wait-4.mp3`. Audio specifications: click sounds should be mono, 96-128kbps, 0.2-0.5 seconds, ~20-50KB each; music tracks should be stereo, 128-160kbps, 15-20 seconds, ~300-500KB each. All files should be MP3 format for maximum browser compatibility.
+**Task**: Create the directory structure `client/public/sounds/` and add all audio files needed for the feature. The required audio files are: `click-primary.mp3` for the "Show Me My Purpose" button, and 3-4 background music tracks named `music-wait-1.mp3` through `music-wait-4.mp3`. Audio specifications: click sounds should be mono, 96-128kbps, 0.2-0.5 seconds, ~20-50KB each; music tracks should be stereo, 128-160kbps, 15-20 seconds, ~300-500KB each. All files should be MP3 format for maximum browser compatibility.
 **Suggested Files for Context**: None (creates new directory structure)
 **Step Dependencies**: Step 22.7
 
@@ -577,37 +577,15 @@ This phase adds delightful audio feedback to enhance user experience during inte
 
 ---
 
-[X] Step 26: Add Sound Effects to All Buttons
+[X] Step 26: Add Sound Effects to "Show Me Purpose" button
 **Task**: Integrate the `use-sound-effect.ts` hook into all user interaction points across the application. For each button, import the hook, call it with the appropriate sound file path, and invoke the returned play function at the start of the existing onClick handler (e.g., `onClick={() => { playSound(); handleAction(); }}`). The sound should play immediately when clicked, before any async operations begin.
-
-**Complete Button-to-Sound Mapping:**
-
-**Home Page** (`client/src/pages/home.tsx`, `client/src/App.tsx`):
-- "Show Me My Purpose" (questionnaire submit button) → `click-primary.mp3` (line 171-177 in single-page-questionnaire.tsx)
-- "Return to Purpose Paths" (top banner link) → `click-return.mp3` (line 38-44)
-- "Ikigai Finder" Header (logo/title) → `click-return.mp3` (App.tsx handleNavigateHome)
-
-**Header Component** (`client/src/components/header.tsx`):
-- Language toggle buttons (EN/ES) → `click-secondary.mp3` (added per user request)
-
-**Results Page** (`client/src/pages/results.tsx`, `client/src/components/results/purpose-paths.tsx`):
-- "Download PDF" → `click-secondary.mp3` (line 492-498)
-- "Start Over" → `click-return.mp3` (line 500-507)
-- "Choose Path and Get Plan" (×3 cards) → `click-secondary.mp3` (purpose-paths.tsx line 135-145)
-
-**Action Plan Page** (`client/src/pages/action-plan.tsx`):
-- "Back to Paths" → `click-return.mp3` (line 522-530)
-- "Download PDF" → `click-secondary.mp3` (line 531-534)
-- "Start Over" → `click-return.mp3` (line 535-542)
 
 **Suggested Files for Context**: `client/src/pages/results.tsx`, `client/src/pages/action-plan.tsx`, `client/src/pages/home.tsx`, `client/src/components/questionnaire/single-page-questionnaire.tsx`, `client/src/components/results/purpose-paths.tsx`, `client/src/App.tsx`
 **Step Dependencies**: Step 25
 **Implementation Notes**:
-- Successfully integrated sound effects across all 11 button interaction points
 - Created wrapper handler functions (e.g., `handleNavigateHome`, `handleReturnToPaths`) to ensure sounds play synchronously before async operations
 - Questionnaire submit button plays sound immediately on click, even before validation (satisfies browser autoplay policies)
 - All sound effects use the `useSoundEffect` hook with appropriate sound file paths
-- Language toggle buttons added with `click-secondary.mp3` sound effect
 - Eliminated initial audio delay by adding explicit `audio.load()` call in `use-sound-effect.ts` and changing all buttons to use `onPointerDown` instead of playing sounds in `onClick` handlers. `pointerdown` fires 50-100ms earlier than `click`, making audio feel instant with zero architectural complexity.
 
 ---
@@ -626,17 +604,9 @@ This phase adds delightful audio feedback to enhance user experience during inte
 
 ---
 
-[ ] Step 28: Add TypeScript Types for Sound Paths
-**Task**: Create type safety for audio file paths to prevent typos and enable autocomplete. In a new file `client/src/types/audio.ts`, define string literal union types for sound effect names (`'primary' | 'secondary' | 'return'`) and create a mapping object that associates each name with its file path. Export helper functions `getSoundPath(name: SoundEffectName): string` and `getMusicTracks(): string[]` that return the appropriate paths. Update `use-sound-effect.ts` and `use-background-music.ts` to optionally accept these typed names instead of raw paths. Update the button implementations from Step 26 to use the typed helper functions (e.g., `useSoundEffect(getSoundPath('primary'))`). This makes it easy to reorganize audio files later without hunting through components for hardcoded paths.
-**Suggested Files for Context**: `client/src/hooks/use-sound-effect.ts`, `client/src/hooks/use-background-music.ts`, all files modified in Step 26
-**Step Dependencies**: Step 27
-**Implementation Notes**: Keep the hooks flexible - they should accept either raw paths (for flexibility) or the typed names (for safety). This balances type safety with ease of use. Refactoring existing code to use typed helpers is a safe change since the paths remain the same.
-
----
-
-[ ] Step 29: Test Audio Implementation and Document
+[ ] Step 28: Test Audio Implementation and Document
 **Task**: Perform comprehensive testing of the audio system and update documentation. Test that: (1) all button clicks play the correct sounds immediately, (2) background music starts and stops correctly during streaming, (3) rapid button clicks handle audio restarts properly, (4) the app gracefully handles missing audio files (shouldn't crash), (5) volume levels feel balanced (clicks at 0.5, music at 0.3). Update documentation (`tech-spec.md`, `CLAUDE.md`) explaining: the two-hook architecture (`use-sound-effect` vs `use-background-music`), complete button-to-sound mapping, file naming conventions, audio specifications (MP3 format, bitrates, file sizes), the directory structure, and how to add or modify sounds in the future.
-**Suggested Files for Context**: `CLAUDE.md`, all files created in Steps 23-28
+**Suggested Files for Context**: `CLAUDE.md`, `tech-spec.md`, all files created in Steps 23-28
 **Step Dependencies**: Step 28
 **Testing Checklist**:
 - Click each button type and verify correct sound plays

@@ -43,7 +43,6 @@ import { t, type Language } from '@/lib/i18n';
 import { Skeleton } from '@/components/ui/skeleton';
 import { exportActionPlanToPDF } from '@/lib/pdf-export';
 import { useToast } from '@/hooks/use-toast';
-import { useSoundEffect } from '@/hooks/use-sound-effect';
 import { useBackgroundMusic } from '@/hooks/use-background-music';
 import type { FullAssessment, ActionPlan, PurposePath, Milestone, SkillToLearn } from '@/types/assessment';
 
@@ -68,9 +67,7 @@ export function ActionPlan({
   const { toast } = useToast();
   const [needsStreaming, setNeedsStreaming] = useState(false);
   const [sessionData, setSessionData] = useState<FullAssessment | null>(null);
-  const { play: playReturnSound } = useSoundEffect('/sounds/click-return.mp3');
-  const { play: playSecondarySound } = useSoundEffect('/sounds/click-secondary.mp3');
-  
+
   // Background music for streaming experience
   const { play: playBackgroundMusic, stop: stopBackgroundMusic, fadeOut: fadeOutBackgroundMusic } = useBackgroundMusic([
     '/sounds/music-wait-lady-brown.mp3',
@@ -466,7 +463,6 @@ export function ActionPlan({
         {/* Action buttons */}
         <div className="flex flex-col sm:flex-row gap-4 justify-center mt-12">
           <Button
-            onPointerDown={playReturnSound}
             onClick={handleBackToPaths}
             size="lg"
             disabled={isStreamingLoading}
@@ -475,7 +471,6 @@ export function ActionPlan({
             {t('actionPlan.backToResults', language)}
           </Button>
           <Button
-            onPointerDown={playReturnSound}
             onClick={handleStartOver}
             variant="outline"
             className="border border-slate-300 text-slate-700 px-8 py-4 rounded-xl font-semibold hover:bg-slate-50 transition-all duration-200"
@@ -557,7 +552,6 @@ export function ActionPlan({
       {/* Action Buttons */}
       <div className="mt-12 flex flex-col sm:flex-row gap-4 justify-center">
         <Button
-          onPointerDown={playReturnSound}
           onClick={handleBackToPaths}
           variant="outline"
           className="order-last sm:order-first"
@@ -567,7 +561,6 @@ export function ActionPlan({
           {t('actionPlan.backToPaths', language)}
         </Button>
         <Button
-          onPointerDown={playSecondarySound}
           onClick={handleExportPDF}
           size="lg"
         >
@@ -575,7 +568,6 @@ export function ActionPlan({
           {t('actionPlan.exportPdf', language)}
         </Button>
         <Button
-          onPointerDown={playReturnSound}
           onClick={handleStartOver}
           variant="outline"
           className="border border-slate-300 text-slate-700 px-8 py-4 rounded-xl font-semibold hover:bg-slate-50 transition-all duration-200"

@@ -244,22 +244,71 @@ The strategy is updated to leverage the best model for each task while simplifyi
   - **Display:** `CoreDriversSummary`, `SalaryBenchmarks` table, `ActionPlan` view.
   - **States:** Interactive components will have clear `hover`, `focus`, `active`, and `disabled` states as provided by `shadcn/ui`, ensuring accessibility (WCAG 2.1 AA).
 
-## 7\. Component Architecture
+## 7\. Audio Enhancement
+
+The application includes minimal audio feedback to enhance user experience during key interactions and waiting periods.
+
+### 7.1 Audio Architecture
+
+The audio system uses two separate React hooks for distinct purposes:
+
+- **`use-sound-effect.ts`**: Plays short audio clips for button interactions
+  - Currently used only for the "Show Me My Purpose" questionnaire submit button
+  - Preloads audio for instant playback
+  - Creates detached audio elements that survive component unmounts
+  - Volume: 30%
+
+- **`use-background-music.ts`**: Plays looping background music during AI streaming
+  - Randomly selects from 4 available tracks per streaming session
+  - Plays during both Purpose Discovery and Action Plan generation
+  - Includes fade-out capability for smooth transitions
+  - Volume: 30%
+
+### 7.2 Audio Files
+
+**Directory Structure:**
+```
+client/public/sounds/
+├── click-primary.mp3          # Questionnaire submit button (7-14KB, mono, 96-128kbps)
+├── music-wait-lady-brown.mp3  # Background music track 1 (300-500KB, stereo, 128-160kbps)
+├── music-wait-feather.mp3     # Background music track 2
+├── music-wait-cats-on-mars.mp3 # Background music track 3
+└── music-wait-lost-woods.mp3  # Background music track 4
+```
+
+**Audio Specifications:**
+- Format: MP3 (maximum browser compatibility)
+- Sound Effects: Mono, 96-128kbps, 0.2-0.5 seconds, ~7-14KB
+- Background Music: Stereo, 128-160kbps, 15-20 seconds (looping), ~300-500KB
+
+### 7.3 Implementation Details
+
+**Sound Effect Usage:**
+- Questionnaire submit button (`client/src/components/questionnaire/single-page-questionnaire.tsx`)
+- Triggered via `onPointerDown` event (50-100ms earlier than `onClick` for perceived instant feedback)
+
+**Background Music Usage:**
+- Results page: Starts when streaming begins, stops when analysis completes
+- Action Plan page: Starts when streaming begins, stops when plan completes
+- Music starts as part of user interaction chain (satisfies browser autoplay policies)
+- Automatically stops on component unmount or streaming errors
+
+## 8\. Component Architecture
 
   - **Error Handling:** Components will be wrapped in a React `<ErrorBoundary>` to gracefully handle rendering errors without crashing the application.
 
-## 8\. Authentication & Authorization
+## 9\. Authentication & Authorization
 
   - **MVP Strategy:** No user accounts. Session is anonymous and identified by `sessionId`.
   - **Session Token:** The `sessionId` will be stored in both `sessionStorage` for client-side access and a `httpOnly`, `SameSite=Lax` cookie.
 
-## 9\. Data Flow
+## 10\. Data Flow
 
   - **Client ↔ Server: Vercel AI SDK Protocol** powers the streaming interface using Server-Sent Events (SSE) with automatic parsing and validation. Standard REST API calls (POST, GET) are used for initial data submission (questionnaire) and session management.
   - **Server-Side:** Route handlers use `streamObject` directly with Zod schemas for validation. The AI SDK handles the streaming protocol automatically, eliminating the need for custom parsers or delimiter handling.
   - **State Management:** Client-side streaming is managed by the AI SDK's `useObject` hook, which provides partial data as it arrives. Both frontend and backend use identical Zod schemas from `shared/streaming-schemas.ts` to ensure type safety and validation consistency. TanStack Query is used for non-streaming server state. Data is persisted in sessionStorage on stream completion to handle page refreshes gracefully.
 
-## 10\. Environment Variables
+## 11\. Environment Variables
 
 The application will require the following environment variables to be set. On Replit, these will be configured in **Secrets**. For local development, they will be in an `.env` file.
 

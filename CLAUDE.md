@@ -40,9 +40,15 @@ Ikigai Finder is an AI-powered career guidance application that helps users disc
 #### AI Streaming System (`server/ai/chains/`)
 The application uses Vercel AI SDK for structured streaming:
 - `purpose-discovery.stream.chain.ts` - Generates career path analysis using streamObject
-- `action-plan.stream.chain.ts` - Creates detailed milestone-based action plans with post-processing
+- `action-plan.stream.chain.ts` - Creates detailed milestone-based action plans
 - Single model approach with GEMINI_REASONING_MODEL for reliable structured output
-- YouTube video enrichment happens as post-processing after streaming completes
+
+#### Audio Enhancement (`client/src/hooks/`)
+Minimal audio feedback system to enhance UX:
+- `use-sound-effect.ts` - Plays click sound for questionnaire submit button only
+- `use-background-music.ts` - Plays looping background music during AI streaming (4 tracks)
+- Audio files located in `client/public/sounds/` (1 sound effect + 4 music tracks)
+- Both hooks use HTMLAudioElement with preloading for instant playback
 
 #### Storage Layer (`server/storage.ts`)
 - Interface-based design (`IStorage`) for easy testing
