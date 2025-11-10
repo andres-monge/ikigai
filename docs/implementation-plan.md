@@ -532,100 +532,30 @@ This phase removes all deprecated code to finalize the AI SDK-only architecture,
 
 ---
 
-## Phase 6: Audio Enhancement - Button Sounds & Background Music
+## Phase 6: Final Hardening and Debugging
 
-This phase adds delightful audio feedback to enhance user experience during interactions and waiting periods. The implementation uses two separate React hooks to handle distinct audio concerns: sound effects for button clicks and background music during AI processing.
+This final phase implements a complete system to capture, reproduce, and fix the ~10% of cases where Gemini API returns `MALFORMED_FUNCTION_CALL` errors. The approach focuses on building observability and testing tools that enable rapid iteration on AI prompt and schema improvements.
 
 ---
 
-[X] Step 23: Add Audio Files and Create Directory Structure
-**Task**: Create the directory structure `client/public/sounds/` and add all audio files needed for the feature. The required audio files are: `click-primary.mp3` for the "Show Me My Purpose" button, and 3-4 background music tracks named `music-wait-1.mp3` through `music-wait-4.mp3`. Audio specifications: click sounds should be mono, 96-128kbps, 0.2-0.5 seconds, ~20-50KB each; music tracks should be stereo, 128-160kbps, 15-20 seconds, ~300-500KB each. All files should be MP3 format for maximum browser compatibility.
-**Suggested Files for Context**: None (creates new directory structure)
+[ ] Step 23: Enhanced Error Logging with JSONL Persistence
+**Task**: Modify the existing error logging in both streaming chains (`server/ai/chains/purpose-discovery.stream.chain.ts` and `server/ai/chains/action-plan.stream.chain.ts`) to capture complete debugging context when `MALFORMED_FUNCTION_CALL` errors occur. Create a `_error-samples/` directory (gitignored) to store error data in JSONL format. Add error logging gated by the `AI_ERROR_SAMPLES=1` environment variable (dev/staging only). Each error record should include: timestamp, endpoint name, sessionId, model identifier, finishReason, standardized error code, and **complete questionnaire responses** that triggered the failure. Update `.gitignore` to exclude `_error-samples/`. The goal is to build a dataset of problematic inputs over time without requiring complex infrastructure.
+**Suggested Files for Context**: `server/ai/chains/purpose-discovery.stream.chain.ts`, `server/ai/chains/action-plan.stream.chain.ts`, `server/utils/ai-logger.ts`, `.gitignore`, `.env.example`
 **Step Dependencies**: Step 22.7
+**Why**: You can't fix what you can't see. This captures the exact inputs that cause failures so you can test fixes against real problematic data.
 
 ---
 
-[X] Step 24: Create Sound Effects Hook
-**Task**: Create a new custom React hook `client/src/hooks/use-sound-effect.ts` that plays short audio clips when called. The hook should accept a sound file path, create and cache an `HTMLAudioElement` instance using `useRef`, and return a `play()` function. The play function should check if audio is already playing and ignore the call if it is (to prevent overlapping sounds). If not playing, it should start playback from the beginning (`currentTime = 0`), set volume to 0.3, and gracefully handle play failures with `.catch()`. Test the hook immediately by temporarily adding it to a button and verifying the sound plays.
-**Suggested Files for Context**: `client/src/hooks/use-mobile.tsx` (for React hook patterns)
+[ ] Step 24: Simple Test Harness with Hardcoded Presets
+**Task**: Create `_docs/manual-test-harness.ts` - a standalone Node.js script that proactively tests the AI endpoints with "difficult" inputs to find failure patterns without waiting for users to encounter them. Hardcode 10-15 test cases covering: vague answers ("I don't know", "maybe"), nonsense ("asdfgh", emoji spam), multilingual (mixed languages), overlong (3000+ character answers), and contradictory responses. The script should call the `/api/analyze/stream` endpoint directly via HTTP, collect all streamed chunks, and report a summary showing which test cases passed vs. failed with error details. Keep it simple - no CLI flags or external config files, just run `tsx _docs/manual-test-harness.ts`. This enables developers to quickly discover which types of inputs cause `MALFORMED_FUNCTION_CALL` errors.
+**Suggested Files for Context**: `server/routes/assessment/purpose-discovery.ts`, `shared/schema.ts`, `shared/streaming-schemas.ts`
 **Step Dependencies**: Step 23
-**Implementation Notes**: 
-- Created `client/src/hooks/use-sound-effect.ts` with HTMLAudioElement caching using `useRef`
-- Implemented `play()` function that checks `audioRef.current.paused` to detect if audio is already playing
-- If audio is playing, the function returns early (ignores the call) to prevent overlapping sounds
-- If not playing, resets `currentTime` to 0 and calls `play()` with error handling via `.catch()`
-- Audio element initialized in `useEffect` with volume 0.3 and `preload='auto'` for immediate playback
-- Added cleanup logic to pause and clear audio reference on component unmount
-- Tested successfully with temporary button - rapid clicks are properly ignored while audio is playing
+**Why**: Waiting for production failures is too slow. This script actively searches for failure patterns so you can fix them proactively.
 
 ---
 
-[X] Step 25: Implement Background Music Hook
-**Task**: Create a new custom React hook `client/src/hooks/use-background-music.ts` that plays background music selected randomly during waiting periods. The hook should accept an array of track file paths and return `{ play, stop }` functions. The `play` function should randomly select a track from the array, create a new `HTMLAudioElement`, set volume to 0.3 (quieter than click sounds), and start playback. The `stop` function should pause the current audio, reset `currentTime` to 0, and clear the audio reference. Use `useRef` to store the current audio instance and `useCallback` to memoize the functions. Add cleanup logic with `useEffect` to stop music when the component unmounts. Test immediately with existing audio files.
-**Suggested Files for Context**: `client/src/hooks/use-sound-effect.ts`, `client/src/hooks/use-session-storage.ts` (for React patterns)
+[ ] Step 25: Quick Replay Script for Fast Iteration
+**Task**: Create `_docs/replay-error.ts` - a simple script that enables rapid testing of prompt/schema fixes against known failures. The script should accept a JSONL line from `_error-samples/errors-YYYY-MM-DD.jsonl` (either via file path or piped stdin), extract the questionnaire responses and configuration, re-submit to the same endpoint with the same parameters, and report whether the error still occurs ("STILL FAILS ❌") or has been fixed ("NOW PASSES ✅"). This creates a tight feedback loop: when you modify AI prompts or schemas, you can immediately verify if your changes fix the problematic inputs without running the full test harness or waiting for the error to randomly occur. Usage: `tsx _docs/replay-error.ts _error-samples/errors-2025-11-10.jsonl` or `cat _error-samples/errors-2025-11-10.jsonl | head -1 | tsx _docs/replay-error.ts`.
+**Suggested Files for Context**: `server/routes/assessment/purpose-discovery.ts`, `server/ai/chains/purpose-discovery.stream.chain.ts`
 **Step Dependencies**: Step 24
-**Implementation Notes**:
-- Created `client/src/hooks/use-background-music.ts` with complete hook implementation
-- Implemented random track selection from array using `Math.floor(Math.random() * tracks.length)`
-- Added looping functionality (`audio.loop = true`) so music continues until explicitly stopped
-- Implemented graceful empty array handling with console warning
-- Used `useCallback` to memoize `play` and `stop` functions for performance
-- Added cleanup logic in `useEffect` to stop music on component unmount
-- Volume set to 0.3 (30%) - quieter than sound effects at 0.5 (50%)
-- Creates new audio element on each `play()` call (unlike sound effects which cache one element)
-- Stops any currently playing music before starting new track to prevent overlaps
-
----
-
-[X] Step 26: Add Sound Effects to "Show Me Purpose" button
-**Task**: Integrate the `use-sound-effect.ts` hook into all user interaction points across the application. For each button, import the hook, call it with the appropriate sound file path, and invoke the returned play function at the start of the existing onClick handler (e.g., `onClick={() => { playSound(); handleAction(); }}`). The sound should play immediately when clicked, before any async operations begin.
-
-**Suggested Files for Context**: `client/src/pages/results.tsx`, `client/src/pages/action-plan.tsx`, `client/src/pages/home.tsx`, `client/src/components/questionnaire/single-page-questionnaire.tsx`, `client/src/components/results/purpose-paths.tsx`, `client/src/App.tsx`
-**Step Dependencies**: Step 25
-**Implementation Notes**:
-- Created wrapper handler functions (e.g., `handleNavigateHome`, `handleReturnToPaths`) to ensure sounds play synchronously before async operations
-- Questionnaire submit button plays sound immediately on click, even before validation (satisfies browser autoplay policies)
-- All sound effects use the `useSoundEffect` hook with appropriate sound file paths
-- Eliminated initial audio delay by adding explicit `audio.load()` call in `use-sound-effect.ts` and changing all buttons to use `onPointerDown` instead of playing sounds in `onClick` handlers. `pointerdown` fires 50-100ms earlier than `click`, making audio feel instant with zero architectural complexity.
-
----
-
-[X] Step 27: Integrate Background Music During AI Streaming
-**Task**: Add background music to the AI streaming experience on both Results and Action Plan pages. In `client/src/pages/results.tsx`, import `use-background-music.ts` and initialize it with the music track paths (`/sounds/music-wait-song-name.mp3`). Call `play()` when streaming begins (triggered by user action - questionnaire submission or path selection), and call `stop()` in the `onFinish` callback after streaming completes. Apply the same pattern to `client/src/pages/action-plan.tsx`. The music starts on the same user gesture that initiates streaming (satisfying browser autoplay policies) and stops cleanly when results appear. Use the `useRef` pattern to ensure music controls don't cause re-render loops.
-**Suggested Files for Context**: `client/src/pages/results.tsx`, `client/src/pages/action-plan.tsx`
-**Step Dependencies**: Step 26
-**Implementation Notes**: 
-- Music plays at 30% volume (0.3) to stay in the background. Each streaming session randomly selects one track from 4 available tracks (lady-brown, feather, cats-on-mars, lost-woods).
-- Music loops automatically (handled by hook from Step 25 with `audio.loop = true`).
-- Music starts when streaming begins: `play()` called synchronously in the same `useEffect` where `submit()` is called, satisfying browser autoplay policies by being part of the user interaction chain.
-- Music stops cleanly: `stop()` called in both `onFinish` (success) and `onError` (failure) callbacks.
-- Music stops on component unmount: handled automatically by hook's cleanup logic.
-- Integration points: Results page (lines 69-74, 255, 94, 202), Action Plan page (lines 75-80, 228, 115, 155).
-
----
-
-[ ] Step 28: Test Audio Implementation and Document
-**Task**: Perform comprehensive testing of the audio system and update documentation. Test that: (1) all button clicks play the correct sounds immediately, (2) background music starts and stops correctly during streaming, (3) rapid button clicks handle audio restarts properly, (4) the app gracefully handles missing audio files (shouldn't crash), (5) volume levels feel balanced (clicks at 0.5, music at 0.3). Update documentation (`tech-spec.md`, `CLAUDE.md`) explaining: the two-hook architecture (`use-sound-effect` vs `use-background-music`), complete button-to-sound mapping, file naming conventions, audio specifications (MP3 format, bitrates, file sizes), the directory structure, and how to add or modify sounds in the future.
-**Suggested Files for Context**: `CLAUDE.md`, `tech-spec.md`, all files created in Steps 23-28
-**Step Dependencies**: Step 28
-**Testing Checklist**:
-- Click each button type and verify correct sound plays
-- Submit questionnaire and verify background music starts
-- Verify music stops when results appear
-- Click "Choose Path" and verify music starts for action plan
-- Test "Back to Paths" and "Start Over" for proper navigation sounds
-- Verify header "Ikigai Finder" link plays return sound
-- Check browser console for any audio-related errors
-
----
-
-## Phase 7: Final Hardening and Debugging
-
-This final phase provides developers with the tools to effectively debug and replicate AI failures.
-
----
-
-[ ] Step 29: Create a Developer Script for Controlled Edge-Case Testing
-**Task**: Create a new file `_docs/manual-test-harness.ts`. This script will not be part of the main application build. It should be a simple Node.js script that allows a developer to easily send a predefined JSON object (representing difficult questionnaire answers) to the new `streamObject` endpoints and print the streaming output. Include sample inputs in the script for testing vague, abstract, non-sequitur, and multi-language answers to verify the structured streaming approach handles edge cases better than delimiter parsing.
-**Suggested Files for Context**: `server/routes/assessment`, `shared/schema.ts`
-**Step Dependencies**: Step 28
+**Why**: Shortens the iteration cycle from minutes to seconds. Once you have a failing case, you can rapidly test different prompt approaches until you find one that works.
