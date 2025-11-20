@@ -61,6 +61,17 @@ export default {
           border: "var(--sidebar-border)",
           ring: "var(--sidebar-ring)",
         },
+        ikigai: {
+          teal: "hsl(var(--ikigai-teal))",
+          pink: "hsl(var(--ikigai-pink))",
+          yellow: "hsl(var(--ikigai-yellow))",
+          orange: "hsl(var(--ikigai-orange))",
+          cream: "hsl(var(--ikigai-cream))",
+        },
+      },
+      borderWidth: {
+        '5': '5px',
+        '6': '6px',
       },
       keyframes: {
         "accordion-down": {

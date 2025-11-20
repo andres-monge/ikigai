@@ -33,20 +33,28 @@ export function Header({ language, onLanguageChange, onNavigateHome }: HeaderPro
         </button>
         
         <div className="flex items-center space-x-4">
-          <div className="flex items-center bg-slate-100 rounded-lg p-1">
+          <div className="flex items-center gap-3">
             <Button
-              variant={language === 'en' ? 'secondary' : 'ghost'}
+              variant="ghost"
               size="sm"
               onClick={() => handleLanguageChange('en')}
-              className="px-3 py-1 text-sm font-medium"
+              className={`px-4 py-1 text-sm font-black rounded-none transition-all duration-200 ${
+                language === 'en' 
+                  ? 'bg-ikigai-teal text-white shadow-[4px_4px_0_rgba(0,0,0,0.65)] hover:bg-ikigai-teal/90 -translate-y-1' 
+                  : 'bg-slate-100 text-slate-400 hover:bg-ikigai-yellow/20 hover:text-slate-600'
+              }`}
             >
               EN
             </Button>
             <Button
-              variant={language === 'es' ? 'secondary' : 'ghost'}
+              variant="ghost"
               size="sm"
               onClick={() => handleLanguageChange('es')}
-              className="px-3 py-1 text-sm font-medium"
+              className={`px-4 py-1 text-sm font-black rounded-none transition-all duration-200 ${
+                language === 'es'
+                  ? 'bg-ikigai-teal text-white shadow-[4px_4px_0_rgba(0,0,0,0.65)] hover:bg-ikigai-teal/90 -translate-y-1'
+                  : 'bg-slate-100 text-slate-400 hover:bg-ikigai-yellow/20 hover:text-slate-600'
+              }`}
             >
               ES
             </Button>

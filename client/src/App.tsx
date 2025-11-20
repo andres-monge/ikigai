@@ -104,7 +104,7 @@ navigate('/');
 return (
 <TooltipProvider>
 <Header language={language} onLanguageChange={setLanguage} onNavigateHome={handleNavigateHome} />
-<main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+<main className="max-w-7xl mx-auto">
 <Switch>
 {/* Landing + Inline Questionnaire (SinglePageQuestionnaire to be introduced in Step 2) */}
 <Route path="/" component={() => <Home language={language} sessionId={sessionId} />} />

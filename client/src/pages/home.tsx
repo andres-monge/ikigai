@@ -7,7 +7,7 @@
  * completely self-contained inside the router.
  */
 
-import { UserX, ArrowRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import React from 'react';
 import { useLocation } from 'wouter';
 import { t, type Language } from '@/lib/i18n';
@@ -36,62 +36,50 @@ export function Home({ language, sessionId }: HomeProps) {
   };
 
   return (
-    <div className="text-center mb-12">
-      <div className="max-w-3xl mx-auto">
-        {/* Resume banner - only show if results exist */}
-        {hasResults && (
-          <div className="bg-blue-50 border-2 border-blue-300 rounded-xl p-4 mb-6 flex items-center justify-center">
+    <>
+      {/* Resume banner - only show if results exist */}
+      {hasResults && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="retro-card border-ikigai-teal bg-ikigai-teal-light p-5 mb-8 flex items-center justify-center animate-fade-in-up">
             <button
               onPointerDown={playReturnSound}
               onClick={handleReturnToPaths}
-              className="text-blue-900 font-medium hover:text-blue-700 transition-colors flex items-center gap-2"
+              className="text-ikigai-teal font-bold hover:opacity-70 transition-opacity flex items-center gap-2 text-lg"
             >
               {t('home.returnToPaths', language)}
-              <ArrowRight className="w-4 h-4" />
+              <ArrowRight className="w-5 h-5" />
             </button>
           </div>
-        )}
-
-        {/* Hero */}
-        <div
-          className="relative mb-8 rounded-2xl overflow-hidden shadow-xl p-6"
-          style={{
-            backgroundColor: '#fff9f3'
-          }}
-        >
-          <div className="text-center">
-            <h2 className="text-4xl md:text-5xl font-bold mb-4 text-gray-900">
-              {t('welcome.title', language)}
-            </h2>
-            
-            {/* Image container */}
-            <div className="mx-auto my-4 max-w-sm">
-              <img 
-                src="/assets/ikigai-circles-866.png" 
-                alt=""
-                className="w-full h-auto"
-              />
-            </div>
-
-            {/* Subtitle */}
-            <p className="text-xl md:text-2xl font-bold text-gray-900 mt-4 opacity-70">
-              {t('welcome.description', language)}
-            </p>
-          </div>
         </div>
+      )}
 
-        {/* Inline single-page questionnaire – introduced in Step 2 */}
-        <div className="mt-12">
-          <SinglePageQuestionnaire language={language} sessionId={sessionId} />
-        </div>
+      {/* Hero Section */}
+      <div className="bg-ikigai-cream p-10 md:p-16 text-center animate-fade-in-up delay-100 rounded-none border-0">
+        <div className="max-w-7xl mx-auto">
+          <h1 className="text-5xl md:text-7xl font-black mb-8 text-gray-900 tracking-tight">
+            {t('welcome.title', language)}
+          </h1>
 
-        <div className="flex justify-center mt-6 space-x-8 text-sm text-slate-500">
-          <div className="flex items-center">
-            <UserX className="w-4 h-4 mr-2 text-accent" />
-            <span>{t('welcome.noAccount', language)}</span>
+          {/* Image container */}
+          <div className="mx-auto my-8 max-w-lg">
+            <img
+              src="/assets/ikigai-circles-866.png"
+              alt="Ikigai diagram showing the intersection of what you love, what you're good at, what the world needs, and what you can be paid for"
+              className="w-full h-auto"
+            />
           </div>
+
+          {/* Subtitle */}
+          <p className="text-2xl md:text-3xl font-bold text-gray-800 mt-8 leading-relaxed">
+            {t('welcome.description', language)}
+          </p>
         </div>
       </div>
-    </div>
+
+      {/* Questionnaire */}
+      <div className="bg-[#f6f4ed] animate-fade-in-up delay-200">
+        <SinglePageQuestionnaire language={language} sessionId={sessionId} />
+      </div>
+    </>
   );
 }

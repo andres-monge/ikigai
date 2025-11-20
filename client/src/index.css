@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,800;9..40,900&family=Manrope:wght@400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -25,6 +27,13 @@
   --success-foreground: hsl(355.7, 100%, 97.3%);
   --ring: hsl(222.2, 84%, 4.9%);
   --radius: 0.75rem;
+
+  /* Ikigai Color Palette */
+  --ikigai-teal: 174 45% 52%;     /* #4DB6AC - What you love */
+  --ikigai-pink: 340 82% 52%;     /* #E91E63 - What the world needs */
+  --ikigai-yellow: 45 100% 51%;   /* #FFC107 - What you're good at */
+  --ikigai-orange: 16 100% 60%;   /* #FF6B35 - What you can be paid for */
+  --ikigai-cream: 32 100% 97%;    /* #fff9f3 - Warm base */
 }
 
 .dark {
@@ -58,7 +67,12 @@
 
   body {
     @apply bg-background text-foreground;
-    font-family: 'Inter', sans-serif;
+    font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-weight: 700;
   }
 }
 
@@ -66,11 +80,116 @@
   .gradient-primary {
     background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)));
   }
-  
+
   .text-gradient {
     background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
+  }
+
+  /* Retro-Modern Card Styles */
+  .retro-card {
+    @apply rounded-2xl shadow-lg transition-all duration-300;
+    border-width: 5px;
+    border-color: hsl(var(--border));
+  }
+
+  .retro-card-thick {
+    @apply rounded-3xl shadow-xl;
+    border-width: 6px;
+  }
+
+  .hero-border {
+    border-width: 6px;
+    border-style: solid;
+  }
+
+  /* Ikigai Accent Borders */
+  .border-ikigai-teal {
+    border-color: hsl(var(--ikigai-teal));
+  }
+
+  .border-ikigai-pink {
+    border-color: hsl(var(--ikigai-pink));
+  }
+
+  .border-ikigai-yellow {
+    border-color: hsl(var(--ikigai-yellow));
+  }
+
+  .border-ikigai-orange {
+    border-color: hsl(var(--ikigai-orange));
+  }
+
+  /* Background colors */
+  .bg-ikigai-cream {
+    background-color: hsl(var(--ikigai-cream));
+  }
+
+  .bg-ikigai-teal-light {
+    background-color: hsl(var(--ikigai-teal) / 0.08);
+  }
+
+  .bg-ikigai-pink-light {
+    background-color: hsl(var(--ikigai-pink) / 0.08);
+  }
+
+  .bg-ikigai-yellow-light {
+    background-color: hsl(var(--ikigai-yellow) / 0.08);
+  }
+
+  .bg-ikigai-orange-light {
+    background-color: hsl(var(--ikigai-orange) / 0.08);
+  }
+
+  /* Text colors */
+  .text-ikigai-teal {
+    color: hsl(var(--ikigai-teal));
+  }
+
+  .text-ikigai-pink {
+    color: hsl(var(--ikigai-pink));
+  }
+
+  .text-ikigai-yellow {
+    color: hsl(var(--ikigai-yellow));
+  }
+
+  .text-ikigai-orange {
+    color: hsl(var(--ikigai-orange));
+  }
+
+  /* Staggered Animations */
+  .animate-fade-in-up {
+    animation: fadeInUp 0.6s ease-out forwards;
+    opacity: 0;
+  }
+
+  .delay-100 {
+    animation-delay: 100ms;
+  }
+
+  .delay-200 {
+    animation-delay: 200ms;
+  }
+
+  .delay-300 {
+    animation-delay: 300ms;
+  }
+
+  .delay-400 {
+    animation-delay: 400ms;
+  }
+
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 }

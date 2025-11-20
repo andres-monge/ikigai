@@ -145,8 +145,9 @@ export function SinglePageQuestionnaire({
 
   /* --------------------------------- Render ------------------------------ */
   return (
-    <div className="bg-white rounded-2xl shadow-lg p-8">
-      <h2 className="text-2xl text-slate-600 mb-6 text-left">
+    <div className="bg-[#f6f4ed] p-10 md:p-12 border-0 rounded-none">
+      <div className="max-w-7xl mx-auto">
+      <h2 className="text-3xl md:text-4xl font-black text-gray-900 mb-8 text-center">
         {t('home.questionnaireTitle', language)}
       </h2>
 
@@ -162,7 +163,7 @@ export function SinglePageQuestionnaire({
               onChange={(e: ChangeEvent<HTMLTextAreaElement>) =>
                 handleTextareaChange(id, e.target.value)
               }
-              className="w-full resize-none border rounded-md p-3 bg-background text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="w-full resize-none border border-dashed border-gray-400 rounded-none p-3 bg-white text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               minRows={3}
               maxRows={10}
               required
@@ -171,14 +172,17 @@ export function SinglePageQuestionnaire({
         ))}
       </div>
 
-      <Button
-        onPointerDown={playPrimarySound}
-        onClick={handleSubmit}
-        disabled={isPending}
-        className="mt-8 px-8 py-4 font-semibold shadow-lg hover:shadow-xl transition-all duration-200 bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        {isPending ? t('questionnaire.saving', language) : t('questionnaire.complete', language)}
-      </Button>
+      <div className="mt-10 flex justify-center">
+        <Button
+          onPointerDown={playPrimarySound}
+          onClick={handleSubmit}
+          disabled={isPending}
+          className="px-12 py-5 text-xl font-black bg-ikigai-teal hover:bg-ikigai-teal/90 text-white rounded-none shadow-[6px_6px_0_rgba(0,0,0,0.65)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-center"
+        >
+          {isPending ? t('questionnaire.saving', language) : t('questionnaire.complete', language)}
+        </Button>
+      </div>
+      </div>
     </div>
   );
 } 
