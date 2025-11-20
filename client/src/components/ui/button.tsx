@@ -18,6 +18,8 @@ const buttonVariants = cva(
           "bg-secondary text-secondary-foreground hover:bg-secondary/80",
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
+        retro: "bg-ikigai-teal text-white hover:bg-ikigai-teal/90 rounded-none shadow-retro font-black disabled:opacity-50 disabled:cursor-not-allowed",
+        "retro-sm": "bg-ikigai-teal text-white hover:bg-ikigai-teal/90 rounded-none shadow-retro-sm font-black -translate-y-1 disabled:opacity-50 disabled:cursor-not-allowed",
       },
       size: {
         default: "h-10 px-4 py-2",

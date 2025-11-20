@@ -67,6 +67,7 @@ export default {
           yellow: "hsl(var(--ikigai-yellow))",
           orange: "hsl(var(--ikigai-orange))",
           cream: "hsl(var(--ikigai-cream))",
+          beige: "hsl(var(--ikigai-beige))",
         },
       },
       borderWidth: {

@@ -77,7 +77,7 @@ export function Home({ language, sessionId }: HomeProps) {
       </div>
 
       {/* Questionnaire */}
-      <div className="bg-[#f6f4ed] animate-fade-in-up delay-200">
+      <div className="bg-ikigai-beige animate-fade-in-up delay-200">
         <SinglePageQuestionnaire language={language} sessionId={sessionId} />
       </div>
     </>

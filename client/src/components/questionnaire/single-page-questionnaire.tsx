@@ -145,7 +145,7 @@ export function SinglePageQuestionnaire({
 
   /* --------------------------------- Render ------------------------------ */
   return (
-    <div className="bg-[#f6f4ed] p-10 md:p-12 border-0 rounded-none">
+    <div className="bg-ikigai-beige p-10 md:p-12 border-0 rounded-none">
       <div className="max-w-7xl mx-auto">
       <h2 className="text-3xl md:text-4xl font-black text-gray-900 mb-8 text-center">
         {t('home.questionnaireTitle', language)}
@@ -177,7 +177,8 @@ export function SinglePageQuestionnaire({
           onPointerDown={playPrimarySound}
           onClick={handleSubmit}
           disabled={isPending}
-          className="px-12 py-5 text-xl font-black bg-ikigai-teal hover:bg-ikigai-teal/90 text-white rounded-none shadow-[6px_6px_0_rgba(0,0,0,0.65)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-center"
+          variant="retro"
+          className="px-12 py-5 text-xl"
         >
           {isPending ? t('questionnaire.saving', language) : t('questionnaire.complete', language)}
         </Button>

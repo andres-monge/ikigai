@@ -35,31 +35,31 @@ export function Header({ language, onLanguageChange, onNavigateHome }: HeaderPro
         <div className="flex items-center space-x-4">
           <div className="flex items-center gap-3">
             <Button
-              variant="ghost"
+              variant={language === 'en' ? 'retro-sm' : 'ghost'}
               size="sm"
               onClick={() => handleLanguageChange('en')}
-              className={`px-4 py-1 text-sm font-black rounded-none transition-all duration-200 ${
-                language === 'en' 
-                  ? 'bg-ikigai-teal text-white shadow-[4px_4px_0_rgba(0,0,0,0.65)] hover:bg-ikigai-teal/90 -translate-y-1' 
-                  : 'bg-slate-100 text-slate-400 hover:bg-ikigai-yellow/20 hover:text-slate-600'
-              }`}
+              className={
+                language === 'en'
+                  ? 'px-4 py-1 text-sm'
+                  : 'px-4 py-1 text-sm font-black rounded-none bg-slate-100 text-slate-400 hover:bg-ikigai-yellow/20 hover:text-slate-600'
+              }
             >
               EN
             </Button>
             <Button
-              variant="ghost"
+              variant={language === 'es' ? 'retro-sm' : 'ghost'}
               size="sm"
               onClick={() => handleLanguageChange('es')}
-              className={`px-4 py-1 text-sm font-black rounded-none transition-all duration-200 ${
+              className={
                 language === 'es'
-                  ? 'bg-ikigai-teal text-white shadow-[4px_4px_0_rgba(0,0,0,0.65)] hover:bg-ikigai-teal/90 -translate-y-1'
-                  : 'bg-slate-100 text-slate-400 hover:bg-ikigai-yellow/20 hover:text-slate-600'
-              }`}
+                  ? 'px-4 py-1 text-sm'
+                  : 'px-4 py-1 text-sm font-black rounded-none bg-slate-100 text-slate-400 hover:bg-ikigai-yellow/20 hover:text-slate-600'
+              }
             >
               ES
             </Button>
           </div>
-          
+
 
         </div>
       </nav>
