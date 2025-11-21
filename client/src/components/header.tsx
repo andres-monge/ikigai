@@ -35,26 +35,18 @@ export function Header({ language, onLanguageChange, onNavigateHome }: HeaderPro
         <div className="flex items-center space-x-4">
           <div className="flex items-center gap-3">
             <Button
-              variant={language === 'en' ? 'retro-sm' : 'ghost'}
+              variant={language === 'en' ? 'retro-sm' : 'retro-inactive'}
               size="sm"
               onClick={() => handleLanguageChange('en')}
-              className={
-                language === 'en'
-                  ? 'px-4 py-1 text-sm'
-                  : 'px-4 py-1 text-sm font-black rounded-none bg-slate-100 text-slate-400 hover:bg-ikigai-yellow/20 hover:text-slate-600'
-              }
+              className="px-4 py-1 text-sm"
             >
               EN
             </Button>
             <Button
-              variant={language === 'es' ? 'retro-sm' : 'ghost'}
+              variant={language === 'es' ? 'retro-sm' : 'retro-inactive'}
               size="sm"
               onClick={() => handleLanguageChange('es')}
-              className={
-                language === 'es'
-                  ? 'px-4 py-1 text-sm'
-                  : 'px-4 py-1 text-sm font-black rounded-none bg-slate-100 text-slate-400 hover:bg-ikigai-yellow/20 hover:text-slate-600'
-              }
+              className="px-4 py-1 text-sm"
             >
               ES
             </Button>
