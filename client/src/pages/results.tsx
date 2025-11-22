@@ -517,16 +517,16 @@ export function Results({
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
           <Button
             onClick={handleExportPDF}
-            variant="retro"
-            className="bg-ikigai-yellow text-slate-900 hover:bg-ikigai-yellow/90 px-8 h-10 text-sm"
+            variant="retro-yellow"
+            className="px-8 h-10 text-sm"
           >
             {t('results.exportPdf', language)}
           </Button>
 
           <Button
             onClick={handleStartOver}
-            variant="retro"
-            className="bg-white text-slate-700 hover:bg-slate-50 border-2 border-slate-300 px-8 h-10 text-sm"
+            variant="retro-light-grey"
+            className="px-8 h-10 text-sm"
           >
             {t('results.startOver', language)}
           </Button>

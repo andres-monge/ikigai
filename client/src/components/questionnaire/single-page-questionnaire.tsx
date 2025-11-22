@@ -177,7 +177,7 @@ export function SinglePageQuestionnaire({
           onPointerDown={playPrimarySound}
           onClick={handleSubmit}
           disabled={isPending}
-          variant="retro"
+          variant="retro-teal"
           className="px-12 py-5 text-xl"
         >
           {isPending ? t('questionnaire.saving', language) : t('questionnaire.complete', language)}

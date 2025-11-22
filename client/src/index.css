@@ -107,6 +107,24 @@
     border-style: solid;
   }
 
+  /* Results Page Card Pattern */
+  .retro-card-results {
+    @apply bg-white rounded-none shadow-retro border border-black;
+  }
+
+  /* Ikigai Gradient Utilities */
+  .gradient-ikigai-teal {
+    @apply bg-gradient-to-br from-ikigai-teal to-ikigai-teal/90;
+  }
+
+  .gradient-ikigai-pink {
+    @apply bg-gradient-to-br from-ikigai-pink to-ikigai-pink/90;
+  }
+
+  .gradient-ikigai-orange {
+    @apply bg-gradient-to-br from-ikigai-orange to-ikigai-orange/90;
+  }
+
   /* Retro Drop Shadows */
   .shadow-retro-sm {
     box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.65);
