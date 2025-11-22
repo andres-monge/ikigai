@@ -39,16 +39,18 @@ export function Home({ language, sessionId }: HomeProps) {
     <>
       {/* Resume banner - only show if results exist */}
       {hasResults && (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="retro-card border-ikigai-teal bg-ikigai-teal-light p-5 mb-8 flex items-center justify-center animate-fade-in-up">
-            <button
-              onPointerDown={playReturnSound}
-              onClick={handleReturnToPaths}
-              className="text-ikigai-teal font-bold hover:opacity-70 transition-opacity flex items-center gap-2 text-lg"
-            >
-              {t('home.returnToPaths', language)}
-              <ArrowRight className="w-5 h-5" />
-            </button>
+        <div className="bg-ikigai-cream w-full">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
+            <div className="retro-card-results p-5 flex items-center justify-center animate-fade-in-up">
+              <button
+                onPointerDown={playReturnSound}
+                onClick={handleReturnToPaths}
+                className="text-slate-800 font-bold hover:opacity-70 transition-opacity flex items-center gap-2 text-lg"
+              >
+                {t('home.returnToPaths', language)}
+                <ArrowRight className="w-5 h-5" />
+              </button>
+            </div>
           </div>
         </div>
       )}
