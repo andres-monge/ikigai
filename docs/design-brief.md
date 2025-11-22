@@ -1,8 +1,8 @@
 # Ikigai Finder Design Brief
 
 **Design Direction:** Modern-nostalgic aesthetic inspired by Tavus.com
-**Status:** Home page complete (2025-11-16)
-**Last Updated:** 2025-11-16
+**Status:** Home page complete with reusable design system
+**Last Updated:** 2025-11-22
 
 ## Design Philosophy
 
@@ -33,6 +33,7 @@ All accent colors derived from the ikigai diagram circles:
 --ikigai-yellow: 45 100% 51%;   /* #FFC107 - What you're good at */
 --ikigai-orange: 16 100% 60%;   /* #FF6B35 - What you can be paid for */
 --ikigai-cream: 32 100% 97%;    /* #fff9f3 - Warm base */
+--ikigai-beige: 32 15% 95%;     /* #f6f4ed - Warm background */
 ```
 
 **Usage Pattern:**
@@ -42,7 +43,7 @@ All accent colors derived from the ikigai diagram circles:
 - Use `text-ikigai-{color}` for headings and emphasis
 
 ### Tailwind Integration
-Colors available as `ikigai.teal`, `ikigai.pink`, `ikigai.yellow`, `ikigai.orange`, `ikigai.cream` in `tailwind.config.ts`
+Colors available as `ikigai.teal`, `ikigai.pink`, `ikigai.yellow`, `ikigai.orange`, `ikigai.cream`, `ikigai.beige` in `tailwind.config.ts`
 
 ---
 
@@ -104,6 +105,21 @@ box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1);
 Custom Tailwind utilities: `border-5` (5px), `border-6` (6px)
 For directional: `border-l-6`, `border-r-6`, etc.
 
+### Retro Drop Shadows
+Custom utility classes for brutalist-style drop shadows:
+
+**`.shadow-retro`**
+- 6px offset drop shadow for primary buttons
+```css
+box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.65);
+```
+
+**`.shadow-retro-sm`**
+- 4px offset drop shadow for smaller buttons
+```css
+box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.65);
+```
+
 ### Hover Effects
 Standard pattern:
 ```jsx
@@ -143,65 +159,125 @@ Staggered page load animations for visual hierarchy:
 **Current Animation Sequence (Home Page):**
 1. Return banner (if present): no delay
 2. Hero section: `delay-100`
-3. Ikigai concept cards: `delay-200`, `delay-300`
-4. Questionnaire section: `delay-400`
+3. Questionnaire section: `delay-200`
 
 ---
 
 ## Component Patterns
 
+### Button System
+**Location:** `client/src/components/ui/button.tsx`
+
+The app uses a reusable button component with variant-based styling powered by CVA (class-variance-authority).
+
+#### Button Variants
+
+**`variant="retro"`** - Primary action buttons
+- Teal background with white text
+- Large drop shadow (`.shadow-retro`)
+- Sharp corners (`rounded-none`)
+- Bold font weight (`font-black`)
+```jsx
+<Button variant="retro" className="px-12 py-5 text-xl">
+  Complete Assessment
+</Button>
+```
+
+**`variant="retro-sm"`** - Active toggle/switch buttons
+- Teal background with white text
+- Small drop shadow (`.shadow-retro-sm`)
+- Lifted appearance (`-translate-y-1`)
+- Sharp corners, bold font
+```jsx
+<Button variant="retro-sm" size="sm" className="px-4 py-1 text-sm">
+  EN
+</Button>
+```
+
+**`variant="retro-inactive"`** - Inactive toggle/switch buttons
+- Light gray background (`bg-slate-100`)
+- Muted text color (`text-slate-400`)
+- Sharp corners, bold font
+- Hover changes to yellow tint
+```jsx
+<Button variant="retro-inactive" size="sm" className="px-4 py-1 text-sm">
+  ES
+</Button>
+```
+
+**Other Variants:** `default`, `destructive`, `outline`, `secondary`, `ghost`, `link` (shadcn/ui standard variants)
+
+#### Button Sizes
+- `size="default"` - h-10 px-4 py-2
+- `size="sm"` - h-9 px-3 (no border radius - controlled by variant)
+- `size="lg"` - h-11 px-8
+- `size="icon"` - h-10 w-10
+
+**Key Pattern:** Variants control border radius, not sizes. This allows retro variants to maintain sharp corners.
+
 ### Hero Section
 **Characteristics:**
-- `.retro-card-thick` with `.hero-border` and `border-gray-800`
-- `bg-ikigai-cream` background
+- Full-width section with `bg-ikigai-cream` background
+- No borders or card wrapper (clean, minimalist approach)
 - Center-aligned content
 - Extra large, bold headline (`text-5xl md:text-7xl font-black`)
 - Generous padding (`p-10 md:p-16`)
+- Sharp corners (`rounded-none`)
 
-**Image Treatment:**
-- Subtle white frame behind images (absolute positioned, `opacity-60`)
-- Images as `relative z-10` to sit above frame
-
+**Actual Implementation:**
 ```jsx
-<div className="retro-card-thick hero-border border-gray-800 bg-ikigai-cream p-10 md:p-16">
-  <h1 className="text-5xl md:text-7xl font-black">Find Your Purpose</h1>
-  <div className="relative max-w-lg mx-auto">
-    <div className="absolute -inset-4 bg-white rounded-2xl opacity-60"></div>
-    <img src="..." className="relative z-10" />
-  </div>
-</div>
-```
-
-### Concept Cards
-**Characteristics:**
-- `.retro-card` with thick colored left border
-- Light background in matching color
-- Horizontal layout with colored dot + text
-- Hover lift effect
-
-```jsx
-<div className="retro-card border-l-6 border-ikigai-teal bg-ikigai-teal-light p-8 hover:shadow-2xl hover:-translate-y-1">
-  <div className="flex items-start gap-4">
-    <div className="w-3 h-3 rounded-full bg-ikigai-teal mt-2"></div>
-    <div className="text-left">
-      <h3 className="text-2xl font-black text-ikigai-teal">Title</h3>
-      <p className="text-gray-700">Description</p>
+<div className="bg-ikigai-cream p-10 md:p-16 text-center animate-fade-in-up delay-100 rounded-none border-0">
+  <div className="max-w-7xl mx-auto">
+    <h1 className="text-5xl md:text-7xl font-black mb-8 text-gray-900 tracking-tight">
+      {t('welcome.title', language)}
+    </h1>
+    <div className="mx-auto my-8 max-w-lg">
+      <img src="/assets/ikigai-circles-866.png" className="w-full h-auto" />
     </div>
+    <p className="text-2xl md:text-3xl font-bold text-gray-800 mt-8 leading-relaxed">
+      {t('welcome.description', language)}
+    </p>
   </div>
 </div>
 ```
 
-### Section Containers
-**Standard wrapper pattern:**
+### Banner Cards (Return to Results)
+**Characteristics:**
+- `.retro-card` with thick colored border
+- Light background in matching color
+- Horizontal centered layout with button
+- Simple, clean design
+
+**Actual Implementation:**
 ```jsx
-<div className="retro-card-thick hero-border border-gray-800 bg-white p-10 md:p-12">
-  <h2 className="text-4xl md:text-5xl font-black text-center mb-8">Section Title</h2>
-  <p className="text-center text-gray-600 text-lg mb-8 max-w-2xl mx-auto">
-    Explanatory text
-  </p>
-  {/* Content */}
+<div className="retro-card border-ikigai-teal bg-ikigai-teal-light p-5 mb-8 flex items-center justify-center animate-fade-in-up">
+  <button className="text-ikigai-teal font-bold hover:opacity-70 transition-opacity flex items-center gap-2 text-lg">
+    {t('home.returnToPaths', language)}
+    <ArrowRight className="w-5 h-5" />
+  </button>
 </div>
 ```
+
+### Full-Width Section Containers
+**Standard wrapper pattern for main sections:**
+```jsx
+{/* Warm background section (e.g., questionnaire) */}
+<div className="bg-ikigai-beige animate-fade-in-up delay-200">
+  {/* Component content */}
+</div>
+
+{/* Cream background section (e.g., hero) */}
+<div className="bg-ikigai-cream p-10 md:p-16 text-center animate-fade-in-up delay-100 rounded-none border-0">
+  <div className="max-w-7xl mx-auto">
+    <h1 className="text-5xl md:text-7xl font-black mb-8 text-gray-900 tracking-tight">
+      Section Title
+    </h1>
+    {/* Content */}
+  </div>
+</div>
+```
+
+**Note:** The current design uses clean, borderless sections rather than thick-bordered cards for main page sections. The `.retro-card` classes are reserved for smaller UI elements like banners.
 
 ---
 
@@ -272,7 +348,7 @@ Staggered page load animations for visual hierarchy:
 
 ### Design Tokens Location
 - CSS Variables: `client/src/index.css` `:root`
-- Tailwind Theme: `tailwind.config.ts` ’ `theme.extend.colors.ikigai`
+- Tailwind Theme: `tailwind.config.ts` ï¿½ `theme.extend.colors.ikigai`
 
 ---
 
@@ -280,15 +356,15 @@ Staggered page load animations for visual hierarchy:
 
 ### Home Page ( Complete)
 **Sections:**
-1. **Return Banner** (conditional) - Teal accent, retro-card
-2. **Hero** - Cream background, 6px black border, large heading + ikigai image
-3. **Four Concept Cards** - 2x2 grid, color-coded borders/backgrounds
-4. **Questionnaire** - White background, thick black border, embedded component
-5. **Footer** - Simple no-account-required message
+1. **Return Banner** (conditional) - `.retro-card` with teal accent, appears when user has existing results
+2. **Hero** - Full-width cream background (`bg-ikigai-cream`), no borders, large heading + ikigai diagram image + subtitle
+3. **Questionnaire** - Full-width beige background (`bg-ikigai-beige`), embedded `SinglePageQuestionnaire` component with retro submit button
 
-**Animations:** Staggered fade-in from top to bottom
+**Design Approach:** Clean, minimalist sections with full-width colored backgrounds. No thick borders on main sections (borders reserved for smaller UI elements like the return banner).
 
-### Other Pages (=§ Todo)
+**Animations:** Staggered fade-in from top to bottom (return banner â†’ hero â†’ questionnaire)
+
+### Other Pages (Todo)
 - Results page
 - Action plan page
 - Not found page
@@ -322,10 +398,10 @@ Staggered page load animations for visual hierarchy:
 
 **5. Color assignment:**
 - Match content theme to ikigai colors logically:
-  - Passion/love content ’ Teal
-  - Skills/talents ’ Yellow
-  - World needs/impact ’ Pink
-  - Economic/career ’ Orange
+  - Passion/love content ï¿½ Teal
+  - Skills/talents ï¿½ Yellow
+  - World needs/impact ï¿½ Pink
+  - Economic/career ï¿½ Orange
 
 ### Testing Checklist:
 - [ ] Hard refresh to see changes (`Cmd+Shift+R`)
@@ -346,16 +422,37 @@ Staggered page load animations for visual hierarchy:
 **Common class combinations:**
 ```jsx
 // Hero section
-className="retro-card-thick hero-border border-gray-800 bg-ikigai-cream p-10 md:p-16 text-center animate-fade-in-up delay-100"
+className="bg-ikigai-cream p-10 md:p-16 text-center animate-fade-in-up delay-100 rounded-none border-0"
 
-// Concept card
-className="retro-card border-l-6 border-ikigai-teal bg-ikigai-teal-light p-8 hover:shadow-2xl hover:-translate-y-1 transition-all"
+// Return banner card
+className="retro-card border-ikigai-teal bg-ikigai-teal-light p-5 mb-8 flex items-center justify-center animate-fade-in-up"
 
-// Section container
-className="retro-card-thick hero-border border-gray-800 bg-white p-10 md:p-12"
+// Warm background section (questionnaire)
+className="bg-ikigai-beige animate-fade-in-up delay-200"
 
 // Large heading
-className="text-5xl md:text-7xl font-black text-gray-900 tracking-tight"
+className="text-5xl md:text-7xl font-black mb-8 text-gray-900 tracking-tight"
+
+// Section subtitle
+className="text-2xl md:text-3xl font-bold text-gray-800 mt-8 leading-relaxed"
+```
+
+**Button patterns:**
+```jsx
+// Primary CTA button
+<Button variant="retro" className="px-12 py-5 text-xl">
+  Submit
+</Button>
+
+// Active language toggle
+<Button variant="retro-sm" size="sm" className="px-4 py-1 text-sm">
+  EN
+</Button>
+
+// Inactive language toggle
+<Button variant="retro-inactive" size="sm" className="px-4 py-1 text-sm">
+  ES
+</Button>
 ```
 
 ---

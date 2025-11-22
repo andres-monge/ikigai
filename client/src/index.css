@@ -67,7 +67,8 @@
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply text-foreground;
+    background-color: hsl(var(--ikigai-beige));
     font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
   }
 

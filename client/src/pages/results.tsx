@@ -335,7 +335,7 @@ export function Results({
     return (
       <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <div className="text-center mb-12">
+        <div className="text-center my-6">
           <h2 className="text-3xl font-bold text-slate-900 mb-4">
             {t('results.title', language)}
           </h2>
@@ -400,13 +400,13 @@ export function Results({
                       <h5 className="font-semibold text-slate-900 mb-3">{t('ikigai.alignment', language)}</h5>
                       <div className="space-y-2">
                         {[
-                          { key: 'love', color: 'red' },
-                          { key: 'goodAt', color: 'blue' },
-                          { key: 'worldNeeds', color: 'green' },
-                          { key: 'pay', color: 'yellow' }
-                        ].map(({ key, color }) => (
+                          { key: 'love', colorClass: 'bg-ikigai-teal' },
+                          { key: 'goodAt', colorClass: 'bg-ikigai-yellow' },
+                          { key: 'worldNeeds', colorClass: 'bg-ikigai-pink' },
+                          { key: 'pay', colorClass: 'bg-ikigai-orange' }
+                        ].map(({ key, colorClass }) => (
                           <div key={key} className="flex items-start">
-                            <div className={`w-3 h-3 rounded-full mr-3 flex-shrink-0 mt-0.5 bg-${color}-400`} />
+                            <div className={`w-3 h-3 rounded-full mr-3 flex-shrink-0 mt-1 ${colorClass}`} />
                             <span className="text-sm text-slate-600">
                               <strong>{t(`ikigai.${key}`, language)}:</strong>{' '}
                               {path.ikigaiAlignment[key as keyof typeof path.ikigaiAlignment] || (
@@ -493,7 +493,7 @@ export function Results({
     <>
       <div className="max-w-6xl mx-auto">
         {/* AI Analysis Header */}
-        <div className="text-center mb-12">
+        <div className="text-center my-6">
           <h2 className="text-3xl font-bold text-slate-900 mb-4">
             {t('results.title', language)}
           </h2>
@@ -517,18 +517,17 @@ export function Results({
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
           <Button
             onClick={handleExportPDF}
-            size="lg"
+            variant="retro"
+            className="bg-ikigai-yellow text-slate-900 hover:bg-ikigai-yellow/90 px-8 h-10 text-sm"
           >
-            <Download className="w-4 h-4 mr-2" />
             {t('results.exportPdf', language)}
           </Button>
 
           <Button
             onClick={handleStartOver}
-            variant="outline"
-            className="border border-slate-300 text-slate-700 px-8 py-4 rounded-xl font-semibold hover:bg-slate-50 transition-all duration-200"
+            variant="retro"
+            className="bg-white text-slate-700 hover:bg-slate-50 border-2 border-slate-300 px-8 h-10 text-sm"
           >
-            <RotateCcw className="w-4 h-4 mr-2" />
             {t('results.startOver', language)}
           </Button>
         </div>
