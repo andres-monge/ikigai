@@ -27,7 +27,7 @@ export function Header({ language, onLanguageChange, onNavigateHome }: HeaderPro
           <div className="w-8 h-8 gradient-primary rounded-lg flex items-center justify-center group-hover:scale-105 transition-transform">
             <Compass className="text-white text-sm" />
           </div>
-          <h1 className="text-xl font-semibold text-slate-900 group-hover:text-primary transition-colors">
+          <h1 className="text-xl font-semibold text-slate-900 group-hover:text-ikigai-teal transition-colors">
             {t('header.title', language)}
           </h1>
         </button>

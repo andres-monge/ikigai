@@ -23,8 +23,8 @@ export function LoadingState({ title, message, language }: LoadingStateProps) {
           {title}
         </h2>
       </div>
-      
-      <div className="bg-white rounded-2xl shadow-lg p-8 mb-8">
+
+      <div className="retro-card-results p-8 mb-8">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto mb-4"></div>
           <p className="text-slate-600">

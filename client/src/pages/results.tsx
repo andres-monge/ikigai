@@ -25,9 +25,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useLocation } from 'wouter';
-import { Download, RotateCcw, Rocket, Users, Code } from 'lucide-react';
 import { experimental_useObject as useObject } from '@ai-sdk/react';
-import { z } from 'zod';
 import { purposeDiscoveryResultSchema } from '@shared/streaming-schemas';
 import { Button } from '@/components/ui/button';
 import { LoadingState } from '@/components/ui/loading-state';
@@ -347,7 +345,7 @@ export function Results({
         </div>
         
         {/* Core Drivers - render as plain text during streaming */}
-        <div className="bg-white rounded-2xl shadow-lg p-8 mb-8">
+        <div className="retro-card-results p-8 mb-8">
           <div className="space-y-6">
             <p className="text-center font-bold text-slate-800 text-lg">
               {coreDrivers.statementSentence || (
@@ -373,27 +371,22 @@ export function Results({
           </h3>
           <div className="grid lg:grid-cols-3 gap-6">
             {normalizedPaths.map((path, index) => {
-              const gradients = ['from-primary to-blue-600', 'from-secondary to-purple-600', 'from-accent to-orange-600'];
+              const gradients = ['gradient-ikigai-teal', 'gradient-ikigai-pink', 'gradient-ikigai-orange'];
               const gradient = gradients[index];
-              const icons = [Rocket, Users, Code];
-              const Icon = icons[index] || Rocket;
-              
+
               return (
-                <div key={path.id} className="bg-white rounded-2xl shadow-lg overflow-hidden flex flex-col">
-                  <div className={`bg-gradient-to-br ${gradient} p-6 text-white`}>
+                <div key={path.id} className="retro-card-results overflow-hidden flex flex-col">
+                  <div className={`${gradient} p-6 text-white`}>
                     <div className="flex items-center justify-between mb-4">
                       <h4 className="text-xl font-bold">
                         {path.title || <span className="inline-block h-7 bg-white/20 rounded w-3/4 animate-pulse" />}
                       </h4>
-                      <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
-                        <Icon className="w-4 h-4" />
-                      </div>
                     </div>
                     <p className="opacity-90 text-sm">
                       {path.description || <span className="inline-block h-5 bg-white/20 rounded w-full animate-pulse" />}
                     </p>
                   </div>
-                  
+
                   <div className="p-6">
                     {/* Ikigai Alignment */}
                     <div className="mb-6">
@@ -406,7 +399,7 @@ export function Results({
                           { key: 'pay', colorClass: 'bg-ikigai-orange' }
                         ].map(({ key, colorClass }) => (
                           <div key={key} className="flex items-start">
-                            <div className={`w-3 h-3 rounded-full mr-3 flex-shrink-0 mt-1 ${colorClass}`} />
+                            <div className={`w-3 h-3 ${colorClass} rounded-full mr-3 flex-shrink-0 mt-1`} />
                             <span className="text-sm text-slate-600">
                               <strong>{t(`ikigai.${key}`, language)}:</strong>{' '}
                               {path.ikigaiAlignment[key as keyof typeof path.ikigaiAlignment] || (
@@ -417,9 +410,9 @@ export function Results({
                         ))}
                       </div>
                     </div>
-                    
+
                     {/* Action Strategy */}
-                    <div className="bg-slate-50 rounded-lg p-4">
+                    <div className="bg-ikigai-beige rounded-none p-4">
                       <h6 className="font-medium text-slate-900 mb-2">{t('results.actionStrategy', language)}</h6>
                       <p className="text-sm text-slate-600">
                         {path.actionStrategy || (

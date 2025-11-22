@@ -165,7 +165,6 @@ export function SinglePageQuestionnaire({
               }
               className="w-full resize-none border border-dashed border-gray-400 rounded-none p-3 bg-white text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               minRows={3}
-              maxRows={10}
               required
             />
           </div>
