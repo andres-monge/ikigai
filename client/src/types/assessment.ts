@@ -67,6 +67,7 @@ export interface Milestone {
   title: string;
   timeline: string;
   actions: string[];
+  checkpoint: string;
   skills?: SkillToLearn[];
 }
 

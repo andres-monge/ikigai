@@ -21,6 +21,7 @@ import { useLocation, useSearch } from 'wouter';
 import {
   GraduationCap,
   ClipboardCheck,
+  Target,
 } from 'lucide-react';
 import { experimental_useObject as useObject } from '@ai-sdk/react';
 import { z } from 'zod';
@@ -502,6 +503,17 @@ export function ActionPlan({
                   ))}
                 </ul>
               </div>
+
+              {/* Checkpoint */}
+              {ms.checkpoint && (
+                <div>
+                  <h4 className="font-semibold text-slate-800 mb-2 flex items-center gap-2">
+                    <Target className="w-4 h-4 text-ikigai-teal" />
+                    {t('actionPlan.checkpoint', language)}
+                  </h4>
+                  <p className="text-slate-700">{ms.checkpoint}</p>
+                </div>
+              )}
 
               {/* Skills (if any) */}
               {ms.skills && ms.skills.length > 0 && (

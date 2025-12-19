@@ -60,6 +60,7 @@ export const translations: Record<string, Record<string, string>> = {
     'actionPlan.backToPaths': 'Back to Paths',
     'actionPlan.actions': 'Actions',
     'actionPlan.skills': 'Skills You\'ll Develop',
+    'actionPlan.checkpoint': 'How You\'ll Know You\'re Onto Something',
     'actionPlan.streaming': 'Scheming...a goal without a plan is just a wish.',
 
     // Ikigai
@@ -116,6 +117,7 @@ export const translations: Record<string, Record<string, string>> = {
     'actionPlan.backToPaths': 'Volver a los caminos',
     'actionPlan.actions': 'Acciones',
     'actionPlan.skills': 'Habilidades que desarrollarás',
+    'actionPlan.checkpoint': 'Cómo sabrás que vas por buen camino',
     'actionPlan.streaming': 'Pensando...un objetivo sin un plan es solo un deseo.',
 
     // Ikigai
