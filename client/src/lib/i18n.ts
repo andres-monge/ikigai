@@ -60,7 +60,7 @@ export const translations: Record<string, Record<string, string>> = {
     'actionPlan.backToPaths': 'Back to Paths',
     'actionPlan.actions': 'Actions',
     'actionPlan.skills': 'Skills You\'ll Develop',
-    'actionPlan.streaming': 'A goal without a plan is just a wish.',
+    'actionPlan.streaming': 'Scheming...a goal without a plan is just a wish.',
 
     // Ikigai
     'ikigai.alignment': 'Ikigai Alignment',
@@ -116,7 +116,7 @@ export const translations: Record<string, Record<string, string>> = {
     'actionPlan.backToPaths': 'Volver a los caminos',
     'actionPlan.actions': 'Acciones',
     'actionPlan.skills': 'Habilidades que desarrollarás',
-    'actionPlan.streaming': 'Un objetivo sin un plan es solo un deseo.',
+    'actionPlan.streaming': 'Pensando...un objetivo sin un plan es solo un deseo.',
 
     // Ikigai
     'ikigai.alignment': 'Encaje Ikigai',
