@@ -38,10 +38,10 @@ export function Home({ language, sessionId }: HomeProps) {
 
   return (
     <>
-      {/* Resume banner - only show if results exist */}
+      {/* Resume banner - only show if results exist (full-bleed) */}
       {hasResults && (
         <motion.div
-          className="bg-ikigai-cream w-full"
+          className="bg-ikigai-cream w-screen ml-[calc(-50vw+50%)]"
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: "easeOut" }}
@@ -63,9 +63,9 @@ export function Home({ language, sessionId }: HomeProps) {
         </motion.div>
       )}
 
-      {/* Hero Section */}
+      {/* Hero Section - full-bleed to extend cream background edge-to-edge */}
       <motion.div
-        className="bg-ikigai-cream p-10 md:p-16 text-center rounded-none border-0"
+        className="bg-ikigai-cream p-10 md:p-16 text-center rounded-none border-0 w-screen ml-[calc(-50vw+50%)]"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.6, delay: 0.1 }}
