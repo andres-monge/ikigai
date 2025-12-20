@@ -163,7 +163,7 @@ export function SinglePageQuestionnaire({
               onChange={(e: ChangeEvent<HTMLTextAreaElement>) =>
                 handleTextareaChange(id, e.target.value)
               }
-              className="w-full resize-none border border-dashed border-gray-400 rounded-none p-3 bg-white text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="w-full resize-none border border-dashed border-gray-400 rounded-none p-3 bg-white text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ikigai-teal"
               minRows={3}
               required
             />
