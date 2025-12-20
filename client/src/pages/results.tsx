@@ -394,8 +394,8 @@ export function Results({
                       <div className="space-y-2">
                         {[
                           { key: 'love', colorClass: 'bg-ikigai-teal' },
-                          { key: 'goodAt', colorClass: 'bg-ikigai-yellow' },
                           { key: 'worldNeeds', colorClass: 'bg-ikigai-pink' },
+                          { key: 'goodAt', colorClass: 'bg-ikigai-yellow' },
                           { key: 'pay', colorClass: 'bg-ikigai-orange' }
                         ].map(({ key, colorClass }) => (
                           <div key={key} className="flex items-start">

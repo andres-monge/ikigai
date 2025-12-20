@@ -50,18 +50,6 @@ export const QUESTIONS = {
       es: '¿Qué temas te entusiasman tanto que podrías hablar sin parar de ellos?',
     },
   ],
-  skills: [
-    {
-      id: 'skills.q1',
-      en: 'Which skills or talents do people compliment you on?',
-      es: '¿Qué habilidades o talentos te suelen destacar los demás?',
-    },
-    {
-      id: 'skills.q2',
-      en: 'Any experiences showing these skills? What\'s your job or school?',
-      es: '¿Has tenido experiencias que muestren estas habilidades? ¿Cuál es tu trabajo o qué estudias?',
-    },
-  ],
   values: [
     {
       id: 'values.q1',
@@ -72,6 +60,18 @@ export const QUESTIONS = {
       id: 'values.q2',
       en: 'If you could fast-forward 10 years, what meaningful change would you be proud you helped create?',
       es: 'Imagínate dentro de 10 años, ¿de qué cambio significativo te enorgullecería haber formado parte?',
+    },
+  ],
+  skills: [
+    {
+      id: 'skills.q1',
+      en: 'Which skills or talents do people compliment you on?',
+      es: '¿Qué habilidades o talentos te suelen destacar los demás?',
+    },
+    {
+      id: 'skills.q2',
+      en: 'Any experiences showing these skills? What\'s your job or school?',
+      es: '¿Has tenido experiencias que muestren estas habilidades? ¿Cuál es tu trabajo o qué estudias?',
     },
   ],
   economic: [
