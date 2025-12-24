@@ -26,6 +26,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useLocation } from 'wouter';
 import { experimental_useObject as useObject } from '@ai-sdk/react';
+import { Copy, Check } from 'lucide-react';
 import { purposeDiscoveryResultSchema } from '@shared/streaming-schemas';
 import { Button } from '@/components/ui/button';
 import { LoadingState } from '@/components/ui/loading-state';
@@ -33,6 +34,7 @@ import { CoreDriversSummary } from '@/components/results/core-drivers-summary';
 import { PurposePaths } from '@/components/results/purpose-paths';
 import { t, type Language } from '@/lib/i18n';
 import { exportToPDF } from '@/lib/pdf-export';
+import { copyResultsToClipboard } from '@/lib/clipboard-export';
 import { useStreamingState, createPollingSchedule, hasPositiveIds } from '@/hooks/use-streaming-state';
 import { useToast } from '@/hooks/use-toast';
 import { useBackgroundMusic } from '@/hooks/use-background-music';
@@ -59,6 +61,8 @@ export function Results({
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [needsStreaming, setNeedsStreaming] = useState(false);
+  const [isCopying, setIsCopying] = useState(false);
+  const [justCopied, setJustCopied] = useState(false);
 
   // Background music for streaming experience
   const { play: playBackgroundMusic, stop: stopBackgroundMusic, fadeOut: fadeOutBackgroundMusic } = useBackgroundMusic([
@@ -478,6 +482,32 @@ export function Results({
     exportToPDF(session!, language);
   };
 
+  /**
+   * Copies the results to clipboard in dual format (HTML + Markdown).
+   * Shows visual feedback with check icon and toast notification.
+   */
+  const handleCopyToClipboard = async () => {
+    if (!session) return;
+    setIsCopying(true);
+    try {
+      await copyResultsToClipboard(session, language);
+      setJustCopied(true);
+      toast({
+        title: t('results.copiedSuccess', language),
+      });
+      // Reset the "copied" state after 2 seconds
+      setTimeout(() => setJustCopied(false), 2000);
+    } catch {
+      toast({
+        title: t('common.error', language),
+        description: t('results.copyError', language),
+        variant: 'destructive',
+      });
+    } finally {
+      setIsCopying(false);
+    }
+  };
+
   const handleStartOver = () => {
     onStartOver();
   };
@@ -486,10 +516,22 @@ export function Results({
     <>
       <div className="max-w-6xl mx-auto">
         {/* AI Analysis Header */}
-        <div className="text-center my-6">
-          <h2 className="text-3xl font-bold text-slate-900 mb-4">
+        <div className="relative my-6">
+          <h2 className="text-3xl font-bold text-slate-900 mb-4 text-center">
             {t('results.title', language)}
           </h2>
+          <button
+            onClick={handleCopyToClipboard}
+            disabled={isCopying}
+            className="absolute right-0 top-0 p-2 text-slate-400 hover:text-slate-600 transition-colors disabled:opacity-50"
+            title={t('results.copyToClipboard', language)}
+          >
+            {justCopied ? (
+              <Check className="w-5 h-5 text-green-500" />
+            ) : (
+              <Copy className="w-5 h-5" />
+            )}
+          </button>
         </div>
 
         {/* Core Drivers Summary */}

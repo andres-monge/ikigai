@@ -22,6 +22,8 @@ import {
   GraduationCap,
   ClipboardCheck,
   Target,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { experimental_useObject as useObject } from '@ai-sdk/react';
 import { z } from 'zod';
@@ -31,6 +33,7 @@ import { useStreamingState, createPollingSchedule, hasPositiveIds } from '@/hook
 import { t, type Language } from '@/lib/i18n';
 import { Skeleton } from '@/components/ui/skeleton';
 import { exportActionPlanToPDF } from '@/lib/pdf-export';
+import { copyActionPlanToClipboard } from '@/lib/clipboard-export';
 import { useToast } from '@/hooks/use-toast';
 import { useBackgroundMusic } from '@/hooks/use-background-music';
 import type { FullAssessment, ActionPlan, PurposePath, Milestone, SkillToLearn } from '@/types/assessment';
@@ -56,6 +59,8 @@ export function ActionPlan({
   const { toast } = useToast();
   const [needsStreaming, setNeedsStreaming] = useState(false);
   const [sessionData, setSessionData] = useState<FullAssessment | null>(null);
+  const [isCopying, setIsCopying] = useState(false);
+  const [justCopied, setJustCopied] = useState(false);
 
   // Background music for streaming experience
   const { play: playBackgroundMusic, stop: stopBackgroundMusic, fadeOut: fadeOutBackgroundMusic } = useBackgroundMusic([
@@ -245,6 +250,32 @@ export function ActionPlan({
     if (!currentActionPlan || !currentChosenPath) return;
 
     exportActionPlanToPDF(currentActionPlan, currentChosenPath.title, language);
+  };
+
+  /**
+   * Copies the action plan to clipboard in dual format (HTML + Markdown).
+   * Shows visual feedback with check icon and toast notification.
+   */
+  const handleCopyToClipboard = async () => {
+    if (!currentActionPlan || !currentChosenPath) return;
+    setIsCopying(true);
+    try {
+      await copyActionPlanToClipboard(currentActionPlan, currentChosenPath, language);
+      setJustCopied(true);
+      toast({
+        title: t('actionPlan.copiedSuccess', language),
+      });
+      // Reset the "copied" state after 2 seconds
+      setTimeout(() => setJustCopied(false), 2000);
+    } catch {
+      toast({
+        title: t('common.error', language),
+        description: t('actionPlan.copyError', language),
+        variant: 'destructive',
+      });
+    } finally {
+      setIsCopying(false);
+    }
   };
 
   const handleBackToPaths = () => {
@@ -466,7 +497,19 @@ export function ActionPlan({
   return (
     <div className="max-w-4xl mx-auto py-8 px-4">
       {/* Header Section */}
-      <div className="retro-card-results p-6 mb-12 text-center">
+      <div className="retro-card-results p-6 mb-12 text-center relative">
+        <button
+          onClick={handleCopyToClipboard}
+          disabled={isCopying}
+          className="absolute right-4 top-4 p-2 text-slate-400 hover:text-slate-600 transition-colors disabled:opacity-50"
+          title={t('actionPlan.copyToClipboard', language)}
+        >
+          {justCopied ? (
+            <Check className="w-5 h-5 text-green-500" />
+          ) : (
+            <Copy className="w-5 h-5" />
+          )}
+        </button>
         <h2 className="text-3xl font-bold text-slate-900 mb-4">
           {t('actionPlan.title', language)}
         </h2>

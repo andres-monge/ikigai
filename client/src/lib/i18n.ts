@@ -50,6 +50,9 @@ export const translations: Record<string, Record<string, string>> = {
     'results.saveAnalysisError': 'Failed to save analysis results.',
     'results.analysisFailedError': 'Analysis failed. Please try again.',
     'results.streaming': 'Enjoy some music while we cook up some options...',
+    'results.copyToClipboard': 'Copy to Clipboard',
+    'results.copiedSuccess': 'Copied to clipboard!',
+    'results.copyError': 'Failed to copy. Please try again.',
 
     // Action Plan
     'actionPlan.title': 'Your Action Plan',
@@ -62,6 +65,9 @@ export const translations: Record<string, Record<string, string>> = {
     'actionPlan.skills': 'Skills You\'ll Develop',
     'actionPlan.checkpoint': 'How You\'ll Know You\'re Onto Something',
     'actionPlan.streaming': 'Scheming...a goal without a plan is just a wish.',
+    'actionPlan.copyToClipboard': 'Copy to Clipboard',
+    'actionPlan.copiedSuccess': 'Copied to clipboard!',
+    'actionPlan.copyError': 'Failed to copy. Please try again.',
 
     // Ikigai
     'ikigai.alignment': 'Ikigai Alignment',
@@ -107,6 +113,9 @@ export const translations: Record<string, Record<string, string>> = {
     'results.saveAnalysisError': 'No se pudieron guardar los resultados del análisis.',
     'results.analysisFailedError': 'El análisis tuvo un error. Por favor, inténtalo de nuevo.',
     'results.streaming': 'Disfruta de la música mientras preparamos algunas opciones...',
+    'results.copyToClipboard': 'Copiar al portapapeles',
+    'results.copiedSuccess': 'Copiado al portapapeles!',
+    'results.copyError': 'Error al copiar. Intente de nuevo.',
 
     // Action Plan
     'actionPlan.title': 'Tu Plan de acción',
@@ -119,6 +128,9 @@ export const translations: Record<string, Record<string, string>> = {
     'actionPlan.skills': 'Habilidades que desarrollarás',
     'actionPlan.checkpoint': 'Cómo sabrás que vas por buen camino',
     'actionPlan.streaming': 'Pensando...un objetivo sin un plan es solo un deseo.',
+    'actionPlan.copyToClipboard': 'Copiar al portapapeles',
+    'actionPlan.copiedSuccess': 'Copiado al portapapeles!',
+    'actionPlan.copyError': 'Error al copiar. Intente de nuevo.',
 
     // Ikigai
     'ikigai.alignment': 'Encaje Ikigai',
