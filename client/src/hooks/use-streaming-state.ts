@@ -86,6 +86,9 @@ export function useStreamingState({
   const isFetchingRef = useRef(false);
   const hasInitiatedStreamingRef = useRef(false);
 
+  // Track sessionIds that returned 404 to prevent infinite retry loops
+  const failedSessionIdsRef = useRef<Set<string>>(new Set());
+
   // Session setter that also updates sessionStorage
   const setSession = (newSession: FullAssessment | null) => {
     setSessionInternal(newSession);
@@ -124,25 +127,33 @@ export function useStreamingState({
     }
 
     // Need to fetch from server if session is missing or has wrong sessionId
-    if (!isFetchingSession && (!session || session.sessionId !== sessionId)) {
+    // Skip if this sessionId already returned 404 (prevents infinite retry loop)
+    if (!isFetchingSession &&
+        (!session || session.sessionId !== sessionId) &&
+        !failedSessionIdsRef.current.has(sessionId)) {
       // Set both state and ref synchronously to prevent race conditions
       setIsFetchingSession(true);
       isFetchingRef.current = true;
       
       apiRequest('GET', `/api/session/${sessionId}`)
         .then(async (res) => {
-          if (res.ok) {
-            const serverSession = await res.json();
-            setSession(serverSession);
-          } else if (res.status === 404) {
-            // Session doesn't exist on server - let pages handle navigation
-            setSession(null);
-          } else {
-            throw new Error(`Server returned ${res.status}`);
-          }
+          // apiRequest throws on non-2xx, so if we get here it's a success
+          // Clear from failed set in case it was previously marked (edge case)
+          failedSessionIdsRef.current.delete(sessionId);
+          const serverSession = await res.json();
+          setSession(serverSession);
         })
-        .catch((error) => {
-          console.error('Failed to fetch session from server:', error);
+        .catch((error: Error) => {
+          // apiRequest throws "404: ..." for 404 responses
+          const is404 = error.message?.startsWith('404:');
+
+          if (is404) {
+            // Mark as failed to prevent infinite retry loop
+            failedSessionIdsRef.current.add(sessionId);
+          } else {
+            console.error('Failed to fetch session from server:', error);
+          }
+
           // Set session to null to trigger error handling in pages
           setSession(null);
         })

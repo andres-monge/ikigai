@@ -46,7 +46,7 @@ export const translations: Record<string, Record<string, string>> = {
     'results.actionPlanError':
       'Could not generate an Action Plan. Please try again.',
     'results.loadingSession': 'Loading your session...',
-    'results.loadSessionError': 'Failed to load your session. Please try again.',
+    'results.loadSessionError': 'No results found. Please complete the questionnaire first.',
     'results.saveAnalysisError': 'Failed to save analysis results.',
     'results.analysisFailedError': 'Analysis failed. Please try again.',
     'results.streaming': 'Enjoy some music while we cook up some options...',
@@ -109,7 +109,7 @@ export const translations: Record<string, Record<string, string>> = {
     'results.actionPlanError':
       'No se pudo generar un plan de acción. Por favor, inténtalo de nuevo.',
     'results.loadingSession': 'Cargando tu sesión...',
-    'results.loadSessionError': 'No se pudo cargar tu sesión. Por favor, inténtalo de nuevo.',
+    'results.loadSessionError': 'No se encontraron resultados. Por favor, completa el cuestionario primero.',
     'results.saveAnalysisError': 'No se pudieron guardar los resultados del análisis.',
     'results.analysisFailedError': 'El análisis tuvo un error. Por favor, inténtalo de nuevo.',
     'results.streaming': 'Disfruta de la música mientras preparamos algunas opciones...',
