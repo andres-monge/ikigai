@@ -46,8 +46,8 @@ export const QUESTIONS = {
     },
     {
       id: 'passions.q2',
-      en: "What topics get you excited enough to talk someone's ear off?",
-      es: '¿Qué temas te entusiasman tanto que podrías hablar sin parar de ellos?',
+      en: 'What topics do you find yourself watching, reading, or thinking about, even when no one is asking you to?',
+      es: '¿Qué temas te encuentras viendo, leyendo o pensando, incluso cuando nadie te lo pide?',
     },
   ],
   values: [
@@ -70,20 +70,20 @@ export const QUESTIONS = {
     },
     {
       id: 'skills.q2',
-      en: 'Any experiences showing these skills? What\'s your job or school?',
-      es: '¿Has tenido experiencias que muestren estas habilidades? ¿Cuál es tu trabajo o qué estudias?',
+      en: 'Tell us a bit about yourself: your work, studies, or anything that shows these skills in action.',
+      es: 'Cuéntanos un poco sobre ti: tu trabajo, estudios o cualquier experiencia que demuestre estas habilidades en acción.',
     },
   ],
   economic: [
     {
       id: 'economic.q1',
-      en: "What are your preferences on: where you'd like to live, hours of work per week, remote work, working for others versus being self-employed?",
-      es: '¿Cuáles son tus preferencias en cuanto a dónde vivir, horas de trabajo por semana, teletrabajo y trabajar para alguien más versus ser autónomo?',
+      en: 'Describe your ideal work setup: location, hours, remote vs. in-person, employed vs. self-employed.',
+      es: 'Describe tu configuración de trabajo ideal: ubicación, horas, remoto vs. presencial, empleado vs. autónomo.',
     },
     {
       id: 'economic.q2',
-      en: 'What are your main financial responsibilities or constraints we should consider?',
-      es: '¿Cuáles son tus principales responsabilidades o limitaciones financieras que deberíamos considerar?',
+      en: 'What constraints or responsibilities should we factor in?',
+      es: '¿Qué limitaciones o responsabilidades deberíamos tener en cuenta?',
     },
   ],
 } as const;
