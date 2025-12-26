@@ -549,7 +549,7 @@ export function Results({
         />
 
         {/* Export and Start Over Actions */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+        <div className="mt-12 flex flex-col sm:flex-row gap-4 justify-center pb-4">
           <Button
             onClick={handleExportPDF}
             variant="retro-yellow"
