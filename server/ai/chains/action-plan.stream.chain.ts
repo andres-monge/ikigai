@@ -12,7 +12,7 @@
 
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { streamObject } from 'ai';
-import type { Language, PurposePath } from '@shared/schema';
+import type { Language, PurposePath, QuestionnaireResponses } from '@shared/schema';
 import { actionPlanResultSchema } from '@shared/streaming-schemas';
 import { getActionPlanSystemPrompt } from '../prompts';
 import { env } from '../../env.js';
@@ -20,15 +20,17 @@ import { env } from '../../env.js';
 /**
  * Streaming Action Plan chain using Vercel AI SDK's streamObject.
  * Returns a streamObject result for validated structured streaming.
- * 
+ *
  * @param chosenPath - The user's selected purpose path
  * @param language - The target language ('en' or 'es')
+ * @param responses - The user's original questionnaire answers for personalization
  * @param maxRetries - Maximum number of retry attempts
  * @returns StreamObject result with validated action plan data
  */
 export async function getActionPlanStreamChain(
   chosenPath: PurposePath,
   language: Language,
+  responses: QuestionnaireResponses,
   maxRetries = 2,
 ) {
   let lastError: Error | null = null;
@@ -41,7 +43,7 @@ export async function getActionPlanStreamChain(
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       // Generate the system prompt for structured output
-      const systemPrompt = getActionPlanSystemPrompt(chosenPath, language);
+      const systemPrompt = getActionPlanSystemPrompt(chosenPath, language, responses);
 
       // Use streamObject to generate structured output with streaming
       const result = streamObject({

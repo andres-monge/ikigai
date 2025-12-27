@@ -264,6 +264,7 @@ export function ActionPlan({
       setJustCopied(true);
       toast({
         title: t('actionPlan.copiedSuccess', language),
+        duration: 1000,
       });
       // Reset the "copied" state after 2 seconds
       setTimeout(() => setJustCopied(false), 2000);

@@ -11,8 +11,8 @@ import { Router } from "express";
 import { z } from "zod";
 import { storage, type HydratedAssessmentSession } from "../../storage";
 import {
-  actionPlanRequestSchema,
   type PurposePath,
+  type QuestionnaireResponses,
 } from "@shared/schema";
 import { getActionPlanStreamChain } from "../../ai/chains";
 import { aiLimiter } from "../../ai/limiter";
@@ -103,8 +103,12 @@ actionPlanRouter.post("/action-plan/stream", async (req, res) => {
     // Start streaming with AI SDK
     try {
       // Get streamObject result with concurrency limiting
-      const result = await aiLimiter(() => 
-        getActionPlanStreamChain(chosenPath as PurposePath, session!.language!)
+      const result = await aiLimiter(() =>
+        getActionPlanStreamChain(
+          chosenPath as PurposePath,
+          session!.language!,
+          session!.responses as QuestionnaireResponses
+        )
       );
 
       // Stream to client using AI SDK's text stream protocol

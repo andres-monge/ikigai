@@ -494,6 +494,7 @@ export function Results({
       setJustCopied(true);
       toast({
         title: t('results.copiedSuccess', language),
+        duration: 1000,
       });
       // Reset the "copied" state after 2 seconds
       setTimeout(() => setJustCopied(false), 2000);
