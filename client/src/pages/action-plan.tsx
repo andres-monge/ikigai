@@ -364,6 +364,19 @@ export function ActionPlan({
                     </ul>
                   </div>
 
+                  {/* Checkpoint */}
+                  <div>
+                    <h4 className="font-semibold text-slate-800 mb-2 flex items-center gap-2">
+                      <Target className="w-4 h-4 text-ikigai-teal" />
+                      {t('actionPlan.checkpoint', language)}
+                    </h4>
+                    {milestone?.checkpoint ? (
+                      <p className="text-slate-700">{milestone.checkpoint}</p>
+                    ) : (
+                      <span className="inline-block h-4 bg-slate-100 rounded w-5/6 animate-pulse" />
+                    )}
+                  </div>
+
                   {/* Skills placeholder */}
                   {(milestone?.skills && milestone.skills.length > 0 || !milestone) && (
                     <div>
