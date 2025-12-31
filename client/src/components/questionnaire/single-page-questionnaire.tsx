@@ -145,10 +145,12 @@ export function SinglePageQuestionnaire({
 
   /* --------------------------------- Render ------------------------------ */
   return (
-    <div className="bg-ikigai-beige p-10 md:p-12 border-0 rounded-none">
+    <div className="bg-ikigai-beige px-10 pt-5 pb-10 md:px-12 md:pt-8 md:pb-12 border-0 rounded-none">
       <div className="max-w-7xl mx-auto">
       <h2 className="text-3xl md:text-4xl font-black text-gray-900 mb-8 text-center">
         {t('home.questionnaireTitle', language)}
+        <br />
+        {t('home.questionnaireTitle2', language)}
       </h2>
 
       <div className="grid grid-cols-1 gap-6">

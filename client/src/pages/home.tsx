@@ -65,7 +65,7 @@ export function Home({ language, sessionId }: HomeProps) {
 
       {/* Hero Section - full-bleed to extend cream background edge-to-edge */}
       <motion.div
-        className="bg-ikigai-cream p-10 md:p-16 text-center rounded-none border-0 w-screen ml-[calc(-50vw+50%)]"
+        className="bg-ikigai-cream px-10 pt-10 pb-5 md:px-16 md:pt-16 md:pb-8 text-center rounded-none border-0 w-screen ml-[calc(-50vw+50%)]"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.6, delay: 0.1 }}
