@@ -171,7 +171,7 @@ export function SinglePageQuestionnaire({
         ))}
       </div>
 
-      <div className="mt-10 flex justify-center">
+      <div className="mt-10 flex flex-col items-center gap-3">
         <Button
           onPointerDown={playPrimarySound}
           onClick={handleSubmit}
@@ -181,6 +181,7 @@ export function SinglePageQuestionnaire({
         >
           {isPending ? t('questionnaire.saving', language) : t('questionnaire.complete', language)}
         </Button>
+        <p className="text-sm text-gray-500">{t('welcome.noAccount', language)}</p>
       </div>
       </div>
     </div>

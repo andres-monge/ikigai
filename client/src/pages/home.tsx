@@ -70,22 +70,35 @@ export function Home({ language, sessionId }: HomeProps) {
         animate={{ opacity: 1 }}
         transition={{ duration: 0.6, delay: 0.1 }}
       >
-        <div className="max-w-7xl mx-auto">
+        <div className="max-w-4xl mx-auto">
+          {/* Headline */}
           <motion.h1
-            className="text-5xl md:text-7xl font-black mb-8 text-gray-900 tracking-tight"
+            className="text-4xl md:text-5xl lg:text-6xl font-black mb-6 text-gray-900 tracking-tight leading-tight"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2, ease: "easeOut" }}
           >
             {t('welcome.title', language)}
+            <br />
+            {t('welcome.title2', language)}
           </motion.h1>
+
+          {/* Problem statement - below headline, smaller */}
+          <motion.p
+            className="text-lg md:text-xl text-gray-600 mb-10 max-w-2xl mx-auto"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.35, ease: "easeOut" }}
+          >
+            {t('welcome.problem', language)}
+          </motion.p>
 
           {/* Image container */}
           <motion.div
-            className="mx-auto my-8 max-w-lg"
+            className="mx-auto my-8 max-w-md"
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.7, delay: 0.4, ease: "easeOut" }}
+            transition={{ duration: 0.7, delay: 0.5, ease: "easeOut" }}
           >
             <img
               src="/assets/ikigai-circles-866.png"
@@ -94,14 +107,14 @@ export function Home({ language, sessionId }: HomeProps) {
             />
           </motion.div>
 
-          {/* Subtitle */}
+          {/* Credibility statement - below image, smaller font */}
           <motion.p
-            className="text-2xl md:text-3xl font-bold text-gray-800 mt-8 leading-relaxed"
+            className="text-sm md:text-base text-gray-500 mt-6"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.6, ease: "easeOut" }}
+            transition={{ duration: 0.6, delay: 0.7, ease: "easeOut" }}
           >
-            {t('welcome.description', language)}
+            {t('welcome.credibility', language)}
           </motion.p>
         </div>
       </motion.div>

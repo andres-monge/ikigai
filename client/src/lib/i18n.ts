@@ -21,17 +21,21 @@ export const translations: Record<string, Record<string, string>> = {
     'header.title': 'Ikigai Finder',
 
     // Welcome Section
-    'welcome.title': 'Find Your Purpose',
-    'welcome.description':
-      'Do something you love. Stop living for the weekend.',
-    'welcome.noAccount': 'No account required',
+    'welcome.title': "You'll spend decades working.",
+    'welcome.title2': 'Why not on something you care about?',
+    'welcome.problem':
+      "52% of people regret their career choice. Don't be one of them.",
+    'welcome.credibility':
+      'Based on Ikigai: the centuries-old Japanese framework for finding fulfilling work.',
+    'welcome.noAccount': 'Free. No signup required.',
 
     // Home
-    'home.questionnaireTitle': 'Answer 8 questions, change your life.',
+    'home.questionnaireTitle':
+      'Answer 8 questions. Discover what drives you, and 3 paths to get there.',
     'home.returnToPaths': 'Return to Purpose Paths',
 
     // Questionnaire
-    'questionnaire.complete': 'Show Me My Purpose',
+    'questionnaire.complete': 'Show Me What I Should Work On',
     'questionnaire.saving': 'Saving...',
 
 
@@ -84,17 +88,21 @@ export const translations: Record<string, Record<string, string>> = {
     'header.title': 'Ikigai Finder',
 
     // Welcome Section
-    'welcome.title': 'Encuentra tu propósito',
-    'welcome.description':
-      'Haz algo que te encante. Deja de vivir esperando al finde.',
-    'welcome.noAccount': 'No requiere cuenta',
+    'welcome.title': 'Vas a pasar décadas trabajando.',
+    'welcome.title2': '¿Por qué no en algo que te importe?',
+    'welcome.problem':
+      'El 52% de las personas se arrepienten de su elección de profesión. No seas una de ellas.',
+    'welcome.credibility':
+      'Basado en Ikigai: el marco japonés centenario para encontrar un trabajo que te llene.',
+    'welcome.noAccount': 'Gratis. Sin registros.',
 
     // Home
-    'home.questionnaireTitle': 'Responde 8 preguntas, cambia tu vida.',
+    'home.questionnaireTitle':
+      'Responde 8 preguntas. Descubre qué te motiva, y 3 caminos para llegar.',
     'home.returnToPaths': 'Volver a tus caminos',
 
     // Questionnaire
-    'questionnaire.complete': 'Enséñame mi propósito',
+    'questionnaire.complete': 'Muéstrame en qué debería trabajar',
     'questionnaire.saving': 'Guardando...',
 
 
