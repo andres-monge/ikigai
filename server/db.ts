@@ -1,63 +1,64 @@
 /**
  * @description
  * Database client configuration and initialization for the Ikigai Finder application.
- * This module sets up the Drizzle ORM client with PostgreSQL connection pooling,
+ * This module sets up the Drizzle ORM client with Neon's serverless PostgreSQL driver,
  * providing a single, reusable database instance throughout the server application.
  *
  * The database client is configured with:
- * - Connection pooling for optimal performance under concurrent load
+ * - Neon serverless driver optimized for Vercel Functions
  * - Environment-based configuration via the centralized env module
  * - Full schema awareness through the shared schema definitions
  *
  * Usage:
  * ```typescript
  * import { db } from './db.js';
- * 
+ *
  * // Execute type-safe database queries
  * const sessions = await db.select().from(assessmentSessions);
  * ```
  */
 
-import { drizzle } from 'drizzle-orm/node-postgres';
-import { Pool } from 'pg';
+import { drizzle } from 'drizzle-orm/neon-serverless';
+import { Pool, neonConfig } from '@neondatabase/serverless';
+import ws from 'ws';
 import { env } from './env.js';
 import * as schema from '../shared/schema.js';
 
 /* ────────────────────────────────────────────────────────────────────────── */
-/* PostgreSQL Connection Pool Configuration                                   */
+/* Neon Serverless Database Configuration                                     */
 /* ────────────────────────────────────────────────────────────────────────── */
 
 /**
- * PostgreSQL connection pool instance.
- * The pool manages multiple database connections efficiently, allowing
- * the server to handle concurrent requests without connection bottlenecks.
- * 
- * Pool configuration defaults:
- * - Max connections: 20 (PostgreSQL default)
- * - Idle timeout: 30 seconds
- * - Connection timeout: 0 (no timeout)
+ * Configure WebSocket for Node.js environments.
+ * Required for Node.js v21 and earlier which lack native WebSocket support.
+ * Vercel Functions run on Node.js 18/20, so this is necessary.
  */
-const pool = new Pool({
-  connectionString: env.DATABASE_URL,
-});
-
-/* ────────────────────────────────────────────────────────────────────────── */
-/* Drizzle ORM Client Instance                                               */
-/* ────────────────────────────────────────────────────────────────────────── */
+neonConfig.webSocketConstructor = ws;
 
 /**
- * Configured Drizzle ORM database client.
- * 
+ * Neon serverless connection pool.
+ * Uses WebSocket-based connections optimized for serverless environments.
+ */
+const pool = new Pool({ connectionString: env.DATABASE_URL });
+
+/**
+ * Configured Drizzle ORM database client using Neon's serverless driver.
+ *
  * This client provides:
  * - Type-safe query building and execution
  * - Full schema awareness for all tables and relations
- * - Connection pooling via the PostgreSQL pool
+ * - WebSocket-based connections optimized for serverless environments
+ * - Pool-like API compatible with existing test infrastructure
  * - Automatic SQL generation and optimization
- * 
- * The client is ready to use immediately and will establish database
- * connections lazily when the first query is executed.
+ *
+ * The Neon serverless driver is recommended for Vercel Functions because:
+ * - It avoids connection pool exhaustion issues common in serverless
+ * - WebSocket connections are efficient for multiple queries per request
+ * - No need for external connection poolers like PgBouncer
+ *
+ * @see https://orm.drizzle.team/docs/connect-neon
  */
-export const db = drizzle(pool, { schema });
+export const db = drizzle({ client: pool, schema });
 
 /**
  * Database client type for use in dependency injection or testing.

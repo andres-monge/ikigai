@@ -24,6 +24,7 @@ import type { QuestionnaireResponses } from '../../../shared/schema.js';
 import { storage } from '../../storage.js';
 import { createTestApp } from '../../utils/test-app.js';
 import { ERROR_CODES } from '../../utils/errors.js';
+import { waitForSessionAnalysis } from '../../test-utils.js';
 
 // Import the functions we'll be mocking before setting up the mock
 import { getPurposeDiscoveryStreamChain } from '../../ai/chains';
@@ -297,9 +298,10 @@ describe('Purpose Discovery Streaming Endpoint - /api/analyze/stream', () => {
     expect(response.text).toMatch(/\"coreThreads\".*Problem-solving/);
 
     // 5. Verify complete application workflow: questionnaire → AI → database persistence
-    const updatedSession = await storage.getAssessmentSessionBySessionId(sessionId);
+    // Use retry helper to handle eventual consistency (DB write happens after HTTP response)
+    const updatedSession = await waitForSessionAnalysis(storage, sessionId);
     expect(updatedSession).toBeDefined();
-    
+
     // Core drivers analysis should be completely saved
     expect(updatedSession!.coreDriversAnalysis).toBeDefined();
     expect(updatedSession!.coreDriversAnalysis!.statementSentence).toContain('driven by the desire');
@@ -442,17 +444,18 @@ describe('Purpose Discovery Streaming Endpoint - /api/analyze/stream', () => {
     expect(response2.text.length).toBeGreaterThan(0);
 
     // 5. Verify complete application functionality: database persistence with proper data
-    const updatedSession1 = await storage.getAssessmentSessionBySessionId(sessionId1);
-    const updatedSession2 = await storage.getAssessmentSessionBySessionId(sessionId2);
-    
+    // Use retry helper to handle eventual consistency (DB write happens after HTTP response)
+    const updatedSession1 = await waitForSessionAnalysis(storage, sessionId1);
+    const updatedSession2 = await waitForSessionAnalysis(storage, sessionId2);
+
     expect(updatedSession1).toBeDefined();
     expect(updatedSession2).toBeDefined();
-    
+
     // Verify the core application functionality: AI analysis was saved correctly
     expect(updatedSession1!.coreDriversAnalysis).toBeDefined();
     expect(updatedSession1!.coreDriversAnalysis!.statementSentence).toContain('driven by the desire');
     expect(updatedSession1!.purposePaths).toHaveLength(3);
-    
+
     expect(updatedSession2!.coreDriversAnalysis).toBeDefined();
     expect(updatedSession2!.coreDriversAnalysis!.statementSentence).toContain('driven by the desire');
     expect(updatedSession2!.purposePaths).toHaveLength(3);
