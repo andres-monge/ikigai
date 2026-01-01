@@ -14,7 +14,6 @@ import { motion } from 'framer-motion';
 import { t, type Language } from '@/lib/i18n';
 import { SinglePageQuestionnaire } from '@/components/questionnaire/single-page-questionnaire';
 import { useSessionStorage } from '@/hooks/use-session-storage';
-import { useSoundEffect } from '@/hooks/use-sound-effect';
 import type { FullAssessment } from '@/types/assessment';
 
 interface HomeProps {
@@ -27,7 +26,6 @@ interface HomeProps {
 export function Home({ language, sessionId }: HomeProps) {
   const [, navigate] = useLocation();
   const [session] = useSessionStorage<FullAssessment | null>('session', null);
-  const { play: playReturnSound } = useSoundEffect('/sounds/click-return.mp3');
 
   // Check if user has existing results (only check local cache, don't fetch from server)
   const hasResults = session?.coreDriversAnalysis || (session?.purposePaths?.length ?? 0) > 0;
@@ -49,7 +47,6 @@ export function Home({ language, sessionId }: HomeProps) {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
             <div className="retro-card-results p-5 flex items-center justify-center">
               <motion.button
-                onPointerDown={playReturnSound}
                 onClick={handleReturnToPaths}
                 className="text-slate-800 font-bold hover:opacity-70 transition-opacity flex items-center gap-2 text-lg"
                 whileHover={{ scale: 1.02 }}
