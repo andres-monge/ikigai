@@ -14,7 +14,7 @@
 **Step Dependencies**: Step 1
 **User Instructions**: None
 
-[ ] Step 3: Add a Vercel-recognized Express entry file at repo root (verified requirement: imports express + default export)
+[X] Step 3: Add a Vercel-recognized Express entry file at repo root (verified requirement: imports express + default export)
 **Task**: Add a repo-root Express entry file at a recognized location (`index.ts`) that imports the `express` package and default-exports the Express app. This entry file is what Vercel detects and deploys as a single Express Function. Keep the entry file thin (it should not call `listen()`).
 **Suggested Files for Context**: [`server/index.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/server/index.ts), [`package.json`](/Users/andresm/Documents/Cursor%20Projects/ikigai/package.json)
 **Step Dependencies**: Step 2
