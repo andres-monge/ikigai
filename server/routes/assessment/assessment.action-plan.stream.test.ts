@@ -140,19 +140,18 @@ afterAll(async () => {
     }
   }
   
-  // Close the PostgreSQL connection pool
+  // Close the database connection pool
   try {
-    // Check if client is already closed to avoid double-close errors
-    if (db.$client && !db.$client.ended) {
+    if (db.$client) {
       await db.$client.end();
     }
   } catch (error: any) {
-    // Only suppress specific connection errors
-    if (error?.message?.includes('already ended') || 
-        error?.message?.includes('Connection terminated') ||
-        error?.code === 'ECONNRESET') {
-      console.log('Expected connection close scenario:', error.message);
-    } else {
+    // Suppress expected connection close errors in test environment
+    const expectedErrors = ['already ended', 'Connection terminated', 'ECONNRESET'];
+    const isExpected = expectedErrors.some(msg =>
+      error?.message?.includes(msg) || error?.code === msg
+    );
+    if (!isExpected) {
       console.error('Unexpected connection close error:', error);
     }
   }
