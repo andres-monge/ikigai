@@ -10,11 +10,24 @@
  * Vercel performs static analysis looking for this import statement.
  *
  * This file does NOT call listen() - Vercel handles that.
+ *
+ * Middleware order for Vercel:
+ * 1. API routes (registered in createApp)
+ * 2. SPA catch-all (registered here, after createApp)
+ *
+ * Note: Vercel ignores express.static() - static assets in public/ are
+ * served directly by Vercel's CDN, not by this Express function.
  */
 
 import express from 'express';  // Required for Vercel detection
-import { createApp } from './server/app';
+import path from 'path';
+import { createApp, createSPACatchAll } from './server/app';
 
 const app = createApp();
+
+// Register SPA catch-all for deep-link refresh support (e.g., /results, /action-plan)
+// Vercel CDN serves static assets from public/, this only handles client-side routes.
+const publicDir = path.resolve(import.meta.dirname, 'public');
+app.use('*', createSPACatchAll(publicDir));
 
 export default app;

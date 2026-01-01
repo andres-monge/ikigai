@@ -34,6 +34,7 @@ import {
 import { type Server } from "http";
 import viteConfig from "../vite.config";
 import { nanoid } from "nanoid";
+import { createSPACatchAll } from "./app";
 
 // Create a logger instance based on Vite's logger for consistent formatting.
 const viteLogger = createLogger();
@@ -141,6 +142,11 @@ export async function setupVite(app: Express, server: Server) {
 /**
  * Configures the Express app to serve static files from the build output directory.
  * This function is used in production environments after running `npm run build`.
+ *
+ * Middleware order (correct for production):
+ * 1. express.static() - serves actual static files
+ * 2. SPA catch-all - serves index.html for client-side routes
+ *
  * @param {Express} app - The Express application instance.
  */
 export function serveStatic(app: Express) {
@@ -153,12 +159,10 @@ export function serveStatic(app: Express) {
     );
   }
 
-  // Serve static files (like CSS, JS, images) from the `public` directory.
+  // 1. Serve static files (like CSS, JS, images) from the `public` directory.
   app.use(express.static(distPath));
 
-  // A fallback middleware for SPAs. If a request doesn't match a static file,
-  // it serves the `index.html` file, allowing the client-side router to handle the URL.
-  app.use("*", (_req: Request, res: Response) => {
-    res.sendFile(path.resolve(distPath, "index.html"));
-  });
+  // 2. SPA catch-all: serves index.html for client-side routes (e.g., /results)
+  // Registered AFTER express.static() so static files are served first.
+  app.use("*", createSPACatchAll(distPath));
 }

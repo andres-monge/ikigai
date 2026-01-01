@@ -14,11 +14,57 @@
  * - ./vite: Logging utility
  */
 
-import express, { type Express, type Request, Response, NextFunction } from "express";
+import express, {
+  type Express,
+  type Request,
+  type Response,
+  type NextFunction,
+  type RequestHandler,
+} from "express";
 import path from "path";
 import fs from "fs";
 import { registerRoutes } from "./routes";
 import { log } from "./vite";
+
+/**
+ * Regex to match asset file extensions (with optional query parameters).
+ * Used to skip serving index.html for static asset requests.
+ */
+const ASSET_EXTENSIONS =
+  /\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|mp3|mp4|webm|webp|json|map|txt|html)(\?.*)?$/i;
+
+/**
+ * Creates the SPA catch-all middleware for deep-link refresh support.
+ * This middleware serves index.html for client-side routes (e.g., /results, /action-plan)
+ * while skipping API routes and static asset requests.
+ *
+ * @param publicDir - Path to the public directory containing index.html
+ * @returns Express middleware function
+ */
+export function createSPACatchAll(publicDir: string): RequestHandler {
+  const indexPath = path.join(publicDir, "index.html");
+
+  return (req: Request, res: Response, next: NextFunction) => {
+    // Skip API routes - they're handled by registerRoutes
+    if (req.originalUrl.startsWith("/api")) {
+      return next();
+    }
+
+    // Skip asset requests (files with extensions) - CDN or express.static serves these
+    if (ASSET_EXTENSIONS.test(req.originalUrl)) {
+      return next();
+    }
+
+    // For SPA routes (e.g., /results, /action-plan), serve index.html
+    // This enables client-side routing to work on hard refresh
+    if (fs.existsSync(indexPath)) {
+      return res.sendFile(indexPath);
+    }
+
+    // If index.html doesn't exist (build not run), pass to next handler
+    next();
+  };
+}
 
 /**
  * Creates and configures the Express application with all middleware and routes.
@@ -74,35 +120,11 @@ export function createApp(): Express {
   // ========= API Routes =========
   registerRoutes(app);
 
-  // ========= SPA Catch-All for Deep-Link Refresh (Vercel) =========
-  // Vercel ignores express.static(), serving public/** via CDN instead.
-  // This catch-all handles SPA deep-link refresh (e.g., /results) by serving
-  // public/index.html. It's conservative: skips API routes and asset requests.
-  const publicDir = path.resolve(import.meta.dirname, "..", "public");
-  const indexPath = path.join(publicDir, "index.html");
-
-  app.use("*", (req: Request, res: Response, next: NextFunction) => {
-    // Skip API routes - they're handled by registerRoutes above
-    if (req.originalUrl.startsWith("/api")) {
-      return next();
-    }
-
-    // Skip asset requests (files with extensions) - Vercel CDN serves these
-    // Common asset extensions that should not trigger index.html
-    const assetExtensions = /\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|mp3|mp4|webm|json|map|txt)$/i;
-    if (assetExtensions.test(req.originalUrl)) {
-      return next();
-    }
-
-    // For SPA routes (e.g., /results, /action-plan), serve index.html
-    // This enables client-side routing to work on hard refresh
-    if (fs.existsSync(indexPath)) {
-      return res.sendFile(indexPath);
-    }
-
-    // If index.html doesn't exist (build not run), pass to next handler
-    next();
-  });
+  // NOTE: SPA catch-all is NOT registered here.
+  // - For Vercel: index.ts registers it after createApp()
+  // - For local prod: serveStatic() registers it after express.static()
+  // - For local dev: setupVite() handles it via Vite middleware
+  // This ensures correct middleware order in all environments.
 
   // ========= Error Handling Middleware =========
   // Must be registered after routes. Uses defensive type checking for serverless safety.
