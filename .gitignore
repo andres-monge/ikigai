@@ -82,3 +82,4 @@ temp/
 vite.config.ts.*
 # .replit and replit.nix removed - needed for Replit deployment
 .config/
+api/index.js
