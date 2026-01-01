@@ -2,8 +2,7 @@
  * @description
  * Vercel Function entry point for the Express application.
  *
- * This file exists at the repo root so Vercel's static analysis can detect it
- * as an Express application and deploy it as a single Function.
+ * This file lives in api/ so Vercel's `functions` config applies to it.
  *
  * IMPORTANT: The explicit `import express from 'express'` is required for
  * Vercel's detection, even though createApp() uses Express internally.
@@ -21,13 +20,13 @@
 
 import express from 'express';  // Required for Vercel detection
 import path from 'path';
-import { createApp, createSPACatchAll } from './server/app';
+import { createApp, createSPACatchAll } from '../server/app';
 
 const app = createApp();
 
 // Register SPA catch-all for deep-link refresh support (e.g., /results, /action-plan)
 // Vercel CDN serves static assets from public/, this only handles client-side routes.
-const publicDir = path.resolve(import.meta.dirname, 'public');
+const publicDir = path.resolve(import.meta.dirname, '..', 'public');
 app.use('*', createSPACatchAll(publicDir));
 
 export default app;
