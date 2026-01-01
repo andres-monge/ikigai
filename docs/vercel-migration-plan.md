@@ -28,7 +28,7 @@
 **User Instructions**: None
 
 ## Function runtime limits (verified) for long AI streaming
-[ ] Step 5: Add `vercel.json` function config for max streaming duration
+[X] Step 5: Add `vercel.json` function config for max streaming duration
 **Task**: Add a `vercel.json` that sets `maxDuration` for the Express entry file (the repo-root `index.ts`). Use the official `functions` config pattern you provided, with `maxDuration` in seconds. Set it to the maximum allowed for Hobby if you want to support long streams (300s).
 **Suggested Files for Context**: [`package.json`](/Users/andresm/Documents/Cursor%20Projects/ikigai/package.json)
 **Step Dependencies**: Step 3
