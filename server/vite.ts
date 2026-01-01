@@ -144,8 +144,8 @@ export async function setupVite(app: Express, server: Server) {
  * @param {Express} app - The Express application instance.
  */
 export function serveStatic(app: Express) {
-  // Define the path to the production build's output directory.
-  const distPath = path.resolve(import.meta.dirname, "public");
+  // Define the path to the production build's output directory (repo-root public/).
+  const distPath = path.resolve(import.meta.dirname, "..", "public");
 
   if (!fs.existsSync(distPath)) {
     throw new Error(

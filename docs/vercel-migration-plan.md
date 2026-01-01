@@ -21,7 +21,7 @@
 **User Instructions**: None
 
 ## SPA deep-link refresh (no rewrites) + Vercel static assets (verified)
-[ ] Step 4: Build-and-serve the SPA using Vercel’s `public/**` (and keep deep-link refresh via Express catch-all)
+[X] Step 4: Build-and-serve the SPA using Vercel's `public/**` (and keep deep-link refresh via Express catch-all)
 **Task**: Ensure the built frontend ends up in repo-root `public/**` so Vercel serves it via CDN (verified: `express.static()` is ignored on Vercel). Add an Express “catch-all” route (registered after `/api` routes) that serves `public/index.html` for any non-`/api` route, so hard refresh on deep links (like `/results`) works without `vercel.json` rewrites. Make the catch-all conservative so it doesn’t intercept asset requests.
 **Suggested Files for Context**: [`package.json`](/Users/andresm/Documents/Cursor%20Projects/ikigai/package.json), [`vite.config.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/vite.config.ts), [`client/index.html`](/Users/andresm/Documents/Cursor%20Projects/ikigai/client/index.html), [`client/src/main.tsx`](/Users/andresm/Documents/Cursor%20Projects/ikigai/client/src/main.tsx), [`server/vite.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/server/vite.ts), [`client/public/sounds`](/Users/andresm/Documents/Cursor%20Projects/ikigai/client/public/sounds)
 **Step Dependencies**: Step 2

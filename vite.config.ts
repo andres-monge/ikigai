@@ -25,7 +25,9 @@ export default defineConfig({
   },
   root: path.resolve(import.meta.dirname, "client"),
   build: {
-    outDir: path.resolve(import.meta.dirname, "dist/public"),
+    // Output to repo-root public/ for Vercel CDN serving
+    // (Vercel ignores express.static() and serves public/** via CDN)
+    outDir: path.resolve(import.meta.dirname, "public"),
     emptyOutDir: true,
   },
   server: {
