@@ -18,9 +18,12 @@
  */
 
 import { createServer } from "http";
-import { app } from "./app";
+import { createApp } from "./app";
 import { setupVite, serveStatic, log } from "./vite";
 import { env } from "./env.js";
+
+// Create Express app instance for local development
+const app = createApp();
 
 // Create HTTP server wrapping the Express app
 const httpServer = createServer(app);

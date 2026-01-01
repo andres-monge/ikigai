@@ -5,7 +5,7 @@
  * routes, and error handling - but does NOT bind to a port or start listening.
  *
  * This separation allows:
- * - Vercel Functions to import and use the app directly (via default export)
+ * - Vercel Functions to call createApp() and default-export the result
  * - Local development to wrap it in an HTTP server with Vite integration
  *
  * @dependencies
@@ -14,7 +14,7 @@
  * - ./vite: Logging utility
  */
 
-import express, { type Request, Response, NextFunction } from "express";
+import express, { type Express, type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { log } from "./vite";
 
@@ -24,7 +24,7 @@ import { log } from "./vite";
  *
  * @returns Configured Express application ready for use
  */
-export function createApp() {
+export function createApp(): Express {
   const app = express();
 
   // ========= Middleware Setup =========
@@ -43,12 +43,11 @@ export function createApp() {
 
     // Capture response body for logging
     let capturedJsonResponse: Record<string, unknown> | undefined = undefined;
-    const originalResJson = res.json;
-    res.json = function (bodyJson) {
+    const originalResJson = res.json.bind(res);
+    res.json = function (bodyJson: Record<string, unknown>) {
       capturedJsonResponse = bodyJson;
-      // @ts-ignore - we're intentionally wrapping the original method
-      return originalResJson.apply(res, arguments);
-    };
+      return originalResJson(bodyJson);
+    } as Response["json"];
 
     res.on("finish", () => {
       const duration = Date.now() - start;
@@ -74,21 +73,26 @@ export function createApp() {
   registerRoutes(app);
 
   // ========= Error Handling Middleware =========
-  // Must be registered after routes
-  app.use((err: Error & { status?: number; statusCode?: number }, _req: Request, res: Response, _next: NextFunction) => {
-    console.error("Unhandled Error:", err.stack || err);
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
+  // Must be registered after routes. Uses defensive type checking for serverless safety.
+  app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+    console.error("Unhandled Error:", err);
+
+    // Safely extract status code with type guards
+    const status =
+      err && typeof err === "object" && "status" in err && typeof err.status === "number"
+        ? err.status
+        : err && typeof err === "object" && "statusCode" in err && typeof err.statusCode === "number"
+          ? err.statusCode
+          : 500;
+
+    // Safely extract error message with type guard
+    const message =
+      err && typeof err === "object" && "message" in err && typeof err.message === "string"
+        ? err.message
+        : "Internal Server Error";
+
     res.status(status).json({ error: message });
   });
 
   return app;
 }
-
-/**
- * Pre-configured Express app instance for direct import.
- * Use this when you need the app without additional configuration.
- */
-export const app = createApp();
-
-export default app;
