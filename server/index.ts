@@ -2,86 +2,36 @@
 
 /**
  * @description
- * This is the main entry point for the Express server. It sets up the Express application,
- * configures middleware, registers API routes, and starts the HTTP server. It also handles
- * the integration of the Vite development server in development mode.
+ * Local development and production server entry point.
+ * This file is ONLY used when running the app locally (npm run dev / npm start).
+ * It imports the configured Express app and wraps it in an HTTP server with
+ * Vite integration for development.
+ *
+ * For Vercel deployment, the app is imported directly from server/app.ts
+ * via the repo-root entry file (index.ts) - this file is not used.
  *
  * @dependencies
- * - express: The web framework.
- * - http: For creating the HTTP server.
- * - ./routes: The function to register all API routes.
- * - ./vite: Helper functions for Vite integration and static file serving.
+ * - http: For creating the HTTP server
+ * - ./app: The configured Express application
+ * - ./vite: Vite dev server integration and static file serving
+ * - ./env: Environment configuration
  */
 
-import express, { type Request, Response, NextFunction } from "express";
-import { createServer, type Server } from "http";
-import { registerRoutes } from "./routes";
+import { createServer } from "http";
+import { app } from "./app";
 import { setupVite, serveStatic, log } from "./vite";
 import { env } from "./env.js";
 
-const app = express();
+// Create HTTP server wrapping the Express app
 const httpServer = createServer(app);
 
 // Set server timeout to 3 minutes to accommodate queued AI requests
 httpServer.timeout = 3 * 60 * 1000; // 3 minutes in milliseconds
 
-// ========= Middleware Setup =========
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
-
-// Custom logging middleware for API requests
-app.use((req, res, next) => {
-  const start = Date.now();
-  const path = req.path;
-
-  // We don't log non-API routes for cleaner logs
-  if (!path.startsWith("/api")) {
-    return next();
-  }
-
-  // Capture response body for logging
-  let capturedJsonResponse: Record<string, any> | undefined = undefined;
-  const originalResJson = res.json;
-  res.json = function (bodyJson) {
-    capturedJsonResponse = bodyJson;
-    // @ts-ignore
-    return originalResJson.apply(res, arguments);
-  };
-
-  res.on("finish", () => {
-    const duration = Date.now() - start;
-    let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-
-    if (capturedJsonResponse && Object.keys(capturedJsonResponse).length > 0) {
-      const responseLog = JSON.stringify(capturedJsonResponse);
-      // Truncate long responses to keep logs readable
-      const truncatedResponse =
-        responseLog.length > 120
-          ? responseLog.slice(0, 119) + "…"
-          : responseLog;
-      logLine += ` :: ${truncatedResponse}`;
-    }
-
-    log(logLine);
-  });
-
-  next();
-});
-
 // ========= Main Application Logic =========
 (async () => {
-  // Register all the /api routes
-  registerRoutes(app);
-
-  // Generic error handling middleware
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    console.error("Unhandled Error:", err.stack || err);
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
-    res.status(status).json({ error: message });
-  });
-
-  // In development, hook into Vite's dev server. In production, serve static files.
+  // In development, hook into Vite's dev server for HMR.
+  // In production (local), serve static files from the build output.
   if (env.NODE_ENV === "development") {
     await setupVite(app, httpServer);
   } else {
@@ -91,7 +41,7 @@ app.use((req, res, next) => {
   // ========= Server Startup =========
   const port = 5000;
 
-  httpServer.on("error", (err: any) => {
+  httpServer.on("error", (err: NodeJS.ErrnoException) => {
     if (err.code === "EADDRINUSE") {
       log(`Port ${port} is busy, retrying in 2 seconds...`, "server");
       setTimeout(() => {

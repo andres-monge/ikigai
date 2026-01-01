@@ -1,14 +1,14 @@
 # Implementation Plan
 
 ## Branching + Preview deployment strategy (GitHub → Vercel)
-[ ] Step 1: Create a safe Preview-first workflow for the migration
+[X] Step 1: Create a safe Preview-first workflow for the migration
 **Task**: Create a dedicated migration branch (for example, `vercel-migration`) and use Vercel’s Git integration so every push/PR gets a Preview deployment URL. The goal is to fully validate the migration on Preview before merging to `main` (which triggers Production).
 **Suggested Files for Context**: [`package.json`](/Users/andresm/Documents/Cursor%20Projects/ikigai/package.json)
 **Step Dependencies**: None
 **User Instructions**: In Vercel, connect the GitHub repo, confirm Preview deployments are enabled, and confirm `main` is the Production branch. Do not change DNS or point any custom domain until the migration is validated.
 
 ## Express entrypoint (verified) + app refactor for serverless
-[ ] Step 2: Refactor Express so Vercel can run it as a single Function (default export, no listening)
+[X] Step 2: Refactor Express so Vercel can run it as a single Function (default export, no listening)
 **Task**: Refactor the server so the Express app can be imported and exported without binding to a port. Add a dedicated “app builder” module that wires middleware, routes, and error handling. Update the existing server entry file so it only starts a local HTTP server when running locally (dev/prod), and is not required for the Vercel Function entry.
 **Suggested Files for Context**: [`server/index.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/server/index.ts), [`server/routes.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/server/routes.ts), [`server/vite.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/server/vite.ts), [`server/env.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/server/env.ts)
 **Step Dependencies**: Step 1
