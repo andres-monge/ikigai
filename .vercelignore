@@ -1,0 +1,10 @@
+# Ignore local server build output (Vercel builds api/index.ts itself)
+dist/
+
+# Tests not needed at runtime
+tests/
+**/*.test.ts
+
+# Development files
+.env
+.env.*
