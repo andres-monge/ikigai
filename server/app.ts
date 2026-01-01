@@ -23,8 +23,17 @@ import express, {
 } from "express";
 import path from "path";
 import fs from "fs";
-import { registerRoutes } from "./routes";
-import { log } from "./vite";
+import { registerRoutes } from "./routes.js";
+
+function log(message: string, source = "express") {
+  const formattedTime = new Date().toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  });
+  console.log(`${formattedTime} [${source}] ${message}`);
+}
 
 /**
  * Regex to match asset file extensions (with optional query parameters).

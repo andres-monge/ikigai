@@ -21,8 +21,8 @@
 import { drizzle } from 'drizzle-orm/neon-serverless';
 import { Pool, neonConfig } from '@neondatabase/serverless';
 import ws from 'ws';
-import { env } from './env.js';
-import * as schema from '../shared/schema.js';
+import { env } from "./env.js";
+import * as schema from "../shared/schema.js";
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /* Neon Serverless Database Configuration                                     */

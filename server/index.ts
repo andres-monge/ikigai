@@ -18,8 +18,8 @@
  */
 
 import { createServer } from "http";
-import { createApp } from "./app";
-import { setupVite, serveStatic, log } from "./vite";
+import { createApp } from "./app.js";
+import { setupVite, serveStatic, log } from "./vite.js";
 import { env } from "./env.js";
 
 // Create Express app instance for local development

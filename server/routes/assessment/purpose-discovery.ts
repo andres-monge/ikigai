@@ -10,25 +10,25 @@
 
 import { Router } from "express";
 import { z } from "zod";
-import { storage, type HydratedAssessmentSession } from "../../storage";
+import { storage, type HydratedAssessmentSession } from "../../storage.js";
 import {
   analysisRequestSchema,
   type PurposePath,
   type QuestionnaireResponses,
   purposePaths,
   assessmentSessions,
-} from "@shared/schema";
-import { getPurposeDiscoveryStreamChain } from "../../ai/chains";
-import { aiLimiter } from "../../ai/limiter";
+} from "../../../shared/schema.js";
+import { getPurposeDiscoveryStreamChain } from "../../ai/chains/index.js";
+import { aiLimiter } from "../../ai/limiter.js";
 import { 
   activeStreams, 
   setupStreamConcurrencyControl, 
   atomicPurposePathUpdate 
-} from "./utils";
-import { TransactionError, ValidationError, wrapTransactionError, ERROR_CODES } from "../../utils/errors";
-import { logAIStreamError } from "../../utils/ai-logger";
-import { validateSessionForAI } from "../../utils/validation";
-import { db } from "../../db";
+} from "./utils.js";
+import { TransactionError, ValidationError, wrapTransactionError, ERROR_CODES } from "../../utils/errors.js";
+import { logAIStreamError } from "../../utils/ai-logger.js";
+import { validateSessionForAI } from "../../utils/validation.js";
+import { db } from "../../db.js";
 import { eq, inArray } from "drizzle-orm";
 
 export const purposeDiscoveryRouter = Router();

@@ -32,9 +32,9 @@ import {
   type ServerOptions, // Import the ServerOptions type
 } from "vite";
 import { type Server } from "http";
-import viteConfig from "../vite.config";
+import viteConfig from "../vite.config.js";
 import { nanoid } from "nanoid";
-import { createSPACatchAll } from "./app";
+import { createSPACatchAll } from "./app.js";
 
 // Create a logger instance based on Vite's logger for consistent formatting.
 const viteLogger = createLogger();

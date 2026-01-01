@@ -6,5 +6,5 @@
  * "../ai/chains"` with zero changes.
  */
 
-export { getPurposeDiscoveryStreamChain } from './purpose-discovery.stream.chain';
-export { getActionPlanStreamChain } from './action-plan.stream.chain'; 
+export { getPurposeDiscoveryStreamChain } from "./purpose-discovery.stream.chain.js";
+export { getActionPlanStreamChain } from "./action-plan.stream.chain.js";

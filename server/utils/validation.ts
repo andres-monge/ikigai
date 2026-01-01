@@ -8,9 +8,9 @@
  * error handling system from server/utils/errors.ts for consistent error responses.
  */
 
-import { questionnaireResponsesSchema, type QuestionnaireResponses } from "@shared/schema";
-import type { HydratedAssessmentSession } from "../storage";
-import { ValidationError } from "./errors";
+import { questionnaireResponsesSchema, type QuestionnaireResponses } from "../../shared/schema.js";
+import type { HydratedAssessmentSession } from "../storage.js";
+import { ValidationError } from "./errors.js";
 
 /**
  * Validates questionnaire responses structure and completeness

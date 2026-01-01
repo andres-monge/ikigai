@@ -13,7 +13,7 @@ import type {
   PurposePath,
   QuestionnaireResponses,
   QuestionAnswerPair,
-} from '@shared/schema';
+} from "../../shared/schema.js";
 
 /**
  * @description

@@ -12,8 +12,8 @@
 
 import type { Express } from "express";
 import { Router } from "express";
-import { assessmentRouter } from "./routes/assessment";
-import { sessionRouter } from "./routes/session";
+import { assessmentRouter } from "./routes/assessment/index.js";
+import { sessionRouter } from "./routes/session.js";
 
 /**
  * Registers all API routes with the provided Express application instance.

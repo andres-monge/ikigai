@@ -12,10 +12,10 @@
 
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { streamObject } from 'ai';
-import type { Language, QuestionnaireResponses } from '@shared/schema';
-import { purposeDiscoveryResultSchema } from '@shared/streaming-schemas';
-import { getPurposeDiscoverySystemPrompt } from '../prompts';
-import { env } from '../../env.js';
+import type { Language, QuestionnaireResponses } from "../../../shared/schema.js";
+import { purposeDiscoveryResultSchema } from "../../../shared/streaming-schemas.js";
+import { getPurposeDiscoverySystemPrompt } from "../prompts.js";
+import { env } from "../../env.js";
 
 /**
  * Streaming Purpose Discovery chain using Vercel AI SDK's streamObject.

@@ -12,10 +12,10 @@
 
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { streamObject } from 'ai';
-import type { Language, PurposePath, QuestionnaireResponses } from '@shared/schema';
-import { actionPlanResultSchema } from '@shared/streaming-schemas';
-import { getActionPlanSystemPrompt } from '../prompts';
-import { env } from '../../env.js';
+import type { Language, PurposePath, QuestionnaireResponses } from "../../../shared/schema.js";
+import { actionPlanResultSchema } from "../../../shared/streaming-schemas.js";
+import { getActionPlanSystemPrompt } from "../prompts.js";
+import { env } from "../../env.js";
 
 /**
  * Streaming Action Plan chain using Vercel AI SDK's streamObject.
