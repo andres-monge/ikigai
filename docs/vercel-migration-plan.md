@@ -39,7 +39,90 @@
 **Task**: Update the DB connection layer to use Neon’s serverless approach with Drizzle (recommended for serverless). This avoids issues commonly caused by long-lived connection pools in serverless environments. Ensure schema typing stays intact and that all storage code continues to work unchanged from the rest of the app’s perspective.
 **Suggested Files for Context**: [`server/db.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/server/db.ts), [`server/storage.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/server/storage.ts), [`drizzle.config.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/drizzle.config.ts), [`shared/schema.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/shared/schema.ts), [`migrations`](/Users/andresm/Documents/Cursor%20Projects/ikigai/migrations)
 **Step Dependencies**: Step 1
-**User Instructions**: Create two Neon databases (Preview/dev and Production). In Vercel, set `DATABASE_URL` for Preview to the dev DB and Production to the prod DB. Run your Drizzle schema deployment workflow against each DB (from your local machine).
+**User Instructions**:
+
+### Part A: Create Two Neon Databases
+
+You need two separate databases so Preview deployments don't affect real user data:
+
+1. **Go to [Neon Console](https://console.neon.tech)** and sign in
+2. **Create the Development database**:
+   - Click "New Project"
+   - Name it `ikigai-dev` (or similar)
+   - Choose the same region as your Vercel deployment (e.g., `us-west-2`)
+   - Click "Create Project"
+   - Copy the connection string (looks like `postgresql://user:pass@host/dbname?sslmode=require`)
+   - Save this as your **Dev DATABASE_URL**
+
+3. **Create the Production database**:
+   - Click "New Project" again
+   - Name it `ikigai-prod`
+   - Same region as above
+   - Copy this connection string as your **Prod DATABASE_URL**
+
+### Part B: Configure Vercel Environment Variables
+
+Vercel lets you set different values for the same variable in different environments:
+
+1. **Go to your Vercel project** → Settings → Environment Variables
+2. **Add `DATABASE_URL`** with these settings:
+
+   | Variable | Environment | Value |
+   |----------|-------------|-------|
+   | `DATABASE_URL` | Preview | `postgresql://...ikigai-dev...` |
+   | `DATABASE_URL` | Production | `postgresql://...ikigai-prod...` |
+
+3. **Important**: Uncheck "Development" for both — your local `.env` file handles local development
+
+### Part C: Push Schema to Both Databases
+
+Before either database can be used, you need to create the tables:
+
+```bash
+# Push schema to DEV database
+DATABASE_URL="postgresql://...your-dev-url..." npm run db:push
+
+# Push schema to PROD database
+DATABASE_URL="postgresql://...your-prod-url..." npm run db:push
+```
+
+Alternatively, if you're using migrations:
+```bash
+DATABASE_URL="postgresql://...your-dev-url..." npm run db:migrate:dev
+DATABASE_URL="postgresql://...your-prod-url..." npm run db:migrate:prod
+```
+
+### Part D: Local Development Setup
+
+Your local `.env` file should point to the **dev** database:
+
+```env
+DATABASE_URL="postgresql://...your-dev-url..."
+```
+
+This way:
+- **Local development** → Dev database
+- **Vercel Preview** → Dev database (same data, good for testing)
+- **Vercel Production** → Prod database (real user data, protected)
+
+### Part E: Verify Tests Still Pass
+
+After updating `server/db.ts` to use the Neon serverless driver:
+
+```bash
+npm test
+```
+
+All tests should pass. If any fail, the database connection change may have affected something — check the error messages.
+
+### Quick Reference: Which Database Am I Using?
+
+| Context | Database | How It's Set |
+|---------|----------|--------------|
+| `npm run dev` (local) | Dev | Your `.env` file |
+| Vercel Preview URL | Dev | Vercel env vars (Preview) |
+| Vercel Production URL | Prod | Vercel env vars (Production) |
+| `npm test` (local) | Dev | Your `.env` file |
 
 ## Validate streaming + routing on Preview, then merge
 [ ] Step 7: Validate the Preview deployment end-to-end before merging to `main`

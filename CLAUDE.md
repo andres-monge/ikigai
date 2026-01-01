@@ -87,6 +87,8 @@ This is a work-in-progress application following a detailed implementation plan 
 
 ## File Creation & Modification Rules
 
+### Do not use "any" types unless absolutely necessary, and when you do please flag the situation.
+
 ### When asked to work with code, documentation, or any file content, you MUST modify the existing file using file editing commands, patches, or direct modifications to existing content. Apply changes incrementally to existing files rather than rewriting them completely.
 
 You are PROHIBITED from creating new files without explicit permission or unless it is stated in the implementation plan. Do not generate separate files when modifications to existing ones would suffice. Do not suggest file creation as the default solution.
