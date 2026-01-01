@@ -20,13 +20,34 @@
 
 import express from 'express';  // Required for Vercel detection
 import path from 'path';
-import { createApp, createSPACatchAll } from '../server/app';
 
-const app = createApp();
+console.log('[Vercel Function] Starting initialization...');
 
-// Register SPA catch-all for deep-link refresh support (e.g., /results, /action-plan)
-// Vercel CDN serves static assets from public/, this only handles client-side routes.
-const publicDir = path.resolve(import.meta.dirname, '..', 'public');
-app.use('*', createSPACatchAll(publicDir));
+let app: express.Express;
+
+try {
+  console.log('[Vercel Function] Importing createApp...');
+  const { createApp, createSPACatchAll: createCatchAll } = await import('../server/app');
+
+  console.log('[Vercel Function] Creating Express app...');
+  app = createApp();
+
+  console.log('[Vercel Function] Registering SPA catch-all...');
+  const publicDir = path.resolve(import.meta.dirname, '..', 'public');
+  app.use('*', createCatchAll(publicDir));
+
+  console.log('[Vercel Function] Initialization complete!');
+} catch (error) {
+  console.error('[Vercel Function] INIT ERROR:', error);
+  // Create a minimal app that returns the error
+  app = express();
+  app.use('*', (_req, res) => {
+    res.status(500).json({
+      error: 'Function initialization failed',
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined
+    });
+  });
+}
 
 export default app;
