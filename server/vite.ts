@@ -30,30 +30,18 @@ import {
   createServer as createViteServer,
   createLogger,
   type ServerOptions, // Import the ServerOptions type
-} from "vite";
-import { type Server } from "http";
-import viteConfig from "../vite.config.js";
-import { nanoid } from "nanoid";
-import { createSPACatchAll } from "./app.js";
+} from 'vite';
+import { type Server } from 'http';
+import viteConfig from '../vite.config.js';
+import { nanoid } from 'nanoid';
+import { createSPACatchAll } from './app.js';
+import { log } from './utils/log.js';
+
+// Re-export log for backward compatibility (server/index.ts imports it from here)
+export { log };
 
 // Create a logger instance based on Vite's logger for consistent formatting.
 const viteLogger = createLogger();
-
-/**
- * A standardized logging utility to ensure consistent timestamped output.
- * @param {string} message - The message to log to the console.
- * @param {string} [source="express"] - The source of the log message (e.g., 'vite', 'server').
- */
-export function log(message: string, source = "express") {
-  const formattedTime = new Date().toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true,
-  });
-
-  console.log(`${formattedTime} [${source}] ${message}`);
-}
 
 /**
  * Configures and attaches the Vite development server middleware to the Express app.

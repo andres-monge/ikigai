@@ -11,7 +11,7 @@
  * @dependencies
  * - express: The web framework
  * - ./routes: API route registration
- * - ./vite: Logging utility
+ * - ./utils/log: Logging utility
  */
 
 import express, {
@@ -20,20 +20,11 @@ import express, {
   type Response,
   type NextFunction,
   type RequestHandler,
-} from "express";
-import path from "path";
-import fs from "fs";
-import { registerRoutes } from "./routes.js";
-
-function log(message: string, source = "express") {
-  const formattedTime = new Date().toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true,
-  });
-  console.log(`${formattedTime} [${source}] ${message}`);
-}
+} from 'express';
+import path from 'path';
+import fs from 'fs';
+import { registerRoutes } from './routes.js';
+import { log } from './utils/log.js';
 
 /**
  * Regex to match asset file extensions (with optional query parameters).

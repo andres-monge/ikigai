@@ -8,28 +8,28 @@
  * their core drivers analysis and three potential career paths.
  */
 
-import { Router } from "express";
-import { z } from "zod";
-import { storage, type HydratedAssessmentSession } from "../../storage.js";
+import { Router } from 'express';
+import { z } from 'zod';
+import { storage, type HydratedAssessmentSession } from '../../storage.js';
 import {
   analysisRequestSchema,
   type PurposePath,
   type QuestionnaireResponses,
   purposePaths,
   assessmentSessions,
-} from "../../../shared/schema.js";
-import { getPurposeDiscoveryStreamChain } from "../../ai/chains/index.js";
-import { aiLimiter } from "../../ai/limiter.js";
-import { 
-  activeStreams, 
-  setupStreamConcurrencyControl, 
-  atomicPurposePathUpdate 
-} from "./utils.js";
-import { TransactionError, ValidationError, wrapTransactionError, ERROR_CODES } from "../../utils/errors.js";
-import { logAIStreamError } from "../../utils/ai-logger.js";
-import { validateSessionForAI } from "../../utils/validation.js";
-import { db } from "../../db.js";
-import { eq, inArray } from "drizzle-orm";
+} from '../../../shared/schema.js';
+import { getPurposeDiscoveryStreamChain } from '../../ai/chains/index.js';
+import { aiLimiter } from '../../ai/limiter.js';
+import {
+  activeStreams,
+  setupStreamConcurrencyControl,
+  atomicPurposePathUpdate
+} from './utils.js';
+import { TransactionError, ValidationError, wrapTransactionError, ERROR_CODES } from '../../utils/errors.js';
+import { logAIStreamError } from '../../utils/ai-logger.js';
+import { validateSessionForAI } from '../../utils/validation.js';
+import { db } from '../../db.js';
+import { eq, inArray } from 'drizzle-orm';
 
 export const purposeDiscoveryRouter = Router();
 

@@ -5,16 +5,16 @@
  * and database operations used across multiple assessment endpoints.
  */
 
-import type { Response } from "express";
-import { storage, type HydratedAssessmentSession } from "../../storage.js";
-import type { PurposePath, ActionPlan } from "../../../shared/schema.js";
-import type { IkigaiAlignment, CoreDriversAnalysis } from "../../../shared/types.js";
-import { db } from "../../db.js";
-import { eq } from "drizzle-orm";
-import { purposePaths, assessmentSessions } from "../../../shared/schema.js";
-import { wrapTransactionError, ERROR_CODES } from "../../utils/errors.js";
-import { inArray } from "drizzle-orm";
-import { validateSessionForAI } from "../../utils/validation.js";
+import type { Response } from 'express';
+import { storage, type HydratedAssessmentSession } from '../../storage.js';
+import type { PurposePath, ActionPlan } from '../../../shared/schema.js';
+import type { IkigaiAlignment, CoreDriversAnalysis } from '../../../shared/types.js';
+import { db } from '../../db.js';
+import { eq } from 'drizzle-orm';
+import { purposePaths, assessmentSessions } from '../../../shared/schema.js';
+import { wrapTransactionError, ERROR_CODES } from '../../utils/errors.js';
+import { inArray } from 'drizzle-orm';
+import { validateSessionForAI } from '../../utils/validation.js';
 
 /**
  * Track active streaming sessions to prevent concurrent streams per session

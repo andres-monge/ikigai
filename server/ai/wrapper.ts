@@ -46,7 +46,7 @@ export type { GeminiContent } from './types';
 /* ────────────────────────────────────────────────────────────────────────── */
 /* Environment & Constants                                                    */
 /* ────────────────────────────────────────────────────────────────────────── */
-import { env } from "../env.js";
+import { env } from '../env.js';
 
 // Re-export model identifiers for backward compatibility
 export const GEMINI_REASONING_MODEL = env.GEMINI_REASONING_MODEL;

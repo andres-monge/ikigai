@@ -20,7 +20,7 @@
  * - Leverages foreign key CASCADE for automatic cleanup
  */
 
-import { db } from "./db.js";
+import { db } from './db.js';
 import { eq } from 'drizzle-orm';
 import {
   type AssessmentSession,
@@ -29,7 +29,7 @@ import {
   type InsertPurposePath,
   assessmentSessions,
   purposePaths,
-} from "../shared/schema.js";
+} from '../shared/schema.js';
 
 /* ------------------------------------------------------------------ */
 /*                          Helper - New Types                        */

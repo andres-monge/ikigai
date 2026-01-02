@@ -8,9 +8,9 @@
  * the internal file structure.
  */
 
-import { Router } from "express";
-import { purposeDiscoveryRouter } from "./purpose-discovery.js";
-import { actionPlanRouter } from "./action-plan.js";
+import { Router } from 'express';
+import { purposeDiscoveryRouter } from './purpose-discovery.js';
+import { actionPlanRouter } from './action-plan.js';
 
 /**
  * Combined assessment router that includes all assessment endpoints:

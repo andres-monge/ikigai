@@ -21,7 +21,7 @@ export {
   actionPlanResultSchema,
   type PurposeDiscoveryResult,
   type ActionPlanResult
-} from "../../shared/streaming-schemas.js";
+} from '../../shared/streaming-schemas.js';
 
 // ========= OPENAPI SCHEMAS FOR FORCED JSON OUTPUT =========
 

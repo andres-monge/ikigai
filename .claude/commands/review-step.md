@@ -65,5 +65,5 @@ For each issue:
 - **DO NOT FIX ISSUES** - Only document them thoroughly
 - Consider both immediate and potential future problems
 - Focus on issues that could break functionality or compromise security
-- To gather information on external libraries or documentation, use the context7 MCP server or if
+- To gather information on external libraries or documentation, use the context7 MCP server or if Vercel related, the Vercel MCP
 - Your detailed issue reports will be passed to another AI agent for implementation

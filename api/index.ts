@@ -18,16 +18,18 @@
  * served directly by Vercel's CDN, not by this Express function.
  */
 
-import express from "express"; // Required for Vercel detection
-import path from "path";
-import { fileURLToPath } from "url";
-import { createApp, createSPACatchAll } from "../server/app.js";
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import express from 'express'; // Required for Vercel static detection - do not remove
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { createApp, createSPACatchAll } from '../server/app.js';
+
 const hereDir = path.dirname(fileURLToPath(import.meta.url));
 const app = createApp();
 
 // Register SPA catch-all for deep-link refresh support (e.g., /results, /action-plan)
 // Vercel CDN serves static assets from public/, this only handles client-side routes.
-const publicDir = path.resolve(hereDir, "..", "public");
-app.use("*", createSPACatchAll(publicDir));
+const publicDir = path.resolve(hereDir, '..', 'public');
+app.use('*', createSPACatchAll(publicDir));
 
 export default app;
