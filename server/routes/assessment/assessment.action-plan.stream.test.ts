@@ -21,6 +21,7 @@ import type { QuestionnaireResponses } from '../../../shared/schema.js';
 import { storage } from '../../storage.js';
 import { createTestApp } from '../../utils/test-app.js';
 import { ERROR_CODES } from '../../utils/errors.js';
+import { waitForSessionActionPlan } from '../../test-utils.js';
 
 // Import the functions we'll be mocking before setting up the mock
 import { getActionPlanStreamChain } from '../../ai/chains';
@@ -429,21 +430,22 @@ describe('Action Plan Streaming Endpoint - POST /api/action-plan/stream (AI SDK)
     expect(response2.text.length).toBeGreaterThan(0);
 
     // 6. Verify complete application functionality: database persistence with proper data
-    const updatedSession1 = await storage.getAssessmentSessionBySessionId(sessionId1);
-    const updatedSession2 = await storage.getAssessmentSessionBySessionId(sessionId2);
-    
+    // Use retry helper to handle eventual consistency (DB write happens after HTTP response)
+    const updatedSession1 = await waitForSessionActionPlan(storage, sessionId1);
+    const updatedSession2 = await waitForSessionActionPlan(storage, sessionId2);
+
     expect(updatedSession1).toBeDefined();
     expect(updatedSession2).toBeDefined();
-    
+
     // Verify the core application functionality: AI analysis was saved correctly
     expect(updatedSession1!.actionPlan).toBeDefined();
     expect(updatedSession1!.actionPlan!.milestones).toHaveLength(1);
     expect(updatedSession1!.actionPlan!.milestones[0].title).toBe('Quick test');
-    
+
     expect(updatedSession2!.actionPlan).toBeDefined();
     expect(updatedSession2!.actionPlan!.milestones).toHaveLength(1);
     expect(updatedSession2!.actionPlan!.milestones[0].title).toBe('Quick test');
-    
+
     // Verify sessions maintain separate data (no cross-contamination)
     expect(updatedSession1!.id).not.toBe(updatedSession2!.id);
     expect(updatedSession1!.sessionId).toBe(sessionId1);

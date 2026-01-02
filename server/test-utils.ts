@@ -64,3 +64,22 @@ export async function waitForSessionAnalysis(
     { timeoutMessage: `Session ${sessionId} coreDriversAnalysis not populated` }
   );
 }
+
+/**
+ * Wait for a session to have actionPlan populated.
+ * Convenience wrapper for the action plan streaming test pattern.
+ *
+ * @param storage - The storage instance to query
+ * @param sessionId - The session ID to check
+ * @returns The hydrated session with actionPlan populated
+ */
+export async function waitForSessionActionPlan(
+  storage: { getAssessmentSessionBySessionId: (id: string) => Promise<any> },
+  sessionId: string
+): Promise<any> {
+  return waitForCondition(
+    () => storage.getAssessmentSessionBySessionId(sessionId),
+    (session) => session?.actionPlan !== null && session?.actionPlan !== undefined,
+    { timeoutMessage: `Session ${sessionId} actionPlan not populated` }
+  );
+}

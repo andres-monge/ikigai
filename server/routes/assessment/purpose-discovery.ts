@@ -19,7 +19,6 @@ import {
   assessmentSessions,
 } from '../../../shared/schema.js';
 import { getPurposeDiscoveryStreamChain } from '../../ai/chains/index.js';
-import { aiLimiter } from '../../ai/limiter.js';
 import {
   activeStreams,
   setupStreamConcurrencyControl,
@@ -84,9 +83,10 @@ purposeDiscoveryRouter.post("/analyze/stream", async (req, res) => {
 
     // Start streaming with AI SDK
     try {
-      // Get streamObject result with concurrency limiting
-      const result = await aiLimiter(() => 
-        getPurposeDiscoveryStreamChain(session!.responses as QuestionnaireResponses, session!.language!)
+      // Get streamObject result
+      const result = await getPurposeDiscoveryStreamChain(
+        session!.responses as QuestionnaireResponses,
+        session!.language!
       );
 
       // Stream to client using AI SDK's text stream protocol

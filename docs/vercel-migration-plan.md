@@ -37,7 +37,7 @@
 ## Database reliability in serverless (recommended improvement)
 [X] Step 6: Switch Drizzle DB client to Neon serverless driver for Vercel Functions
 **Task**: Update the DB connection layer to use Neon's serverless approach with Drizzle (recommended for serverless). This avoids issues commonly caused by long-lived connection pools in serverless environments. Ensure schema typing stays intact and that all storage code continues to work unchanged from the rest of the app's perspective.
-**Implementation Notes**: Switched from `drizzle-orm/node-postgres` + `pg.Pool` to `drizzle-orm/neon-serverless` + Neon's `Pool`. Added WebSocket configuration for Node.js. 97/99 tests pass; 2 test failures are pre-existing race conditions in streaming tests (exposed by WebSocket latency, not caused by migration).
+**Implementation Notes**: Switched from `drizzle-orm/node-postgres` + `pg.Pool` to `drizzle-orm/neon-serverless` + Neon's `Pool`. Added WebSocket configuration for Node.js. All tests pass after adding `waitForSessionActionPlan` retry helper to handle eventual consistency.
 **Suggested Files for Context**: [`server/db.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/server/db.ts), [`server/storage.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/server/storage.ts), [`drizzle.config.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/drizzle.config.ts), [`shared/schema.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/shared/schema.ts), [`migrations`](/Users/andresm/Documents/Cursor%20Projects/ikigai/migrations)
 **Step Dependencies**: Step 1
 **User Instructions**:
