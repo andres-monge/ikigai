@@ -101,13 +101,13 @@ DATABASE_URL="$PROD_DATABASE_URL" npx tsx scripts/analytics-report.ts
 
 ## Phase 3: Backend API
 
-[ ] Step 3: Create analytics API endpoint
+[X] Step 3: Create analytics API endpoint
 **Task**: Create a new Express router file for analytics with a single POST endpoint at `/event`. The endpoint should: (1) Accept a JSON body with `sessionId` (string, required), `eventType` (string, required), and `metadata` (object, optional). (2) Validate that `eventType` is one of the allowed values: `visit`, `start`, `section`, `export`, `start_over`. (3) Call `storage.logAnalyticsEvent()` wrapped in try/catch. (4) Always return 200 status with `{ success: true }` even if the database write fails (to never block the client). (5) Log any errors to console for debugging. Use Zod for request body validation following patterns in other route files.
 **Suggested Files for Context**: [`server/routes/session.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/server/routes/session.ts), [`server/storage.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/server/storage.ts), [`server/routes/assessment/index.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/server/routes/assessment/index.ts)
 **Step Dependencies**: Step 2
 **User Instructions**: None
 
-[ ] Step 4: Register analytics router
+[X] Step 4: Register analytics router
 **Task**: Import the new analytics router in the main routes file and register it under the `/analytics` path prefix. This will make the endpoint available at `/api/analytics/event`.
 **Suggested Files for Context**: [`server/routes.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/server/routes.ts), [`server/routes/analytics.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/server/routes/analytics.ts)
 **Step Dependencies**: Step 3

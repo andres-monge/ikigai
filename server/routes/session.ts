@@ -52,6 +52,10 @@ sessionRouter.get("/session/:sessionId", async (req, res, next) => {
 
 /* ------------------------ POST /api/session/start-over ------------------------ */
 
+/**
+ * Start Over endpoint - preserves session data for analytics while allowing
+ * users to start fresh. The frontend generates a new session ID.
+ */
 sessionRouter.post("/session/start-over", async (req, res, next) => {
   try {
     // Validate request body
@@ -65,14 +69,12 @@ sessionRouter.post("/session/start-over", async (req, res, next) => {
 
     const { sessionId } = validation.data;
 
-    // Delete session data (idempotent - always succeeds)
-    const wasDeleted = await storage.deleteAssessmentSessionBySessionId(sessionId);
+    // Log start_over event for analytics (preserves session data)
+    await storage.logAnalyticsEvent(sessionId, 'start_over', {});
 
-    // Return success regardless of whether session existed
+    // Return success - frontend will generate a new session ID
     res.json({
-      message: wasDeleted 
-        ? "Session data cleared successfully"
-        : "Session was already cleared or did not exist"
+      message: "Start over recorded successfully"
     });
   } catch (err) {
     next(err);
