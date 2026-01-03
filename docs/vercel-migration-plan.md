@@ -105,7 +105,7 @@ All tests should pass. If any fail, the database connection change may have affe
 | `npm test` (local) | Dev branch | `DATABASE_URL` in `.env` |
 
 ## Validate streaming + routing on Preview, then merge
-[ ] Step 7: Validate the Preview deployment end-to-end before merging to `main`
+[X] Step 7: Validate the Preview deployment end-to-end before merging to `main`
 **Task**: On the Preview deployment URL, validate: SPA loads, sounds/assets load, deep-link refresh works, and streaming endpoints work reliably under the configured duration. Confirm DB reads/writes succeed and that the API error handling does not leave the function in a bad state after errors.
 **Suggested Files for Context**: [`server/routes/assessment/purpose-discovery.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/server/routes/assessment/purpose-discovery.ts), [`server/routes/assessment/action-plan.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/server/routes/assessment/action-plan.ts), [`server/routes/session.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/server/routes/session.ts), [`server/utils/errors.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/server/utils/errors.ts), [`server/utils/ai-logger.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/server/utils/ai-logger.ts)
 **Step Dependencies**: Step 4, Step 5, Step 6
@@ -116,6 +116,8 @@ All tests should pass. If any fail, the database connection change may have affe
 **Suggested Files for Context**: [`package.json`](/Users/andresm/Documents/Cursor%20Projects/ikigai/package.json), [`server/env.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/server/env.ts)
 **Step Dependencies**: Step 7
 **User Instructions**: After Production validation passes, you can optionally attach a custom domain and enable any additional Vercel protections (Firewall rules, etc.).
+
+[ ] Step 9: Update @docs/tech-spec.md
 
 ## Brief summary (overall approach + key considerations)
 This migration keeps your architecture as a “serverless monolith”: a single Express Function for `/api/*`, and static SPA assets served from Vercel’s CDN via repo-root `public/**` (verified: `express.static()` is ignored on Vercel). SPA deep-link refresh is handled by an Express catch-all route returning `public/index.html`, avoiding `vercel.json` rewrites. Long AI streaming is supported by setting `maxDuration` for the Express entry file in `vercel.json` (verified via the official snippet you provided). The main implementation risk to manage is database connectivity in serverless; switching the Drizzle client to Neon’s serverless driver is the recommended improvement for stability under Vercel Functions
