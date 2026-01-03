@@ -22,10 +22,10 @@ export function Header({ language, onLanguageChange, onNavigateHome }: HeaderPro
       <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         <button
           onClick={handleNavigateHome}
-          className="flex items-center space-x-3 hover:opacity-80 transition-opacity cursor-pointer group"
+          className="flex items-center space-x-0.5 hover:opacity-80 transition-opacity cursor-pointer group"
         >
-          <div className="w-8 h-8 gradient-primary rounded-lg flex items-center justify-center group-hover:scale-105 transition-transform">
-            <Compass className="text-white text-sm" />
+          <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center group-hover:scale-105 transition-transform">
+            <Compass className="text-ikigai-teal text-sm" />
           </div>
           <h1 className="text-xl font-semibold text-slate-900 group-hover:text-ikigai-teal transition-colors">
             {t('header.title', language)}

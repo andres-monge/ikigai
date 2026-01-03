@@ -111,13 +111,14 @@ All tests should pass. If any fail, the database connection change may have affe
 **Step Dependencies**: Step 4, Step 5, Step 6
 **User Instructions**: Use Vercel’s deployment logs to inspect failures and confirm there are no unexpected timeouts. Only merge to `main` after the Preview deployment passes these checks.
 
-[ ] Step 8: Merge to `main` and confirm Production deployment uses Production env vars
+[X] Step 8: Merge to `main` and confirm Production deployment uses Production env vars
 **Task**: Merge the migration branch to `main` to trigger a Production deployment. Confirm Production uses the Production environment variables (especially `DATABASE_URL` and `GEMINI_API_KEY`) and re-run the same validation checklist on the Production URL.
 **Suggested Files for Context**: [`package.json`](/Users/andresm/Documents/Cursor%20Projects/ikigai/package.json), [`server/env.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/server/env.ts)
 **Step Dependencies**: Step 7
 **User Instructions**: After Production validation passes, you can optionally attach a custom domain and enable any additional Vercel protections (Firewall rules, etc.).
 
-[ ] Step 9: Update @docs/tech-spec.md
+## Update project documentation
+[X] Step 9: Update @docs/tech-spec.md
 
 ## Brief summary (overall approach + key considerations)
 This migration keeps your architecture as a “serverless monolith”: a single Express Function for `/api/*`, and static SPA assets served from Vercel’s CDN via repo-root `public/**` (verified: `express.static()` is ignored on Vercel). SPA deep-link refresh is handled by an Express catch-all route returning `public/index.html`, avoiding `vercel.json` rewrites. Long AI streaming is supported by setting `maxDuration` for the Express entry file in `vercel.json` (verified via the official snippet you provided). The main implementation risk to manage is database connectivity in serverless; switching the Drizzle client to Neon’s serverless driver is the recommended improvement for stability under Vercel Functions

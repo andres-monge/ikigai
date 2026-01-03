@@ -32,7 +32,7 @@ An AI-powered web application designed to help career-switchers and students fin
 ### Personality and Reasoning
 
   - [ ] AI persona's personality and writing will mimic that of Paul Graham. It will encourage and explain the why behind every suggestion made to the user in all interactions.
-  - [ ] The web application will be built and deployed using Replit.
+  - [ ] The web application is deployed on Vercel with a serverless Express backend.
 
 ### General
 
@@ -54,8 +54,8 @@ An AI-powered web application designed to help career-switchers and students fin
       - **Frontend:** React SPA (Vite, TypeScript), using TanStack Query for server state. UI built with shadcn/ui and Tailwind CSS.
       - **Backend:** Node.js server (Express), orchestrating the AI generation logic.
       - **AI & Data:** Uses **Vercel AI SDK** with **`GEMINI_REASONING_MODEL`** for structured object streaming via `streamObject`.
-      - **Data Persistence:** Session data is stored in a **Replit PostgreSQL database**. Schema management and migrations are handled by **Drizzle ORM** and **Drizzle Kit**. A two-database strategy (production and development) is employed to ensure a safe workflow.
-      - **Deployment:** The application is packaged for deployment on Replit.
+      - **Data Persistence:** Session data is stored in a **Neon PostgreSQL database** using the serverless driver for optimal performance in serverless environments. Schema management and migrations are handled by **Drizzle ORM** and **Drizzle Kit**. A two-branch strategy (production and development) on Neon is employed to ensure a safe workflow.
+      - **Deployment:** The application is deployed on **Vercel** as a serverless monolith: a single Express Function for `/api/*` routes, with static SPA assets served from Vercel's CDN.
 
 <!-- end list -->
 
@@ -66,7 +66,7 @@ graph TD
         C1 -->|POST /api/action-plan/stream| S1
     end
 
-    subgraph "Replit Environment (Server)"
+    subgraph "Vercel Serverless (Server)"
         S1 -- "Purpose Discovery" --> ORC(AI SDK streamObject)
         S1 -- "Action Plan" --> ORC2(AI SDK streamObject)
 
@@ -78,7 +78,7 @@ graph TD
         end
 
         subgraph "Data Persistence"
-            DB[(Replit PostgreSQL)]
+            DB[(Neon PostgreSQL)]
         end
 
         PARSE1 -- "Validated Object" --> PERSIST1(Atomic Transaction)
@@ -310,8 +310,8 @@ client/public/sounds/
 
 ## 11\. Environment Variables
 
-The application will require the following environment variables to be set. On Replit, these will be configured in **Secrets**. For local development, they will be in an `.env` file.
+The application requires the following environment variables. On Vercel, these are configured in **Settings → Environment Variables** with separate values for Production and Preview environments. For local development, they are set in an `.env` file.
 
-  - `DATABASE_URL`: The full connection string for the PostgreSQL database.
+  - `DATABASE_URL`: The full connection string for the Neon PostgreSQL database. On Vercel, Production uses the production branch and Preview uses the development branch.
   - `GEMINI_API_KEY`: The API key for Google AI Studio.
   - `GEMINI_REASONING_MODEL`: The identifier for the main analysis model.

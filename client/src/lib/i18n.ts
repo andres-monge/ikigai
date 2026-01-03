@@ -18,7 +18,7 @@
 export const translations: Record<string, Record<string, string>> = {
   en: {
     // Header
-    'header.title': 'Ikigai Finder',
+    'header.title': 'Find My Ikigai',
 
     // Welcome Section
     'welcome.title': "You'll spend decades working.",
@@ -35,7 +35,7 @@ export const translations: Record<string, Record<string, string>> = {
     'home.returnToPaths': 'Return to Purpose Paths',
 
     // Questionnaire
-    'questionnaire.complete': 'Show Me What I Should Work On',
+    'questionnaire.complete': 'Show Me My 3 Paths',
     'questionnaire.saving': 'Saving...',
 
 
@@ -85,7 +85,7 @@ export const translations: Record<string, Record<string, string>> = {
   },
   es: {
     // Header
-    'header.title': 'Ikigai Finder',
+    'header.title': 'Find My Ikigai',
 
     // Welcome Section
     'welcome.title': 'Vas a pasar décadas trabajando.',
@@ -102,7 +102,7 @@ export const translations: Record<string, Record<string, string>> = {
     'home.returnToPaths': 'Volver a tus caminos',
 
     // Questionnaire
-    'questionnaire.complete': 'Muéstrame en qué debería trabajar',
+    'questionnaire.complete': 'Muéstrame mis 3 caminos',
     'questionnaire.saving': 'Guardando...',
 
 
