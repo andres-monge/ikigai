@@ -13,22 +13,14 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { storage } from '../storage.js';
+import { ANALYTICS_EVENT_TYPES } from '../../shared/schema.js';
 
 export const analyticsRouter = Router();
-
-/** Allowed event types for analytics tracking */
-const ALLOWED_EVENT_TYPES = [
-  'visit',
-  'start',
-  'section',
-  'export',
-  'start_over',
-] as const;
 
 /** Zod schema for analytics event request body */
 const analyticsEventSchema = z.object({
   sessionId: z.string().min(1),
-  eventType: z.enum(ALLOWED_EVENT_TYPES),
+  eventType: z.enum(ANALYTICS_EVENT_TYPES),
   metadata: z.record(z.unknown()).optional().default({}),
 });
 

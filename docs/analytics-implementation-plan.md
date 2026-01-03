@@ -123,7 +123,7 @@ DATABASE_URL="$PROD_DATABASE_URL" npx tsx scripts/analytics-report.ts
 
 ## Phase 4: Frontend Analytics Hook
 
-[ ] Step 6: Create useAnalytics hook
+[X] Step 6: Create useAnalytics hook
 **Task**: Create a new React hook called `useAnalytics` that provides a `trackEvent` function. The hook should: (1) Accept no parameters. (2) Get the `sessionId` from session storage using the existing `useSessionStorage` hook pattern (key is `'sessionId'`). (3) Return a memoized `trackEvent(eventType: string, metadata?: object)` function that fires a POST request to `/api/analytics/event` with the sessionId, eventType, and metadata. (4) The fetch should be fire-and-forget from the UI perspective (no await, catch errors silently). (5) Use `useCallback` with `sessionId` as dependency. Export the hook as a named export.
 **Suggested Files for Context**: [`client/src/hooks/use-session-storage.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/client/src/hooks/use-session-storage.ts), [`client/src/hooks/use-sound-effect.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/client/src/hooks/use-sound-effect.ts), [`client/src/hooks/use-get-session.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/client/src/hooks/use-get-session.ts)
 **Step Dependencies**: Step 4
@@ -133,7 +133,7 @@ DATABASE_URL="$PROD_DATABASE_URL" npx tsx scripts/analytics-report.ts
 
 ## Phase 5: Frontend Instrumentation
 
-[ ] Step 7: Add visit tracking to App component
+[X] Step 7: Add visit tracking to App component
 **Task**: In the main App component, add a `useEffect` that fires a `visit` event once when the app mounts. Use the new `useAnalytics` hook. The effect should have an empty dependency array (or only stable dependencies) to ensure it fires exactly once per page load. Add appropriate comments explaining this is for analytics.
 **Suggested Files for Context**: [`client/src/App.tsx`](/Users/andresm/Documents/Cursor%20Projects/ikigai/client/src/App.tsx), [`client/src/hooks/use-analytics.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/client/src/hooks/use-analytics.ts)
 **Step Dependencies**: Step 6

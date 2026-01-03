@@ -10,7 +10,7 @@
 * - Shared UI primitives: Header, Toaster, TooltipProvider
 */
 
-import { useState, useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Route, Switch, useLocation } from 'wouter';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Toaster } from '@/components/ui/toaster';
@@ -20,6 +20,7 @@ import { Results } from '@/pages/results';
 import { ActionPlan } from '@/pages/action-plan';
 import { NotFound } from '@/pages/not-found';
 import { useSessionStorage } from '@/hooks/use-session-storage';
+import { useAnalytics } from '@/hooks/use-analytics';
 import type { Language } from '@/lib/i18n';
 import type { FullAssessment } from '@/types/assessment';
 
@@ -52,6 +53,26 @@ Math.random().toString(36).slice(2) + Date.now().toString(36);
 setSessionId(newId);
 }
 }, [sessionId, setSessionId]);
+
+/* ------------------------------------------------------------------------ */
+/*      ANALYTICS      */
+/* ------------------------------------------------------------------------ */
+
+const { trackEvent } = useAnalytics();
+
+/** Ref to ensure we only fire the visit event once per page load. */
+const hasTrackedVisit = useRef(false);
+
+/**
+ * Track the 'visit' analytics event once when the app mounts.
+ * Uses a ref to ensure only one event is fired even if dependencies change.
+ */
+useEffect(() => {
+  if (!hasTrackedVisit.current && sessionId) {
+    trackEvent('visit');
+    hasTrackedVisit.current = true;
+  }
+}, [sessionId, trackEvent]);
 
 /* ------------------------------------------------------------------------ */
 /*      GLOBAL EVENT HANDLERS      */

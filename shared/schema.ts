@@ -240,6 +240,20 @@ export type ActionState<T> =
 /* -------------------------------------------------------------------------- */
 
 export type Language = 'en' | 'es';
+
+/**
+ * @description Analytics event types for tracking user funnel progression.
+ * Shared between frontend hook and backend validation to prevent drift.
+ */
+export const ANALYTICS_EVENT_TYPES = [
+  'visit',
+  'start',
+  'section',
+  'export',
+  'start_over',
+] as const;
+
+export type AnalyticsEventType = (typeof ANALYTICS_EVENT_TYPES)[number];
 export type PurposePath = SelectPurposePath;
 export type AssessmentSession = SelectAssessmentSession;
 export type InsertAssessmentSession = z.infer<typeof insertAssessmentSessionSchema>;

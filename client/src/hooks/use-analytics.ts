@@ -1,15 +1,6 @@
 import { useCallback } from 'react';
 import { useSessionStorage } from './use-session-storage';
-
-/**
- * Analytics event types supported by the system.
- * - visit: App first loads
- * - start: User enters their first answer
- * - section: User completes a questionnaire section
- * - export: User exports results (copy or PDF)
- * - start_over: User clicks Start Over
- */
-type AnalyticsEventType = 'visit' | 'start' | 'section' | 'export' | 'start_over';
+import type { AnalyticsEventType } from '@shared/schema';
 
 /**
  * Custom hook for tracking analytics events.
