@@ -30,8 +30,8 @@ export const translations: Record<string, Record<string, string>> = {
     'welcome.noAccount': 'Free. No signup required.',
 
     // Home
-    'home.questionnaireTitle': 'Answer 8 questions.',
-    'home.questionnaireTitle2': 'Discover what drives you, and 3 paths to get there.',
+    'home.questionnaireTitle': 'Answer 8 questions. Find your thing.',
+    'home.questionnaireTitle2': 'Then pick a path to start.',
     'home.returnToPaths': 'Return to Purpose Paths',
 
     // Questionnaire
@@ -97,8 +97,8 @@ export const translations: Record<string, Record<string, string>> = {
     'welcome.noAccount': 'Gratis. Sin registros.',
 
     // Home
-    'home.questionnaireTitle': 'Responde 8 preguntas.',
-    'home.questionnaireTitle2': 'Descubre qué te motiva, y 3 caminos para llegar.',
+    'home.questionnaireTitle': 'Responde 8 preguntas. Descubre qué te motiva.',
+    'home.questionnaireTitle2': 'Luego elige un camino para empezar.',
     'home.returnToPaths': 'Volver a tus caminos',
 
     // Questionnaire
