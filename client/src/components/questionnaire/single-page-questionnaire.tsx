@@ -25,7 +25,7 @@
  * <SinglePageQuestionnaire language={language} sessionId={sessionId} />
  */
 
-import { useState, type ChangeEvent, useMemo } from 'react';
+import { useState, useRef, type ChangeEvent, useMemo } from 'react';
 import { useLocation } from 'wouter';
 import TextareaAutosize from 'react-textarea-autosize';
 import { Label } from '@/components/ui/label';
@@ -34,6 +34,7 @@ import { useSessionStorage } from '@/hooks/use-session-storage';
 import { useCreateAssessment } from '@/hooks/use-create-assessment';
 import { useToast } from '@/hooks/use-toast';
 import { useSoundEffect } from '@/hooks/use-sound-effect';
+import { useAnalytics } from '@/hooks/use-analytics';
 import { t, type Language } from '@/lib/i18n';
 import { QUESTIONS, buildFlatQuestionList } from './questions';
 import type {
@@ -82,6 +83,12 @@ export function SinglePageQuestionnaire({
   const [, navigate] = useLocation();
   const { play: playPrimarySound } = useSoundEffect('/sounds/click-primary.mp3');
 
+  /* ------------------------------ Analytics ------------------------------- */
+  const { trackEvent } = useAnalytics();
+
+  /** Ref to ensure we only fire the 'start' event once per session. */
+  const hasTrackedStart = useRef(false);
+
   /* ------------------------------ Build UI list --------------------------- */
   const flatQuestions = useMemo(() => buildFlatQuestionList(language), [language]);
 
@@ -108,6 +115,12 @@ export function SinglePageQuestionnaire({
 
   /* ---------------------------- Event Handlers --------------------------- */
   const handleTextareaChange = (id: string, value: string) => {
+    // Track 'start' event on first non-empty answer
+    if (!hasTrackedStart.current && value.trim()) {
+      trackEvent('start');
+      hasTrackedStart.current = true;
+    }
+
     setAnswers((prev) => ({ ...prev, [id]: value }));
   };
 
