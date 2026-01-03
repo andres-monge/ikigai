@@ -41,6 +41,51 @@ Additionally, enable AI-powered analysis of questionnaire answers to understand 
 
 ---
 
+## Development & Deployment Strategy
+
+### Prerequisites
+- Complete Vercel migration first (merge `vercel-migration` branch to `main`)
+- Ensure Vercel environment variables are configured: Preview → dev database, Production → prod database
+
+### Workflow
+
+| Step | Action | Database |
+|------|--------|----------|
+| 1 | Create `analytics` branch from `main` | — |
+| 2 | Implement all steps locally | Dev (via `.env`) |
+| 3 | Push to branch → Vercel creates Preview deployment | Dev (via Vercel Preview env) |
+| 4 | Test on Preview URL (Step 13 validation) | Dev |
+| 5 | Before merging: push schema to prod | Prod |
+| 6 | Merge to `main` → Vercel deploys to Production | Prod |
+
+### Database Commands Reference
+
+```bash
+# Local development (uses DATABASE_URL from .env, which points to dev)
+npm run dev
+npm run db:push
+
+# Push schema to dev database explicitly
+DATABASE_URL="$DEV_DATABASE_URL" npm run db:push
+
+# Push schema to prod database (do this BEFORE merging to main)
+DATABASE_URL="$PROD_DATABASE_URL" npm run db:push
+
+# Run scripts against dev
+DATABASE_URL="$DEV_DATABASE_URL" npx tsx scripts/analytics-report.ts
+
+# Run scripts against prod (for real analytics)
+DATABASE_URL="$PROD_DATABASE_URL" npx tsx scripts/analytics-report.ts
+```
+
+### Checklist Before Merging to Main
+- [ ] All steps implemented and tested locally
+- [ ] Preview deployment tested end-to-end (Step 13)
+- [ ] Schema pushed to production database: `DATABASE_URL="$PROD_DATABASE_URL" npm run db:push`
+- [ ] No console errors in Preview deployment logs
+
+---
+
 ## Phase 1: Database Schema
 
 [ ] Step 1: Add analytics_events table to shared schema
