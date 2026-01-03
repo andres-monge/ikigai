@@ -145,8 +145,19 @@ export const purposePaths = pgTable('purpose_paths', {
   actionStrategy: text('action_strategy'),
 });
 
-
-
+/**
+ * @description Analytics events table for tracking user funnel progression.
+ * Stores lightweight events with optional metadata for calculating success metrics.
+ */
+export const analyticsEvents = pgTable('analytics_events', {
+  id: serial('id').primaryKey(),
+  sessionId: text('session_id').notNull(),
+  eventType: text('event_type').notNull(),
+  metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
 
 /* --------------------------- DRIZZLE RELATIONS ---------------------------- */
 
@@ -190,8 +201,10 @@ export const insertPurposePathSchema = createInsertSchema(purposePaths);
 export const selectPurposePathSchema = createSelectSchema(purposePaths);
 export type SelectPurposePath = z.infer<typeof selectPurposePathSchema>;
 
-
-
+export const insertAnalyticsEventSchema = createInsertSchema(analyticsEvents);
+export const selectAnalyticsEventSchema = createSelectSchema(analyticsEvents);
+export type InsertAnalyticsEvent = z.infer<typeof insertAnalyticsEventSchema>;
+export type SelectAnalyticsEvent = z.infer<typeof selectAnalyticsEventSchema>;
 
 /* -------------------------------------------------------------------------- */
 /* API-LEVEL REQUEST SCHEMAS                        */
