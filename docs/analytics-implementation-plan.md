@@ -113,7 +113,7 @@ DATABASE_URL="$PROD_DATABASE_URL" npx tsx scripts/analytics-report.ts
 **Step Dependencies**: Step 3
 **User Instructions**: None
 
-[ ] Step 5: Modify Start Over endpoint to preserve data
+[X] Step 5: Modify Start Over endpoint to preserve data
 **Task**: Modify the existing `/api/session/start-over` endpoint to NO LONGER delete session data from the database. The endpoint should: (1) Remove or comment out the call to `storage.deleteAssessmentSessionBySessionId()`. (2) Log a `start_over` analytics event with the sessionId before returning. (3) Return success as before. This preserves all questionnaire answers for analysis while still allowing users to start fresh (the frontend will generate a new session ID).
 **Suggested Files for Context**: [`server/routes/session.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/server/routes/session.ts), [`server/storage.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/server/storage.ts)
 **Step Dependencies**: Step 2

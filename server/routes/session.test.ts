@@ -1,12 +1,14 @@
 /**
  * @description
  * Integration tests for session management endpoints.
- * 
- * ✨ Step 8 Implementation ✨
- * ──────────────────────────
+ *
  * Tests both GET /api/session/:sessionId and POST /api/session/start-over
  * endpoints to ensure they work correctly with the PostgreSQL database.
- * 
+ *
+ * Note: As of the Analytics implementation (Step 5), the start-over endpoint
+ * now PRESERVES session data for analytics purposes instead of deleting it.
+ * The frontend generates a new session ID to allow users to start fresh.
+ *
  * @dependencies
  * - Development database must be running and accessible via DATABASE_URL
  * - Tests create and clean up their own test data
@@ -20,7 +22,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '../db.js';
 import { storage } from '../storage.js';
 import { sessionRouter } from './session.js';
-import { assessmentSessions, purposePaths } from '../../shared/schema.js';
+import { assessmentSessions, analyticsEvents } from '../../shared/schema.js';
 import type { QuestionnaireResponses } from '../../shared/schema.js';
 
 // Create a test app
@@ -195,45 +197,57 @@ describe('POST /api/session/start-over', () => {
     expect(response.body.error).toBe("Invalid request data");
   });
 
-  it('should return success for non-existent session (idempotent)', async () => {
+  it('should return success and log event for any session (idempotent)', async () => {
+    const nonExistentSessionId = 'non-existent-session-' + Date.now();
+
     const response = await request(app)
       .post('/api/session/start-over')
-      .send({ sessionId: 'non-existent-session' })
+      .send({ sessionId: nonExistentSessionId })
       .expect(200);
 
-    expect(response.body.message).toBe("Session was already cleared or did not exist");
+    expect(response.body.message).toBe("Start over recorded successfully");
+
+    // Verify analytics event was logged
+    const events = await db.select()
+      .from(analyticsEvents)
+      .where(eq(analyticsEvents.sessionId, nonExistentSessionId));
+    expect(events).toHaveLength(1);
+    expect(events[0].eventType).toBe('start_over');
+
+    // Cleanup
+    await db.delete(analyticsEvents).where(eq(analyticsEvents.sessionId, nonExistentSessionId));
   });
 
-  it('should delete session and cascade delete purpose paths', async () => {
+  it('should preserve session data and log analytics event', async () => {
     // Create a test session with purpose paths
     const session = await storage.createAssessmentSession({
       sessionId: testSessionId2,
       language: 'en',
       responses: sampleQuestionnaireResponses,
       coreDriversAnalysis: {
-        summary: "Test user for deletion.",
-        strengthsAnalysis: "Will be deleted."
+        summary: "Test user for analytics.",
+        strengthsAnalysis: "Data will be preserved."
       }
     });
 
     // Add purpose paths
-    const path1 = await storage.createPurposePath({
+    await storage.createPurposePath({
       assessmentId: session.id,
       title: "Test Path 1",
-      description: "Will be deleted",
+      description: "Will be preserved",
       ikigaiAlignment: {},
       actionStrategy: "Test strategy"
     });
 
-    const path2 = await storage.createPurposePath({
+    await storage.createPurposePath({
       assessmentId: session.id,
-      title: "Test Path 2", 
-      description: "Will also be deleted",
+      title: "Test Path 2",
+      description: "Will also be preserved",
       ikigaiAlignment: {},
       actionStrategy: "Another test strategy"
     });
 
-    // Verify data exists before deletion
+    // Verify data exists before start-over
     const beforeSession = await storage.getAssessmentSessionBySessionId(testSessionId2);
     expect(beforeSession).toBeTruthy();
     expect(beforeSession!.purposePaths).toHaveLength(2);
@@ -244,42 +258,55 @@ describe('POST /api/session/start-over', () => {
       .send({ sessionId: testSessionId2 })
       .expect(200);
 
-    expect(response.body.message).toBe("Session data cleared successfully");
+    expect(response.body.message).toBe("Start over recorded successfully");
 
-    // Verify session is deleted
+    // Verify session data is PRESERVED (not deleted)
     const afterSession = await storage.getAssessmentSessionBySessionId(testSessionId2);
-    expect(afterSession).toBeUndefined();
+    expect(afterSession).toBeTruthy();
+    expect(afterSession!.purposePaths).toHaveLength(2);
 
-    // Verify purpose paths are cascade deleted
-    const remainingPaths = await db.select()
-      .from(purposePaths)
-      .where(eq(purposePaths.assessmentId, session.id));
-    expect(remainingPaths).toHaveLength(0);
+    // Verify analytics event was logged
+    const events = await db.select()
+      .from(analyticsEvents)
+      .where(eq(analyticsEvents.sessionId, testSessionId2));
+    expect(events.some(e => e.eventType === 'start_over')).toBe(true);
+
+    // Cleanup analytics events
+    await db.delete(analyticsEvents).where(eq(analyticsEvents.sessionId, testSessionId2));
   });
 
-  it('should be idempotent - second call also returns success', async () => {
-    // Create and delete session
-    const session = await storage.createAssessmentSession({
+  it('should be idempotent - multiple calls log multiple events', async () => {
+    // Create session
+    await storage.createAssessmentSession({
       sessionId: testSessionId,
       language: 'en',
       responses: sampleQuestionnaireResponses
     });
 
-    // First deletion call
+    // First start-over call
     const response1 = await request(app)
       .post('/api/session/start-over')
       .send({ sessionId: testSessionId })
       .expect(200);
 
-    expect(response1.body.message).toBe("Session data cleared successfully");
+    expect(response1.body.message).toBe("Start over recorded successfully");
 
-    // Second deletion call should also succeed
+    // Second start-over call should also succeed and log another event
     const response2 = await request(app)
       .post('/api/session/start-over')
       .send({ sessionId: testSessionId })
       .expect(200);
 
-    expect(response2.body.message).toBe("Session was already cleared or did not exist");
+    expect(response2.body.message).toBe("Start over recorded successfully");
+
+    // Verify two analytics events were logged
+    const events = await db.select()
+      .from(analyticsEvents)
+      .where(eq(analyticsEvents.sessionId, testSessionId));
+    expect(events.filter(e => e.eventType === 'start_over')).toHaveLength(2);
+
+    // Cleanup analytics events
+    await db.delete(analyticsEvents).where(eq(analyticsEvents.sessionId, testSessionId));
   });
 });
 
@@ -288,9 +315,9 @@ describe('POST /api/session/start-over', () => {
 /* ------------------------------------------------------------------ */
 
 describe('Session lifecycle integration', () => {
-  it('should handle full lifecycle: create → retrieve → delete → verify deletion', async () => {
+  it('should handle full lifecycle: create → retrieve → start-over → verify preservation', async () => {
     const lifecycleSessionId = 'lifecycle-test-' + Math.random().toString(36) + '-' + Date.now();
-    
+
     // 1. Create session
     const session = await storage.createAssessmentSession({
       sessionId: lifecycleSessionId,
@@ -315,22 +342,30 @@ describe('Session lifecycle integration', () => {
     expect(getResponse.body.sessionId).toBe(lifecycleSessionId);
     expect(getResponse.body.purposePaths).toHaveLength(1);
 
-    // 4. Delete via POST endpoint
-    const deleteResponse = await request(app)
+    // 4. Call start-over endpoint (now preserves data)
+    const startOverResponse = await request(app)
       .post('/api/session/start-over')
       .send({ sessionId: lifecycleSessionId })
       .expect(200);
 
-    expect(deleteResponse.body.message).toBe("Session data cleared successfully");
+    expect(startOverResponse.body.message).toBe("Start over recorded successfully");
 
-    // 5. Verify deletion via GET endpoint
-    const getAfterDeleteResponse = await request(app)
+    // 5. Verify session data is STILL accessible (preserved for analytics)
+    const getAfterStartOverResponse = await request(app)
       .get(`/api/session/${lifecycleSessionId}`)
-      .expect(404);
+      .expect(200);
 
-    expect(getAfterDeleteResponse.body.error).toBe("Session not found");
+    expect(getAfterStartOverResponse.body.sessionId).toBe(lifecycleSessionId);
+    expect(getAfterStartOverResponse.body.purposePaths).toHaveLength(1);
+
+    // 6. Verify analytics event was logged
+    const events = await db.select()
+      .from(analyticsEvents)
+      .where(eq(analyticsEvents.sessionId, lifecycleSessionId));
+    expect(events.some(e => e.eventType === 'start_over')).toBe(true);
 
     // Cleanup
+    await db.delete(analyticsEvents).where(eq(analyticsEvents.sessionId, lifecycleSessionId));
     await db.delete(assessmentSessions).where(eq(assessmentSessions.sessionId, lifecycleSessionId));
   });
 });
