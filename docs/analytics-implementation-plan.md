@@ -81,7 +81,7 @@ DATABASE_URL="$PROD_DATABASE_URL" npx tsx scripts/analytics-report.ts
 
 ## Phase 1: Database Schema
 
-[ ] Step 1: Add analytics_events table to shared schema
+[X] Step 1: Add analytics_events table to shared schema
 **Task**: Add a new Drizzle table definition for `analytics_events` to the shared schema file. The table should have: `id` (serial primary key), `sessionId` (text, not null), `eventType` (text, not null), `metadata` (jsonb, default empty object), and `createdAt` (timestamp with timezone, default now). Also create and export the corresponding Zod insert/select schemas and TypeScript types using `createInsertSchema` and `createSelectSchema` from drizzle-zod. Follow the existing patterns in the file for table definitions and type exports.
 **Suggested Files for Context**: [`shared/schema.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/shared/schema.ts)
 **Step Dependencies**: None
@@ -91,7 +91,7 @@ DATABASE_URL="$PROD_DATABASE_URL" npx tsx scripts/analytics-report.ts
 
 ## Phase 2: Storage Layer
 
-[ ] Step 2: Add logAnalyticsEvent method to storage layer
+[X] Step 2: Add logAnalyticsEvent method to storage layer
 **Task**: Add a new method `logAnalyticsEvent(sessionId: string, eventType: string, metadata?: Record<string, unknown>): Promise<void>` to both the `IStorage` interface and the `PostgresStorage` class. The implementation should insert a row into the `analytics_events` table using Drizzle's insert API. The method should await the insert (not fire-and-forget) to ensure reliability in serverless environments. Import the new `analyticsEvents` table from the schema. Follow the existing patterns in the file for method signatures and implementations.
 **Suggested Files for Context**: [`server/storage.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/server/storage.ts), [`shared/schema.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/shared/schema.ts), [`server/db.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/server/db.ts)
 **Step Dependencies**: Step 1

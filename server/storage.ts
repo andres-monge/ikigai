@@ -29,6 +29,7 @@ import {
   type InsertPurposePath,
   assessmentSessions,
   purposePaths,
+  analyticsEvents,
 } from '../shared/schema.js';
 
 /* ------------------------------------------------------------------ */
@@ -81,6 +82,13 @@ export interface IStorage {
 
   // === Session Management Methods ===
   deleteAssessmentSessionBySessionId(sessionId: string): Promise<boolean>;
+
+  // === Analytics Methods ===
+  logAnalyticsEvent(
+    sessionId: string,
+    eventType: string,
+    metadata?: Record<string, unknown>,
+  ): Promise<void>;
 }
 
 /* ------------------------------------------------------------------ */
@@ -196,6 +204,20 @@ export class PostgresStorage implements IStorage {
       .returning({ id: assessmentSessions.id });
 
     return !!deleted;
+  }
+
+  /* ---------------- Analytics ---------------- */
+
+  async logAnalyticsEvent(
+    sessionId: string,
+    eventType: string,
+    metadata: Record<string, unknown> = {},
+  ): Promise<void> {
+    await db.insert(analyticsEvents).values({
+      sessionId,
+      eventType,
+      metadata,
+    });
   }
 }
 
