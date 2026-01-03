@@ -77,13 +77,6 @@ DATABASE_URL="$DEV_DATABASE_URL" npx tsx scripts/analytics-report.ts
 # Run scripts against prod (for real analytics)
 DATABASE_URL="$PROD_DATABASE_URL" npx tsx scripts/analytics-report.ts
 ```
-
-### Checklist Before Merging to Main
-- [ ] All steps implemented and tested locally
-- [ ] Preview deployment tested end-to-end (Step 13)
-- [ ] Schema pushed to production database: `DATABASE_URL="$PROD_DATABASE_URL" npm run db:push`
-- [ ] No console errors in Preview deployment logs
-
 ---
 
 ## Phase 1: Database Schema
