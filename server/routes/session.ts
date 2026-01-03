@@ -67,10 +67,10 @@ sessionRouter.post("/session/start-over", async (req, res, next) => {
       });
     }
 
-    const { sessionId } = validation.data;
+    const { sessionId, fromPage } = validation.data;
 
-    // Log start_over event for analytics (preserves session data)
-    await storage.logAnalyticsEvent(sessionId, 'start_over', {});
+    // Log start_over event for analytics with fromPage metadata
+    await storage.logAnalyticsEvent(sessionId, 'start_over', fromPage ? { fromPage } : {});
 
     // Return success - frontend will generate a new session ID
     res.json({

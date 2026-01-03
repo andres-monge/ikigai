@@ -39,7 +39,7 @@ const [, setSession] = useSessionStorage<FullAssessment | null>(
 null,
 );
 
-const [, navigate] = useLocation();
+const [location, navigate] = useLocation();
 
 /* ------------------------------------------------------------------------ */
 /*      EFFECTS      */
@@ -92,21 +92,24 @@ const handleNavigateHome = () => {
 * Clears current session data and kicks the user back to the landing page.
 * Used by the Results page's "Start Over" button.
 *
-* ✨ Step 8 Enhancement ✨
-* Now calls the API to delete server-side data before clearing local state.
+* Calls the API to log a 'start_over' analytics event (with fromPage metadata)
+* while preserving session data for analysis.
 */
 const handleStartOver = async () => {
-// Call API to delete server-side session data
+// Determine which page the user is starting over from
+const fromPage = location === '/action-plan' ? 'action-plan' : 'results';
+
+// Call API to log start_over event (server-side for reliability in serverless)
 try {
   await fetch('/api/session/start-over', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sessionId }),
+    body: JSON.stringify({ sessionId, fromPage }),
     credentials: 'include'
   });
 } catch (error) {
   // Log error but continue - don't block user from resetting
-  console.error('Failed to clear server session data:', error);
+  console.error('Failed to notify server of start over:', error);
 }
 
 // Always reset local state regardless of API result

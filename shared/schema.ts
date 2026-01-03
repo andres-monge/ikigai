@@ -225,6 +225,7 @@ export type ActionPlanRequest = z.infer<typeof actionPlanRequestSchema>;
 
 export const startOverRequestSchema = z.object({
   sessionId: z.string().min(1),
+  fromPage: z.enum(['results', 'action-plan']).optional(),
 });
 export type StartOverRequest = z.infer<typeof startOverRequestSchema>;
 

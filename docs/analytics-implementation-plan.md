@@ -38,6 +38,7 @@ Additionally, enable AI-powered analysis of questionnaire answers to understand 
 3. **Silent client failures** — API always returns 200 to never block the user experience
 4. **Preserve all session data** — "Start Over" no longer deletes data; it logs an event and generates a new session ID
 5. **Hybrid analysis approach** — Scripts for deterministic metrics, subagent for AI-powered exploration
+6. **Shared type definitions** — Event types defined once in `shared/schema.ts` (`ANALYTICS_EVENT_TYPES` constant and `AnalyticsEventType` type), imported by both frontend hook and backend validation to prevent drift
 
 ---
 
@@ -139,11 +140,11 @@ DATABASE_URL="$PROD_DATABASE_URL" npx tsx scripts/analytics-report.ts
 **Step Dependencies**: Step 6
 **User Instructions**: None
 
-[ ] Step 8: Add start_over tracking to App component
+[X] Step 8: Add start_over tracking to App component
 **Task**: In the main App component, modify the `handleStartOver` function to fire a `start_over` analytics event before clearing local state. The event should include metadata `{ fromPage }` indicating which page the user was on when they clicked Start Over. Determine the current page from the URL or pass it as context. Use the `useAnalytics` hook. Note: The server-side deletion has already been removed in Step 5, so this is just adding the client-side tracking.
 **Suggested Files for Context**: [`client/src/App.tsx`](/Users/andresm/Documents/Cursor%20Projects/ikigai/client/src/App.tsx), [`client/src/hooks/use-analytics.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/client/src/hooks/use-analytics.ts)
 **Step Dependencies**: Step 6
-**User Instructions**: None
+**Implementation Notes**: Adjusted to avoid duplicate events. Instead of using `trackEvent` (client-side, fire-and-forget), the `fromPage` metadata is passed to the `/api/session/start-over` endpoint which logs the event server-side (awaited, more reliable for serverless). Updated `startOverRequestSchema` in `shared/schema.ts` to accept optional `fromPage` field.
 
 [ ] Step 9: Add questionnaire start tracking
 **Task**: In the SinglePageQuestionnaire component, add tracking for when the user enters their first answer. This should fire a `start` event exactly once per session. Implementation approach: (1) Add a ref or state to track whether the start event has already been fired for this session. (2) In the answer change handler, check if this is the first non-empty answer being entered and if the start event hasn't been fired yet. (3) If both conditions are true, fire the `start` event and mark it as fired. Use the `useAnalytics` hook.
