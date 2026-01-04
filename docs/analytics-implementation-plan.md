@@ -158,13 +158,13 @@ DATABASE_URL="$PROD_DATABASE_URL" npx tsx scripts/analytics-report.ts
 **Step Dependencies**: Step 9
 **User Instructions**: None
 
-[ ] Step 11: Add export tracking to Results page
+[X] Step 11: Add export tracking to Results page
 **Task**: In the Results page component, add analytics tracking to both export functions. (1) In `handleExportPDF`, fire an `export` event with metadata `{ page: 'results', type: 'pdf' }`. (2) In `handleCopyToClipboard`, fire an `export` event with metadata `{ page: 'results', type: 'copy' }`. Fire the events at the start of each function (before the actual export logic). Use the `useAnalytics` hook.
 **Suggested Files for Context**: [`client/src/pages/results.tsx`](/Users/andresm/Documents/Cursor%20Projects/ikigai/client/src/pages/results.tsx), [`client/src/hooks/use-analytics.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/client/src/hooks/use-analytics.ts)
 **Step Dependencies**: Step 6
 **User Instructions**: None
 
-[ ] Step 12: Add export tracking to Action Plan page
+[X] Step 12: Add export tracking to Action Plan page
 **Task**: In the Action Plan page component, add analytics tracking to both export functions. (1) In `handleExportPDF`, fire an `export` event with metadata `{ page: 'action-plan', type: 'pdf' }`. (2) In `handleCopyToClipboard`, fire an `export` event with metadata `{ page: 'action-plan', type: 'copy' }`. Fire the events at the start of each function (before the actual export logic). Use the `useAnalytics` hook.
 **Suggested Files for Context**: [`client/src/pages/action-plan.tsx`](/Users/andresm/Documents/Cursor%20Projects/ikigai/client/src/pages/action-plan.tsx), [`client/src/hooks/use-analytics.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/client/src/hooks/use-analytics.ts)
 **Step Dependencies**: Step 6

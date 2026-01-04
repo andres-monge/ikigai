@@ -36,6 +36,7 @@ import { exportActionPlanToPDF } from '@/lib/pdf-export';
 import { copyActionPlanToClipboard } from '@/lib/clipboard-export';
 import { useToast } from '@/hooks/use-toast';
 import { useBackgroundMusic } from '@/hooks/use-background-music';
+import { useAnalytics } from '@/hooks/use-analytics';
 import type { FullAssessment, ActionPlan, PurposePath, Milestone, SkillToLearn } from '@/types/assessment';
 
 interface ActionPlanProps {
@@ -57,6 +58,7 @@ export function ActionPlan({
 }: ActionPlanProps) {
   const [location, navigate] = useLocation();
   const { toast } = useToast();
+  const { trackEvent } = useAnalytics();
   const [needsStreaming, setNeedsStreaming] = useState(false);
   const [sessionData, setSessionData] = useState<FullAssessment | null>(null);
   const [isCopying, setIsCopying] = useState(false);
@@ -249,6 +251,7 @@ export function ActionPlan({
     // data is available anyway.
     if (!currentActionPlan || !currentChosenPath) return;
 
+    trackEvent('export', { page: 'action-plan', type: 'pdf' });
     exportActionPlanToPDF(currentActionPlan, currentChosenPath.title, language);
   };
 
@@ -258,6 +261,7 @@ export function ActionPlan({
    */
   const handleCopyToClipboard = async () => {
     if (!currentActionPlan || !currentChosenPath) return;
+    trackEvent('export', { page: 'action-plan', type: 'copy' });
     setIsCopying(true);
     try {
       await copyActionPlanToClipboard(currentActionPlan, currentChosenPath, language);

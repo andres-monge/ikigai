@@ -38,6 +38,7 @@ import { copyResultsToClipboard } from '@/lib/clipboard-export';
 import { useStreamingState, createPollingSchedule, hasPositiveIds } from '@/hooks/use-streaming-state';
 import { useToast } from '@/hooks/use-toast';
 import { useBackgroundMusic } from '@/hooks/use-background-music';
+import { useAnalytics } from '@/hooks/use-analytics';
 import type { FullAssessment, PurposePath } from '@/types/assessment';
 
 /* -------------------------------------------------------------------------- */
@@ -60,6 +61,7 @@ export function Results({
 }: ResultsProps) {
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const { trackEvent } = useAnalytics();
   const [needsStreaming, setNeedsStreaming] = useState(false);
   const [isCopying, setIsCopying] = useState(false);
   const [justCopied, setJustCopied] = useState(false);
@@ -479,6 +481,7 @@ export function Results({
    * `session` is defined from this point onward.
    */
   const handleExportPDF = () => {
+    trackEvent('export', { page: 'results', type: 'pdf' });
     exportToPDF(session!, language);
   };
 
@@ -488,6 +491,7 @@ export function Results({
    */
   const handleCopyToClipboard = async () => {
     if (!session) return;
+    trackEvent('export', { page: 'results', type: 'copy' });
     setIsCopying(true);
     try {
       await copyResultsToClipboard(session, language);
