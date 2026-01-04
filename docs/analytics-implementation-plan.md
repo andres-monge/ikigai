@@ -152,7 +152,7 @@ DATABASE_URL="$PROD_DATABASE_URL" npx tsx scripts/analytics-report.ts
 **Step Dependencies**: Step 6
 **User Instructions**: None
 
-[ ] Step 10: Add section completion tracking
+[X] Step 10: Add section completion tracking
 **Task**: In the SinglePageQuestionnaire component, add tracking for section completion. A section is considered complete when all questions in that section have non-empty answers. Implementation approach: (1) Create a helper function or effect that determines which sections are complete based on current answers. (2) Track which sections have already had their completion event fired (using a ref or state). (3) When a section transitions from incomplete to complete, fire a `section` event with metadata `{ section: 'passions' | 'skills' | 'values' | 'economic' }`. (4) Only fire each section's completion event once. Use the `useAnalytics` hook and reference the `QUESTIONS` constant to determine which questions belong to each section.
 **Suggested Files for Context**: [`client/src/components/questionnaire/single-page-questionnaire.tsx`](/Users/andresm/Documents/Cursor%20Projects/ikigai/client/src/components/questionnaire/single-page-questionnaire.tsx), [`client/src/components/questionnaire/questions.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/client/src/components/questionnaire/questions.ts), [`client/src/hooks/use-analytics.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/client/src/hooks/use-analytics.ts)
 **Step Dependencies**: Step 9

@@ -25,7 +25,7 @@
  * <SinglePageQuestionnaire language={language} sessionId={sessionId} />
  */
 
-import { useState, useRef, type ChangeEvent, useMemo } from 'react';
+import { useState, useRef, useEffect, type ChangeEvent, useMemo } from 'react';
 import { useLocation } from 'wouter';
 import TextareaAutosize from 'react-textarea-autosize';
 import { Label } from '@/components/ui/label';
@@ -88,6 +88,37 @@ export function SinglePageQuestionnaire({
 
   /** Ref to ensure we only fire the 'start' event once per session. */
   const hasTrackedStart = useRef(false);
+
+  /** Ref to track which sections have already fired completion events. */
+  const trackedSections = useRef<Set<string>>(new Set());
+
+  /**
+   * Check section completion and fire analytics events.
+   * A section is complete when all its questions have non-empty answers.
+   */
+  useEffect(() => {
+    const sectionNames = Object.keys(QUESTIONS) as Array<keyof typeof QUESTIONS>;
+
+    for (const section of sectionNames) {
+      // Skip if already tracked
+      if (trackedSections.current.has(section)) {
+        continue;
+      }
+
+      // Check if all questions in this section have non-empty answers
+      const sectionQuestions = QUESTIONS[section];
+      const isComplete = sectionQuestions.every(
+        (q) => answers[q.id]?.trim()
+      );
+
+      if (isComplete) {
+        trackEvent('section', {
+          section: section as 'passions' | 'skills' | 'values' | 'economic',
+        });
+        trackedSections.current.add(section);
+      }
+    }
+  }, [answers, trackEvent]);
 
   /* ------------------------------ Build UI list --------------------------- */
   const flatQuestions = useMemo(() => buildFlatQuestionList(language), [language]);
