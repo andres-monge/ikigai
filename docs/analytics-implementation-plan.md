@@ -14,8 +14,8 @@ Capture data to calculate these success metrics:
 | **Completion rate** | `assessment_sessions rows / start events` |
 | **Section drop-off** | Last `section` event for sessions without completion |
 | **Results → Action Plan** | `sessions with actionPlan / sessions with purpose_paths` |
-| **Results export rate** | `export events (page=results) / sessions with purpose_paths` |
-| **Action Plan export rate** | `export events (page=action-plan) / sessions with actionPlan` |
+| **Results export rate** | `distinct sessions with results export / sessions with purpose_paths` |
+| **Action Plan export rate** | `distinct sessions with action-plan export / sessions with actionPlan` |
 | **Overall export rate (North Star)** | `distinct sessions with any export / sessions with purpose_paths` |
 | **Restart rate** | `start_over events / sessions with purpose_paths` |
 
@@ -174,7 +174,7 @@ DATABASE_URL="$PROD_DATABASE_URL" npx tsx scripts/analytics-report.ts
 
 ## Phase 6: Validation
 
-[ ] Step 13: Manual end-to-end validation
+[X] Step 13: Manual end-to-end validation
 **Task**: Manually test the complete analytics flow by walking through the application. This is a validation step, not a code change.
 **Suggested Files for Context**: None
 **Step Dependencies**: Steps 7-12
@@ -198,7 +198,7 @@ DATABASE_URL="$PROD_DATABASE_URL" npx tsx scripts/analytics-report.ts
 
 ## Phase 7: Analysis Scripts
 
-[ ] Step 14: Create funnel metrics report script
+[X] Step 14: Create funnel metrics report script
 **Task**: Create a Node.js script that calculates and displays all success metrics. The script should: (1) Connect to the database using the existing db module. (2) Query `analytics_events` for event counts grouped by type. (3) Query `assessment_sessions` for session counts (total, with purpose_paths, with actionPlan). (4) Join data to calculate each metric from the Overview section. (5) Support optional command-line arguments for time period filtering (--days=7, --days=30, or all time by default). (6) Output a formatted report to console showing each metric with its value and the underlying counts. Use the existing Drizzle ORM patterns and import the db client from server/db.js.
 **Suggested Files for Context**: [`server/db.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/server/db.ts), [`server/storage.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/server/storage.ts), [`shared/schema.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/shared/schema.ts)
 **Step Dependencies**: Step 1
