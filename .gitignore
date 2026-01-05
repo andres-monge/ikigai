@@ -84,3 +84,6 @@ vite.config.ts.*
 .config/
 api/index.js
 .vercel
+
+# Analytics output (generated, may contain user data)
+user-data.json

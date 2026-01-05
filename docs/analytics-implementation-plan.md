@@ -214,13 +214,13 @@ DATABASE_URL="$PROD_DATABASE_URL" npx tsx scripts/analytics-report.ts
 
 ## Phase 8: AI Analysis Subagent
 
-[ ] Step 16: Create user-analyst subagent
+[X] Step 16: Create user-analyst subagent
 **Task**: Create a Claude Code subagent for AI-powered user analysis. The subagent should be created as a markdown file in the `.claude/agents/` directory. The subagent configuration should: (1) Have name `user-analyst` and a description indicating it analyzes questionnaire data to identify user personas and insights. (2) Have access to Read, Bash, and Grep tools (for reading extracted data files and running queries). (3) Include a detailed system prompt that instructs the agent to: analyze questionnaire responses to identify user personas (demographics, motivations, pain points), identify patterns in successful vs unsuccessful sessions (those who exported vs those who didn't), surface specific quotes/answers that reveal user needs, identify where the app is solving problems and where it's failing, and output a structured report with actionable insights. The prompt should emphasize looking for patterns across multiple users rather than individual analysis.
 **Suggested Files for Context**: [`~/.claude/agents/`](/Users/andresm/.claude/agents/) (if exists, for patterns), subagent documentation provided in conversation
 **Step Dependencies**: Step 15
 **User Instructions**:
-1. After creating the subagent, extract fresh user data: `DATABASE_URL="$PROD_DATABASE_URL" npx tsx scripts/extract-user-data.ts > user-data.json`
-2. Invoke the subagent: "Use the user-analyst agent to analyze the data in user-data.json and identify user personas"
+1. Invoke the subagent: "Use the user-analyst agent to analyze my users" (agent extracts fresh data automatically)
+2. For time-filtered analysis: "Analyze users from the last 7 days"
 3. Ask follow-up questions like: "What patterns do you see in users who dropped off before exporting?" or "Which user segments seem most satisfied?"
 
 ---
