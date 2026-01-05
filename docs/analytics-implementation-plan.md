@@ -204,7 +204,7 @@ DATABASE_URL="$PROD_DATABASE_URL" npx tsx scripts/analytics-report.ts
 **Step Dependencies**: Step 1
 **User Instructions**: Run the script with: `DATABASE_URL="$PROD_DATABASE_URL" npx tsx scripts/analytics-report.ts` (use PROD_DATABASE_URL for real analytics, DEV_DATABASE_URL for testing).
 
-[ ] Step 15: Create user data extraction script
+[X] Step 15: Create user data extraction script
 **Task**: Create a Node.js script that extracts questionnaire answers in a format suitable for AI analysis. The script should: (1) Query all `assessment_sessions` that have completed questionnaires (responses is not null). (2) For each session, include: sessionId, language, all questionnaire responses (passions, skills, values, economic), whether they reached results (has purpose_paths), whether they reached action plan (has actionPlan), whether they exported, and the created timestamp. (3) Support optional --days filter for recent sessions only. (4) Output as JSON to stdout (can be piped to a file). (5) Anonymize by not including any PII (session IDs are already anonymous). The output format should be an array of session objects ready for AI consumption.
 **Suggested Files for Context**: [`server/db.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/server/db.ts), [`server/storage.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/server/storage.ts), [`shared/schema.ts`](/Users/andresm/Documents/Cursor%20Projects/ikigai/shared/schema.ts)
 **Step Dependencies**: Step 1
