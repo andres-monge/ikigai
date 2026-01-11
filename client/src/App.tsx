@@ -12,6 +12,7 @@
 
 import { useEffect, useRef } from 'react';
 import { Route, Switch, useLocation } from 'wouter';
+import { Analytics } from '@vercel/analytics/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Toaster } from '@/components/ui/toaster';
 import { Header } from '@/components/header';
@@ -165,6 +166,7 @@ onStartOver={handleStartOver}
 
 
 <Toaster />
+<Analytics />
 </TooltipProvider>
 );
 }
