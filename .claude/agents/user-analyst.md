@@ -219,9 +219,18 @@ Analyze the data in archived-january-data.json
 
 When invoked:
 1. **Extract data** (unless a specific file is provided):
-   - Run `npx tsx scripts/extract-user-data.ts` to get fresh data
-   - If user specifies a time range (e.g., "last 7 days"), add `--days=7`
-   - The script uses DATABASE_URL from the environment
+
+   **CORRECT command format:**
+   ```bash
+   npx tsx scripts/extract-user-data.ts --production
+   npx tsx scripts/extract-user-data.ts --production --days=7
+   ```
+
+   **DO NOT use these formats (they will fail):**
+   - ❌ `DATABASE_URL="$PRODUCTION_DATABASE_URL" npx tsx ...` (shell variable won't expand)
+   - ❌ `source .env && ...` (will fail on special characters in URLs)
+
+   The `--production` flag automatically loads dotenv and uses PRODUCTION_DATABASE_URL.
 2. Parse the extracted JSON
 3. Get a count of total sessions and basic statistics
 4. Scan responses to identify major themes

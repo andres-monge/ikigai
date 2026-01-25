@@ -13,10 +13,13 @@
  * - Export behavior (whether user exported, and from which page)
  *
  * @usage
- * DATABASE_URL="$PROD_DATABASE_URL" npx tsx scripts/extract-user-data.ts > user-data.json
- * DATABASE_URL="$DEV_DATABASE_URL" npx tsx scripts/extract-user-data.ts --days=7 > user-data.json
- * DATABASE_URL="$DEV_DATABASE_URL" npx tsx scripts/extract-user-data.ts --days=30 > user-data.json
+ * npx tsx scripts/extract-user-data.ts --production > user-data.json
+ * npx tsx scripts/extract-user-data.ts --production --days=7 > user-data.json
+ * npx tsx scripts/extract-user-data.ts --days=30 > user-data.json  # uses DATABASE_URL (dev)
  */
+
+// Load environment variables from .env file FIRST
+import 'dotenv/config';
 
 import { drizzle } from 'drizzle-orm/neon-serverless';
 import { Pool, neonConfig } from '@neondatabase/serverless';
@@ -60,9 +63,10 @@ interface ExtractedSession {
 /* CLI Argument Parsing                                                        */
 /* -------------------------------------------------------------------------- */
 
-function parseArgs(): { days: number | null } {
+function parseArgs(): { days: number | null; useProduction: boolean } {
   const args = process.argv.slice(2);
   let days: number | null = null;
+  let useProduction = false;
 
   for (const arg of args) {
     if (arg.startsWith('--days=')) {
@@ -74,31 +78,36 @@ function parseArgs(): { days: number | null } {
         process.exit(1);
       }
       days = value;
+    } else if (arg === '--production' || arg === '--prod') {
+      useProduction = true;
     } else if (arg === '--help' || arg === '-h') {
-      console.error('Usage: npx tsx scripts/extract-user-data.ts [--days=N] > output.json');
+      console.error('Usage: npx tsx scripts/extract-user-data.ts [--production] [--days=N]');
       console.error('');
       console.error('Extracts user questionnaire data for AI analysis.');
       console.error('Output is JSON format, suitable for piping to a file.');
       console.error('');
       console.error('Options:');
-      console.error('  --days=N    Filter to last N days (default: all time)');
-      console.error('  --help, -h  Show this help message');
+      console.error('  --production  Use PRODUCTION_DATABASE_URL instead of DATABASE_URL');
+      console.error('  --days=N      Filter to last N days (default: all time)');
+      console.error('  --help, -h    Show this help message');
       console.error('');
       console.error('Environment:');
-      console.error('  DATABASE_URL  Required. PostgreSQL connection string.');
+      console.error('  DATABASE_URL             Default database connection');
+      console.error('  PRODUCTION_DATABASE_URL  Production database (used with --production)');
       console.error('');
-      console.error('Example:');
-      console.error('  DATABASE_URL="$PROD_DATABASE_URL" npx tsx scripts/extract-user-data.ts > user-data.json');
+      console.error('Examples:');
+      console.error('  npx tsx scripts/extract-user-data.ts --production');
+      console.error('  npx tsx scripts/extract-user-data.ts --production --days=7');
       process.exit(0);
     } else {
       console.error(`Error: Unknown argument: ${arg}`);
-      console.error('Usage: npx tsx scripts/extract-user-data.ts [--days=N] > output.json');
+      console.error('Usage: npx tsx scripts/extract-user-data.ts [--production] [--days=N]');
       console.error('Run with --help for more information.');
       process.exit(1);
     }
   }
 
-  return { days };
+  return { days, useProduction };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -106,14 +115,22 @@ function parseArgs(): { days: number | null } {
 /* -------------------------------------------------------------------------- */
 
 async function extractUserData(): Promise<void> {
-  const { days } = parseArgs();
+  const { days, useProduction } = parseArgs();
 
-  // Validate DATABASE_URL
-  const databaseUrl = process.env.DATABASE_URL;
+  // Select the appropriate database URL
+  const envVarName = useProduction ? 'PRODUCTION_DATABASE_URL' : 'DATABASE_URL';
+  const databaseUrl = process.env[envVarName];
+
   if (!databaseUrl) {
-    console.error('Error: DATABASE_URL environment variable is required');
+    console.error(`Error: ${envVarName} environment variable is required`);
+    if (useProduction) {
+      console.error('Tip: Add PRODUCTION_DATABASE_URL to your .env file');
+    }
     process.exit(1);
   }
+
+  // Log which database we're using (to stderr so it doesn't pollute JSON output)
+  console.error(`Using ${useProduction ? 'PRODUCTION' : 'development'} database`);
 
   // Create database connection with schema for type-safe queries
   const pool = new Pool({ connectionString: databaseUrl });
