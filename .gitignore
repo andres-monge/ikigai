@@ -9,7 +9,7 @@ build/
 out/
 .next/
 server/public/
-public/
+/public/
 
 # Testing
 coverage/
