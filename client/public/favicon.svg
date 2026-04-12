@@ -1,4 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#4DB6AC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-  <circle cx="12" cy="12" r="10"/>
-  <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" fill="#4DB6AC"/>
+  <!-- Horizon line -->
+  <line x1="2" y1="16" x2="22" y2="16"/>
+  <!-- Rising sun (half circle above horizon) -->
+  <path d="M6 16a6 6 0 0 1 12 0" fill="none"/>
+  <!-- 3 rays (3 paths) -->
+  <line x1="12" y1="4.7" x2="12" y2="7.7"/>
+  <line x1="5.1" y1="7.1" x2="7.2" y2="9.2"/>
+  <line x1="18.9" y1="7.1" x2="16.8" y2="9.2"/>
 </svg>
