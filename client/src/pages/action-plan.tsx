@@ -598,6 +598,7 @@ export function ActionPlan({
       {/* Action Buttons */}
       <div className="mt-12 flex flex-col sm:flex-row gap-4 justify-center">
         <Button
+          data-testid="back-to-paths"
           onClick={handleBackToPaths}
           variant="retro-light-grey"
           className="px-8 h-10 text-sm order-last sm:order-first"
@@ -606,6 +607,7 @@ export function ActionPlan({
           {t('actionPlan.backToPaths', language)}
         </Button>
         <Button
+          data-testid="export-pdf"
           onClick={handleExportPDF}
           variant="retro-yellow"
           className="px-8 h-10 text-sm"

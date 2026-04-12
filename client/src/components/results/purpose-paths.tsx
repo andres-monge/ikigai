@@ -76,6 +76,7 @@ export function PurposePaths({
           return (
             <div
               key={path.id || index}
+              data-path-id={path.id}
               className="retro-card-results overflow-hidden flex flex-col lg:grid lg:grid-rows-subgrid lg:row-span-3 transition-all duration-300"
             >
               <div
@@ -118,6 +119,7 @@ export function PurposePaths({
               <div className="p-6 pt-0">
                 {typeof path.id === 'number' && (
                   <Button
+                    data-testid="get-action-plan"
                     onClick={() => handleChoosePath(path.id!)}
                     variant={pathColor.buttonVariant}
                     className="w-full mb-3"

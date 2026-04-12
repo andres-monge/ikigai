@@ -42,7 +42,7 @@ httpServer.timeout = 3 * 60 * 1000; // 3 minutes in milliseconds
   }
 
   // ========= Server Startup =========
-  const port = 5000;
+  const port = 5001;
 
   httpServer.on("error", (err: NodeJS.ErrnoException) => {
     if (err.code === "EADDRINUSE") {

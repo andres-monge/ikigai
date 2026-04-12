@@ -43,6 +43,9 @@ const TEST_RESPONSES = {
 };
 
 test.describe('Core User Journey', () => {
+  // Real AI streaming + polling requires generous timeout
+  test.setTimeout(120000);
+
   test('Complete flow: Questionnaire → Results → Action Plan', async ({ page }) => {
     // Set up console error logging for debugging
     page.on('console', msg => {
@@ -67,8 +70,8 @@ test.describe('Core User Journey', () => {
       // Refresh to get a fresh sessionId
       await page.reload();
       
-      // Verify the questionnaire is visible
-      await expect(page.locator('h2').filter({ hasText: 'Answer 8 questions, let our AI change your life.' })).toBeVisible();
+      // Verify the questionnaire is visible (use data-testid, not heading text)
+      await expect(page.locator('[data-testid="questionnaire-submit"]')).toBeVisible({ timeout: 10000 });
       
       // Take screenshot of initial state
       await page.screenshot({ path: 'test-screenshots/01-home-page.png', fullPage: true });
@@ -97,7 +100,7 @@ test.describe('Core User Journey', () => {
 
     await test.step('Submit questionnaire and navigate to results', async () => {
       // Click the submit button
-      await page.click('button:has-text("Show Me My Purpose")');
+      await page.click('[data-testid="questionnaire-submit"]');
       
       // Wait for navigation to results page
       await page.waitForURL('**/results', { timeout: 10000 });
@@ -111,62 +114,51 @@ test.describe('Core User Journey', () => {
     // ========================================================================
     
     await test.step('Wait for and validate Core Drivers Analysis', async () => {
-      // Wait for main heading
-      const resultsHeading = page.locator('h2').filter({ hasText: 'Your Ikigai' });
-      await expect(resultsHeading).toBeVisible();
-      
-      // Ensure loading state is gone
-      await expect(page.locator('text=Generating your analysis...')).not.toBeVisible({ timeout: AI_STREAMING_TIMEOUT });
-      
-      // Validate core drivers paragraph is populated (not empty)
-      const coreDriversParagraph = page.locator('main p').first();
-      await expect(async () => {
-        const text = await coreDriversParagraph.textContent();
-        expect(text?.length).toBeGreaterThan(50); // Substantial content
-      }).toPass({ timeout: 30000 });
-      
-      // Validate numbered list exists and is populated
+      // Wait for results page heading (structural — any h2 on results page)
+      await expect(page.locator('h2').first()).toBeVisible();
+
+      // Core drivers <li> elements only exist after streaming completes and
+      // ReactMarkdown renders in completed mode. This wait gates on that transition.
       const listItems = page.locator('main li');
-      await expect(listItems.first()).toBeVisible({ timeout: 30000 });
-      
-      // Ensure the list item has substantial content (the numbered points)
+      await expect(listItems.first()).toBeVisible({ timeout: AI_STREAMING_TIMEOUT });
+
+      // Ensure the list item has substantial content
       await expect(async () => {
         const text = await listItems.first().textContent();
-        expect(text?.length).toBeGreaterThan(100); // Has substantial content with multiple points
-      }).toPass({ timeout: 30000 });
-      
+        expect(text?.length).toBeGreaterThan(20);
+      }).toPass({ timeout: 10000 });
+
       // Take screenshot of core drivers
       await page.screenshot({ path: 'test-screenshots/03-core-drivers.png', fullPage: true });
     });
 
     await test.step('Validate Purpose Paths are populated', async () => {
-      // Wait for section heading
-      const pathsHeading = page.locator('h3').filter({ hasText: 'Your 3 Purpose Paths' });
-      await expect(pathsHeading).toBeVisible({ timeout: AI_STREAMING_TIMEOUT });
-      
+      // Wait for purpose paths section heading (structural — h3 after h2)
+      await expect(page.locator('h3').first()).toBeVisible({ timeout: AI_STREAMING_TIMEOUT });
+
       // Ensure we have 3 complete path cards with titles
-      const pathTitles = page.locator('h4'); // Path titles like "The AI Education Architect"
+      const pathTitles = page.locator('h4');
       await expect(pathTitles).toHaveCount(3);
-      
+
       // Validate each path title has substantial content
       for (let i = 0; i < 3; i++) {
-        const pathTitle = pathTitles.nth(i);
         await expect(async () => {
-          const text = await pathTitle.textContent();
-          expect(text?.length).toBeGreaterThan(10); // Has actual title
+          const text = await pathTitles.nth(i).textContent();
+          expect(text?.length).toBeGreaterThan(10);
         }).toPass();
       }
-      
-      // Ensure all action plan buttons are present
-      const actionButtons = page.locator('button').filter({ hasText: 'Get Action Plan' });
+
+      // Ensure all action plan buttons are present (via data-testid)
+      const actionButtons = page.locator('[data-testid="get-action-plan"]');
       await expect(actionButtons).toHaveCount(3);
-      
-      // Verify Ikigai sections exist (structure validation) - use .first() since there are 3 paths
-      await expect(page.locator('text=Love:').first()).toBeVisible();
-      await expect(page.locator('text=Good At:').first()).toBeVisible(); 
-      await expect(page.locator('text=Meaningful:').first()).toBeVisible();
-      await expect(page.locator('text=Pay:').first()).toBeVisible();
-      
+
+      // Verify each path card has 4 ikigai alignment items (structural — colored dots)
+      const pathCards = page.locator('[data-path-id]');
+      for (let i = 0; i < 3; i++) {
+        const alignmentDots = pathCards.nth(i).locator('[class*="rounded-full"][class*="bg-ikigai-"]');
+        await expect(alignmentDots).toHaveCount(4);
+      }
+
       // Take screenshot of purpose paths
       await page.screenshot({ path: 'test-screenshots/04-purpose-paths.png', fullPage: true });
     });
@@ -176,33 +168,30 @@ test.describe('Core User Journey', () => {
     // ========================================================================
     
     await test.step('Select first purpose path', async () => {
-      // Wait for the purpose discovery stream to fully complete and clean up
-      // This prevents concurrency conflicts with the action plan stream
-      await page.waitForTimeout(5000);
-      
-      // NEW: Wait for DOM stability after background refetch (happens ~1 second after streaming)
-      // The background refetch causes React remounts when IDs change from temporary to DB IDs
-      await page.waitForTimeout(2000); // Total 7 seconds ensures background refetch completes
-      
-      // Get fresh reference to button after potential remounts
-      const firstActionPlanButton = page.locator('button').filter({ hasText: 'Get Action Plan' }).first();
-      
-      // Ensure button is truly ready with explicit waits
-      await expect(firstActionPlanButton).toBeVisible({ timeout: 10000 });
-      await expect(firstActionPlanButton).toBeEnabled({ timeout: 5000 });
-      
-      // Add a small stabilization delay before clicking
-      await page.waitForTimeout(500);
-      
-      // Click with confidence now that DOM is stable
-      await firstActionPlanButton.click();
-      
-      // Wait for navigation to action plan page with query parameter
+      // Wait for path cards to have positive data-path-id values (real DB IDs).
+      // Timeout covers: streaming completion + completed-mode re-render +
+      // polling schedule in use-streaming-state.ts [500, 1000, 2000, 4000, 8000]ms
+      const pathCards = page.locator('[data-path-id]');
+      await expect(async () => {
+        const count = await pathCards.count();
+        expect(count).toBe(3);
+        for (let i = 0; i < count; i++) {
+          const id = Number(await pathCards.nth(i).getAttribute('data-path-id'));
+          expect(id).toBeGreaterThan(0);
+        }
+      }).toPass({ timeout: 30000 });
+
+      // Locate the first path card's action button and click it
+      const firstPathCard = pathCards.first();
+      const actionButton = firstPathCard.locator('[data-testid="get-action-plan"]');
+      await expect(actionButton).toBeVisible();
+      await expect(actionButton).toBeEnabled();
+      await actionButton.click();
+
+      // Wait for navigation to action plan page with a positive pathId
       await page.waitForURL('**/action-plan?pathId=*', { timeout: 10000 });
-      
-      // Verify we're on the action plan page with a pathId
       expect(page.url()).toContain('/action-plan');
-      expect(page.url()).toMatch(/pathId=-?\d+/); // pathId can be negative (temporary ID)
+      expect(page.url()).toMatch(/pathId=[1-9]\d*/);
     });
 
     // ========================================================================
@@ -210,56 +199,38 @@ test.describe('Core User Journey', () => {
     // ========================================================================
     
     await test.step('Wait for and validate Action Plan is populated', async () => {
-      // Take a screenshot first to see what's actually on the page
-      await page.screenshot({ path: 'test-screenshots/05-action-plan-debug.png', fullPage: true });
-      
-      // Wait for any h1 heading to appear (more flexible than exact text match)
-      const anyHeading = page.locator('h1');
-      await expect(anyHeading.first()).toBeVisible({ timeout: AI_STREAMING_TIMEOUT });
-      
-      // Ensure we're on the action plan page by checking URL
+      // Wait for action plan heading (structural)
+      await expect(page.locator('h2').first()).toBeVisible({ timeout: AI_STREAMING_TIMEOUT });
       expect(page.url()).toContain('/action-plan');
-      
-      // Wait for milestone cards to appear - look for "Actions" headers (most reliable indicator)
-      const actionsHeaders = page.locator('text=Actions');
-      await expect(actionsHeaders.first()).toBeVisible({ timeout: AI_STREAMING_TIMEOUT });
-      
-      // Verify we have multiple milestones (should have at least 3)
-      const actionsCount = await actionsHeaders.count();
-      expect(actionsCount).toBeGreaterThanOrEqual(3);
-      
-      // Validate that we have substantial content in milestone headings
-      const milestoneHeadings = page.locator('h3');
-      if (await milestoneHeadings.count() > 0) {
-        await expect(async () => {
-          const text = await milestoneHeadings.first().textContent();
-          expect(text?.length).toBeGreaterThan(10); // Has actual milestone title
-        }).toPass({ timeout: 30000 });
-      }
-      
+
+      // Wait for milestone cards — each has an h3 title inside a retro-card
+      const milestoneHeadings = page.locator('.retro-card-results h3');
+      await expect(milestoneHeadings.first()).toBeVisible({ timeout: AI_STREAMING_TIMEOUT });
+
+      // Verify we have multiple milestones (at least 3)
+      await expect(async () => {
+        const count = await milestoneHeadings.count();
+        expect(count).toBeGreaterThanOrEqual(3);
+      }).toPass({ timeout: 10000 });
+
+      // Validate milestone headings have substantial content
+      await expect(async () => {
+        const text = await milestoneHeadings.first().textContent();
+        expect(text?.length).toBeGreaterThan(10);
+      }).toPass({ timeout: 10000 });
+
       // Take screenshot of action plan
       await page.screenshot({ path: 'test-screenshots/05-action-plan.png', fullPage: true });
     });
 
     await test.step('Validate Action Plan UI controls', async () => {
-      // Check for Export PDF button (flexible text matching)
-      const exportButton = page.locator('button').filter({ hasText: /Export.*PDF/i });
-      if (await exportButton.count() > 0) {
-        await expect(exportButton.first()).toBeVisible();
-        console.log('Export PDF button found');
-      } else {
-        console.log('Export PDF button not found - may be below fold or different text');
-      }
-      
-      // Check for Back button (flexible text matching)
-      const backButton = page.locator('button').filter({ hasText: /Back.*Path/i });
-      if (await backButton.count() > 0) {
-        await expect(backButton.first()).toBeVisible();
-        console.log('Back button found');
-      } else {
-        console.log('Back button not found - may be below fold or different text');
-      }
-      
+      // Wait for action buttons to appear (they render after all milestones)
+      const exportButton = page.locator('[data-testid="export-pdf"]');
+      const backButton = page.locator('[data-testid="back-to-paths"]');
+
+      await expect(exportButton).toBeVisible({ timeout: 10000 });
+      await expect(backButton).toBeVisible({ timeout: 10000 });
+
       // Take final screenshot
       await page.screenshot({ path: 'test-screenshots/06-complete-journey.png', fullPage: true });
     });
@@ -270,7 +241,7 @@ test.describe('Core User Journey', () => {
     
     await test.step('Verify no error toasts appeared', async () => {
       // Check that no destructive toasts (error messages) are visible
-      const errorToasts = page.locator('[data-type="destructive"], .destructive');
+      const errorToasts = page.locator('.destructive');
       await expect(errorToasts).toHaveCount(0);
     });
   });

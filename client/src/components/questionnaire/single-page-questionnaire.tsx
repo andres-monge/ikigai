@@ -219,6 +219,7 @@ export function SinglePageQuestionnaire({
 
       <div className="mt-10 flex flex-col items-center gap-3">
         <Button
+          data-testid="questionnaire-submit"
           onPointerDown={playPrimarySound}
           onClick={handleSubmit}
           disabled={isPending}
