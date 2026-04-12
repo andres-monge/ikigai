@@ -460,7 +460,7 @@ export function ActionPlan({
         {/* Render milestones even without chosen path details */}
         <div className="space-y-8">
           {currentActionPlan.milestones.map((ms: Milestone, idx: number) => (
-            <div key={idx} className="retro-card-results p-6">
+            <div key={idx} data-testid="milestone-card" className="retro-card-results p-6">
               <div className="flex flex-row gap-4 items-start mb-4">
                 <div className="flex-1">
                   <div className="flex justify-between items-center">
@@ -493,6 +493,7 @@ export function ActionPlan({
         {/* Action buttons */}
         <div className="flex flex-col sm:flex-row gap-4 justify-center mt-12">
           <Button
+            data-testid="back-to-paths"
             onClick={handleBackToPaths}
             variant="retro-light-grey"
             className="px-8 h-10 text-sm"
@@ -542,7 +543,7 @@ export function ActionPlan({
       {/* Milestones Section */}
       <div className="space-y-8">
         {currentActionPlan.milestones.map((ms: Milestone, idx: number) => (
-          <div key={idx} className="retro-card-results p-6">
+          <div key={idx} data-testid="milestone-card" className="retro-card-results p-6">
             <div className="flex flex-row gap-4 items-start mb-4">
               <div className="flex-1">
                 <div className="flex justify-between items-center">

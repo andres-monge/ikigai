@@ -59,10 +59,6 @@ export function PurposePaths({
   onChoosePath,
   isChoosing,
 }: PurposePathsProps) {
-  const handleChoosePath = (pathId: number) => {
-    onChoosePath(pathId);
-  };
-
   return (
     <div className="mb-8">
       <h3 className="text-2xl font-bold text-slate-900 mb-6 text-center">
@@ -95,10 +91,10 @@ export function PurposePaths({
                   </h5>
                   <div className="space-y-2">
                     {IKIGAI_CONCEPTS.map(({ key, colorClass, label }) => (
-                      <div key={key} className="flex items-start">
+                      <div key={key} className="flex items-start" data-testid="alignment-item">
                         <div className={`w-3 h-3 ${colorClass} rounded-full mr-3 flex-shrink-0 mt-1`} />
                         <span className="text-sm text-slate-600">
-                          <strong>{t(label as any, language)}:</strong>{' '}
+                          <strong>{t(label, language)}:</strong>{' '}
                           {path.ikigaiAlignment[key as keyof typeof path.ikigaiAlignment]}
                         </span>
                       </div>
@@ -120,7 +116,7 @@ export function PurposePaths({
                 {typeof path.id === 'number' && (
                   <Button
                     data-testid="get-action-plan"
-                    onClick={() => handleChoosePath(path.id!)}
+                    onClick={() => onChoosePath(path.id)}
                     variant={pathColor.buttonVariant}
                     className="w-full mb-3"
                     disabled={isChoosing}

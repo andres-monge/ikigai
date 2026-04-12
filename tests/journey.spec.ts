@@ -152,11 +152,11 @@ test.describe('Core User Journey', () => {
       const actionButtons = page.locator('[data-testid="get-action-plan"]');
       await expect(actionButtons).toHaveCount(3);
 
-      // Verify each path card has 4 ikigai alignment items (structural — colored dots)
+      // Verify each path card has 4 ikigai alignment items
       const pathCards = page.locator('[data-path-id]');
       for (let i = 0; i < 3; i++) {
-        const alignmentDots = pathCards.nth(i).locator('[class*="rounded-full"][class*="bg-ikigai-"]');
-        await expect(alignmentDots).toHaveCount(4);
+        const alignmentItems = pathCards.nth(i).locator('[data-testid="alignment-item"]');
+        await expect(alignmentItems).toHaveCount(4);
       }
 
       // Take screenshot of purpose paths
@@ -203,8 +203,8 @@ test.describe('Core User Journey', () => {
       await expect(page.locator('h2').first()).toBeVisible({ timeout: AI_STREAMING_TIMEOUT });
       expect(page.url()).toContain('/action-plan');
 
-      // Wait for milestone cards — each has an h3 title inside a retro-card
-      const milestoneHeadings = page.locator('.retro-card-results h3');
+      // Wait for milestone cards to appear
+      const milestoneHeadings = page.locator('[data-testid="milestone-card"] h3');
       await expect(milestoneHeadings.first()).toBeVisible({ timeout: AI_STREAMING_TIMEOUT });
 
       // Verify we have multiple milestones (at least 3)
