@@ -83,7 +83,7 @@ purposeDiscoveryRouter.post("/analyze/stream", async (req, res) => {
 
     // Start streaming with AI SDK
     try {
-      // Get streamObject result
+      // Get structured streaming result
       const result = await getPurposeDiscoveryStreamChain(
         session!.responses as QuestionnaireResponses,
         session!.language!
@@ -93,7 +93,7 @@ purposeDiscoveryRouter.post("/analyze/stream", async (req, res) => {
       result.pipeTextStreamToResponse(res);
 
       // Concurrently wait for the final validated object and save to database
-      const finalObject = await result.object;
+      const finalObject = await result.output;
 
       if (finalObject) {
         // Save to database using atomic transaction (includes both paths and analysis)

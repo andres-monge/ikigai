@@ -37,7 +37,7 @@ vi.mock('../../ai/chains', () => ({
 /* ------------------------------------------------------------------ */
 
 /**
- * Creates a mock streamObject result for testing AI SDK action plan streaming
+ * Creates a mock structured streaming result for testing AI SDK action plan streaming
  * This simulates AI SDK streaming behavior with progressive JSON chunks
  * optimized for fast test execution while testing application functionality
  */
@@ -63,7 +63,7 @@ function createMockActionPlanStreamResult(finalObject: any) {
       chunks.forEach(chunk => res.write(chunk));
       res.end();
     }),
-    object: Promise.resolve(finalObject)
+    output: Promise.resolve(finalObject)
   };
 }
 
@@ -309,7 +309,7 @@ describe('Action Plan Streaming Endpoint - POST /api/action-plan/stream (AI SDK)
             }, 500);
           }, 300);
         }),
-        object: new Promise(resolve => {
+        output: new Promise(resolve => {
           setTimeout(() => resolve({ milestones: [{ title: "Hold stream open", timeline: "Test", actions: ["Test"], skills: [] }] }), 1000);
         })
       };

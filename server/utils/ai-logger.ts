@@ -45,10 +45,20 @@ function sanitizeInput(input: any): string {
  */
 function extractErrorDetails(error: unknown) {
   if (error instanceof Error) {
+    const errorWithModelOutput = error as Error & {
+      finishReason?: string;
+      text?: string;
+    };
+
     return {
       name: error.name,
       message: error.message,
       stack: error.stack?.split('\n').slice(0, 3), // First 3 lines of stack
+      finishReason: errorWithModelOutput.finishReason,
+      rawTextPreview:
+        typeof errorWithModelOutput.text === 'string'
+          ? errorWithModelOutput.text.slice(0, 500)
+          : undefined,
     };
   }
   

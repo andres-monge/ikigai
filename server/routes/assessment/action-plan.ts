@@ -101,7 +101,7 @@ actionPlanRouter.post("/action-plan/stream", async (req, res) => {
 
     // Start streaming with AI SDK
     try {
-      // Get streamObject result
+      // Get structured streaming result
       const result = await getActionPlanStreamChain(
         chosenPath as PurposePath,
         session!.language!,
@@ -129,7 +129,7 @@ actionPlanRouter.post("/action-plan/stream", async (req, res) => {
       }
 
       // Concurrently wait for the final validated object
-      const finalObject = await result.object;
+      const finalObject = await result.output;
 
       if (finalObject) {
         // Save the action plan to database atomically

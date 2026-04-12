@@ -40,7 +40,7 @@ vi.mock('../../ai/chains', () => ({
 /* ------------------------------------------------------------------ */
 
 /**
- * Creates a mock streamObject result for testing AI SDK streaming
+ * Creates a mock structured streaming result for testing AI SDK streaming
  * This simulates AI SDK streaming behavior with progressive chunks
  * optimized for fast test execution while testing application functionality
  */
@@ -65,7 +65,7 @@ function createMockStreamResult(finalObject: any) {
       chunks.forEach(chunk => res.write(chunk));
       res.end();
     }),
-    object: Promise.resolve(finalObject)
+    output: Promise.resolve(finalObject)
   };
 }
 
@@ -352,7 +352,7 @@ describe('Purpose Discovery Streaming Endpoint - /api/analyze/stream', () => {
             }, 500);
           }, 300);
         }),
-        object: new Promise(resolve => {
+        output: new Promise(resolve => {
           setTimeout(() => resolve(mockFinalObject), 1000);
         })
       };
