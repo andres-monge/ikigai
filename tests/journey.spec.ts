@@ -136,8 +136,8 @@ test.describe('Core User Journey', () => {
       // Wait for purpose paths section heading (structural — h3 after h2)
       await expect(page.locator('h3').first()).toBeVisible({ timeout: AI_STREAMING_TIMEOUT });
 
-      // Ensure we have 3 complete path cards with titles
-      const pathTitles = page.locator('h4');
+      // Ensure we have 3 complete path cards with titles (scoped to path cards)
+      const pathTitles = page.locator('[data-path-id] h4');
       await expect(pathTitles).toHaveCount(3);
 
       // Validate each path title has substantial content
