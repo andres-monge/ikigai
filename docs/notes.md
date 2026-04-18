@@ -1,6 +1,6 @@
+- change prompt to suggest degrees instead of jobs?
+- change name
+- add voicenote feature?
+- send to runnymede
 - every questionnaire completion should trigger an analysis? or at least initially it should be a daily cron job so we're reacting quickly to how inital users use it?
-- pay for gemini key before launch
-- remotion video + tweet for every
-- follow path to PMF
-- make e2e test 
 - Bugs reporter
