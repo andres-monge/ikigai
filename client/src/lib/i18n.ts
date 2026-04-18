@@ -77,7 +77,7 @@ export const translations: Record<string, Record<string, string>> = {
     'ikigai.love': 'Love',
     'ikigai.goodAt': 'Good At',
     'ikigai.worldNeeds': 'Meaningful',
-    'ikigai.pay': 'Pay',
+    'ikigai.pay': 'Financial Outlook',
 
     // Common
     'common.error': 'Something went wrong. Please try again.',
@@ -143,7 +143,7 @@ export const translations: Record<string, Record<string, string>> = {
     'ikigai.love': 'Te encanta',
     'ikigai.goodAt': 'Se te da bien',
     'ikigai.worldNeeds': 'Gratificante',
-    'ikigai.pay': 'Paga',
+    'ikigai.pay': 'Perspectiva financiera',
 
     // Common
     'common.error': 'Algo salió mal. Por favor inténtalo de nuevo.',

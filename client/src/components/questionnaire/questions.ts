@@ -77,13 +77,13 @@ export const QUESTIONS = {
   economic: [
     {
       id: 'economic.q1',
-      en: "Forget what's realistic for a second. Describe the life you actually want: the place, the pace, the people.",
-      es: 'Olvídate de lo realista por un momento. Describe la vida que realmente quieres: el lugar, el ritmo, la gente.',
+      en: "How much school do you have left, and what choices are coming up? Subject picks, university applications? Any deadlines we should know about?",
+      es: '¿Cuánto te queda de instituto y qué decisiones se acercan? Elección de asignaturas, solicitudes de universidad... ¿Alguna fecha límite que debamos tener en cuenta?',
     },
     {
       id: 'economic.q2',
-      en: 'What constraints or responsibilities should we factor in?',
-      es: '¿Qué limitaciones o responsabilidades deberíamos tener en cuenta?',
+      en: "What's the thing you're most stuck on? It's fine if the answer is 'I don't even know what I want.'",
+      es: "¿En qué estás más atascado/a? No pasa nada si la respuesta es 'ni siquiera sé lo que quiero.'",
     },
   ],
 } as const;

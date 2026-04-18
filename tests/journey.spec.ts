@@ -37,8 +37,8 @@ const TEST_RESPONSES = {
     q2: "Help students get tech jobs through better educational tools"
   },
   economic: {
-    q1: "Remote work, flexible hours, eventually self-employed",
-    q2: "Need $80k+ salary, financial stability for family"
+    q1: "2 years left, IB subject choices in September, university applications next January",
+    q2: "I don't really know what I want to study yet"
   }
 };
 
