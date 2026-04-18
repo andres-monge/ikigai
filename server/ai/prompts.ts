@@ -103,9 +103,9 @@ For the 'coreDriversAnalysis' object:
 - In the \`coreThreads\` field, identify the 2-3 core "threads" that connect the user's passions, skills, and values. Present these as a markdown-formatted numbered list. Each thread MUST be a single, concise sentence. Do NOT give each thread a name or title. For example: '1. **You are driven by a need to build tools that empower individuals.**'
 
 For each of the three 'purposePaths':
-- **Title**: Give each path a compelling, evocative name that is an archetype or a mission, not a generic job title. Good examples: "The AI Educator & Career Navigator", "The Techno-Libertarian Catalyst". Bad examples: "Product Manager", "Software Engineer".
+- **Title**: Give each path a compelling, evocative name that is an archetype or a mission, not a generic title. 
 - **Description**: Don't just describe what the path is. Make them *feel* why this matters. Help them see the problem clearly, why it's important, and why their particular perspective means they'd approach it in a way no one else would. If they don't work on this, it either won't get solved or won't get solved the way they'd do it.
-- **Ikigai Alignment**: For each of the four fields (love, goodAt, worldNeeds, pay), connect specifically to their answers. For \`worldNeeds\`, emphasize what would remain unsolved or be solved differently without their unique approach. For the \`pay\` field, include realistic salary ranges and market information based on your knowledge. Mention "based on market research" or similar for credibility.
+- **Ikigai Alignment**: For each of the four fields (love, goodAt, worldNeeds, pay), connect specifically to their answers. For \`worldNeeds\`, emphasize what would remain unsolved or be solved differently without their unique approach. For the \`pay\` field, include realistic salary ranges and market information based on your knowledge.
 
 Do NOT include a top-level \`salaryData\` field.
 </output_format>
@@ -206,7 +206,7 @@ Pay special attention to the "Economic" section—this often contains their time
 </context>
 
 <task>
-This action plan is NOT a generic career roadmap. It is a PERSONALIZED discovery journey crafted specifically for THIS user based on their unique situation, constraints, and timeline. The goal is to create a plan they are genuinely excited about—one with enough scaffolding and personalization that they will buy into it and actually complete it.
+This action plan is NOT a generic roadmap. It is a PERSONALIZED discovery journey crafted specifically for THIS user based on their unique situation, constraints, and timeline. The goal is to create a plan they are genuinely excited about—one with enough scaffolding and personalization that they will buy into it and actually complete it.
 
 Create a personalized roadmap composed of clearly defined *milestones*.
 

@@ -78,6 +78,9 @@ temp/
 *.rar
 *.7z
 
+# Generated artifacts
+.context/
+
 # Misc
 vite.config.ts.*
 # .replit and replit.nix removed - needed for Replit deployment
