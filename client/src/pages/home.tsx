@@ -76,8 +76,6 @@ export function Home({ language, sessionId }: HomeProps) {
             transition={{ duration: 0.6, delay: 0.2, ease: "easeOut" }}
           >
             {t('welcome.title', language)}
-            <br />
-            {t('welcome.title2', language)}
           </motion.h1>
 
           {/* Problem statement - below headline, smaller */}

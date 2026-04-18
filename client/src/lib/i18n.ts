@@ -18,21 +18,21 @@
 export const translations: Record<string, Record<string, string>> = {
   en: {
     // Header
-    'header.title': 'Find My Ikigai',
+    'header.title': 'Revela',
 
     // Welcome Section
-    'welcome.title': "You'll spend decades working.",
-    'welcome.title2': 'Why not on something you care about?',
+    'welcome.title': 'Not sure what you want to do next?',
+    'welcome.title2': '',
     'welcome.problem':
-      "52% of people regret their career choice. Don't be one of them.",
+      'Everyone asks what you want to be. Nobody teaches you how to figure that out.',
     'welcome.credibility':
-      'Based on Ikigai: the centuries-old Japanese framework for finding fulfilling work.',
+      "A framework to do something fulfilling: what you love, what you're good at, what the world needs, and what pays.",
     'welcome.noAccount': 'Free. No signup required.',
 
     // Home
     'home.questionnaireTitle': 'Answer 8 questions. Find your thing.',
     'home.questionnaireTitle2': 'Then pick a path to start.',
-    'home.returnToPaths': 'Return to Purpose Paths',
+    'home.returnToPaths': 'Return to Your Paths',
 
     // Questionnaire
     'questionnaire.complete': 'Show Me My 3 Paths',
@@ -41,8 +41,8 @@ export const translations: Record<string, Record<string, string>> = {
 
 
     // Results
-    'results.title': 'Your Ikigai',
-    'results.purposePaths': 'Your 3 Purpose Paths',
+    'results.title': "What You're About",
+    'results.purposePaths': 'Your 3 Paths',
     'results.exportPdf': 'Export as PDF',
     'results.startOver': 'Start Over',
     'results.choosePathAndGetPlan': 'Get Action Plan',
@@ -53,7 +53,7 @@ export const translations: Record<string, Record<string, string>> = {
     'results.loadSessionError': 'No results found. Please complete the questionnaire first.',
     'results.saveAnalysisError': 'Failed to save analysis results.',
     'results.analysisFailedError': 'Analysis failed. Please try again.',
-    'results.streaming': 'Enjoy some music while we cook up some options...',
+    'results.streaming': 'Enjoy some music while we read through your answers...',
     'results.copyToClipboard': 'Copy to Clipboard',
     'results.copiedSuccess': 'Copied to clipboard!',
     'results.copyError': 'Failed to copy. Please try again.',
@@ -61,7 +61,7 @@ export const translations: Record<string, Record<string, string>> = {
     // Action Plan
     'actionPlan.title': 'Your Action Plan',
     'actionPlan.subtitle':
-      'Steps to get you started on your new path.',
+      "Here's how to start exploring this path.",
     'actionPlan.chosenPath': 'Chosen Path',
     'actionPlan.exportPdf': 'Export as PDF',
     'actionPlan.backToPaths': 'Back to Paths',
@@ -74,7 +74,7 @@ export const translations: Record<string, Record<string, string>> = {
     'actionPlan.copyError': 'Failed to copy. Please try again.',
 
     // Ikigai
-    'ikigai.alignment': 'Ikigai Alignment',
+    'ikigai.alignment': 'Why This Fits You',
     'ikigai.love': 'Love',
     'ikigai.goodAt': 'Good At',
     'ikigai.worldNeeds': 'Meaningful',
@@ -85,15 +85,15 @@ export const translations: Record<string, Record<string, string>> = {
   },
   es: {
     // Header
-    'header.title': 'Find My Ikigai',
+    'header.title': 'Revela',
 
     // Welcome Section
-    'welcome.title': 'Vas a pasar décadas trabajando.',
-    'welcome.title2': '¿Por qué no en algo que te importe?',
+    'welcome.title': '¿No tienes claro qué quieres hacer después?',
+    'welcome.title2': '',
     'welcome.problem':
-      'El 52% de las personas se arrepienten de su elección de profesión. No seas una de ellas.',
+      'Todos te preguntan qué quieres ser. Nadie te enseña cómo descubrirlo.',
     'welcome.credibility':
-      'Basado en Ikigai: el marco japonés centenario para encontrar un trabajo que te llene.',
+      'Un método para hacer algo que te llene: lo que amas, lo que se te da bien, lo que el mundo necesita y lo que paga.',
     'welcome.noAccount': 'Gratis. Sin registros.',
 
     // Home
@@ -108,8 +108,8 @@ export const translations: Record<string, Record<string, string>> = {
 
 
     // Results
-    'results.title': 'Tu Ikigai',
-    'results.purposePaths': 'Tus 3 Caminos',
+    'results.title': 'Lo que te define',
+    'results.purposePaths': 'Tus 3 caminos',
     'results.exportPdf': 'Exportar como PDF',
     'results.startOver': 'Volver al inicio',
     'results.choosePathAndGetPlan': 'Ver Plan de acción',
@@ -120,7 +120,7 @@ export const translations: Record<string, Record<string, string>> = {
     'results.loadSessionError': 'No se encontraron resultados. Por favor, completa el cuestionario primero.',
     'results.saveAnalysisError': 'No se pudieron guardar los resultados del análisis.',
     'results.analysisFailedError': 'El análisis tuvo un error. Por favor, inténtalo de nuevo.',
-    'results.streaming': 'Disfruta de la música mientras preparamos algunas opciones...',
+    'results.streaming': 'Disfruta de la música mientras analizamos tus respuestas...',
     'results.copyToClipboard': 'Copiar al portapapeles',
     'results.copiedSuccess': 'Copiado al portapapeles!',
     'results.copyError': 'Error al copiar. Intente de nuevo.',
@@ -128,7 +128,7 @@ export const translations: Record<string, Record<string, string>> = {
     // Action Plan
     'actionPlan.title': 'Tu Plan de acción',
     'actionPlan.subtitle':
-      'Pasos para empezar en tu nuevo camino.',
+      'Así puedes empezar a explorar este camino.',
     'actionPlan.chosenPath': 'Camino elegido',
     'actionPlan.exportPdf': 'Exportar como PDF',
     'actionPlan.backToPaths': 'Volver a los caminos',
@@ -141,7 +141,7 @@ export const translations: Record<string, Record<string, string>> = {
     'actionPlan.copyError': 'Error al copiar. Intente de nuevo.',
 
     // Ikigai
-    'ikigai.alignment': 'Encaje Ikigai',
+    'ikigai.alignment': 'Por qué encaja contigo',
     'ikigai.love': 'Te encanta',
     'ikigai.goodAt': 'Se te da bien',
     'ikigai.worldNeeds': 'Gratificante',

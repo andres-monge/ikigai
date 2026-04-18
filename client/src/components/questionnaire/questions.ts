@@ -30,6 +30,10 @@ export interface QuestionEntry {
   en: string;
   /** Spanish wording of the question */
   es: string;
+  /** Optional hint shown below the question label (English) */
+  hintEn?: string;
+  /** Optional hint shown below the question label (Spanish) */
+  hintEs?: string;
 }
 
 /**
@@ -43,6 +47,8 @@ export const QUESTIONS = {
       id: 'passions.q1',
       en: "What activities make you forget to check the clock because you're so into them?",
       es: '¿Qué actividades te absorben tanto que pierdes la noción del tiempo?',
+      hintEn: '"I don\'t know" counts as an answer :)',
+      hintEs: '"No sé" también es una respuesta válida :)',
     },
     {
       id: 'passions.q2',
@@ -53,8 +59,8 @@ export const QUESTIONS = {
   values: [
     {
       id: 'values.q1',
-      en: "What issues in your community, industry or the country frustrate you so much you'd gladly tackle them?",
-      es: '¿Qué problemas en tu entorno, industria o país te frustran tanto que estarías dispuesto a abordarlos?',
+      en: "What issues in your friend group, community, or country frustrate you so much you'd gladly tackle them?",
+      es: '¿Qué problemas en tu grupo de amigos, comunidad o país te frustran tanto que estarías dispuesto a abordarlos?',
     },
     {
       id: 'values.q2',
@@ -70,15 +76,15 @@ export const QUESTIONS = {
     },
     {
       id: 'skills.q2',
-      en: 'Tell us a bit about yourself: your work, studies, or anything that shows these skills in action.',
-      es: 'Cuéntanos un poco sobre ti: tu trabajo, estudios o cualquier experiencia que demuestre estas habilidades en acción.',
+      en: 'Tell us a bit about yourself: your studies, hobbies or anything that shows these skills in action.',
+      es: 'Cuéntanos un poco sobre ti: tus estudios, hobbies o cualquier experiencia que demuestre estas habilidades en acción.',
     },
   ],
   economic: [
     {
       id: 'economic.q1',
-      en: 'Describe your ideal work setup: location, hours, remote vs. in-person, employed vs. self-employed.',
-      es: 'Describe tu configuración de trabajo ideal: ubicación, horas, remoto vs. presencial, empleado vs. autónomo.',
+      en: "Forget what's realistic for a second. Describe the life you actually want: the place, the pace, the people.",
+      es: 'Olvídate de lo realista por un momento. Describe la vida que realmente quieres: el lugar, el ritmo, la gente.',
     },
     {
       id: 'economic.q2',
@@ -98,13 +104,16 @@ export const QUESTIONS = {
  */
 export const buildFlatQuestionList = (
   language: Language,
-): Array<{ id: string; title: string }> => {
+): Array<{ id: string; title: string; hint?: string }> => {
   return (
     Object.values(QUESTIONS) // 4 sections
       .flat() // → 8 entries
-      .map(({ id, en, es }) => ({
-        id,
-        title: language === 'en' ? en : es,
+      .map((entry) => ({
+        id: entry.id,
+        title: language === 'en' ? entry.en : entry.es,
+        hint: language === 'en'
+          ? ('hintEn' in entry ? entry.hintEn : undefined)
+          : ('hintEs' in entry ? entry.hintEs : undefined),
       }))
   );
 }; 

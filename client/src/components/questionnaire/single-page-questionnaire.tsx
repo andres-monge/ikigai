@@ -198,11 +198,14 @@ export function SinglePageQuestionnaire({
       </h2>
 
       <div className="grid grid-cols-1 gap-6">
-        {flatQuestions.map(({ id, title }) => (
+        {flatQuestions.map(({ id, title, hint }) => (
           <div key={id}>
             <Label htmlFor={id} className="block text-lg font-medium text-slate-900 mb-3 text-left">
               {title}
             </Label>
+            {hint && (
+              <p className="text-sm text-gray-500 -mt-1 mb-2 text-left">{hint}</p>
+            )}
             <TextareaAutosize
               id={id}
               value={answers[id] || ''}
