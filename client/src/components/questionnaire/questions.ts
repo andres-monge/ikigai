@@ -30,10 +30,6 @@ export interface QuestionEntry {
   en: string;
   /** Spanish wording of the question */
   es: string;
-  /** Optional hint shown below the question label (English) */
-  hintEn?: string;
-  /** Optional hint shown below the question label (Spanish) */
-  hintEs?: string;
 }
 
 /**
@@ -47,8 +43,6 @@ export const QUESTIONS = {
       id: 'passions.q1',
       en: "What activities make you forget to check the clock because you're so into them?",
       es: '¿Qué actividades te absorben tanto que pierdes la noción del tiempo?',
-      hintEn: '"I don\'t know" counts as an answer :)',
-      hintEs: '"No sé" también es una respuesta válida :)',
     },
     {
       id: 'passions.q2',
@@ -104,16 +98,13 @@ export const QUESTIONS = {
  */
 export const buildFlatQuestionList = (
   language: Language,
-): Array<{ id: string; title: string; hint?: string }> => {
+): Array<{ id: string; title: string }> => {
   return (
     Object.values(QUESTIONS) // 4 sections
       .flat() // → 8 entries
-      .map((entry) => ({
-        id: entry.id,
-        title: language === 'en' ? entry.en : entry.es,
-        hint: language === 'en'
-          ? ('hintEn' in entry ? entry.hintEn : undefined)
-          : ('hintEs' in entry ? entry.hintEs : undefined),
+      .map(({ id, en, es }) => ({
+        id,
+        title: language === 'en' ? en : es,
       }))
   );
 };
