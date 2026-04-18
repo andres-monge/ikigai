@@ -22,7 +22,6 @@ export const translations: Record<string, Record<string, string>> = {
 
     // Welcome Section
     'welcome.title': 'Not sure what you want to do next?',
-    'welcome.title2': '',
     'welcome.problem':
       'Everyone asks what you want to be. Nobody teaches you how to figure that out.',
     'welcome.credibility':
@@ -89,7 +88,6 @@ export const translations: Record<string, Record<string, string>> = {
 
     // Welcome Section
     'welcome.title': '¿No tienes claro qué quieres hacer después?',
-    'welcome.title2': '',
     'welcome.problem':
       'Todos te preguntan qué quieres ser. Nadie te enseña cómo descubrirlo.',
     'welcome.credibility':
