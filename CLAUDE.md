@@ -32,15 +32,16 @@ Ikigai Finder is an AI-powered career guidance application that helps users disc
 - **Frontend**: React SPA with TypeScript, Vite, TanStack Query, shadcn/ui components
 - **Backend**: Express.js server with AI orchestration chains
 - **Database**: PostgreSQL with Drizzle ORM
-- **AI Integration**: Vercel AI SDK with GEMINI_REASONING_MODEL for structured streaming
-- **Deployment**: Configured for Replit deployment
+- **AI Integration**: Vercel AI SDK v6 with Google Gemini models for structured streaming
+- **Deployment**: Vercel
 
 ### Key Architectural Patterns
 
 #### AI Streaming System (`server/ai/chains/`)
-The application uses Vercel AI SDK for structured streaming:
-- `purpose-discovery.stream.chain.ts` - Generates career path analysis using streamObject
+The application uses Vercel AI SDK v6 for structured streaming:
+- `purpose-discovery.stream.chain.ts` - Generates career path analysis using `streamText` + `Output.object()`
 - `action-plan.stream.chain.ts` - Creates detailed milestone-based action plans
+- `google-structured-model.ts` - Shared model wrapper with `extractJsonMiddleware` (strips fenced JSON from Gemini responses) and thinking config
 - Single model approach with GEMINI_REASONING_MODEL for reliable structured output
 
 #### Audio Enhancement (`client/src/hooks/`)
