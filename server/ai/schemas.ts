@@ -76,7 +76,7 @@ export const purposeDiscoveryOpenApiSchema = {
               pay: {
                 type: 'STRING',
                 description:
-                  'How this path meets their economic needs with realistic salary information.',
+                  'Future financial outlook for this field: what it tends to pay, whether further education is common, and the financial trajectory.',
               },
             },
             required: ['love', 'goodAt', 'worldNeeds', 'pay'],
@@ -84,7 +84,7 @@ export const purposeDiscoveryOpenApiSchema = {
           actionStrategy: {
             type: 'STRING',
             description:
-              "A high-level strategy to get started (e.g., 'Bootstrapped MVP in 6 mo').",
+              "A high-level strategy to start exploring (e.g., 'School project + online community in 3 mo').",
           },
         },
         required: [

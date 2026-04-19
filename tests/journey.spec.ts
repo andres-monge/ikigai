@@ -30,7 +30,7 @@ const TEST_RESPONSES = {
   },
   skills: {
     q1: "Explaining complex things simply, problem-solving, web development",
-    q2: "5 years as frontend developer, led UI redesign projects"
+    q2: "Built a few websites for school clubs, taught myself Figma over the summer"
   },
   values: {
     q1: "Digital divide in education, lack of access to learning resources",
@@ -90,7 +90,7 @@ test.describe('Core User Journey', () => {
       await page.fill('#values\\.q1', TEST_RESPONSES.values.q1);
       await page.fill('#values\\.q2', TEST_RESPONSES.values.q2);
       
-      // Fill Economic questions
+      // Fill School Context questions
       await page.fill('#economic\\.q1', TEST_RESPONSES.economic.q1);
       await page.fill('#economic\\.q2', TEST_RESPONSES.economic.q2);
       

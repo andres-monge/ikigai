@@ -64,7 +64,7 @@ export const formatQuestionnaireForPrompt = (
 
 /**
  * Generates the master system prompt for the Purpose Discovery phase.
- * @param {QuestionnaireResponses} responses - The user's answers.
+ * @param {QuestionnaireResponses} responses - The student's questionnaire answers.
  * @param {Language} language - The target language ('en' or 'es').
  * @returns {string} The formatted system prompt.
  */
@@ -89,7 +89,7 @@ ${langInstruction}
 
 <principles>
 1. **Follow Curiosity:** The most reliable guide to what you should be doing is what you find interesting. Don't look for a single, grand "passion." Look for problems that seem absorbing to you.
-2. **Work on Problems:** The path to satisfaction and impact lies in tackling challenges that the user believes will have a positive impact and can be proud of.
+2. **Work on Problems:** The path to satisfaction and impact lies in tackling challenges that you believe will have a positive impact and can be proud of.
 3. **Learn by Doing:** The only way to know if you'll like something is to try it. The best way to learn is by building your own projects.
 4. **Compounding Effort:** What you work on should have the potential for your effort to compound over time. You get better, your projects get bigger, your impact grows.
 5. **Meaningful Work:** The most fulfilling work is doing something you consider to be important that, if not for you, wouldn't get done—or wouldn't get done the way you believe it should be done. Everyone has a unique perspective. The question is whether you'll use yours.
@@ -99,8 +99,8 @@ ${langInstruction}
 Generate your final answer as a single JSON object that strictly follows the provided schema.
 
 For the 'coreDriversAnalysis' object:
-- In the \`statementSentence\` field, write a single, insightful sentence that presents the core threads and summarizes the user's ikigai. This should feel like a realization, not a summary.
-- In the \`coreThreads\` field, identify the 2-3 core "threads" that connect the user's passions, skills, and values. Present these as a markdown-formatted numbered list. Each thread MUST be a single, concise sentence. Do NOT give each thread a name or title. For example: '1. **You are driven by a need to build tools that empower individuals.**'
+- In the \`statementSentence\` field, write a single, insightful sentence that presents the core threads and summarizes the student's ikigai. This should feel like a realization, not a summary.
+- In the \`coreThreads\` field, identify the 2-3 core "threads" that connect the student's passions, skills, and values. Present these as a markdown-formatted numbered list. Each thread MUST be a single, concise sentence. Do NOT give each thread a name or title. For example: '1. **You are driven by a need to build tools that empower individuals.**'
 
 For each of the three 'purposePaths':
 - **Title**: Give each path a compelling, evocative name that is an archetype or a mission, not a generic title. 
@@ -145,9 +145,9 @@ Before returning your final response, verify:
 /**
  * Generates the master system prompt for the Action Plan generation phase.
  *
- * @param {PurposePath} chosenPath - The path the user selected.
+ * @param {PurposePath} chosenPath - The path the student selected.
  * @param {Language} language - The target language ('en' or 'es').
- * @param {QuestionnaireResponses} responses - The user's original questionnaire answers for personalization.
+ * @param {QuestionnaireResponses} responses - The student's original questionnaire answers for personalization.
  * @returns {string} The formatted system prompt.
  */
 export const getActionPlanSystemPrompt = (
@@ -182,17 +182,17 @@ Return a JSON object with milestones. Each milestone must include:
 
 1. **Title** - A short, evocative headline that conveys the purpose of this phase.
 
-2. **Timeline** - When to focus on it (e.g., "Week 1", "Weeks 2-3", "Month 2"). Align with user's stated runway if mentioned.
+2. **Timeline** - When to focus on it (e.g., "Week 1", "Weeks 2-3", "Month 2"). Align with the student's school timeline if mentioned.
 
 3. **Actions** - A bulleted list of concrete, atomic tasks. Requirements:
    - Every action MUST include a time estimate in parentheses, e.g., "Draft a one-paragraph case study on your phone (15 min)"
    - The FIRST action of the FIRST milestone must be achievable in under 60 minutes with zero prerequisites
    - If an action would take more than 4 hours, break it into smaller steps
-   - Reference the user's specific assets, skills, and situation where possible
+   - Reference the student's specific assets, skills, and situation where possible
 
 4. **Checkpoint** - A self-validating signal that tells them this milestone is complete. This should be something concrete and external they can verify themselves, not just "I feel ready." Examples: "You'll know this is done when you've had 3 conversations with people who work in this space." "You'll know this is working when you can explain to a friend what this field actually involves day-to-day."
 
-5. **Skills** - Skills the user should learn *during* this milestone, only if directly needed. Provide only the skill name as a string.
+5. **Skills** - Skills the student should learn *during* this milestone, only if directly needed. Provide only the skill name as a string.
 </output_format>
 
 <context>

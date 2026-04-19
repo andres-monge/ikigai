@@ -74,6 +74,7 @@ export const QUESTIONS = {
       es: 'Cuéntanos un poco sobre ti: tus estudios, hobbies o cualquier experiencia que demuestre estas habilidades en acción.',
     },
   ],
+  // Key kept as 'economic' to match the DB schema — display label is "School Context"
   economic: [
     {
       id: 'economic.q1',
