@@ -36,6 +36,15 @@ export const translations: Record<string, Record<string, string>> = {
     // Questionnaire
     'questionnaire.complete': 'Show Me My 3 Paths',
     'questionnaire.saving': 'Saving...',
+    'questionnaire.mic.start': 'Speak your answer',
+    'questionnaire.mic.stop': 'Stop recording',
+    'questionnaire.mic.processing': 'Transcribing...',
+    'questionnaire.mic.error.permission':
+      'Microphone access denied. Check your browser settings.',
+    'questionnaire.mic.error.failed':
+      'Transcription failed. Try again or type your answer.',
+    'questionnaire.mic.error.empty':
+      'No speech detected. Try speaking closer to the microphone.',
 
 
 
@@ -102,6 +111,15 @@ export const translations: Record<string, Record<string, string>> = {
     // Questionnaire
     'questionnaire.complete': 'Muéstrame mis 3 caminos',
     'questionnaire.saving': 'Guardando...',
+    'questionnaire.mic.start': 'Habla tu respuesta',
+    'questionnaire.mic.stop': 'Dejar de grabar',
+    'questionnaire.mic.processing': 'Transcribiendo...',
+    'questionnaire.mic.error.permission':
+      'Acceso al micrófono denegado. Revisa la configuración de tu navegador.',
+    'questionnaire.mic.error.failed':
+      'La transcripción falló. Inténtalo de nuevo o escribe tu respuesta.',
+    'questionnaire.mic.error.empty':
+      'No se detectó voz. Intenta hablar más cerca del micrófono.',
 
 
 
