@@ -1,6 +1,6 @@
 /**
  * @description
- * User data extraction script for AI analysis of the Ikigai Finder application.
+ * User data extraction script for AI analysis of the Revelio application.
  *
  * Extracts questionnaire answers and session metadata in a format suitable for
  * AI-powered user persona analysis. The output is anonymized (session IDs are

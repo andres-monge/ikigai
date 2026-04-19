@@ -18,7 +18,7 @@
 export const translations: Record<string, Record<string, string>> = {
   en: {
     // Header
-    'header.title': 'Revela',
+    'header.title': 'Revelio',
 
     // Welcome Section
     'welcome.title': 'Not sure what you want to do next?',
@@ -93,7 +93,7 @@ export const translations: Record<string, Record<string, string>> = {
   },
   es: {
     // Header
-    'header.title': 'Revela',
+    'header.title': 'Revelio',
 
     // Welcome Section
     'welcome.title': '¿No tienes claro qué quieres hacer después?',

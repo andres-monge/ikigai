@@ -7,7 +7,7 @@ topic: student-prompt-adaptation
 
 ## Problem Frame
 
-Revela is pivoting from adults in career crisis to 16-18 year old students at private and international schools (B2B, sold to schools). The current system prompts, questionnaire questions, and AI output are framed for adults with work experience — references to "bootstrapped MVPs," "cold-messaging hiring managers," "ideal work setup," and salary ranges assume a professional context students don't have.
+Revelio is pivoting from adults in career crisis to 16-18 year old students at private and international schools (B2B, sold to schools). The current system prompts, questionnaire questions, and AI output are framed for adults with work experience — references to "bootstrapped MVPs," "cold-messaging hiring managers," "ideal work setup," and salary ranges assume a professional context students don't have.
 
 The core proposition — helping people discover what they actually enjoy through exploration and side quests, not prescribing careers — works for students. But the language, examples, action plan scaffolding, and practical questions need to meet students where they are: in school, facing subject choices and university applications, often uncertain about what they want, and navigating family expectations.
 

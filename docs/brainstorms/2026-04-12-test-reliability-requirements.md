@@ -7,7 +7,7 @@ topic: test-reliability
 
 ## Problem Frame
 
-The Ikigai Finder app was built months ago and has an E2E test (`tests/journey.spec.ts`) that was abandoned because it couldn't pass reliably. The test has stale selectors (copy changed since the test was written) and a known race condition around temporary-to-real ID transitions. The app already has comprehensive API-level tests with mocked AI (`server/routes/assessment/*.test.ts`, `server/routes/session.test.ts`), so the gap is specifically the E2E browser test.
+The Revelio app was built months ago and has an E2E test (`tests/journey.spec.ts`) that was abandoned because it couldn't pass reliably. The test has stale selectors (copy changed since the test was written) and a known race condition around temporary-to-real ID transitions. The app already has comprehensive API-level tests with mocked AI (`server/routes/assessment/*.test.ts`, `server/routes/session.test.ts`), so the gap is specifically the E2E browser test.
 
 The app's AI response times have improved dramatically since the test was written — the 60-second timeout is no longer an issue. The AI layer is the core product, so the E2E test should exercise real AI calls rather than mocking them.
 

@@ -2,13 +2,13 @@
 
 **Date:** 2026-04-04
 **Status:** Brainstorm complete — ready for ME skill execution
-**Focus:** Validating whether the Ikigai Finder solves a problem people will pay to fix
+**Focus:** Validating whether the Revelio solves a problem people will pay to fix
 
 ---
 
 ## What We're Exploring
 
-Whether Ikigai Finder — an AI-powered career guidance tool that helps people discover meaningful work through the ikigai framework — has a paying market beyond the founder.
+Whether Revelio — an AI-powered career guidance tool that helps people discover meaningful work through the ikigai framework — has a paying market beyond the founder.
 
 The product exists and works. It was built to solve the founder's own pain. The question is: **does anyone else want this enough to pay for it?**
 
@@ -16,7 +16,7 @@ The product exists and works. It was built to solve the founder's own pain. The 
 
 ### What exists today
 
-- Full working app at findmyikigai.vercel.app
+- Full working app at revelio-me.vercel.app
 - Structured questionnaire → AI analysis → personalized career paths + action plans
 - Streaming AI results using Google Gemini
 - No users beyond the founder
@@ -45,7 +45,7 @@ This is a strong ME starting point: "scratch your own itch" is how most minimali
 
 The biggest competitor is **inaction**. Most people in career crisis don't use any tool at all. They think about it, feel stuck, and keep doing what they're doing. This means the product doesn't just need to be better than alternatives — it needs to overcome the inertia of doing nothing.
 
-### Where Ikigai Finder could fit
+### Where Revelio could fit
 
 - **10x cheaper than a career coach** but with similar personalization depth
 - **10x more actionable than free assessments** — career paths with action plans, not just a personality type
@@ -127,7 +127,7 @@ This is a sequencing decision, not a commitment. B2B may end up being the real m
 ## Open Questions
 
 1. **Is career guidance a vitamin or a painkiller?** Career coaches charge $200/hr, which suggests some people feel real pain. But most people do nothing — is the pain real but latent, or is it just a "that would be nice" feeling?
-2. **Does the ikigai framing help or hurt?** "Ikigai" is a known concept with built-in credibility. But it may also feel woo-woo or culturally appropriative to some. Is "AI career guidance" a stronger frame than "ikigai finder"?
+2. **Does the ikigai framing help or hurt?** "Ikigai" is a known concept with built-in credibility. But it may also feel woo-woo or culturally appropriative to some. Is "AI career guidance" a stronger frame than "revelio"?
 3. **Where do career-stuck people actually congregate?** Reddit is obvious. But are there other communities — Discord servers, Facebook groups, Slack communities, newsletter audiences — where this audience gathers?
 4. **What would someone pay?** The $100-300/hr career coach market suggests high willingness to pay for the right thing. But AI tools are expected to be cheap. Where does this land?
 5. **Is there a natural trigger moment?** Layoffs, graduations, burnout episodes, turning 30/40 — are there moments when people would search for and pay for this? Can we intercept those moments?

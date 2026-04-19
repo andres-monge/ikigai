@@ -26,7 +26,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Architecture
 
 ### Application Overview
-Ikigai Finder is an AI-powered career guidance application that helps users discover their purpose through a structured questionnaire. The app generates personalized career paths and detailed action plans using Google's Gemini AI models.
+Revelio is an AI-powered career guidance application that helps users discover their purpose through a structured questionnaire. The app generates personalized career paths and detailed action plans using Google's Gemini AI models.
 
 ### High-Level Structure
 - **Frontend**: React SPA with TypeScript, Vite, TanStack Query, shadcn/ui components

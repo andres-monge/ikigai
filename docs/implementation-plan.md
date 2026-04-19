@@ -21,9 +21,9 @@ This foundational phase configures your local development environment to connect
 **Suggested Files for Context**: `replit.md`
 **Step Dependencies**: Step 1
 **User Instructions**:
-1.  **Create Production DB**: In your main "Ikigai Finder" Replit project, navigate to the **Tools** tab and add a **Database**. Replit will automatically populate the **Secrets** with the production `DATABASE_URL` and other credentials.
-2.  **Create Development DB**: Create a new, separate Replit project named "Dev-DB-Ikigai-Finder" (or similar). Add a **Database** to this new project as well.
-3.  **Update Local `.env`**: Copy the `DATABASE_URL` from the **Secrets** of your *new development project* ("Dev-DB-Ikigai-Finder") and paste it into the `.env` file on your *local machine*. **Do not** use the production URL locally.
+1.  **Create Production DB**: In your main "Revelio" Replit project, navigate to the **Tools** tab and add a **Database**. Replit will automatically populate the **Secrets** with the production `DATABASE_URL` and other credentials.
+2.  **Create Development DB**: Create a new, separate Replit project named "Dev-DB-Revelio" (or similar). Add a **Database** to this new project as well.
+3.  **Update Local `.env`**: Copy the `DATABASE_URL` from the **Secrets** of your *new development project* ("Dev-DB-Revelio") and paste it into the `.env` file on your *local machine*. **Do not** use the production URL locally.
 
 ---
 

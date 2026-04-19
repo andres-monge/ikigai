@@ -1,6 +1,6 @@
 /**
  * @description
- * Database client configuration and initialization for the Ikigai Finder application.
+ * Database client configuration and initialization for the Revelio application.
  * This module sets up the Drizzle ORM client with Neon's serverless PostgreSQL driver,
  * providing a single, reusable database instance throughout the server application.
  *

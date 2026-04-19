@@ -1,6 +1,6 @@
 # Synthetic User Feedback
 
-This document captures feedback from synthetic user personas testing the Ikigai Finder app. Each persona represents a distinct demographic with unique pain points, constraints, and expectations.
+This document captures feedback from synthetic user personas testing the Revelio app. Each persona represents a distinct demographic with unique pain points, constraints, and expectations.
 
 ---
 
@@ -535,7 +535,7 @@ This would address the family pressure dimension.
 This single line captures everything I feel but couldn't articulate. I would screenshot this and send it to every burned-out tech lead I know.
 
 **My exact Slack message would be:**
-> "Dude, I just did this Ikigai Finder thing expecting generic BS, but check this out [screenshot of 'craftsman stuck in a factory' quote]. It basically called out our entire existence. The action plan is actually doable too - not 'quit your job and find yourself' nonsense. Takes like 10 min to fill out."
+> "Dude, I just did this Revelio thing expecting generic BS, but check this out [screenshot of 'craftsman stuck in a factory' quote]. It basically called out our entire existence. The action plan is actually doable too - not 'quit your job and find yourself' nonsense. Takes like 10 min to fill out."
 
 **Why Outstanding:**
 The combination of naming the pain specifically + respecting my income floor + providing low-risk Week 1 actions is exactly what I'd want to share with other trapped managers.

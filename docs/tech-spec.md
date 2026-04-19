@@ -1,8 +1,8 @@
-# Ikigai Finder Technical Specification
+# Revelio Technical Specification
 
 # Project Name
 
-Ikigai Finder
+Revelio
 
 ## Project Description
 

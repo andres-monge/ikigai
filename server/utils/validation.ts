@@ -1,6 +1,6 @@
 /**
  * @description
- * Runtime input validation utilities for the Ikigai Finder application.
+ * Runtime input validation utilities for the Revelio application.
  * Provides comprehensive validation of session data before expensive AI operations,
  * implementing a "fail-fast" strategy to catch malformed data early.
  * 

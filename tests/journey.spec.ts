@@ -2,7 +2,7 @@
  * @file journey.spec.ts
  * 
  * @description
- * End-to-end test for the core user journey through the Ikigai Finder application.
+ * End-to-end test for the core user journey through the Revelio application.
  * This test validates the complete flow from questionnaire submission through
  * results display to action plan generation, using the new streamObject implementation.
  * 

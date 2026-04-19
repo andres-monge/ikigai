@@ -1,4 +1,4 @@
-# B2B Idea Validation: Ikigai Finder for Private Schools & Universities
+# B2B Idea Validation: Revelio for Private Schools & Universities
 
 **Date:** 2026-04-11
 **Status:** Validation analysis complete — ready for outreach
@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-Ikigai Finder has a stronger B2B case selling to **private and international schools** than to public schools or individual consumers. Private schools buy faster, pay more, and are motivated by excellence rather than compliance. The product helps students do the thing they struggle with most at 16-18: figure out what they actually want to do. Existing tools (Naviance, Unifrog, BridgeU) help students *apply* to things — none help them articulate what they care about in the first place. However, **zero sales conversations have happened** — all of this is structural analysis. Per ME principles, the only validation is payment.
+Revelio has a stronger B2B case selling to **private and international schools** than to public schools or individual consumers. Private schools buy faster, pay more, and are motivated by excellence rather than compliance. The product helps students do the thing they struggle with most at 16-18: figure out what they actually want to do. Existing tools (Naviance, Unifrog, BridgeU) help students *apply* to things — none help them articulate what they care about in the first place. However, **zero sales conversations have happened** — all of this is structural analysis. Per ME principles, the only validation is payment.
 
 ---
 
@@ -23,7 +23,7 @@ This complements tools like Naviance, Unifrog, and BridgeU (which handle applica
 
 ### What exists today (the product)
 
-- Working app at findmyikigai.vercel.app
+- Working app at revelio-me.vercel.app
 - 8 free-text questions across 4 ikigai dimensions (passions, values, skills, practical constraints)
 - AI generates: core drivers summary, 3 personalized purpose paths, detailed milestone-based action plans
 - Bilingual (English/Spanish)
@@ -158,7 +158,7 @@ Perkins V (Strengthening Career and Technical Education for the 21st Century Act
 - Authorization of appropriations expired FY2024 — continued funding is uncertain, especially given current administration's education budget posture
 - It's US-only — zero relevance for international schools
 - Even when fully funded (~$1.4B/year), per-school allocations for discretionary tech purchases are small
-- Positioning Ikigai Finder as "Perkins V fundable" would be a stretch
+- Positioning Revelio as "Perkins V fundable" would be a stretch
 
 **Bottom line:** Government funding is not a reliable go-to-market strategy for this product. Private school tuition revenue is.
 

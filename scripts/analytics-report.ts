@@ -1,6 +1,6 @@
 /**
  * @description
- * Funnel metrics report script for the Ikigai Finder analytics system.
+ * Funnel metrics report script for the Revelio analytics system.
  *
  * Calculates and displays all success metrics defined in the analytics implementation plan:
  * - Landing → Start conversion
@@ -114,7 +114,7 @@ async function generateReport(): Promise<void> {
     : null;
 
   console.log('\n' + '='.repeat(70));
-  console.log(' IKIGAI FINDER - ANALYTICS REPORT');
+  console.log(' REVELIO - ANALYTICS REPORT');
   console.log('='.repeat(70));
   console.log(`\n  Period: ${days ? `Last ${days} days` : 'All time'}`);
   console.log(`  Generated: ${new Date().toISOString()}`);
