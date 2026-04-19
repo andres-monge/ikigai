@@ -23,6 +23,16 @@ export const transcriptionRouter = Router();
 /** Accepted language hints for Groq Whisper */
 const SUPPORTED_LANGUAGES = new Set(['en', 'es']);
 
+/** Module-level Groq client — reused across requests (matches google-structured-model.ts pattern) */
+let groqClient: ReturnType<typeof createGroq> | null = null;
+
+function getGroqClient() {
+  if (!groqClient) {
+    groqClient = createGroq({ apiKey: env.GROQ_API_KEY });
+  }
+  return groqClient;
+}
+
 /**
  * POST /api/transcribe
  *
@@ -37,7 +47,7 @@ transcriptionRouter.post(
       // ── Validate GROQ_API_KEY presence ──────────────────────────────
       if (!env.GROQ_API_KEY) {
         return res.status(503).json({
-          error: 'Speech-to-text is not configured. GROQ_API_KEY is missing.',
+          error: 'Speech-to-text is not available. Please contact the administrator.',
           code: ERROR_CODES.TRANSCRIPTION_ERROR,
         });
       }
@@ -60,19 +70,18 @@ transcriptionRouter.post(
       }
 
       // ── Validate language query parameter ───────────────────────────
-      const language = (req.query.language as string) ?? 'en';
+      const rawLanguage = req.query.language;
+      const language = typeof rawLanguage === 'string' ? rawLanguage : 'en';
       if (!SUPPORTED_LANGUAGES.has(language)) {
         return res.status(400).json({
-          error: `Unsupported language "${language}". Supported: ${[...SUPPORTED_LANGUAGES].join(', ')}.`,
+          error: `Unsupported language. Supported: ${[...SUPPORTED_LANGUAGES].join(', ')}.`,
           code: ERROR_CODES.VALIDATION_ERROR,
         });
       }
 
       // ── Call Groq Whisper via Vercel AI SDK ─────────────────────────
-      const groq = createGroq({ apiKey: env.GROQ_API_KEY });
-
       const result = await transcribe({
-        model: groq.transcription('whisper-large-v3-turbo'),
+        model: getGroqClient().transcription('whisper-large-v3-turbo'),
         audio: req.body,
         providerOptions: {
           groq: { language },
@@ -83,11 +92,8 @@ transcriptionRouter.post(
     } catch (error) {
       console.error('[Transcription] Error:', error);
 
-      const message =
-        error instanceof Error ? error.message : 'Unknown transcription error';
-
       return res.status(500).json({
-        error: `Transcription failed: ${message}`,
+        error: 'Transcription failed. Please try again.',
         code: ERROR_CODES.TRANSCRIPTION_ERROR,
       });
     }

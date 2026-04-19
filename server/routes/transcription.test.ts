@@ -173,7 +173,7 @@ describe('POST /api/transcribe', () => {
 
     expect(res.status).toBe(500);
     expect(res.body.code).toBe('TRANSCRIPTION_ERROR');
-    expect(res.body.error).toMatch(/groq rate limit/i);
+    expect(res.body.error).toMatch(/transcription failed/i);
   });
 
   it('returns 503 when GROQ_API_KEY is not configured', async () => {
@@ -186,6 +186,6 @@ describe('POST /api/transcribe', () => {
 
     expect(res.status).toBe(503);
     expect(res.body.code).toBe('TRANSCRIPTION_ERROR');
-    expect(res.body.error).toMatch(/GROQ_API_KEY/);
+    expect(res.body.error).toMatch(/not available/i);
   });
 });

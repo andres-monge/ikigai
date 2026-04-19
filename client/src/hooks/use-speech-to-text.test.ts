@@ -18,7 +18,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { useSpeechToText, type UseSpeechToTextOptions } from './use-speech-to-text';
+import { useSpeechToText, _resetBrowserSupportCache, type UseSpeechToTextOptions } from './use-speech-to-text';
 
 /* ------------------------------------------------------------------ */
 /*                    MediaRecorder Mock                              */
@@ -66,6 +66,7 @@ function createMockStream(): MediaStream {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  _resetBrowserSupportCache();
 
   // Set up browser API mocks
   Object.defineProperty(global, 'MediaRecorder', {

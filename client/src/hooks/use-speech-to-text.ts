@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import type { Language } from '@/lib/i18n';
 
 /**
  * Recording lifecycle state machine.
@@ -10,7 +11,7 @@ export type RecordingState = 'idle' | 'recording' | 'processing';
 
 export interface UseSpeechToTextOptions {
   /** Language hint for Groq Whisper ('en' | 'es') */
-  language: string;
+  language: Language;
   /** Called with (textareaId, transcribedText) when transcription succeeds */
   onTranscription: (textareaId: string, text: string) => void;
   /** Called when transcription returns empty text (no speech detected) */
@@ -37,6 +38,9 @@ export interface UseSpeechToTextReturn {
 /** Maximum recording duration in milliseconds (2 minutes) */
 const MAX_RECORDING_MS = 120_000;
 
+/** Transcription fetch timeout in milliseconds (30 seconds) */
+const TRANSCRIBE_TIMEOUT_MS = 30_000;
+
 /**
  * Detect the best audio mime type the browser supports.
  * Chrome/Edge/Firefox prefer webm/opus; Safari falls back to mp4.
@@ -57,14 +61,23 @@ function getPreferredMimeType(): string {
 
 /**
  * Check if the browser supports the required audio APIs.
+ * Cached after first call — browser API presence doesn't change at runtime.
  */
-function checkBrowserSupport(): boolean {
-  return (
-    typeof navigator !== 'undefined' &&
-    typeof navigator.mediaDevices?.getUserMedia === 'function' &&
-    typeof MediaRecorder !== 'undefined' &&
-    getPreferredMimeType() !== ''
-  );
+let _browserSupportCached: boolean | null = null;
+function isSpeechSupported(): boolean {
+  if (_browserSupportCached === null) {
+    _browserSupportCached =
+      typeof navigator !== 'undefined' &&
+      typeof navigator.mediaDevices?.getUserMedia === 'function' &&
+      typeof MediaRecorder !== 'undefined' &&
+      getPreferredMimeType() !== '';
+  }
+  return _browserSupportCached;
+}
+
+/** Reset the cached browser support check. Exported for testing only. */
+export function _resetBrowserSupportCache(): void {
+  _browserSupportCached = null;
 }
 
 /**
@@ -103,7 +116,6 @@ export function useSpeechToText(options: UseSpeechToTextOptions): UseSpeechToTex
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const autoStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const mimeTypeRef = useRef<string>('');
 
   // Keep callbacks fresh without re-creating startRecording/stopRecording
   const onTranscriptionRef = useRef(onTranscription);
@@ -113,7 +125,7 @@ export function useSpeechToText(options: UseSpeechToTextOptions): UseSpeechToTex
   const onErrorRef = useRef(onError);
   onErrorRef.current = onError;
 
-  const isSupported = checkBrowserSupport();
+  const isSupported = isSpeechSupported();
 
   /**
    * Release microphone stream tracks and clear auto-stop timer.
@@ -138,11 +150,15 @@ export function useSpeechToText(options: UseSpeechToTextOptions): UseSpeechToTex
     async (audioBlob: Blob, textareaId: string) => {
       setRecordingState('processing');
 
+      const abortController = new AbortController();
+      const timeoutId = setTimeout(() => abortController.abort(), TRANSCRIBE_TIMEOUT_MS);
+
       try {
         const res = await fetch(`/api/transcribe?language=${encodeURIComponent(language)}`, {
           method: 'POST',
           headers: { 'Content-Type': audioBlob.type },
           body: audioBlob,
+          signal: abortController.signal,
         });
 
         if (!res.ok) {
@@ -159,10 +175,15 @@ export function useSpeechToText(options: UseSpeechToTextOptions): UseSpeechToTex
         }
       } catch (err) {
         const message =
-          err instanceof Error ? err.message : 'Transcription failed. Try again or type your answer.';
+          err instanceof DOMException && err.name === 'AbortError'
+            ? 'Transcription timed out. Try again or type your answer.'
+            : err instanceof Error
+              ? err.message
+              : 'Transcription failed. Try again or type your answer.';
         setError(message);
         onErrorRef.current?.(message);
       } finally {
+        clearTimeout(timeoutId);
         setRecordingState('idle');
         setActiveTextareaId(null);
       }
@@ -205,14 +226,10 @@ export function useSpeechToText(options: UseSpeechToTextOptions): UseSpeechToTex
         streamRef.current = stream;
 
         const mimeType = getPreferredMimeType();
-        mimeTypeRef.current = mimeType;
 
         const recorder = new MediaRecorder(stream, { mimeType });
         mediaRecorderRef.current = recorder;
         chunksRef.current = [];
-
-        // Capture the textareaId for use in onstop
-        const capturedTextareaId = textareaId;
 
         recorder.ondataavailable = (e) => {
           if (e.data.size > 0) {
@@ -234,7 +251,7 @@ export function useSpeechToText(options: UseSpeechToTextOptions): UseSpeechToTex
 
           // Only transcribe if we have audio data
           if (blob.size > 0) {
-            transcribeAudio(blob, capturedTextareaId);
+            transcribeAudio(blob, textareaId);
           } else {
             setRecordingState('idle');
             setActiveTextareaId(null);

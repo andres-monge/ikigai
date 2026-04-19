@@ -29,6 +29,7 @@ import { useState, useRef, useEffect, type ChangeEvent, useMemo } from 'react';
 import { useLocation } from 'wouter';
 import TextareaAutosize from 'react-textarea-autosize';
 import { Mic, Loader2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { useSessionStorage } from '@/hooks/use-session-storage';
@@ -125,7 +126,8 @@ export function SinglePageQuestionnaire({
   /* ------------------------------ Speech-to-Text -------------------------- */
   const stt = useSpeechToText({
     language,
-    onTranscription: (textareaId, text) => {
+    onTranscription: (textareaId, rawText) => {
+      const text = rawText.trim();
       setAnswers((prev) => {
         const existing = prev[textareaId] ?? '';
         // Smart separator: add a space only if existing text doesn't end with whitespace
@@ -257,7 +259,10 @@ export function SinglePageQuestionnaire({
                   onChange={(e: ChangeEvent<HTMLTextAreaElement>) =>
                     handleTextareaChange(id, e.target.value)
                   }
-                  className={`w-full resize-none border border-dashed border-gray-400 rounded-none p-3 bg-white text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ikigai-teal${stt.isSupported ? ' pr-12' : ''}`}
+                  className={cn(
+                    'w-full resize-none border border-dashed border-gray-400 rounded-none p-3 bg-white text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ikigai-teal',
+                    stt.isSupported && 'pr-12',
+                  )}
                   minRows={3}
                   required
                 />
@@ -265,7 +270,7 @@ export function SinglePageQuestionnaire({
                   <button
                     type="button"
                     aria-label={micLabel}
-                    disabled={isProcessingThis}
+                    disabled={stt.recordingState === 'processing'}
                     onClick={() => {
                       if (isRecordingThis) {
                         stt.stopRecording();
