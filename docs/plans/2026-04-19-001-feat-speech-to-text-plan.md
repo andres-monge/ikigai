@@ -1,7 +1,7 @@
 ---
 title: "feat: Add speech-to-text for questionnaire textareas"
 type: feat
-status: active
+status: done
 date: 2026-04-19
 origin: docs/brainstorms/2026-04-19-speech-to-text-requirements.md
 ---
@@ -99,7 +99,7 @@ Users face friction when answering open-ended questionnaire questions by typing.
 
 ## Implementation Units
 
-- [ ] **Unit 1: Install dependencies and configure environment**
+- [x] **Unit 1: Install dependencies and configure environment**
 
 **Goal:** Establish the foundation — install the Groq provider package and register the API key in the environment validation schema.
 
@@ -128,7 +128,7 @@ Users face friction when answering open-ended questionnaire questions by typing.
 
 ---
 
-- [ ] **Unit 2: Create server-side transcription endpoint**
+- [x] **Unit 2: Create server-side transcription endpoint**
 
 **Goal:** Add a `POST /api/transcribe` endpoint that receives raw audio, calls Groq Whisper via Vercel AI SDK, and returns the transcribed text.
 
@@ -172,7 +172,7 @@ Users face friction when answering open-ended questionnaire questions by typing.
 
 ---
 
-- [ ] **Unit 3: Create `useSpeechToText` hook**
+- [x] **Unit 3: Create `useSpeechToText` hook**
 
 **Goal:** Build a React hook that manages the full recording lifecycle — feature detection, MediaRecorder control, audio capture, server communication, and state management. Enforces single-active-recording and auto-stop at 120 seconds.
 
@@ -221,7 +221,7 @@ Users face friction when answering open-ended questionnaire questions by typing.
 
 ---
 
-- [ ] **Unit 4: Integrate mic button into questionnaire UI**
+- [x] **Unit 4: Integrate mic button into questionnaire UI**
 
 **Goal:** Wire the `useSpeechToText` hook into the questionnaire component — add mic buttons to each textarea, show visual recording state, append transcribed text, display errors, and add all i18n strings.
 
