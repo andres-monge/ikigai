@@ -51,6 +51,11 @@ const envSchema = z.object({
       message: 'GEMINI_TEMPERATURE must be a number between 0 and 1',
     }),
 
+  // Groq API Configuration (optional — powers speech-to-text feature)
+  GROQ_API_KEY: z
+    .string()
+    .default(''),
+
   // Optional Environment Metadata
   NODE_ENV: z
     .enum(['development', 'production', 'test'])

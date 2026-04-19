@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.62",
+    "@ai-sdk/groq": "^3.0.35",
     "@ai-sdk/react": "^3.0.160",
     "@google/genai": "^1.0.0",
     "@hookform/resolvers": "^3.10.0",
