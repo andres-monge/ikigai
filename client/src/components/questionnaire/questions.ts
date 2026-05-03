@@ -83,8 +83,8 @@ export const QUESTIONS = {
     },
     {
       id: 'economic.q2',
-      en: "What's the thing you're most stuck on? It's fine if the answer is 'I don't even know what I want.'",
-      es: "¿En qué estás más atascado/a? No pasa nada si la respuesta es 'ni siquiera sé lo que quiero.'",
+      en: 'Which future decision are you most stuck on?',
+      es: '¿Qué decisión sobre tu futuro te tiene más atascado/a?',
     },
   ],
 } as const;
