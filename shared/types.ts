@@ -19,8 +19,8 @@ export interface IkigaiAlignment {
   love: string;
   /** What the person excels at or has talent for */
   goodAt: string;
-  /** What the world needs or values */
-  worldNeeds: string;
+  /** Why this would feel meaningful to the student */
+  meaning: string;
   /** How this path can provide economic stability */
   pay: string;
 }

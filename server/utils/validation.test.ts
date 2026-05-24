@@ -58,7 +58,7 @@ const validPurposePaths = [
     ikigaiAlignment: {
       love: "Building elegant user interfaces",
       goodAt: "Full-stack development and architecture", 
-      worldNeeds: "Better software experiences",
+      meaning: "Better software experiences",
       pay: "$120,000-$150,000 annually with consulting opportunities"
     },
     actionStrategy: "Focus on mastering modern frameworks and building a portfolio of impactful projects."

@@ -153,7 +153,7 @@ const mockFinalObject = {
       ikigaiAlignment: {
         love: "Building elegant user interfaces",
         goodAt: "Full-stack development and architecture",
-        worldNeeds: "Better software experiences",
+        meaning: "Better software experiences",
         pay: "$120,000-$150,000 annually with consulting opportunities"
       },
       actionStrategy: "Focus on mastering modern frameworks and building a portfolio of impactful projects."
@@ -164,7 +164,7 @@ const mockFinalObject = {
       ikigaiAlignment: {
         love: "Designing elegant system architectures",
         goodAt: "Technical leadership and architecture design",
-        worldNeeds: "Scalable, maintainable software systems",
+        meaning: "Scalable, maintainable software systems",
         pay: "$140,000-$180,000 with leadership bonuses"
       },
       actionStrategy: "Develop expertise in system design patterns and cloud architecture."
@@ -175,7 +175,7 @@ const mockFinalObject = {
       ikigaiAlignment: {
         love: "Translating user needs into technical solutions",
         goodAt: "Product thinking and technical execution",
-        worldNeeds: "Products that truly serve user needs",
+        meaning: "Products that truly serve user needs",
         pay: "$130,000-$170,000 plus equity opportunities"
       },
       actionStrategy: "Build strong product intuition while maintaining technical depth."
@@ -318,7 +318,7 @@ describe('Purpose Discovery Streaming Endpoint - /api/analyze/stream', () => {
     expect(fullStackPath).toBeDefined();
     expect(fullStackPath!.ikigaiAlignment.love).toBe('Building elegant user interfaces');
     expect(fullStackPath!.ikigaiAlignment.goodAt).toBe('Full-stack development and architecture');
-    expect(fullStackPath!.ikigaiAlignment.worldNeeds).toBe('Better software experiences');
+    expect(fullStackPath!.ikigaiAlignment.meaning).toBe('Better software experiences');
     expect(fullStackPath!.ikigaiAlignment.pay).toContain('$120,000-$150,000');
     expect(fullStackPath!.actionStrategy).toContain('modern frameworks');
     

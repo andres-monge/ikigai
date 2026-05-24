@@ -42,7 +42,7 @@ export interface CoreDrivers {
 export interface IkigaiAlignment {
   love: string;
   goodAt: string;
-  worldNeeds: string;
+  meaning: string;
   pay: string;
 }
 

@@ -85,7 +85,7 @@ export const translations: Record<string, Record<string, string>> = {
     'ikigai.alignment': 'Why This Fits You',
     'ikigai.love': 'Love',
     'ikigai.goodAt': 'Good At',
-    'ikigai.worldNeeds': 'Meaningful',
+    'ikigai.meaning': 'Meaningful',
     'ikigai.pay': 'Financial Outlook',
 
     // Common
@@ -160,7 +160,7 @@ export const translations: Record<string, Record<string, string>> = {
     'ikigai.alignment': 'Por qué encaja contigo',
     'ikigai.love': 'Te encanta',
     'ikigai.goodAt': 'Se te da bien',
-    'ikigai.worldNeeds': 'Gratificante',
+    'ikigai.meaning': 'Gratificante',
     'ikigai.pay': 'Perspectiva financiera',
 
     // Common

@@ -41,7 +41,7 @@ function formatResultsAsMarkdown(results: FullAssessment, language: Language): s
     md += `#### ${t('ikigai.alignment', language)}\n\n`;
     md += `- **${t('ikigai.love', language)}:** ${path.ikigaiAlignment.love}\n`;
     md += `- **${t('ikigai.goodAt', language)}:** ${path.ikigaiAlignment.goodAt}\n`;
-    md += `- **${t('ikigai.worldNeeds', language)}:** ${path.ikigaiAlignment.worldNeeds}\n`;
+    md += `- **${t('ikigai.meaning', language)}:** ${path.ikigaiAlignment.meaning}\n`;
     md += `- **${t('ikigai.pay', language)}:** ${path.ikigaiAlignment.pay}\n\n`;
     md += `#### ${t('results.actionStrategy', language)}\n\n`;
     md += `${path.actionStrategy}\n\n`;
@@ -76,7 +76,7 @@ function formatResultsAsHTML(results: FullAssessment, language: Language): strin
     html += `<ul>`;
     html += `<li><strong>${t('ikigai.love', language)}:</strong> ${path.ikigaiAlignment.love}</li>`;
     html += `<li><strong>${t('ikigai.goodAt', language)}:</strong> ${path.ikigaiAlignment.goodAt}</li>`;
-    html += `<li><strong>${t('ikigai.worldNeeds', language)}:</strong> ${path.ikigaiAlignment.worldNeeds}</li>`;
+    html += `<li><strong>${t('ikigai.meaning', language)}:</strong> ${path.ikigaiAlignment.meaning}</li>`;
     html += `<li><strong>${t('ikigai.pay', language)}:</strong> ${path.ikigaiAlignment.pay}</li>`;
     html += `</ul>`;
     html += `<h4>${t('results.actionStrategy', language)}</h4>`;

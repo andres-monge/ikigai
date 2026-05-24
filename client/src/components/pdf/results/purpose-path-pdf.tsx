@@ -84,7 +84,7 @@ const styles = StyleSheet.create({
 });
 
 // Alignment keys in display order
-const ALIGNMENT_KEYS = ['love', 'worldNeeds', 'goodAt', 'pay'] as const;
+const ALIGNMENT_KEYS = ['love', 'meaning', 'goodAt', 'pay'] as const;
 
 interface PurposePathPDFProps {
   path: PurposePath;

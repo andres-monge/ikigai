@@ -69,9 +69,10 @@ export const purposeDiscoveryOpenApiSchema = {
                 type: 'STRING',
                 description: 'How this path aligns with their skills.',
               },
-              worldNeeds: {
+              meaning: {
                 type: 'STRING',
-                description: 'How this path meets a need in the world.',
+                description:
+                  'Why the student would find this work meaningful. Address them directly ("you"). Name the specific gap, why their particular perspective fills it, and what would not happen — or would happen differently — if they did not do this work. Do NOT describe a category of person the world needs.',
               },
               pay: {
                 type: 'STRING',
@@ -79,7 +80,7 @@ export const purposeDiscoveryOpenApiSchema = {
                   'Future financial outlook for this field: what it tends to pay, whether further education is common, and the financial trajectory.',
               },
             },
-            required: ['love', 'goodAt', 'worldNeeds', 'pay'],
+            required: ['love', 'goodAt', 'meaning', 'pay'],
           },
           actionStrategy: {
             type: 'STRING',

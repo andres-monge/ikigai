@@ -37,7 +37,7 @@ export const purposeDiscoveryResultSchema = z.object({
         ikigaiAlignment: z.object({
           love: z.string(),
           goodAt: z.string(),
-          worldNeeds: z.string(),
+          meaning: z.string(),
           pay: z.string(),
         }),
         actionStrategy: z.string(),

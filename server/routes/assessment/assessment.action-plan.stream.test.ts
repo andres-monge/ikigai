@@ -213,7 +213,7 @@ describe('Action Plan Streaming Endpoint - POST /api/action-plan/stream (AI SDK)
       ikigaiAlignment: {
         love: 'Building elegant user interfaces',
         goodAt: 'Full-stack development and architecture',
-        worldNeeds: 'Better software experiences',
+        meaning: 'Better software experiences',
         pay: '$120,000-$150,000 annually with consulting opportunities'
       },
       actionStrategy: 'Focus on mastering modern frameworks and building a portfolio of impactful projects.'
@@ -290,7 +290,7 @@ describe('Action Plan Streaming Endpoint - POST /api/action-plan/stream (AI SDK)
       ikigaiAlignment: {
         love: 'Test',
         goodAt: 'Test',
-        worldNeeds: 'Test',
+        meaning: 'Test',
         pay: 'Test'
       },
       actionStrategy: 'Test strategy'
@@ -387,7 +387,7 @@ describe('Action Plan Streaming Endpoint - POST /api/action-plan/stream (AI SDK)
       assessmentId: testSession1.id,
       title: 'Test Path 1',
       description: 'Test',
-      ikigaiAlignment: { love: 'Test', goodAt: 'Test', worldNeeds: 'Test', pay: 'Test' },
+      ikigaiAlignment: { love: 'Test', goodAt: 'Test', meaning: 'Test', pay: 'Test' },
       actionStrategy: 'Test'
     });
 
@@ -395,7 +395,7 @@ describe('Action Plan Streaming Endpoint - POST /api/action-plan/stream (AI SDK)
       assessmentId: testSession2.id,
       title: 'Test Path 2',
       description: 'Test',
-      ikigaiAlignment: { love: 'Test', goodAt: 'Test', worldNeeds: 'Test', pay: 'Test' },
+      ikigaiAlignment: { love: 'Test', goodAt: 'Test', meaning: 'Test', pay: 'Test' },
       actionStrategy: 'Test'
     });
 
@@ -469,7 +469,7 @@ describe('Action Plan Streaming Endpoint - POST /api/action-plan/stream (AI SDK)
       assessmentId: testSession.id,
       title: 'Test Path',
       description: 'Test',
-      ikigaiAlignment: { love: 'Test', goodAt: 'Test', worldNeeds: 'Test', pay: 'Test' },
+      ikigaiAlignment: { love: 'Test', goodAt: 'Test', meaning: 'Test', pay: 'Test' },
       actionStrategy: 'Test'
     });
 
@@ -549,7 +549,7 @@ describe('Action Plan Streaming Endpoint - POST /api/action-plan/stream (AI SDK)
       assessmentId: testSession.id,
       title: 'Existing Path',
       description: 'A valid path',
-      ikigaiAlignment: { love: 'test', goodAt: 'test', worldNeeds: 'test', pay: 'test' },
+      ikigaiAlignment: { love: 'test', goodAt: 'test', meaning: 'test', pay: 'test' },
       actionStrategy: 'Test strategy'
     });
 

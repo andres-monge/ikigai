@@ -48,7 +48,7 @@ const IKIGAI_PATH_COLORS = [
  */
 const IKIGAI_CONCEPTS = [
   { key: 'love', colorClass: 'bg-ikigai-teal', label: 'ikigai.love' },
-  { key: 'worldNeeds', colorClass: 'bg-ikigai-pink', label: 'ikigai.worldNeeds' },
+  { key: 'meaning', colorClass: 'bg-ikigai-pink', label: 'ikigai.meaning' },
   { key: 'goodAt', colorClass: 'bg-ikigai-yellow', label: 'ikigai.goodAt' },
   { key: 'pay', colorClass: 'bg-ikigai-orange', label: 'ikigai.pay' },
 ] as const;

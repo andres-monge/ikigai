@@ -329,7 +329,7 @@ export function Results({
         ikigaiAlignment: {
           love: streamingPath?.ikigaiAlignment?.love || '',
           goodAt: streamingPath?.ikigaiAlignment?.goodAt || '',
-          worldNeeds: streamingPath?.ikigaiAlignment?.worldNeeds || '',
+          meaning: streamingPath?.ikigaiAlignment?.meaning || '',
           pay: streamingPath?.ikigaiAlignment?.pay || '',
         },
         actionStrategy: streamingPath?.actionStrategy || '',
@@ -400,7 +400,7 @@ export function Results({
                       <div className="space-y-2">
                         {[
                           { key: 'love', colorClass: 'bg-ikigai-teal' },
-                          { key: 'worldNeeds', colorClass: 'bg-ikigai-pink' },
+                          { key: 'meaning', colorClass: 'bg-ikigai-pink' },
                           { key: 'goodAt', colorClass: 'bg-ikigai-yellow' },
                           { key: 'pay', colorClass: 'bg-ikigai-orange' }
                         ].map(({ key, colorClass }) => (

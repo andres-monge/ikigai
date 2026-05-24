@@ -38,7 +38,7 @@ export const PATH_COLORS = [
 // Ikigai alignment indicator colors
 export const ALIGNMENT_COLORS = {
   love: IKIGAI_COLORS.teal,
-  worldNeeds: IKIGAI_COLORS.pink,
+  meaning: IKIGAI_COLORS.pink,
   goodAt: IKIGAI_COLORS.yellow,
   pay: IKIGAI_COLORS.orange,
 } as const;
