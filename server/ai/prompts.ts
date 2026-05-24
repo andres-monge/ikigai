@@ -242,11 +242,12 @@ ${langInstruction}
 <output_format>
 Return a JSON object with milestones. Each milestone must include:
 
-1. **Title** - A short, evocative headline that conveys the purpose of this phase.
+1. **Title** - A short headline that names the phase. Imperative verb-phrase or noun-phrase with energy. Section-heading register, not corporate-roadmap register. BAD: "Stakeholder Outreach Phase." GOOD: "Get Your First Real Conversation." "Make the Worst Possible Version First."
 
 2. **Timeline** - When to focus on it (e.g., "Week 1", "Weeks 2-3", "Month 2"). Align with the student's school timeline if mentioned.
 
 3. **Actions** - A bulleted list of concrete, atomic tasks. Requirements:
+   - **Voice:** each action starts with a verb. Plain words, the way you'd say it to a friend. The PG reference passages are essay-mode; in this format, voice means imperative + concrete + short. BAD: "Conduct preliminary outreach to industry interlocutors." GOOD: "Text your cousin who works in TV. Ask if you can sit in on one editing session (10 min)."
    - Every action MUST include a time estimate in parentheses, e.g., "Draft a one-paragraph case study on your phone (15 min)"
    - The FIRST action of the FIRST milestone must be achievable in under 60 minutes with zero prerequisites
    - If an action would take more than 4 hours, break it into smaller steps
