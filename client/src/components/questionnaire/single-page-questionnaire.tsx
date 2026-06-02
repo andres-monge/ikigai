@@ -261,7 +261,7 @@ export function SinglePageQuestionnaire({
                   }
                   className={cn(
                     'w-full resize-none border border-dashed border-gray-400 rounded-none p-3 bg-white text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ikigai-teal',
-                    stt.isSupported && 'pr-12',
+                    stt.isSupported && 'pb-12',
                   )}
                   minRows={3}
                   required
@@ -278,7 +278,7 @@ export function SinglePageQuestionnaire({
                         stt.startRecording(id);
                       }
                     }}
-                    className="absolute top-2 right-2 flex items-center justify-center w-8 h-8 min-w-[44px] min-h-[44px] rounded-full transition-colors hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="absolute bottom-2 right-2 flex items-center justify-center w-8 h-8 min-w-[44px] min-h-[44px] rounded-full transition-colors hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isProcessingThis ? (
                       <Loader2 className="w-5 h-5 text-gray-500 animate-spin" />
