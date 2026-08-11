@@ -90,3 +90,10 @@ api/index.js
 
 # Analytics output (generated, may contain user data)
 user-data.json
+
+# gstack skill pack (project-local Claude Code install; vendors its own
+# git clone + generated symlinks, must not be tracked in this repo's history)
+.claude/skills/gstack/
+.claude/skills/gstack-*/
+.gstack/
+.gstack-worktrees/
