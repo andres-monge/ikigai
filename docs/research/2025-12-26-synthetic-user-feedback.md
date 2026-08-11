@@ -1,5 +1,7 @@
 # Synthetic User Feedback
 
+> Historical snapshot from 2025-12-26. This is research context, not current product direction.
+
 This document captures feedback from synthetic user personas testing the Revelio app. Each persona represents a distinct demographic with unique pain points, constraints, and expectations.
 
 ---

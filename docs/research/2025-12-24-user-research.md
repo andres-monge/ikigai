@@ -1,5 +1,8 @@
+# User Research Collection
 
-# Keyword & Search Intent Research
+> Historical snapshot from 2025-12-24. This is research context, not current product direction.
+
+## Keyword & Search Intent Research
 
 <chatgpt_research>
 

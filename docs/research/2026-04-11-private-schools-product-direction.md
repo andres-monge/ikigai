@@ -1,9 +1,11 @@
-# B2B Idea Validation: Revelio for Private Schools & Universities
+# Private Schools Product Direction
 
 **Date:** 2026-04-11
-**Status:** Validation analysis complete — ready for outreach
-**Validates against:** Minimalist Entrepreneur framework (Sahil Lavingia)
+**Historical status:** Recommended outreach; no sales conversations had occurred
+**Original framing:** Minimalist Entrepreneur analysis for private schools and universities
 **Builds on:** [2026-04-04 Demand Validation Brainstorm](../brainstorms/2026-04-04-ikigai-finder-demand-validation-brainstorm.md)
+
+> Historical snapshot. This is research context, not current product direction.
 
 ---
 
@@ -73,7 +75,7 @@ The core problem isn't "career guidance at scale." It's that **students aged 16-
 
 **For the counselors:** High. Even at well-staffed private schools, deep personalized career exploration conversations take time that doesn't scale. A tool that helps students articulate what they want *before* the counselor meeting makes every meeting more productive.
 
-**For the students:** This is the real pain point. At 16-18, most students genuinely don't know what they want — and they're terrified of choosing wrong. Synthetic user testing with a "paralyzed high school senior" persona (see `docs/synthetic-user-feedback.md`) confirmed: "I have no idea what I want to do," "I don't want to waste money on the wrong major," "Everything sounds boring... except I don't know what I actually like." The school is the buyer, but the student's pain is what makes the product necessary.
+**For the students:** This is the real pain point. At 16-18, most students genuinely don't know what they want — and they're terrified of choosing wrong. Synthetic user testing with a "paralyzed high school senior" persona (see [Synthetic User Feedback](./2025-12-26-synthetic-user-feedback.md)) confirmed: "I have no idea what I want to do," "I don't want to waste money on the wrong major," "Everything sounds boring... except I don't know what I actually like." The school is the buyer, but the student's pain is what makes the product necessary.
 
 ### Would they pay to make this problem go away?
 
@@ -210,7 +212,7 @@ The product works, but the copy is written for adults in a career crisis — not
 
 ### Evidence: Synthetic user testing
 
-A "paralyzed high school senior" persona (17-year-old, 3.4 GPA, no work experience) tested the app and rated it **Good, not Outstanding** (see `docs/synthetic-user-feedback.md`). Key feedback:
+A "paralyzed high school senior" persona (17-year-old, 3.4 GPA, no work experience) tested the app and rated it **Good, not Outstanding** (see [Synthetic User Feedback](./2025-12-26-synthetic-user-feedback.md)). Key feedback:
 
 - "Don't know what 'ikigai' means — is that Japanese?" → The ikigai framing confuses younger users
 - "Language feels written for adults" → Copy assumes adult work experience

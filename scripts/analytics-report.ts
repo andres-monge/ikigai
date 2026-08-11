@@ -2,7 +2,7 @@
  * @description
  * Funnel metrics report script for the Revelio analytics system.
  *
- * Calculates and displays all success metrics defined in the analytics implementation plan:
+ * Calculates and displays funnel metrics for the Revelio analytics system:
  * - Landing → Start conversion
  * - Completion rate
  * - Section drop-off analysis
