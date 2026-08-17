@@ -56,6 +56,31 @@ const envSchema = z.object({
     .string()
     .default(''),
 
+  // OpenAI Configuration (optional until the agent surface is enabled)
+  OPENAI_API_KEY: z
+    .string()
+    .default(''),
+
+  // Google OAuth Configuration (optional until authentication is mounted)
+  GOOGLE_CLIENT_ID: z
+    .string()
+    .default(''),
+  GOOGLE_CLIENT_SECRET: z
+    .string()
+    .default(''),
+
+  // Better Auth Configuration (optional until authentication is mounted)
+  BETTER_AUTH_SECRET: z
+    .string()
+    .default(''),
+  BETTER_AUTH_URL: z
+    .string()
+    .default(''),
+  AUTH_SIGNUPS_ENABLED: z
+    .string()
+    .default('false')
+    .transform((value) => value === 'true'),
+
   // Optional Environment Metadata
   NODE_ENV: z
     .enum(['development', 'production', 'test'])

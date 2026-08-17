@@ -131,6 +131,11 @@ return (
 <Header language={language} onLanguageChange={setLanguage} onNavigateHome={handleNavigateHome} />
 <main className="max-w-7xl mx-auto bg-ikigai-beige">
 <Switch>
+{/* Preserved anonymous questionnaire entry for the revamp transition */}
+<Route path="/legacy">
+{() => <Home language={language} sessionId={sessionId} />}
+</Route>
+
 {/* Landing + Inline Questionnaire (SinglePageQuestionnaire to be introduced in Step 2) */}
 <Route path="/" component={() => <Home language={language} sessionId={sessionId} />} />
 

@@ -59,7 +59,7 @@ test.describe('Core User Journey', () => {
     // ========================================================================
     
     await test.step('Navigate to home page', async () => {
-      await page.goto('/');
+      await page.goto('/legacy');
       
       // Clear any existing session storage to avoid concurrency conflicts
       await page.evaluate(() => {
