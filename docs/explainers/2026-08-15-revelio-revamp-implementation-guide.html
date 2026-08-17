@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Understanding the Revelio Revamp Plan</title>
+  <style>
+    :root {
+      --ink: #18231f;
+      --muted: #5d6b65;
+      --paper: #f6f2e9;
+      --panel: #fffdf8;
+      --line: #d7d4c9;
+      --green: #174e3d;
+      --green-soft: #dcebe3;
+      --gold: #a66612;
+      --gold-soft: #f5e4c7;
+      --blue: #2e5f78;
+      --blue-soft: #dceaf0;
+      --red: #8c3b35;
+      --red-soft: #f1dedb;
+      --shadow: 0 12px 30px rgba(36, 46, 40, .08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.58;
+    }
+    header, main, footer { width: min(1120px, calc(100% - 32px)); margin-inline: auto; }
+    header { padding: 64px 0 28px; }
+    h1 { max-width: 18ch; margin: 0 0 22px; font-size: clamp(2.5rem, 7vw, 5.1rem); line-height: .96; letter-spacing: -.055em; }
+    h2 { margin: 0 0 14px; font-size: clamp(1.55rem, 3vw, 2.2rem); line-height: 1.12; letter-spacing: -.025em; }
+    h3 { margin: 0 0 8px; font-size: 1.06rem; }
+    p, li { max-width: 70ch; }
+    p { margin: 0 0 14px; }
+    ul, ol { margin: 10px 0 0; padding-left: 22px; }
+    li + li { margin-top: 7px; }
+    code { padding: .08em .34em; border-radius: 5px; background: #ebe7dc; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .92em; }
+    .meta { display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; margin: 0; color: var(--muted); }
+    .meta dt { font-weight: 750; color: var(--ink); }
+    .meta dd { margin: 0; }
+    .lede { max-width: 63ch; margin-top: 28px; font-size: 1.18rem; color: #34443d; }
+    main { padding-bottom: 60px; }
+    section { margin-top: 56px; }
+    .panel { padding: 26px; border: 1px solid var(--line); border-radius: 20px; background: var(--panel); box-shadow: var(--shadow); }
+    .visual { overflow-x: auto; padding: 24px 12px 16px; border: 1px solid var(--line); border-radius: 22px; background: var(--panel); box-shadow: var(--shadow); }
+    .visual svg { display: block; min-width: 920px; width: 100%; height: auto; }
+    .caption { margin: 14px auto 0; color: var(--muted); font-size: .92rem; }
+    .callout { max-width: 70ch; margin: 22px 0; padding: 18px 20px; border-left: 5px solid var(--gold); background: var(--gold-soft); border-radius: 4px 14px 14px 4px; }
+    .callout strong { color: #70430a; }
+    .grid-2, .grid-3 { display: grid; gap: 18px; align-items: stretch; }
+    .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .card { padding: 22px; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); }
+    .card p:last-child, .card ul:last-child { margin-bottom: 0; }
+    .eyebrow { margin-bottom: 7px; color: var(--green); font-size: .78rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+    .tag { display: inline-block; margin: 4px 5px 0 0; padding: 3px 9px; border-radius: 999px; background: var(--green-soft); color: var(--green); font-size: .78rem; font-weight: 750; }
+    .tag.gold { background: var(--gold-soft); color: #75460d; }
+    .tag.blue { background: var(--blue-soft); color: var(--blue); }
+    .tag.red { background: var(--red-soft); color: var(--red); }
+    .flow { display: grid; grid-template-columns: repeat(5, 1fr); gap: 9px; margin-top: 20px; }
+    .flow-step { position: relative; padding: 18px 13px; border-radius: 14px; background: var(--green-soft); color: var(--green); font-weight: 750; text-align: center; }
+    .flow-step:not(:last-child)::after { content: "→"; position: absolute; right: -11px; top: 50%; z-index: 2; transform: translateY(-50%); color: var(--gold); font-size: 1.25rem; }
+    .state-strip { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: 10px; align-items: center; max-width: 760px; margin: 22px 0; }
+    .state { padding: 18px; border-radius: 14px; text-align: center; font-weight: 760; }
+    .proposed { background: var(--gold-soft); color: #70430a; }
+    .confirmed { background: var(--green-soft); color: var(--green); }
+    .changed { background: var(--blue-soft); color: var(--blue); }
+    .arrow { color: var(--muted); font-size: 1.35rem; }
+    .stage { display: grid; grid-template-columns: 120px 1fr; gap: 22px; padding: 22px 0; border-top: 1px solid var(--line); }
+    .stage:first-of-type { border-top: 0; }
+    .stage-label { color: var(--green); font-weight: 850; }
+    .stage h3 { margin-bottom: 5px; }
+    .unit-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }
+    .unit { padding: 15px 17px; border: 1px solid var(--line); border-radius: 12px; background: #fbf9f3; }
+    .unit b { color: var(--green); }
+    .checkpoint { display: grid; grid-template-columns: 58px 1fr; gap: 13px; align-items: start; padding: 14px 0; border-top: 1px solid var(--line); }
+    .checkpoint:first-child { border-top: 0; }
+    .checkpoint-id { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 50%; background: var(--gold-soft); color: #75460d; font-weight: 850; }
+    .contrast { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 18px; overflow: hidden; background: var(--panel); }
+    .contrast > div { padding: 24px; }
+    .contrast > div + div { border-left: 1px solid var(--line); }
+    .keep { background: linear-gradient(160deg, var(--panel), var(--green-soft)); }
+    .defer { background: linear-gradient(160deg, var(--panel), #ece9e1); }
+    .stop { padding: 18px 20px; border: 1px solid #dfb6b2; border-radius: 14px; background: var(--red-soft); }
+    .prompt { max-width: 78ch; padding: 18px 20px; border-radius: 14px; background: #17211d; color: #f6f2e9; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }
+    .small { color: var(--muted); font-size: .9rem; }
+    footer { padding: 24px 0 44px; border-top: 1px solid var(--line); color: var(--muted); font-size: .9rem; }
+    @media (max-width: 800px) {
+      header { padding-top: 40px; }
+      .grid-2, .grid-3, .unit-list, .contrast { grid-template-columns: 1fr; }
+      .contrast > div + div { border-left: 0; border-top: 1px solid var(--line); }
+      .flow { grid-template-columns: 1fr; }
+      .flow-step:not(:last-child)::after { content: "↓"; right: auto; left: 50%; top: auto; bottom: -18px; transform: translateX(-50%); }
+      .stage { grid-template-columns: 1fr; gap: 5px; }
+      .state-strip { grid-template-columns: 1fr; }
+      .arrow { transform: rotate(90deg); text-align: center; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Understanding the Revelio Revamp</h1>
+    <dl class="meta">
+      <dt>Date</dt><dd>2026-08-15</dd>
+      <dt>Input shape</dt><dd>concept</dd>
+      <dt>Subject</dt><dd>The implementation-ready Revelio Revamp plan dated 2026-08-14</dd>
+    </dl>
+    <p class="lede">You are not mainly building a chatbot. You are building and testing a method for helping people discover worthwhile directions through conversation, real-world experiments, and remembered evidence. The software exists to make that learning loop possible.</p>
+  </header>
+
+  <main>
+    <section>
+      <div class="visual">
+        <svg viewBox="0 0 1040 410" role="img" aria-labelledby="arch-title arch-desc">
+          <title id="arch-title">Revelio system architecture</title>
+          <desc id="arch-desc">The explorer uses chat and a workspace. Express authenticates them with Google through Better Auth, bounds individual requests, sends turns to OpenAI, and applies typed tool writes to a versioned career map in Neon.</desc>
+          <defs>
+            <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#a66612"/></marker>
+            <filter id="halo"><feMorphology in="SourceAlpha" result="d" operator="dilate" radius="3"/><feFlood flood-color="#fffdf8"/><feComposite in2="d" operator="in"/><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          </defs>
+          <rect x="20" y="28" width="210" height="330" rx="20" fill="#fffdf8" stroke="#d7d4c9"/>
+          <text x="45" y="62" font-size="17" font-weight="800" fill="#174e3d">Explorer's browser</text>
+          <rect x="45" y="92" width="160" height="72" rx="13" fill="#dcebe3"/>
+          <text x="125" y="122" text-anchor="middle" font-size="16" font-weight="700" fill="#174e3d">Conversation</text>
+          <text x="125" y="145" text-anchor="middle" font-size="13" fill="#174e3d">text + microphone</text>
+          <rect x="45" y="187" width="160" height="92" rx="13" fill="#f5e4c7"/>
+          <text x="125" y="216" text-anchor="middle" font-size="16" font-weight="700" fill="#75460d">Career map</text>
+          <text x="125" y="239" text-anchor="middle" font-size="13" fill="#75460d">see, edit, delete</text>
+          <text x="125" y="261" text-anchor="middle" font-size="13" fill="#75460d">proposed / confirmed</text>
+
+          <rect x="305" y="28" width="275" height="330" rx="20" fill="#fffdf8" stroke="#d7d4c9"/>
+          <text x="330" y="62" font-size="17" font-weight="800" fill="#174e3d">Express on Vercel</text>
+          <rect x="330" y="92" width="225" height="55" rx="12" fill="#dceaf0"/>
+          <text x="442" y="126" text-anchor="middle" font-size="15" font-weight="700" fill="#2e5f78">Better Auth + Google</text>
+          <rect x="330" y="165" width="225" height="76" rx="12" fill="#dcebe3"/>
+          <text x="442" y="195" text-anchor="middle" font-size="15" font-weight="700" fill="#174e3d">Agent turn endpoint</text>
+          <text x="442" y="218" text-anchor="middle" font-size="13" fill="#174e3d">lease · retries · streaming</text>
+          <rect x="330" y="260" width="225" height="70" rx="12" fill="#f5e4c7"/>
+          <text x="442" y="290" text-anchor="middle" font-size="15" font-weight="700" fill="#75460d">Typed memory tools</text>
+          <text x="442" y="313" text-anchor="middle" font-size="13" fill="#75460d">validate · version · history</text>
+
+          <rect x="660" y="28" width="355" height="147" rx="20" fill="#fffdf8" stroke="#d7d4c9"/>
+          <text x="685" y="62" font-size="17" font-weight="800" fill="#174e3d">OpenAI</text>
+          <rect x="685" y="84" width="142" height="65" rx="12" fill="#dceaf0"/>
+          <text x="756" y="111" text-anchor="middle" font-size="14" font-weight="700" fill="#2e5f78">GPT-5.x</text>
+          <text x="756" y="133" text-anchor="middle" font-size="12" fill="#2e5f78">reasoning + search</text>
+          <rect x="846" y="84" width="144" height="65" rx="12" fill="#dceaf0"/>
+          <text x="918" y="111" text-anchor="middle" font-size="14" font-weight="700" fill="#2e5f78">Conversation</text>
+          <text x="918" y="133" text-anchor="middle" font-size="12" fill="#2e5f78">transcript + compaction</text>
+
+          <rect x="660" y="211" width="355" height="147" rx="20" fill="#fffdf8" stroke="#d7d4c9"/>
+          <text x="685" y="245" font-size="17" font-weight="800" fill="#174e3d">Neon Postgres</text>
+          <rect x="685" y="267" width="142" height="65" rx="12" fill="#dcebe3"/>
+          <text x="756" y="294" text-anchor="middle" font-size="14" font-weight="700" fill="#174e3d">Identity</text>
+          <text x="756" y="316" text-anchor="middle" font-size="12" fill="#174e3d">users · sessions</text>
+          <rect x="846" y="267" width="144" height="65" rx="12" fill="#f5e4c7"/>
+          <text x="918" y="294" text-anchor="middle" font-size="14" font-weight="700" fill="#75460d">Career map</text>
+          <text x="918" y="316" text-anchor="middle" font-size="12" fill="#75460d">truth + change history</text>
+
+          <path d="M205 128 C260 128,265 195,330 195" fill="none" stroke="#a66612" stroke-width="3" marker-end="url(#arrowhead)"/>
+          <path d="M205 232 C265 232,270 295,330 295" fill="none" stroke="#a66612" stroke-width="3" marker-end="url(#arrowhead)"/>
+          <path d="M555 198 C620 198,620 116,685 116" fill="none" stroke="#a66612" stroke-width="3" marker-end="url(#arrowhead)"/>
+          <path d="M827 116 L846 116" fill="none" stroke="#a66612" stroke-width="3" marker-end="url(#arrowhead)"/>
+          <path d="M555 295 C620 295,620 299,685 299" fill="none" stroke="#a66612" stroke-width="3" marker-end="url(#arrowhead)"/>
+          <path d="M827 299 L846 299" fill="none" stroke="#a66612" stroke-width="3" marker-end="url(#arrowhead)"/>
+          <text x="600" y="185" font-size="12" fill="#5d6b65" filter="url(#halo)">new message + briefing</text>
+          <text x="595" y="285" font-size="12" fill="#5d6b65" filter="url(#halo)">safe writes</text>
+        </svg>
+      </div>
+      <p class="caption">The central design choice: OpenAI remembers what was said; Neon remembers what the product currently believes is true. The current career map is injected into every model turn so corrections beat old conversation context.</p>
+    </section>
+
+    <section>
+      <div class="eyebrow">01 · What you are testing</div>
+      <h2>The product hypothesis is a learning loop, not a prettier report</h2>
+      <p>The old Revelio collects eight answers and produces a static result. The rebuild replaces that with an adaptive agent that keeps asking until it has enough evidence, proposes three possible directions with a reason each might fit, helps the explorer choose one provisionally, designs a real experiment, and learns from what happened when the explorer returns.</p>
+      <p>The signed-in product lives directly at <code>/</code>. On desktop, conversation and "Your Map" sit side by side; on phones, two tabs let the explorer switch between them without losing their draft or place. Before the map has content, it says "Your map will take shape as we talk" instead of looking blank or broken.</p>
+      <div class="flow" aria-label="Revelio discovery loop">
+        <div class="flow-step">Reflect</div>
+        <div class="flow-step">Compare three paths</div>
+        <div class="flow-step">Pick one to test</div>
+        <div class="flow-step">Run and observe</div>
+        <div class="flow-step">Continue, switch, or form a new path</div>
+      </div>
+      <div class="callout"><strong>The belief bar:</strong> by September 15, you should personally feel that this is something you would pay for and continue using. The pilot then tests whether that judgment generalizes beyond you.</div>
+      <p>The method deliberately tests the daily practice behind a career image. Someone attracted to “founder,” “designer,” or “professor” should receive an experiment that exposes them to the actual work, not encouragement to pursue the title. The two unchosen paths remain parked with their original reasoning, so they can be reconsidered later rather than forgotten.</p>
+      <p>A return is defined by unfinished work, not a clock. Whenever someone opens Revelio with an experiment still waiting for an observation, their next conversation picks it up—whether they were away for an hour or a month.</p>
+    </section>
+
+    <section>
+      <div class="eyebrow">02 · The three kinds of state</div>
+      <h2>Do not blur identity, conversation, and product truth</h2>
+      <div class="grid-3">
+        <article class="card">
+          <span class="tag blue">OpenAI</span>
+          <h3>Conversation memory</h3>
+          <p>What the explorer and agent said, plus tool calls and reasoning context. One durable Conversation per user gives cross-session continuity and compaction.</p>
+          <p class="small">Tradeoff: transcript retention and vendor coupling are accepted for the MVP.</p>
+        </article>
+        <article class="card">
+          <span class="tag gold">Neon</span>
+          <h3>Product memory</h3>
+          <p>The current statement, profile, constraints, direction paths, experiments and observations. This versioned career map is the authoritative product record.</p>
+          <p class="small">A Markdown projection is generated for the model; Markdown is the reading format, not the database.</p>
+        </article>
+        <article class="card">
+          <span class="tag">Better Auth</span>
+          <h3>Identity and access</h3>
+          <p>Which Google account the explorer controls and which session is active. Signup is public while the founder switch is on; the server derives ownership from this verified session.</p>
+          <p class="small">Neither the browser nor the model gets to choose a user ID.</p>
+        </article>
+      </div>
+      <p class="callout"><strong>Why the split matters:</strong> a conversation may contain an old belief. If the explorer later corrects it, the career map changes and includes a tombstone telling the model not to reuse the stale version. Conversation is evidence; the career map is current truth.</p>
+    </section>
+
+    <section>
+      <div class="eyebrow">03 · Conversational writes</div>
+      <h2>The agent writes as understanding develops, but interpretations are not automatically truth</h2>
+      <p>Every meaningful conclusion is persisted through a narrow, typed tool before the turn finishes. The model cannot perform arbitrary database edits. It can perform semantic operations such as “record observation,” “update path,” or “mark this proposal confirmed.”</p>
+      <div class="state-strip">
+        <div class="state proposed">Suggested<br><span class="small">agent interpretation</span></div>
+        <div class="arrow">→</div>
+        <div class="state confirmed">Confirmed<br><span class="small">explorer assents in chat</span></div>
+        <div class="arrow">→</div>
+        <div class="state changed">Revised or dropped<br><span class="small">new evidence arrives</span></div>
+      </div>
+      <p>Assent stays conversational: “yes, that captures it” can cause a <code>mark_confirmed</code> tool call. The database calls the earlier state <code>proposed</code>, but the interface uses the friendlier label “Suggested.” Agreement is separate from progress: an experiment can be “Confirmed” while its progress is “Not started,” “In progress,” or “Done.” When the explorer picks one of three paths, that path becomes active and the other two are parked in the same update. There is no approval-card interface. Ambiguity should lead to another question, not an inferred acceptance.</p>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Written immediately</h3>
+          <ul>
+            <li>Facts the explorer directly provides</li>
+            <li>Observations after an experiment</li>
+            <li>Agent proposals shown as Suggested</li>
+            <li>Conversational assent or a path pick as a status transition</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Protection around every write</h3>
+          <ul>
+            <li>Validated operation schema</li>
+            <li>Expected career-map version</li>
+            <li>Unique source/tool-call ID</li>
+            <li>Atomic map update plus history entry</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="eyebrow">04 · One turn end to end</div>
+      <h2>A streamed answer is only the visible surface of a transaction</h2>
+      <ol>
+        <li>The browser sends only the new message, carrying a stable client message ID.</li>
+        <li>Express verifies the Better Auth session and acquires that user's turn lease. A second simultaneous message gets a friendly conflict instead of racing.</li>
+        <li>The server loads the latest career map and turns it into a concise request-scoped briefing.</li>
+        <li>The agent runs against the user's OpenAI Conversation, with compaction enabled and bounded access to web search and map tools. Its loop uses the pinned AI SDK's standard behavior rather than a Revelio-specific rule.</li>
+        <li>Each tool write is validated, version-checked, deduplicated and committed to Neon before the agent treats it as successful.</li>
+        <li>The reply streams to the browser. On completion, the workspace refetches the authoritative map.</li>
+        <li>The lease is released even after an error. A later request can reclaim a stale lease left by a crashed function.</li>
+      </ol>
+      <div class="callout"><strong>Retry and interruption rule:</strong> sending the same client message ID again never invokes the model twice. A visible Stop button cancels the current reply. Sending a new message while Revelio is replying cancels the old reply first, then sends the new one—so “You seem stuck” becomes a real interruption, not a second overlapping turn.</div>
+    </section>
+
+    <section>
+      <div class="eyebrow">05 · Authentication in plain English</div>
+      <h2>Any Google account can sign in while signup is enabled</h2>
+      <p>The rebuilt product becomes the homepage. When someone opens <code>/</code>, a signed-in visitor uses the chat-and-map product right there; a signed-out visitor goes to <code>/login</code>. The visitor chooses Google; Google proves control of the identity; Better Auth resolves or creates the Revelio user, sets the secure session cookie, and returns to <code>/</code>. Returning with the same Google account restores the same career map. The old anonymous questionnaire remains available at <code>/legacy</code>. There is no separate <code>/explore</code> product route, invitation allowlist, magic-link email, password flow, or Resend dependency.</p>
+      <p>The founder can pause new accounts with <code>AUTH_SIGNUPS_ENABLED</code> without locking out existing users. The Google project stays External + Testing for the pilot and requests only the identity scope set that Better Auth emits as <code>openid email profile</code>; Google's current identity-only exception allows any Google account in that configuration. A later move to public production verification requires a controlled domain, homepage, and privacy policy, but that is not a Stage 0 pilot blocker.</p>
+      <p>Better Auth uses its native PostgreSQL adapter in a separate <code>auth</code> schema. Revelio's Drizzle schema remains explicitly scoped to <code>public</code>. Authentication rate limits protect <code>/api/auth/*</code>. Normal agent use has no daily allowance, and replies use the pinned AI SDK's standard loop behavior. Individual text and audio requests are bounded, only one turn runs per user, billing is watched, and the agent has an emergency off-switch. The user can stop or interrupt any reply. The anonymous legacy app keeps its existing behavior until real usage justifies a targeted control.</p>
+    </section>
+
+    <section>
+      <div class="eyebrow">06 · The three early proofs</div>
+      <h2>Prove the external service, define the method, then test the experience</h2>
+      <div class="grid-3">
+        <article class="card">
+          <span class="tag blue">U1</span>
+          <h3>Live OpenAI check</h3>
+          <p>A small temporary program calls the real OpenAI service. It proves that one conversation can continue across turns, long context can be shortened, web search and Revelio's own actions work together, the private career briefing is not accidentally saved as dialogue, and the conversation can be deleted.</p>
+          <p class="small">This answers: “Can the chosen service actually do what the architecture assumes?”</p>
+        </article>
+        <article class="card">
+          <span class="tag gold">U2</span>
+          <h3>Thesis and method</h3>
+          <p>The thesis is the one-page belief behind Revelio: who it serves, what normal career advice gets wrong, what Revelio believes instead, and why this approach might work. The method is the ordered loop the agent follows: reflect, compare three plausible paths, pick one, test the real practice, observe, then continue, switch, or create a new path.</p>
+          <p class="small">The agent may draft it; you decide whether it truly represents your view.</p>
+        </article>
+        <article class="card">
+          <span class="tag">U7a</span>
+          <h3>Reference conversations</h3>
+          <p>Prepared example chats exercise the real model before the product machinery exists. Each example describes the situation, the behavior you expect, and what the career map should contain afterward. They test insight, adaptability, anti-prestige reasoning, three-path selection, memory writes, grounding, and response speed.</p>
+          <p class="small">A faster model that passes these examples is preferable to a slower flagship model.</p>
+        </article>
+      </div>
+      <div class="callout"><strong>Updated web-safety decision:</strong> the dedicated malicious-webpage conversation has been removed. For this MVP, the prompt simply tells the model that search results are information, never instructions. Searches omit names, emails and raw private reflections, and search runs only when current information is actually needed. This saves build time, but it consciously accepts more risk than testing or separating web research into its own read-only step.</div>
+    </section>
+
+    <section>
+      <div class="eyebrow">07 · Implementation stages</div>
+      <h2>The order is designed to invalidate bad assumptions cheaply</h2>
+      <div class="panel">
+        <div class="stage">
+          <div class="stage-label">Stage 0</div>
+          <div><h3>Provisioning — founder</h3><p>Confirm OpenAI billing and an alert, create a Google OAuth web client in External + Testing with the exact local and production callbacks, prepare Vercel secrets, and install/authenticate the Neon CLI. Better Auth is installed later with U3, when its code and migrations can be reviewed together. No Resend account, controlled domain, or OpenAI hard spend limit is required for this pilot.</p></div>
+        </div>
+        <div class="stage">
+          <div class="stage-label">Stage 1</div>
+          <div><h3>Prove the platform and method</h3><p>U1 upgrades Node 24 and AI SDK 7, cleans dead code, preserves the legacy app, and runs the real OpenAI check. U2 defines the thesis and method. U7a tests that method through reference conversations before infrastructure depends on it.</p></div>
+        </div>
+        <div class="stage">
+          <div class="stage-label">Stage 2</div>
+          <div><h3>Build the product core</h3><p>U3 adds direct Better Auth with public Google sign-in and a new-signup switch. U4 creates durable product memory. U5 connects authenticated messages, OpenAI Conversations, streaming, safe tool writes, request-size bounds, and an emergency off-switch.</p></div>
+        </div>
+        <div class="stage">
+          <div class="stage-label">Stage 3</div>
+          <div><h3>Build and dogfood the experience</h3><p>U6 supplies chat and the editable workspace. U7b integrates the validated adaptive interview. U8 completes the return-session loop.</p></div>
+        </div>
+        <div class="stage">
+          <div class="stage-label">Stage 4</div>
+          <div><h3>Launch deliberately</h3><p>U9 prepares candidates, invitation and erasure runbook in parallel. U10 applies reviewed migrations, completes the full production loop and leaves outreach ready for genuine interest.</p></div>
+        </div>
+      </div>
+      <div class="unit-list">
+        <div class="unit"><b>U1</b> Runtime, dependencies, cleanup, provider proof</div>
+        <div class="unit"><b>U2</b> Founder-signed thesis and method</div>
+        <div class="unit"><b>U3</b> Better Auth and public Google sign-in</div>
+        <div class="unit"><b>U4</b> Versioned career map and briefing</div>
+        <div class="unit"><b>U5</b> Durable streaming agent turn</div>
+        <div class="unit"><b>U6</b> Chat, mic and editable workspace</div>
+        <div class="unit"><b>U7a</b> Prompt behavior before integration</div>
+        <div class="unit"><b>U7b</b> Adaptive interview in the product</div>
+        <div class="unit"><b>U8</b> Return, observe and update direction</div>
+        <div class="unit"><b>U9/U10</b> Pilots, migration and launch</div>
+      </div>
+    </section>
+
+    <section>
+      <div class="eyebrow">08 · Your checkpoints</div>
+      <h2>The coding agents build the mechanism; you decide whether the product deserves to exist</h2>
+      <div class="panel">
+        <div class="checkpoint"><div class="checkpoint-id">A</div><div><h3>After U1: trust the provider facts?</h3><p>Read the live spike. It must prove threading, compaction, search plus custom tools, non-persistent briefings and deletion. A failure changes architecture before product code is built.</p></div></div>
+        <div class="checkpoint"><div class="checkpoint-id">B</div><div><h3>After U7a: does the method feel distinct?</h3><p>Run the reference conversations yourself. Look for adaptive curiosity, three genuinely different paths, clear reasons each might fit, anti-prestige reasoning, realistic experiments, meaningful evidence and acceptable response speed. This is the most important checkpoint.</p></div></div>
+        <div class="checkpoint"><div class="checkpoint-id">C</div><div><h3>After U3: can a real Google account sign in safely?</h3><p>Walk the real Google flow on local port 5001. Verify first sign-in, repeat sign-in, logout, OAuth cancellation, and the signup-off rule: an unseen account is denied while an existing one still enters.</p></div></div>
+        <div class="checkpoint"><div class="checkpoint-id">D</div><div><h3>After U5: is conversation actually durable?</h3><p>Run one live turn, inspect the map and skim redacted logs. Confirm the map write lands before the stream closes.</p></div></div>
+        <div class="checkpoint"><div class="checkpoint-id">E</div><div><h3>After U6 + U7b: would you use it?</h3><p>Complete the entire interview as yourself. Judge the pacing, insight, friction and visible workspace—not merely correctness.</p></div></div>
+        <div class="checkpoint"><div class="checkpoint-id">F</div><div><h3>After U8: does returning create new value?</h3><p>Come back to a seeded experiment, record what happened and see whether the next direction genuinely improves.</p></div></div>
+        <div class="checkpoint"><div class="checkpoint-id">G</div><div><h3>Before deploy: understand the irreversible edges</h3><p>Review both Drizzle and Better Auth SQL, confirm backups, alerts, switches, callbacks and secrets, and keep the agent disabled during the first deployment.</p></div></div>
+        <div class="checkpoint"><div class="checkpoint-id">H</div><div><h3>At launch: make the belief judgment explicitly</h3><p>Complete your production loop, enable the agent, and contact suitable candidates whenever genuine interest or a credible opportunity appears. There is no canary timer or invitation batch.</p></div></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="eyebrow">09 · What stays deliberately small</div>
+      <h2>This is a protected MVP, not an enterprise platform</h2>
+      <div class="contrast">
+        <div class="keep">
+          <h3>Build now</h3>
+          <ul>
+            <li>One agent route and one discovery loop</li>
+            <li>One flexible career-map document per user</li>
+            <li>Public Google identity with a signup switch</li>
+            <li>Persistent user/IP cost ceilings</li>
+            <li>Founder-run reference conversations</li>
+            <li>Manual pilot operation and erasure runbook</li>
+          </ul>
+        </div>
+        <div class="defer">
+          <h3>Do not build yet</h3>
+          <ul>
+            <li>Payments, invite gates, passwords or extra identity providers</li>
+            <li>Custom-domain Google production verification</li>
+            <li>Normalized tables for every product concept</li>
+            <li>Automated retention and export systems</li>
+            <li>Large eval or monitoring platforms</li>
+            <li>Weekly re-engagement and multi-loop journeys</li>
+            <li>Spanish UI or retirement of the old app</li>
+          </ul>
+        </div>
+      </div>
+      <p>The safety mechanisms that remain are tied to plausible pilot failures: duplicate writes after a retry, stale data overwriting a correction, one user reaching another user's data, an oversized request, an OAuth configuration error, or a migration deleting auth tables. Billing is watched and the agent can be switched off; persistent usage quotas wait for evidence that they are needed.</p>
+    </section>
+
+    <section>
+      <div class="eyebrow">10 · Tradeoffs you are consciously accepting</div>
+      <h2>The architecture is optimized for speed to credible evidence</h2>
+      <div class="grid-2">
+        <article class="card"><h3>OpenAI owns the transcript</h3><p>You get durable conversation state and compaction with less code. In return, sensitive reflections are retained by OpenAI until deletion, transcript retrieval depends on its API, and full erasure spans multiple systems.</p></article>
+        <article class="card"><h3>The career map is flexible JSON</h3><p>You can evolve the method quickly. In return, analytics and strict relational rules are weaker until the data model stabilizes.</p></article>
+        <article class="card"><h3>Assent is interpreted conversationally</h3><p>The product feels natural. In return, the model can misunderstand whether something is confirmed. The proposed/confirmed boundary, visible panel and reference conversations limit that risk.</p></article>
+        <article class="card"><h3>The current application shell remains</h3><p>You spend the month on the method and loop rather than framework migration. In return, some Express/Replit heritage survives until evidence justifies a broader rebuild.</p></article>
+        <article class="card"><h3>Web-search protection is intentionally light</h3><p>The model is told to treat search results as information, not instructions, and private details are kept out of queries. There is no dedicated malicious-page test or separate research step in this MVP, so this is a conscious speed-for-safety tradeoff.</p></article>
+        <article class="card"><h3>Operations stay manual</h3><p>Five pilots do not need dashboards and schedulers. In return, you must personally watch logs and billing alerts, execute erasure, manage outreach and notice stalled sessions.</p></article>
+      </div>
+    </section>
+
+    <section>
+      <div class="eyebrow">11 · Stop conditions and common traps</div>
+      <h2>Know when the plan tells the coding agent to stop</h2>
+      <div class="grid-2">
+        <div class="stop"><h3>Stop and reconsider architecture</h3><ul><li>The real OpenAI check contradicts the Conversation or compaction assumptions.</li><li>AI SDK 7 materially breaks the protected legacy flow and the v6 fallback cannot preserve requirements.</li><li>Implementation needs an unapproved production dependency.</li></ul></div>
+        <div class="card"><h3>Do not mistake these for blockers</h3><ul><li>The design is not ready for hundreds of thousands of users.</li><li>The map schema may change after pilot learning.</li><li>Pilot operations require manual work.</li><li>The old anonymous questionnaire still exists.</li><li>The agent is not yet a complete career operating system.</li></ul></div>
+      </div>
+      <h3 style="margin-top:28px">Implementation traps worth remembering</h3>
+      <ul>
+        <li>Mount Better Auth before both <code>express.json()</code> and <code>express.urlencoded()</code>, or sign-in requests can hang.</li>
+        <li>Use local port <code>5001</code> in <code>BETTER_AUTH_URL</code> and the Google callback; preview URLs are signed-out-only.</li>
+        <li>Do not send the accumulated client transcript; send one new message and the OpenAI conversation ID.</li>
+        <li>Keep the per-turn career briefing out of durable conversation items.</li>
+        <li>Never let model tools accept a user ID or generic JSON patch.</li>
+        <li>Keep Better Auth in the <code>auth</code> schema and set Drizzle's <code>schemaFilter</code> to <code>public</code> before using <code>db:push</code>.</li>
+        <li>Reject oversized text or audio before provider work; keep the pinned AI SDK's loop default and do not add a daily allowance.</li>
+        <li>Forward browser cancellation through Express to the agent and tools; keep stream resumption off because it conflicts with manual Stop.</li>
+        <li>Do not log career text or streamed response bodies.</li>
+        <li>Do not run an unreviewed schema push against production.</li>
+        <li>Do not let the build consume U2, U7a, U9, or your dogfood time; those create the actual evidence.</li>
+      </ul>
+    </section>
+
+    <section>
+      <div class="eyebrow">12 · How to execute with ce-work</div>
+      <h2>One unit per session preserves your leverage</h2>
+      <p>Begin each code session by naming the plan as authority and exactly one implementation unit as scope. Let the unit's own verification gate finish before moving forward. Review the resulting behavior—not every generated line—at the human checkpoint.</p>
+      <pre class="prompt">Use compound-engineering:ce-work.
+Plan authority: docs/plans/2026-08-14-claude-feat-revelio-revamp-plan.md
+Scope: implement U&lt;number&gt; only.
+Honor the plan's Working Agreements, dependencies, stop conditions,
+test scenarios, and verification commands. Do not begin later units.</pre>
+      <p>U2 and U9 are different: the agent can research, organize and draft, but you own the thesis, candidate judgment, invitation voice and final sign-off. Your scarce time belongs at checkpoints B, E and F; routine build supervision should not consume it.</p>
+    </section>
+
+    <section>
+      <div class="eyebrow">13 · Before U1</div>
+      <h2>Your immediate readiness checklist</h2>
+      <div class="panel">
+        <ul>
+          <li>OpenAI project exists, billing works, and a billing alert is configured; no hard spend limit is required.</li>
+          <li>Google Auth is External + Testing with only identity scopes; callbacks are <code>http://localhost:5001/api/auth/callback/google</code> and <code>https://revelio-me.vercel.app/api/auth/callback/google</code>.</li>
+          <li><code>OPENAI_API_KEY</code>, <code>GOOGLE_CLIENT_ID</code>, <code>GOOGLE_CLIENT_SECRET</code>, <code>BETTER_AUTH_SECRET</code>, <code>BETTER_AUTH_URL</code>, and <code>AUTH_SIGNUPS_ENABLED</code> are prepared for the environments that need them.</li>
+          <li>The Neon CLI is installed and authenticated; Better Auth itself waits for U3.</li>
+          <li>You have protected time for U2 and the U7a reference conversations—not only coding time.</li>
+          <li>You accept that pilot conversations live with OpenAI and know the manual erasure promise.</li>
+          <li>The September 15 gate remains fixed; scope moves if necessary.</li>
+        </ul>
+      </div>
+      <p class="callout"><strong>The shortest mental model:</strong> U1 proves the platform. U2 and U7a prove the method. U3–U5 make it durable. U6–U8 make it useful. U9–U10 put it in front of real people.</p>
+    </section>
+  </main>
+
+  <footer>Composed 2026-08-15 17:36 CEST by ce-explain</footer>
+</body>
+</html>
