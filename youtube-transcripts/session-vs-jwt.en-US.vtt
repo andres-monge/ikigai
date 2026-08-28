@@ -1,0 +1,399 @@
+WEBVTT
+Kind: captions
+Language: en-US
+
+00:00:00.160 --> 00:00:03.280
+Today, we're diving into the&nbsp;
+world of web authentication.
+
+00:00:03.280 --> 00:00:05.800
+We’ll explore the two most common approaches:&nbsp;&nbsp;
+
+00:00:05.800 --> 00:00:10.040
+session-based authentication&nbsp;
+and JSON Web Tokens, or JWTs.
+
+00:00:10.040 --> 00:00:14.160
+We’ll walk through the flow of each&nbsp;
+mechanism and discuss their pros and cons.
+
+00:00:14.160 --> 00:00:17.720
+By the end, you'll have a clear&nbsp;
+understanding of when to use each one.
+
+00:00:17.720 --> 00:00:19.200
+Let's get started!
+
+00:00:19.200 --> 00:00:22.680
+First, let's walk through the flow&nbsp;
+of session-based authentication.
+
+00:00:22.680 --> 00:00:25.560
+The user sends their login&nbsp;
+credentials to the server.
+
+00:00:25.560 --> 00:00:27.760
+The server verifies these credentials.
+
+00:00:27.760 --> 00:00:30.360
+If they're valid, it creates a new session.
+
+00:00:30.360 --> 00:00:35.680
+The server then stores the session data, typically&nbsp;
+in a database or in-memory cache like Redis.
+
+00:00:35.680 --> 00:00:40.560
+This data might include the user ID,&nbsp;
+session expiration time, and other metadata.
+
+00:00:40.560 --> 00:00:45.960
+The server sends back a response with a unique&nbsp;
+session ID, usually in the form of a cookie.
+
+00:00:45.960 --> 00:00:51.440
+On subsequent requests, the client automatically&nbsp;
+sends the session ID cookie with each request.
+
+00:00:51.440 --> 00:00:55.600
+The server takes the session ID, looks&nbsp;
+up the corresponding session data in its&nbsp;&nbsp;
+
+00:00:55.600 --> 00:01:00.320
+session store, and uses that data to&nbsp;
+authenticate and process the request.
+
+00:01:00.320 --> 00:01:03.440
+The key point is that with&nbsp;
+session-based authentication,&nbsp;&nbsp;
+
+00:01:03.440 --> 00:01:07.400
+the server is responsible for&nbsp;
+creating and storing the session data.
+
+00:01:07.400 --> 00:01:12.640
+It then uses the session ID as a key to&nbsp;
+retrieve this data on future requests.
+
+00:01:12.640 --> 00:01:16.640
+One advantage of sessions is that&nbsp;
+revoking a session is straightforward.
+
+00:01:16.640 --> 00:01:19.000
+Since the session data is stored on the server,&nbsp;&nbsp;
+
+00:01:19.000 --> 00:01:23.400
+the server can simply delete or&nbsp;
+invalidate the session at any time.
+
+00:01:23.400 --> 00:01:28.080
+However, in a distributed system where&nbsp;
+your application runs on multiple servers,&nbsp;&nbsp;
+
+00:01:28.080 --> 00:01:31.240
+all those servers need access&nbsp;
+to the same session data.
+
+00:01:31.240 --> 00:01:35.080
+This is typically achieved by using&nbsp;
+a centralized session store that all&nbsp;&nbsp;
+
+00:01:35.080 --> 00:01:39.120
+servers can access, like Redis&nbsp;
+or a distributed SQL database.
+
+00:01:39.120 --> 00:01:43.320
+While this works well, it does add some&nbsp;
+complexity and potential latency to each&nbsp;&nbsp;
+
+00:01:43.320 --> 00:01:48.040
+request, as the server needs to make&nbsp;
+a separate trip to the session store.
+
+00:01:48.040 --> 00:01:51.160
+Now, let's look at the flow&nbsp;
+of JWT-based authentication.
+
+00:01:51.160 --> 00:01:54.400
+First, the user sends their&nbsp;
+login credentials to the server.
+
+00:01:54.400 --> 00:01:56.560
+The server verifies these credentials.
+
+00:01:56.560 --> 00:01:59.160
+If they're valid, it generates a JWT.
+
+00:01:59.160 --> 00:02:01.840
+The server signs the JWT with a secret key.
+
+00:02:01.840 --> 00:02:06.160
+This signature ensures the integrity&nbsp;
+of the token, preventing tampering.
+
+00:02:06.160 --> 00:02:10.920
+The server then sends back the JWT to the&nbsp;
+client, typically in the response body.
+
+00:02:10.920 --> 00:02:14.880
+The client stores the JWT, usually&nbsp;
+in local storage or a cookie.
+
+00:02:14.880 --> 00:02:19.280
+On subsequent requests, the client&nbsp;
+sends the JWT in the request headers.
+
+00:02:19.280 --> 00:02:21.440
+The server verifies the JWT signature.
+
+00:02:21.440 --> 00:02:24.680
+If it's valid, the server&nbsp;
+trusts the data in the token&nbsp;&nbsp;
+
+00:02:24.680 --> 00:02:28.000
+and uses it for authentication and authorization.
+
+00:02:28.000 --> 00:02:33.000
+The critical difference here is that with JWTs,&nbsp;
+the server doesn't store any session state.
+
+00:02:33.000 --> 00:02:38.040
+All the necessary data is contained within the&nbsp;
+token itself, which is stored on the client.
+
+00:02:38.040 --> 00:02:40.320
+This makes JWTs stateless.
+
+00:02:40.320 --> 00:02:43.480
+For signing JWTs, there are&nbsp;
+several algorithms available,&nbsp;&nbsp;
+
+00:02:43.480 --> 00:02:47.560
+with HMAC, RSA , and ECDSA being the most common.
+
+00:02:47.560 --> 00:02:50.160
+HMAC is a symmetric signing method,&nbsp;&nbsp;
+
+00:02:50.160 --> 00:02:54.400
+which means the same secret key is&nbsp;
+used to sign and verify the token.
+
+00:02:54.400 --> 00:02:58.280
+This is simpler and more efficient, but&nbsp;
+it requires sharing the secret key with&nbsp;&nbsp;
+
+00:02:58.280 --> 00:03:02.880
+any service that needs to verify the&nbsp;
+token, which can be a security concern.
+
+00:03:02.880 --> 00:03:07.480
+RSA and ECDSA, on the other hand,&nbsp;
+are asymmetric signing methods.
+
+00:03:07.480 --> 00:03:11.640
+They use a private key to sign the&nbsp;
+token and a public key to verify it.
+
+00:03:11.640 --> 00:03:16.400
+This allows for a more secure architecture&nbsp;
+where the private key is kept secret and&nbsp;&nbsp;
+
+00:03:16.400 --> 00:03:21.600
+only used for signing, while any service&nbsp;
+can verify the token using the public key.
+
+00:03:21.600 --> 00:03:26.760
+However, this adds some complexity and&nbsp;
+computational overhead compared to HMAC.
+
+00:03:26.760 --> 00:03:32.120
+The choice of signing algorithm depends on your&nbsp;
+security requirements and system architecture.
+
+00:03:32.120 --> 00:03:36.320
+If you have a monolithic application or&nbsp;
+trust all the services in your system,&nbsp;&nbsp;
+
+00:03:36.320 --> 00:03:38.360
+HMAC might be sufficient.
+
+00:03:38.360 --> 00:03:42.000
+But if you have a microservice&nbsp;
+architecture or need to share JWTs&nbsp;&nbsp;
+
+00:03:42.000 --> 00:03:49.000
+with untrusted third-party services, RSA&nbsp;
+or ECDSA provide a more secure solution.
+
+00:03:49.000 --> 00:03:52.640
+One challenge with JWTs is&nbsp;
+handling token expiration.
+
+00:03:52.640 --> 00:03:56.080
+If a token is stolen, it can&nbsp;
+be used until it expires.
+
+00:03:56.080 --> 00:04:01.800
+To mitigate this, you can use refresh tokens&nbsp;
+in combination with short-lived access tokens.
+
+00:04:01.800 --> 00:04:05.200
+The access token is the actual JWT&nbsp;
+used for authentication on each&nbsp;&nbsp;
+
+00:04:05.200 --> 00:04:10.120
+request. It has a short expiration&nbsp;
+time, typically around 15 minutes.
+
+00:04:10.120 --> 00:04:12.040
+The refresh token, on the other hand,&nbsp;&nbsp;
+
+00:04:12.040 --> 00:04:16.280
+has a much longer expiration time,&nbsp;
+perhaps several days or weeks.
+
+00:04:16.280 --> 00:04:20.720
+When the access token expires, instead&nbsp;
+of requiring the user to log in again,&nbsp;&nbsp;
+
+00:04:20.720 --> 00:04:25.320
+the client can send the refresh token to&nbsp;
+a special token endpoint on the server.
+
+00:04:25.320 --> 00:04:28.600
+The server checks if the refresh&nbsp;
+token is valid and hasn't been&nbsp;&nbsp;
+
+00:04:28.600 --> 00:04:33.120
+revoked. If everything checks out,&nbsp;
+the server issues a new access token.
+
+00:04:33.120 --> 00:04:38.200
+This process happens behind the scenes,&nbsp;
+without requiring interaction from the user.
+
+00:04:38.200 --> 00:04:41.840
+This approach strikes a balance&nbsp;
+between security and user experience.
+
+00:04:41.840 --> 00:04:47.440
+The short-lived access tokens limit the window&nbsp;
+of potential misuse if a token is stolen,&nbsp;&nbsp;
+
+00:04:47.440 --> 00:04:51.800
+while the long-lived refresh tokens&nbsp;
+allow users to remain authenticated&nbsp;&nbsp;
+
+00:04:51.800 --> 00:04:55.920
+for an extended period without&nbsp;
+needing to log in repeatedly.
+
+00:04:55.920 --> 00:04:59.840
+It's important to note that the refresh&nbsp;
+token is only sent when the access&nbsp;&nbsp;
+
+00:04:59.840 --> 00:05:02.800
+token has expired, not on every request.
+
+00:05:02.800 --> 00:05:06.880
+The access token is sent on every&nbsp;
+request that requires authentication.
+
+00:05:06.880 --> 00:05:11.880
+So, when should you use session-based&nbsp;
+authentication, and when are JWTs a better choice?
+
+00:05:11.880 --> 00:05:17.120
+Session-based authentication is a good fit when&nbsp;
+you need the ability to revoke sessions instantly.
+
+00:05:17.120 --> 00:05:19.800
+If a user reports their account as compromised,&nbsp;&nbsp;
+
+00:05:19.800 --> 00:05:23.440
+you can immediately invalidate&nbsp;
+their session on the server side.
+
+00:05:23.440 --> 00:05:28.400
+Sessions are also a good choice if you already&nbsp;
+have a centralized data store for other purposes.
+
+00:05:28.400 --> 00:05:33.560
+In this case, you can leverage that existing&nbsp;
+infrastructure for session storage as well.
+
+00:05:33.560 --> 00:05:37.600
+However, it's important to keep in mind&nbsp;
+that using a centralized session store does&nbsp;&nbsp;
+
+00:05:37.600 --> 00:05:43.200
+add some latency to each request, as the server&nbsp;
+needs to fetch the session data from the store.
+
+00:05:43.200 --> 00:05:48.200
+Finally, sessions keep sensitive data on the&nbsp;
+server, which can be a security advantage.
+
+00:05:48.200 --> 00:05:52.720
+On the other hand, JWTs are a great choice&nbsp;
+when you need a stateless architecture.
+
+00:05:52.720 --> 00:05:56.200
+Because JWTs store all the&nbsp;
+necessary data in the token itself,&nbsp;&nbsp;
+
+00:05:56.200 --> 00:06:00.480
+your server doesn't need to keep track&nbsp;
+of sessions in memory or in a database.
+
+00:06:00.480 --> 00:06:05.560
+This makes it much easier to scale your&nbsp;
+application horizontally across multiple servers.
+
+00:06:05.560 --> 00:06:10.360
+JWTs are also useful when you need to share&nbsp;
+authentication data with other services.
+
+00:06:10.360 --> 00:06:13.040
+For instance, in a microservice architecture,&nbsp;&nbsp;
+
+00:06:13.040 --> 00:06:17.480
+a JWT generated by the authentication&nbsp;
+service can be verified and trusted by&nbsp;&nbsp;
+
+00:06:17.480 --> 00:06:22.640
+other services without needing to contact&nbsp;
+the authentication service on each request.
+
+00:06:22.640 --> 00:06:24.120
+If you do choose JWTs,&nbsp;&nbsp;
+
+00:06:24.120 --> 00:06:28.720
+consider implementing refresh tokens to&nbsp;
+balance security and user experience.
+
+00:06:28.720 --> 00:06:34.240
+Refresh tokens allow you to use short-lived access&nbsp;
+tokens to limit the window of potential misuse,&nbsp;&nbsp;
+
+00:06:34.240 --> 00:06:38.760
+while still allowing users to remain&nbsp;
+authenticated for an extended period.
+
+00:06:38.760 --> 00:06:44.640
+Ultimately, the choice depends on the specific&nbsp;
+needs and architecture of your application.
+
+00:06:44.640 --> 00:06:48.320
+If you like our videos, you might like&nbsp;
+our system design newsletter as well.
+
+00:06:48.320 --> 00:06:51.840
+It cover topics and trends&nbsp;
+in large scale system design.
+
+00:06:51.840 --> 00:06:54.120
+Trusted by 500,000 readers.
+
+00:06:54.120 --> 00:06:59.320
+Subscribe at blog.bytebytego.com.
+
