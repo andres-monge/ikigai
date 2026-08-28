@@ -1,5 +1,0 @@
-
-- send to runnymede
-- every questionnaire completion should trigger an analysis? or at least initially it should be a daily cron job so we're reacting quickly to how inital users use it?
-- how to set up payment, one time free use
-- Bugs reporter
