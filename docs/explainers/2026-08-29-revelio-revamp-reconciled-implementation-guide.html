@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Understanding the Reconciled Revelio Revamp</title>
+  <style>
+    :root {
+      --ink: #17231f;
+      --muted: #5e6964;
+      --paper: #f6f1e8;
+      --surface: #fffdf8;
+      --line: #d9d2c5;
+      --green: #0e5a49;
+      --green-soft: #dcebe4;
+      --amber: #a86512;
+      --amber-soft: #f7e5c4;
+      --blue: #315f78;
+      --blue-soft: #deebf1;
+      --rose: #8d4c52;
+      --rose-soft: #f1dfe0;
+      --shadow: 0 12px 32px rgba(32, 45, 39, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+    html { background: var(--paper); color: var(--ink); }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+      background:
+        radial-gradient(circle at 12% 0%, rgba(14, 90, 73, 0.10), transparent 30rem),
+        var(--paper);
+    }
+
+    header, main, footer { width: min(1120px, calc(100% - 32px)); margin-inline: auto; }
+    header { padding: 72px 0 36px; }
+    main { padding-bottom: 72px; }
+    footer { padding: 24px 0 48px; color: var(--muted); font-size: 0.88rem; }
+
+    h1, h2, h3 { line-height: 1.12; letter-spacing: -0.035em; }
+    h1 { margin: 0 0 20px; font-size: clamp(2.6rem, 7vw, 5.4rem); max-width: 960px; }
+    h2 { margin: 0 0 14px; font-size: clamp(1.8rem, 4vw, 3rem); }
+    h3 { margin: 0 0 8px; font-size: 1.12rem; letter-spacing: -0.015em; }
+    p { margin: 0 0 1rem; max-width: 70ch; }
+    strong { font-weight: 750; }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 22px;
+      color: var(--green);
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      font-size: 0.75rem;
+    }
+
+    .eyebrow::before { content: ""; width: 28px; height: 2px; background: var(--green); }
+
+    .dek { font-size: clamp(1.15rem, 2vw, 1.45rem); color: #33433c; max-width: 76ch; }
+
+    .metadata {
+      margin: 30px 0 0;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      overflow: hidden;
+      background: rgba(255, 253, 248, 0.75);
+      box-shadow: var(--shadow);
+    }
+
+    .metadata div { padding: 18px 20px; }
+    .metadata div + div { border-left: 1px solid var(--line); }
+    .metadata dt { color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.09em; font-weight: 800; }
+    .metadata dd { margin: 4px 0 0; font-weight: 700; }
+
+    section { margin-top: 72px; }
+    .section-intro { margin-bottom: 24px; }
+    .section-intro p { color: var(--muted); font-size: 1.05rem; }
+
+    .hero-visual, .panel {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+    }
+
+    .hero-visual { margin-top: 38px; padding: 26px; overflow: hidden; }
+    .hero-visual svg { display: block; width: 100%; height: auto; }
+
+    .status-strip {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: var(--line);
+      box-shadow: var(--shadow);
+    }
+
+    .status-item { background: var(--surface); padding: 22px; min-height: 160px; }
+    .status-item .num { font-size: 0.76rem; font-weight: 850; letter-spacing: 0.08em; color: var(--muted); }
+    .status-item .state { display: inline-block; margin: 12px 0 10px; padding: 4px 9px; border-radius: 999px; font-weight: 800; font-size: 0.75rem; }
+    .done { background: var(--green-soft); color: var(--green); }
+    .written { background: var(--blue-soft); color: var(--blue); }
+    .next { background: var(--amber-soft); color: var(--amber); }
+    .later { background: #ece9e1; color: #5e625f; }
+
+    .authority-stack { display: grid; gap: 12px; max-width: 900px; }
+    .authority-card {
+      display: grid;
+      grid-template-columns: 180px 1fr;
+      gap: 24px;
+      padding: 22px 24px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--surface);
+    }
+    .authority-card .label { font-weight: 850; color: var(--green); }
+    .authority-card p { margin: 0; }
+
+    .contrast {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+    .contrast article { padding: 26px; border-radius: 22px; border: 1px solid var(--line); background: var(--surface); }
+    .contrast .before { border-top: 5px solid var(--rose); }
+    .contrast .after { border-top: 5px solid var(--green); }
+    .contrast ul, .plain-list { padding-left: 1.2rem; margin: 14px 0 0; }
+    li { margin: 0.5rem 0; }
+
+    .flow-panel { padding: 26px; }
+    .flow-panel svg { width: 100%; height: auto; display: block; }
+
+    .lane-key { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-top: 18px; color: var(--muted); font-size: 0.9rem; }
+    .lane-key span { display: inline-flex; gap: 7px; align-items: center; }
+    .lane-key i { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+
+    .method-loop {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 12px;
+      counter-reset: method;
+    }
+    .method-loop article {
+      counter-increment: method;
+      padding: 20px;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      min-height: 178px;
+    }
+    .method-loop article::before {
+      content: counter(method, decimal-leading-zero);
+      display: block;
+      margin-bottom: 18px;
+      font-weight: 900;
+      color: var(--amber);
+      font-size: 0.78rem;
+      letter-spacing: 0.08em;
+    }
+    .method-loop p { color: var(--muted); font-size: 0.93rem; }
+
+    .principles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .principles article { padding: 22px; border-radius: 18px; background: var(--surface); border: 1px solid var(--line); }
+    .principles .icon { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 11px; background: var(--green-soft); color: var(--green); font-weight: 900; margin-bottom: 16px; }
+    .principles p { color: var(--muted); font-size: 0.94rem; }
+
+    .next-callout {
+      padding: 30px;
+      border-radius: 24px;
+      color: #f7f6f0;
+      background: var(--green);
+      box-shadow: var(--shadow);
+    }
+    .next-callout h2 { color: white; }
+    .next-callout p { color: #dce9e4; }
+    .next-callout ol { margin: 22px 0 0; padding-left: 1.3rem; max-width: 76ch; }
+    .next-callout li { padding-left: 8px; margin: 0.8rem 0; }
+
+    .warning {
+      margin-top: 18px;
+      padding: 18px 20px;
+      border-left: 4px solid var(--amber);
+      border-radius: 0 14px 14px 0;
+      background: var(--amber-soft);
+      color: #5d4019;
+      max-width: 78ch;
+    }
+
+    .checkpoints { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .checkpoint { padding: 22px; border-radius: 18px; border: 1px solid var(--line); background: var(--surface); }
+    .checkpoint .tag { color: var(--amber); font-weight: 900; font-size: 0.76rem; letter-spacing: 0.08em; }
+    .checkpoint p { margin: 7px 0 0; color: var(--muted); }
+
+    .snapshot { padding: 24px; border-radius: 20px; background: #ebe6dc; }
+    .snapshot p:last-child { margin-bottom: 0; }
+
+    @media (max-width: 850px) {
+      .metadata, .status-strip, .contrast, .principles, .checkpoints { grid-template-columns: 1fr 1fr; }
+      .metadata div + div { border-left: 0; border-top: 1px solid var(--line); }
+      .method-loop { grid-template-columns: 1fr 1fr; }
+      .authority-card { grid-template-columns: 1fr; gap: 6px; }
+    }
+
+    @media (max-width: 560px) {
+      header { padding-top: 46px; }
+      section { margin-top: 54px; }
+      .metadata, .status-strip, .contrast, .principles, .checkpoints, .method-loop { grid-template-columns: 1fr; }
+      .hero-visual, .flow-panel { padding: 14px; }
+      .status-item { min-height: 0; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Revelio · post-U1 guide</div>
+    <h1>Understanding the Reconciled Revelio Revamp</h1>
+    <p class="dek">You have finished defining the Method and reconciled it with the product rebuild. The important shift is that the Method is no longer a paragraph waiting to be written: it is now the contract that the remaining architecture, agent, interface, and tests must implement.</p>
+
+    <dl class="metadata">
+      <div><dt>Date</dt><dd>2026-08-29</dd></div>
+      <div><dt>Input shape</dt><dd>diff</dd></div>
+      <div><dt>Subject</dt><dd>Working-tree U1 reconciliation of the Revelio Revamp plan</dd></div>
+    </dl>
+
+    <div class="hero-visual" aria-label="The reconciled authority and execution flow">
+      <svg viewBox="0 0 1000 410" role="img" aria-labelledby="hero-title hero-desc">
+        <title id="hero-title">The reconciled Revelio authority and execution flow</title>
+        <desc id="hero-desc">The thesis informs the Method Product Contract. U1 binds both into the active implementation plan. The plan then gates provider proof, Method construction, experience work, and launch.</desc>
+        <defs>
+          <marker id="arrow" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#0e5a49"/></marker>
+          <filter id="halo"><feGaussianBlur stdDeviation="5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        </defs>
+        <rect x="18" y="34" width="210" height="105" rx="18" fill="#dcebe4" stroke="#0e5a49"/>
+        <text x="42" y="70" font-size="14" font-weight="800" fill="#0e5a49">METHOD AUTHORITY</text>
+        <text x="42" y="101" font-size="23" font-weight="800" fill="#17231f">Thesis</text>
+        <text x="42" y="124" font-size="14" fill="#52615b">What Revelio believes</text>
+
+        <rect x="292" y="34" width="250" height="105" rx="18" fill="#deebf1" stroke="#315f78"/>
+        <text x="318" y="70" font-size="14" font-weight="800" fill="#315f78">PRODUCT BEHAVIOR</text>
+        <text x="318" y="101" font-size="23" font-weight="800" fill="#17231f">Method Contract</text>
+        <text x="318" y="124" font-size="14" fill="#52615b">What the product must do</text>
+
+        <rect x="606" y="34" width="374" height="105" rx="18" fill="#f7e5c4" stroke="#a86512"/>
+        <text x="632" y="70" font-size="14" font-weight="800" fill="#a86512">IMPLEMENTATION AUTHORITY</text>
+        <text x="632" y="101" font-size="23" font-weight="800" fill="#17231f">Reconciled Revamp Plan</text>
+        <text x="632" y="124" font-size="14" fill="#52615b">How and in what order it is built</text>
+
+        <line x1="228" y1="86" x2="284" y2="86" stroke="#0e5a49" stroke-width="3" marker-end="url(#arrow)"/>
+        <line x1="542" y1="86" x2="598" y2="86" stroke="#0e5a49" stroke-width="3" marker-end="url(#arrow)"/>
+        <text x="560" y="69" font-size="12" font-weight="700" fill="#0e5a49">U1 BINDS</text>
+
+        <line x1="793" y1="140" x2="793" y2="200" stroke="#0e5a49" stroke-width="3" marker-end="url(#arrow)"/>
+
+        <rect x="32" y="216" width="210" height="112" rx="18" fill="#fffdf8" stroke="#d9d2c5"/>
+        <text x="56" y="249" font-size="13" font-weight="800" fill="#a86512">I1 + G1</text>
+        <text x="56" y="279" font-size="20" font-weight="800" fill="#17231f">Prove the base</text>
+        <text x="56" y="302" font-size="13" fill="#52615b">Platform baseline and</text>
+        <text x="56" y="321" font-size="13" fill="#52615b">provider boundary</text>
+
+        <rect x="278" y="216" width="210" height="112" rx="18" fill="#fffdf8" stroke="#d9d2c5"/>
+        <text x="302" y="249" font-size="13" font-weight="800" fill="#315f78">U2–U5</text>
+        <text x="302" y="279" font-size="20" font-weight="800" fill="#17231f">Build the core</text>
+        <text x="302" y="302" font-size="13" fill="#52615b">State, modules, memory,</text>
+        <text x="302" y="321" font-size="13" fill="#52615b">agent and research</text>
+
+        <rect x="524" y="216" width="210" height="112" rx="18" fill="#fffdf8" stroke="#d9d2c5"/>
+        <text x="548" y="249" font-size="13" font-weight="800" fill="#0e5a49">U6–U9</text>
+        <text x="548" y="279" font-size="20" font-weight="800" fill="#17231f">Make it useful</text>
+        <text x="548" y="302" font-size="13" fill="#52615b">Interface, learning loop,</text>
+        <text x="548" y="321" font-size="13" fill="#52615b">peers and Side Doors</text>
+
+        <rect x="770" y="216" width="210" height="112" rx="18" fill="#fffdf8" stroke="#d9d2c5"/>
+        <text x="794" y="249" font-size="13" font-weight="800" fill="#8d4c52">U10 + I3</text>
+        <text x="794" y="279" font-size="20" font-weight="800" fill="#17231f">Prove and launch</text>
+        <text x="794" y="302" font-size="13" fill="#52615b">Complete journeys, safety,</text>
+        <text x="794" y="321" font-size="13" fill="#52615b">deployment and pilots</text>
+
+        <line x1="242" y1="272" x2="270" y2="272" stroke="#0e5a49" stroke-width="3" marker-end="url(#arrow)"/>
+        <line x1="488" y1="272" x2="516" y2="272" stroke="#0e5a49" stroke-width="3" marker-end="url(#arrow)"/>
+        <line x1="734" y1="272" x2="762" y2="272" stroke="#0e5a49" stroke-width="3" marker-end="url(#arrow)"/>
+
+        <text x="32" y="378" font-size="15" font-weight="750" fill="#17231f">The shortest mental model:</text>
+        <text x="220" y="378" font-size="15" fill="#52615b">define → reconcile → falsify assumptions → build the Method → prove the journey.</text>
+      </svg>
+    </div>
+  </header>
+
+  <main>
+    <section>
+      <div class="section-intro">
+        <div class="eyebrow">01 · Where you are now</div>
+        <h2>The Method is specified; the Method is not built</h2>
+        <p>The main thread completed knowledge work and the U1 authority reconciliation. Those are real milestones, but neither is runtime behavior. The product still needs the provider gate and Method implementation.</p>
+      </div>
+      <div class="status-strip">
+        <article class="status-item"><div class="num">FOUNDATION</div><span class="state done">Founder-approved</span><h3>Thesis</h3><p>Defines the philosophy: action creates the self-knowledge reflection cannot.</p></article>
+        <article class="status-item"><div class="num">METHOD</div><span class="state done">Locked</span><h3>Product Contract</h3><p>Turns the philosophy and your decisions into testable product behavior.</p></article>
+        <article class="status-item"><div class="num">AUTHORITY</div><span class="state written">Reconciled</span><h3>Revamp plan</h3><p>Now binds the Method without disturbing the settled platform architecture.</p></article>
+        <article class="status-item"><div class="num">RUNTIME</div><span class="state next">Next</span><h3>Provider gate</h3><p>Must prove the load-bearing OpenAI and AI SDK behavior before Method code.</p></article>
+      </div>
+      <div class="warning"><strong>Working-tree status matters.</strong> The reconciliation is written in the active plan, but this explainer describes the current working tree. Commit or merge status is a separate repository step.</div>
+    </section>
+
+    <section>
+      <div class="section-intro">
+        <div class="eyebrow">02 · One authority stack</div>
+        <h2>Three documents answer three different questions</h2>
+        <p>U1 did not merge everything into one giant document. It established explicit precedence so a coding agent can tell philosophy, required behavior, and sequencing apart.</p>
+      </div>
+      <div class="authority-stack">
+        <article class="authority-card"><div class="label">Thesis</div><p><strong>Why this approach should work.</strong> It remains the Method authority and is not re-authored by the implementation plan.</p></article>
+        <article class="authority-card"><div class="label">Method Product Contract</div><p><strong>What Revelio must do.</strong> It contains the full lifecycle, requirements, flows, acceptance examples, and Method technical decisions.</p></article>
+        <article class="authority-card"><div class="label">Active revamp plan</div><p><strong>How the product gets built.</strong> It owns ordering, infrastructure, gates, verification, deployment, and the preserved legacy product.</p></article>
+      </div>
+      <div class="snapshot">
+        <p><strong>If they disagree:</strong> the thesis wins on Method philosophy; the Method Contract wins on product behavior; the reconciled revamp plan wins on implementation sequencing. Three named implementation clarifications now live in the revamp plan: commitment intent precedes completed provisional commitment, required canonical copy can be faithfully translated, and normal usage gets no custom daily or numeric quota policy.</p>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-intro">
+        <div class="eyebrow">03 · What U1 changed</div>
+        <h2>The old plan treated the Method as prompt content; the new plan treats it as a product system</h2>
+        <p>This is why the reconciliation touched much more than the old U2 and U7a descriptions.</p>
+      </div>
+      <div class="contrast">
+        <article class="before">
+          <h3>Before reconciliation</h3>
+          <ul>
+            <li>U2 meant “write the thesis and Method statement.”</li>
+            <li>The prompt carried most Method behavior.</li>
+            <li>The career map used broad generic writes and confirmation.</li>
+            <li>The return flow was essentially continue, switch, or make a new path.</li>
+            <li>Web search could share the mutation-capable agent context.</li>
+            <li>Experiments tested an existing career’s assumed practice.</li>
+          </ul>
+        </article>
+        <article class="after">
+          <h3>After reconciliation</h3>
+          <ul>
+            <li>The thesis and Method Contract already define the Method.</li>
+            <li>Seven repository-owned modules guide one checkpoint at a time.</li>
+            <li>A Method kernel owns narrow, versioned, auditable operations.</li>
+            <li>Reflection produces user-owned Next Moves, peer evidence, and Side Doors.</li>
+            <li>Research is isolated and receives only validated, de-identified fields.</li>
+            <li>Projects create firsthand evidence without constraining paths to jobs that exist today.</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-intro">
+        <div class="eyebrow">04 · The product loop</div>
+        <h2>Revelio is a learning loop with a lightweight entry tail</h2>
+        <p>The experience begins with reflection, but its decisive evidence comes from action. Nothing in the loop claims to reveal a permanent calling.</p>
+      </div>
+      <div class="method-loop">
+        <article><h3>Form the foundation</h3><p>Ask as little as possible to propose a concise Why I Work the explorer recognizes and explicitly confirms.</p></article>
+        <article><h3>Compare paths</h3><p>Present exactly three distinct, equal Purpose Paths as different ways to serve that Why. The explorer chooses.</p></article>
+        <article><h3>Run a project</h3><p>Begin with one thoughtful Path Project: an exciting outcome with a believable, low-stakes first version.</p></article>
+        <article><h3>Interpret evidence</h3><p>Reflect at any work status, preserve what happened, and decide whether to stop, switch, explore further, or commit provisionally.</p></article>
+        <article><h3>Enter sideways</h3><p>After meaningful peer exposure, turn accumulated proof into three current Side Doors and let the explorer choose one.</p></article>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-intro">
+        <div class="eyebrow">05 · The implementation map</div>
+        <h2>Infrastructure, Method, experience, and launch now have distinct jobs</h2>
+        <p>The old U-number collision is gone from the active plan. Infrastructure work uses I-units, the provider proof is G1, and U2–U10 now belong to the Method build.</p>
+      </div>
+      <div class="panel flow-panel">
+        <svg viewBox="0 0 1040 620" role="img" aria-labelledby="map-title map-desc">
+          <title id="map-title">Reconciled Revelio implementation map</title>
+          <desc id="map-desc">Four implementation lanes show infrastructure work, the provider gate, Method code, and the experience through launch. The critical path runs from the reconciled authority and platform baseline through G1, Method core, experience, and U10.</desc>
+          <defs><marker id="lane-arrow" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#52615b"/></marker></defs>
+          <rect x="12" y="18" width="1016" height="584" rx="24" fill="#fbfaf6" stroke="#d9d2c5"/>
+
+          <text x="34" y="67" font-size="14" font-weight="850" fill="#315f78">PLATFORM LANE</text>
+          <rect x="178" y="38" width="208" height="64" rx="14" fill="#deebf1" stroke="#315f78"/>
+          <text x="196" y="65" font-size="14" font-weight="850" fill="#315f78">I1</text><text x="196" y="87" font-size="15" font-weight="750" fill="#17231f">Platform baseline</text>
+          <rect x="432" y="38" width="208" height="64" rx="14" fill="#deebf1" stroke="#315f78"/>
+          <text x="450" y="65" font-size="14" font-weight="850" fill="#315f78">I2</text><text x="450" y="87" font-size="15" font-weight="750" fill="#17231f">Google identity</text>
+          <rect x="686" y="38" width="208" height="64" rx="14" fill="#deebf1" stroke="#315f78"/>
+          <text x="704" y="65" font-size="14" font-weight="850" fill="#315f78">I3</text><text x="704" y="87" font-size="15" font-weight="750" fill="#17231f">Pilots + erasure</text>
+          <line x1="386" y1="70" x2="423" y2="70" stroke="#52615b" stroke-width="2.5" marker-end="url(#lane-arrow)"/>
+
+          <text x="34" y="178" font-size="14" font-weight="850" fill="#a86512">AUTHORITY + PROOF</text>
+          <rect x="178" y="144" width="208" height="70" rx="14" fill="#f7e5c4" stroke="#a86512"/>
+          <text x="196" y="172" font-size="14" font-weight="850" fill="#a86512">U1 · WRITTEN</text><text x="196" y="195" font-size="15" font-weight="750" fill="#17231f">Reconcile authority</text>
+          <rect x="432" y="144" width="208" height="70" rx="14" fill="#f7e5c4" stroke="#a86512"/>
+          <text x="450" y="172" font-size="14" font-weight="850" fill="#a86512">G1 · GATE</text><text x="450" y="195" font-size="15" font-weight="750" fill="#17231f">Prove provider boundary</text>
+          <line x1="386" y1="179" x2="423" y2="179" stroke="#52615b" stroke-width="2.5" marker-end="url(#lane-arrow)"/>
+          <line x1="282" y1="103" x2="282" y2="135" stroke="#52615b" stroke-width="2.5" marker-end="url(#lane-arrow)"/>
+
+          <text x="34" y="304" font-size="14" font-weight="850" fill="#0e5a49">METHOD CORE</text>
+          <rect x="178" y="268" width="174" height="72" rx="14" fill="#dcebe4" stroke="#0e5a49"/>
+          <text x="196" y="296" font-size="14" font-weight="850" fill="#0e5a49">U2</text><text x="196" y="319" font-size="15" font-weight="750" fill="#17231f">Method kernel</text>
+          <rect x="390" y="248" width="174" height="72" rx="14" fill="#dcebe4" stroke="#0e5a49"/>
+          <text x="408" y="276" font-size="14" font-weight="850" fill="#0e5a49">U3</text><text x="408" y="299" font-size="15" font-weight="750" fill="#17231f">First modules</text>
+          <rect x="390" y="336" width="174" height="72" rx="14" fill="#dcebe4" stroke="#0e5a49"/>
+          <text x="408" y="364" font-size="14" font-weight="850" fill="#0e5a49">U4</text><text x="408" y="387" font-size="15" font-weight="750" fill="#17231f">Memory + briefing</text>
+          <rect x="614" y="292" width="208" height="72" rx="14" fill="#dcebe4" stroke="#0e5a49"/>
+          <text x="632" y="320" font-size="14" font-weight="850" fill="#0e5a49">U5</text><text x="632" y="343" font-size="15" font-weight="750" fill="#17231f">Agent + isolated research</text>
+          <line x1="536" y1="215" x2="280" y2="260" stroke="#52615b" stroke-width="2.5" marker-end="url(#lane-arrow)"/>
+          <line x1="352" y1="304" x2="381" y2="284" stroke="#52615b" stroke-width="2.5" marker-end="url(#lane-arrow)"/>
+          <line x1="352" y1="304" x2="381" y2="371" stroke="#52615b" stroke-width="2.5" marker-end="url(#lane-arrow)"/>
+          <line x1="564" y1="284" x2="606" y2="321" stroke="#52615b" stroke-width="2.5" marker-end="url(#lane-arrow)"/>
+          <line x1="564" y1="372" x2="606" y2="338" stroke="#52615b" stroke-width="2.5" marker-end="url(#lane-arrow)"/>
+          <line x1="536" y1="103" x2="688" y2="283" stroke="#52615b" stroke-width="2.2" stroke-dasharray="6 5" marker-end="url(#lane-arrow)"/>
+
+          <text x="34" y="500" font-size="14" font-weight="850" fill="#8d4c52">EXPERIENCE + LAUNCH</text>
+          <rect x="178" y="462" width="136" height="70" rx="14" fill="#f1dfe0" stroke="#8d4c52"/>
+          <text x="196" y="490" font-size="14" font-weight="850" fill="#8d4c52">U6</text><text x="196" y="513" font-size="14" font-weight="750" fill="#17231f">UI + prototype</text>
+          <rect x="338" y="462" width="136" height="70" rx="14" fill="#f1dfe0" stroke="#8d4c52"/>
+          <text x="356" y="490" font-size="14" font-weight="850" fill="#8d4c52">U7</text><text x="356" y="513" font-size="14" font-weight="750" fill="#17231f">First project</text>
+          <rect x="498" y="462" width="136" height="70" rx="14" fill="#f1dfe0" stroke="#8d4c52"/>
+          <text x="516" y="490" font-size="14" font-weight="850" fill="#8d4c52">U8</text><text x="516" y="513" font-size="14" font-weight="750" fill="#17231f">Loop + peers</text>
+          <rect x="658" y="462" width="136" height="70" rx="14" fill="#f1dfe0" stroke="#8d4c52"/>
+          <text x="676" y="490" font-size="14" font-weight="850" fill="#8d4c52">U9</text><text x="676" y="513" font-size="14" font-weight="750" fill="#17231f">Side Doors</text>
+          <rect x="818" y="462" width="156" height="70" rx="14" fill="#f1dfe0" stroke="#8d4c52"/>
+          <text x="836" y="490" font-size="14" font-weight="850" fill="#8d4c52">U10</text><text x="836" y="513" font-size="14" font-weight="750" fill="#17231f">Prove + deploy</text>
+          <line x1="718" y1="365" x2="263" y2="454" stroke="#52615b" stroke-width="2.5" marker-end="url(#lane-arrow)"/>
+          <line x1="314" y1="497" x2="329" y2="497" stroke="#52615b" stroke-width="2.5" marker-end="url(#lane-arrow)"/>
+          <line x1="474" y1="497" x2="489" y2="497" stroke="#52615b" stroke-width="2.5" marker-end="url(#lane-arrow)"/>
+          <line x1="634" y1="497" x2="649" y2="497" stroke="#52615b" stroke-width="2.5" marker-end="url(#lane-arrow)"/>
+          <line x1="794" y1="497" x2="809" y2="497" stroke="#52615b" stroke-width="2.5" marker-end="url(#lane-arrow)"/>
+          <line x1="790" y1="103" x2="888" y2="453" stroke="#52615b" stroke-width="2.2" stroke-dasharray="6 5" marker-end="url(#lane-arrow)"/>
+
+          <text x="178" y="574" font-size="13" font-weight="750" fill="#17231f">Parallel now:</text>
+          <text x="274" y="574" font-size="13" fill="#52615b">the fixture-only Purpose Paths prototype may start after U1 while I1/G1 proceed.</text>
+        </svg>
+        <div class="lane-key"><span><i style="background:#315f78"></i>Infrastructure retained from the revamp</span><span><i style="background:#a86512"></i>Authority and feasibility gates</span><span><i style="background:#0e5a49"></i>Method mechanics</span><span><i style="background:#8d4c52"></i>User experience and release</span></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-intro">
+        <div class="eyebrow">06 · Architecture that protects the Method</div>
+        <h2>The model interprets; the application keeps truth</h2>
+        <p>The new architecture deliberately separates the work that benefits from judgment from the rules that must always be true.</p>
+      </div>
+      <div class="principles">
+        <article><div class="icon">AI</div><h3>One active Method module</h3><p>A small global voice plus one repository-owned module guides the current checkpoint. The model does not carry the entire Method in one giant prompt.</p></article>
+        <article><div class="icon">{ }</div><h3>Narrow state operations</h3><p>Paths, projects, reflections, choices, peers, proof, and routes change through typed operations with revisions and lineage—not through prose parsing.</p></article>
+        <article><div class="icon">3</div><h3>Atomic equal choices</h3><p>Purpose Paths, follow-on projects, and Side Doors are exact-three sets. Selection activates one and parks the others in a single valid transition.</p></article>
+        <article><div class="icon">↻</div><h3>State refresh every step</h3><p>After a write, the server reloads canonical state and re-derives the next module, briefing, and available operations before the model continues.</p></article>
+        <article><div class="icon">⌕</div><h3>Isolated research</h3><p>Search gets validated, de-identified inputs and no Conversation or career-map context. Results provide cited information but never instructions or tool authority.</p></article>
+        <article><div class="icon">UI</div><h3>Deterministic presentation</h3><p>The product renders validated state in stable components. The model supplies meaning; it does not generate runtime interfaces for paths or projects.</p></article>
+      </div>
+    </section>
+
+    <section>
+      <div class="next-callout">
+        <div class="eyebrow" style="color:#dce9e4">07 · What ce-work means now</div>
+        <h2>The next run should not start at Method U2</h2>
+        <p>U1 removed the authority conflict, but the plan still requires the platform prerequisite and a provider feasibility gate before the model-free Method kernel can land.</p>
+        <ol>
+          <li><strong>Finish and verify any remaining I1 work.</strong> The AI SDK/OpenAI baseline is landed, but the plan still calls out the fail-closed agent switch and final baseline/preview evidence.</li>
+          <li><strong>Run G1.</strong> Prove dynamic module and tool refresh, isolated research, narration after committed state, cancellation, idempotency, safe compaction, and the native versus fallback loop choice.</li>
+          <li><strong>Only after G1 passes, begin U2.</strong> Build the Method kernel without a database or live model first.</li>
+          <li><strong>In parallel, prototype Purpose Paths.</strong> The fixture-only U6 prototype may begin now because U1 is written; it does not need to wait for the connected interface.</li>
+        </ol>
+      </div>
+      <div class="warning"><strong>Practical scope:</strong> invoke CE Work against one named unit and its verification gate. “Implement the plan” means follow this dependency graph; it does not mean generate I1 through U10 in one undifferentiated run.</div>
+    </section>
+
+    <section>
+      <div class="section-intro">
+        <div class="eyebrow">08 · Your high-leverage checkpoints</div>
+        <h2>The agents prove mechanisms; you judge whether the Method creates value</h2>
+        <p>Your attention belongs where technical correctness cannot answer the product question.</p>
+      </div>
+      <div class="checkpoints">
+        <article class="checkpoint"><div class="tag">AFTER G1</div><h3>Trust the provider boundary?</h3><p>Read the durable receipt. If neither loop route safely refreshes state, modules, tools, streaming, and compaction, architecture stops before Method code.</p></article>
+        <article class="checkpoint"><div class="tag">DURING U6</div><h3>Can you compare paths neutrally?</h3><p>Choose the Purpose Paths presentation that makes three options understandable and equally weighted without nudging you toward one.</p></article>
+        <article class="checkpoint"><div class="tag">AFTER U7</div><h3>Would you finish onboarding?</h3><p>Dogfood the pacing from the first question through one accepted Path Project. Judge insight, friction, concision, and whether the Why genuinely grounds the paths.</p></article>
+        <article class="checkpoint"><div class="tag">AFTER U8</div><h3>Does returning create new knowledge?</h3><p>Reflect on a real project at different work statuses. Check whether Revelio helps you interpret evidence without converting it into a score or verdict.</p></article>
+        <article class="checkpoint"><div class="tag">AFTER U9</div><h3>Do Side Doors feel credible?</h3><p>Inspect whether confirmed proof leads to three current, contribution-shaped entry routes rather than generic networking advice.</p></article>
+        <article class="checkpoint"><div class="tag">BEFORE OUTREACH</div><h3>Would you keep using it?</h3><p>Complete the production journey yourself, including reload and interruption. The founder-belief bar comes before asking external explorers to validate it.</p></article>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-intro">
+        <div class="eyebrow">09 · What happens to the August 15 explainer</div>
+        <h2>Keep the old guide as history; use this one for the reconciled plan</h2>
+        <p>The earlier HTML accurately taught the plan as it existed on August 15. Overwriting it would erase useful history and make its date misleading.</p>
+      </div>
+      <div class="contrast">
+        <article class="before"><h3>August 15 guide</h3><p>Use it to understand the original rebuild architecture and the decisions already made about OpenAI Conversations, Neon product memory, Google identity, the legacy route, and the broad launch intent.</p></article>
+        <article class="after"><h3>August 29 guide</h3><p>Use it to understand the post-U1 authority, the complete Method, the I/G/U work lanes, the provider gate, isolated research, deterministic presentation, and the current execution order.</p></article>
+      </div>
+    </section>
+
+    <section>
+      <div class="snapshot">
+        <p><strong>Keep this sentence:</strong> you are not mainly building a chatbot or a prettier career report. You are building a tested method for turning reflection into firsthand evidence, using that evidence to choose what to explore next, and turning accumulated proof into a credible way into the work.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer>Composed 2026-08-29 20:26 CEST by ce-explain</footer>
+</body>
+</html>
