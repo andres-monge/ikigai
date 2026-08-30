@@ -46,7 +46,7 @@ This is why the two most common forms of career advice are wrong:
 
 The highest chance of success comes from following your curiosity to work on your own projects, pay attention to what gives you energy, and use what you learn to choose the next one. The point of a project is not necessarily to succeed, it's to learn if it's something you'd want to pursue.
 
-Think of it like dating rather than picking a destination. Projects are dates: you start with something chill that is low commitment, then invest more only if each date makes you want another.
+Think of it like dating rather than picking a destination. Projects are dates: you start with something chill and low commitment, then invest more only if each date makes you want another.
 
 I'm not the first person to suggest running low-stakes experiments, but I believe existing approaches aren't the best way to tackle this problem:
 
