@@ -8,8 +8,15 @@ import {
   type CareerMap,
   type CareerMapOperation,
 } from '../shared/career-map/index.js';
-import { PostgresStorage } from './storage.js';
-import { storageTestDatabase } from './storage.test-database.js';
+import {
+  createWorkspaceActionPersistenceContext,
+  PostgresStorage,
+  type AgentTurnRecord,
+} from './storage.js';
+import {
+  cleanupStorageTestDatabases,
+  storageTestDatabase,
+} from './storage.test-database.js';
 
 export const CAREER_MAP_FALSIFICATION_BOUNDS = {
   serializedBytes: 1_048_576,
@@ -57,6 +64,26 @@ function evidenceOperation(
   };
 }
 
+function boundPerformanceOperation(
+  turn: AgentTurnRecord,
+  operation: CareerMapOperation,
+) {
+  const context = createWorkspaceActionPersistenceContext(turn, {
+    turnSequence: operation.expectedRevision + 1,
+    occurredAt: operation.occurredAt,
+  });
+  if (operation.type !== 'append-foundation-evidence') throw new Error('Unexpected performance operation.');
+  return {
+    context,
+    operation: {
+      ...operation,
+      payload: {
+        evidence: { ...operation.payload.evidence, provenance: context.action },
+      },
+    } as CareerMapOperation,
+  };
+}
+
 function longLivedFixture(revisions = 300): CareerMap {
   let map = createCareerMap(`${runId}-fixture`);
   for (let index = 0; index < revisions; index += 1) {
@@ -76,7 +103,11 @@ function percentile(values: number[], fraction: number): number {
 }
 
 afterAll(async () => {
-  for (const userId of owners) await storage.eraseMethodData(userId);
+  try {
+    for (const userId of owners) await storage.eraseMethodData(userId);
+  } finally {
+    await cleanupStorageTestDatabases();
+  }
 });
 
 describe('career-map durable-shape falsification bounds', () => {
@@ -111,13 +142,20 @@ describe('career-map durable-shape falsification bounds', () => {
       turnId: `${runId}-latency-turn`,
       leaseId: `${runId}-latency-lease`,
     };
-    expect((await storage.beginAgentTurn(latencyTurn)).status).toBe('started');
+    const startedTurn = await storage.beginWorkspaceActionTurn(latencyTurn);
+    expect(startedTurn.status).toBe('started');
+    if (startedTurn.status !== 'started') throw new Error('Performance turn did not start.');
+    const durableLatencyTurn = startedTurn.turn;
     const hotPathBaseRevision = 280;
     for (let revision = 0; revision < hotPathBaseRevision; revision += 1) {
+      const bounded = boundPerformanceOperation(
+        durableLatencyTurn,
+        evidenceOperation(revision, `${runId}-latency-source-${revision}`),
+      );
       const result = await storage.persistCareerMapOperation({
         userId: latencyOwner,
         leaseId: latencyTurn.leaseId,
-        operation: evidenceOperation(revision, `${runId}-latency-source-${revision}`),
+        ...bounded,
         moduleVersion: 'performance@1',
       });
       expect(result.status).toBe('committed');
@@ -125,10 +163,14 @@ describe('career-map durable-shape falsification bounds', () => {
     const transactionSamples: number[] = [];
     for (let revision = hotPathBaseRevision; revision < 300; revision += 1) {
       const started = performance.now();
+      const bounded = boundPerformanceOperation(
+        durableLatencyTurn,
+        evidenceOperation(revision, `${runId}-latency-source-${revision}`),
+      );
       const result = await storage.persistCareerMapOperation({
         userId: latencyOwner,
         leaseId: latencyTurn.leaseId,
-        operation: evidenceOperation(revision, `${runId}-latency-source-${revision}`),
+        ...bounded,
         moduleVersion: 'performance@1',
       });
       transactionSamples.push(performance.now() - started);
@@ -142,7 +184,10 @@ describe('career-map durable-shape falsification bounds', () => {
         storage.persistCareerMapOperation({
           userId: latencyOwner,
           leaseId: latencyTurn.leaseId,
-          operation: evidenceOperation(300, `${runId}-race-source-${index}`),
+          ...boundPerformanceOperation(
+            durableLatencyTurn,
+            evidenceOperation(300, `${runId}-race-source-${index}`),
+          ),
           moduleVersion: 'performance@1',
         })),
     );

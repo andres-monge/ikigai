@@ -276,6 +276,7 @@ export const agentTurns = pgTable('agent_turns', {
     .references(() => careerMaps.userId, { onDelete: 'cascade' }),
   clientMessageId: text('client_message_id').notNull(),
   requestFingerprint: text('request_fingerprint').notNull(),
+  origin: text('origin').$type<'agent-turn' | 'workspace-action'>().notNull(),
   leaseId: text('lease_id').notNull(),
   status: agentTurnStatusEnum('status').notNull().default('pending'),
   terminalResult: jsonb('terminal_result').$type<Record<string, unknown>>(),
@@ -291,6 +292,10 @@ export const agentTurns = pgTable('agent_turns', {
   terminalConsistency: check(
     'agent_turns_terminal_consistency',
     sql`(${table.status} = 'pending' AND ${table.terminalAt} IS NULL) OR (${table.status} <> 'pending' AND ${table.terminalAt} IS NOT NULL)`,
+  ),
+  validOrigin: check(
+    'agent_turns_valid_origin',
+    sql`${table.origin} IN ('agent-turn', 'workspace-action')`,
   ),
 }));
 

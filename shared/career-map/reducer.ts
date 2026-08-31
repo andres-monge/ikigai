@@ -123,10 +123,12 @@ function auditableConfirmation(
   target: { id: string; revision: number; presentation: ModelPresentation },
   action: UserActionProvenance,
 ): Confirmation {
+  const turnIsValid = action.kind === 'ui-action'
+    || action.turnId !== target.presentation.assistantTurnId;
   const sequenceIsValid = action.kind === 'ui-action'
     ? action.turnSequence >= target.presentation.turnSequence
     : action.turnSequence > target.presentation.turnSequence;
-  assert(sequenceIsValid, 'Confirmation must come from a subsequent user turn or an explicit UI action.', 'confirmation-not-auditable');
+  assert(turnIsValid && sequenceIsValid, 'Confirmation must come from a subsequent user turn or an explicit UI action.', 'confirmation-not-auditable');
   return {
     targetId: target.id,
     targetRevision: target.revision,

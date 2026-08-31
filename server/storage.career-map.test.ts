@@ -1,16 +1,24 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { eq } from 'drizzle-orm';
-import { storageTestDatabase as db } from './storage.test-database.js';
+import { and, eq } from 'drizzle-orm';
+import {
+  cleanupStorageTestDatabases,
+  storageTestDatabase as db,
+} from './storage.test-database.js';
 import {
   ConversationMappingConflictError,
+  CareerMapRepairRequiredError,
+  createAgentTurnPersistenceContext,
+  createWorkspaceActionPersistenceContext,
   MethodErasurePendingError,
   PostgresStorage,
   ResearchAttemptConflictError,
+  ResearchAttemptSourceError,
   TurnLeaseIdentityConflictError,
   TurnLeaseLostError,
   type StorageFaultStage,
 } from './storage.js';
+import { compileCareerMapBriefing } from './ai/briefing.js';
 import {
   agentConversationMappings,
   agentTurnLeases,
@@ -141,7 +149,11 @@ function sideDoors(): [SideDoorInput, SideDoorInput, SideDoorInput] {
   })) as [SideDoorInput, SideDoorInput, SideDoorInput];
 }
 
-async function beginTurn(userId: string, suffix = 'one') {
+async function beginTurn(
+  userId: string,
+  suffix = 'one',
+  origin: 'agent-turn' | 'workspace-action' = 'workspace-action',
+) {
   await storage.getOrCreateCareerMap(userId);
   const input = {
     userId,
@@ -150,18 +162,78 @@ async function beginTurn(userId: string, suffix = 'one') {
     turnId: id(`turn-${suffix}`),
     leaseId: id(`lease-${suffix}`),
   };
-  const result = await storage.beginAgentTurn(input);
+  const result = origin === 'agent-turn'
+    ? await storage.beginAgentTurn(input)
+    : await storage.beginWorkspaceActionTurn(input);
   expect(result.status).toBe('started');
-  return input;
+  if (result.status !== 'started') throw new Error('Test fixture turn did not start.');
+  return result.turn;
 }
 
 async function persist(userId: string, leaseId: string, operation: CareerMapOperation) {
-  return storage.persistCareerMapOperation({
+  return storage.persistCareerMapOperation(await boundPersistenceInput({
     userId,
     leaseId,
     operation,
     moduleVersion: 'method-test@1',
-  });
+  }));
+}
+
+function provenanceTiming(operation: CareerMapOperation) {
+  const candidates: Array<{ turnSequence: number; occurredAt: string }> = [];
+  const visit = (value: unknown): void => {
+    if (!value || typeof value !== 'object') return;
+    if (Array.isArray(value)) {
+      value.forEach(visit);
+      return;
+    }
+    const record = value as Record<string, unknown>;
+    if ((record.kind === 'user-message' || record.kind === 'ui-action')
+      && typeof record.turnSequence === 'number' && typeof record.occurredAt === 'string') {
+      candidates.push({ turnSequence: record.turnSequence, occurredAt: record.occurredAt });
+    }
+    if (record.kind === 'model-presentation'
+      && typeof record.turnSequence === 'number' && typeof record.presentedAt === 'string') {
+      candidates.push({ turnSequence: record.turnSequence, occurredAt: record.presentedAt });
+    }
+    Object.values(record).forEach(visit);
+  };
+  visit(operation.payload);
+  return candidates.sort((left, right) => right.turnSequence - left.turnSequence)[0]
+    ?? { turnSequence: operation.expectedRevision + 1, occurredAt: operation.occurredAt };
+}
+
+function bindOperationProvenance(
+  value: unknown,
+  context: ReturnType<typeof createWorkspaceActionPersistenceContext>,
+): unknown {
+  if (!value || typeof value !== 'object') return value;
+  if (Array.isArray(value)) return value.map((item) => bindOperationProvenance(item, context));
+  const record = value as Record<string, unknown>;
+  if (record.kind === 'user-message' || record.kind === 'ui-action') return context.action;
+  if (record.kind === 'model-presentation') return context.presentation;
+  return Object.fromEntries(
+    Object.entries(record).map(([key, nested]) => [key, bindOperationProvenance(nested, context)]),
+  );
+}
+
+async function boundPersistenceInput(input: {
+  userId: string;
+  leaseId: string;
+  operation: CareerMapOperation;
+  moduleVersion: string;
+}) {
+  const [turn] = await db.select().from(agentTurns).where(and(
+    eq(agentTurns.userId, input.userId),
+    eq(agentTurns.leaseId, input.leaseId),
+  ));
+  if (!turn) throw new Error('Test fixture is missing its durable turn.');
+  const context = createWorkspaceActionPersistenceContext(turn, provenanceTiming(input.operation));
+  return {
+    ...input,
+    context,
+    operation: bindOperationProvenance(input.operation, context) as CareerMapOperation,
+  };
 }
 
 async function eraseOwner(userId: string) {
@@ -175,7 +247,11 @@ beforeEach(() => {
 });
 
 afterAll(async () => {
-  for (const userId of owners) await eraseOwner(userId);
+  try {
+    for (const userId of owners) await eraseOwner(userId);
+  } finally {
+    await cleanupStorageTestDatabases();
+  }
 });
 
 describe('PostgresStorage Method map, history, and ownership', () => {
@@ -342,13 +418,323 @@ describe('PostgresStorage Method map, history, and ownership', () => {
     expect(loaded.status).toBe('ready');
     if (loaded.status === 'ready') expect(loaded.map.pathSets[0].paths[0].sources?.[0]).toEqual(attempt.sources[0]);
     const history = await storage.listCareerMapHistory(userId);
-    expect(history[1].confirmationProvenance).toEqual(action(2));
+    expect(history[1].confirmationProvenance).toEqual({
+      kind: 'ui-action',
+      actionId: turn.clientMessageId,
+      turnId: turn.turnId,
+      turnSequence: 2,
+      occurredAt: at(2),
+    });
     await db.delete(careerMapResearchAttempts).where(eq(careerMapResearchAttempts.userId, userId));
     expect(await storage.loadCareerMap(userId)).toMatchObject({
       status: 'repair-required',
       reason: 'research-mismatch',
     });
     await eraseOwner(userId);
+  });
+
+  it('binds action and presentation provenance to the active durable turn', async () => {
+    const userId = owner('durable-provenance-boundary');
+    await storage.getOrCreateCareerMap(userId);
+    const turn = await beginTurn(userId, 'durable-provenance-boundary', 'agent-turn');
+    const firstContext = createAgentTurnPersistenceContext(turn, {
+      turnSequence: 1,
+      occurredAt: at(1),
+    });
+    const firstOperation = evidenceOperation(0, id('durable-provenance-first'));
+    if (firstOperation.type !== 'append-foundation-evidence') throw new Error('Unexpected fixture operation.');
+    firstOperation.payload.evidence.provenance = firstContext.action;
+    expect((await storage.persistCareerMapOperation({
+      userId, leaseId: turn.leaseId, context: firstContext,
+      operation: firstOperation, moduleVersion: 'method-test@1',
+    })).status).toBe('committed');
+
+    const currentContext = createAgentTurnPersistenceContext(turn, {
+      turnSequence: 2,
+      occurredAt: at(2),
+    });
+    for (const [suffix, provenance] of [
+      ['kind', { ...currentContext.action, kind: 'ui-action' }],
+      ['turn', { ...currentContext.action, turnId: id('forged-turn') }],
+      ['action', { ...currentContext.action, actionId: id('forged-action') }],
+    ] as const) {
+      const forged = evidenceOperation(1, id(`durable-provenance-forged-${suffix}`));
+      if (forged.type !== 'append-foundation-evidence') throw new Error('Unexpected fixture operation.');
+      forged.payload.evidence.provenance = provenance;
+      const rejected = await storage.persistCareerMapOperation({
+        userId, leaseId: turn.leaseId, context: currentContext,
+        operation: forged, moduleVersion: 'method-test@1',
+      });
+      expect(rejected.status).toBe('rejected');
+      if (rejected.status === 'rejected') expect(rejected.error.code).toBe('invalid-operation');
+    }
+
+    const proposal: CareerMapOperation = {
+      type: 'propose-why', sourceId: id('durable-provenance-why'), expectedRevision: 1, occurredAt: at(2),
+      payload: {
+        why: {
+          id: id('durable-provenance-why-record'), revision: 1,
+          statement: 'Help people learn through action.', serves: 'Career explorers',
+          pointOfView: 'Firsthand evidence creates agency.',
+        },
+        presentation: currentContext.presentation,
+      },
+    };
+    expect((await storage.persistCareerMapOperation({
+      userId, leaseId: turn.leaseId, context: currentContext,
+      operation: proposal, moduleVersion: 'method-test@1',
+    })).status).toBe('committed');
+
+    const confirmationContext = createAgentTurnPersistenceContext(turn, {
+      turnSequence: 3,
+      occurredAt: at(3),
+    });
+    const sameTurnConfirmation: CareerMapOperation = {
+      type: 'confirm-why', sourceId: id('durable-provenance-same-turn-confirm'),
+      expectedRevision: 2, occurredAt: at(3),
+      payload: {
+        whyId: id('durable-provenance-why-record'), whyRevision: 1,
+        action: confirmationContext.action,
+      },
+    };
+    const sameTurn = await storage.persistCareerMapOperation({
+      userId, leaseId: turn.leaseId, context: confirmationContext,
+      operation: sameTurnConfirmation, moduleVersion: 'method-test@1',
+    });
+    expect(sameTurn.status).toBe('rejected');
+    if (sameTurn.status === 'rejected') expect(sameTurn.error.code).toBe('confirmation-not-auditable');
+
+    const forgedUi = structuredClone(sameTurnConfirmation);
+    if (forgedUi.type !== 'confirm-why') throw new Error('Unexpected fixture operation.');
+    forgedUi.sourceId = id('durable-provenance-forged-ui');
+    forgedUi.payload.action.kind = 'ui-action';
+    const forgedUiResult = await storage.persistCareerMapOperation({
+      userId, leaseId: turn.leaseId, context: confirmationContext,
+      operation: forgedUi, moduleVersion: 'method-test@1',
+    });
+    expect(forgedUiResult.status).toBe('rejected');
+    if (forgedUiResult.status === 'rejected') expect(forgedUiResult.error.code).toBe('invalid-operation');
+
+    const relabeledContext = {
+      ...confirmationContext,
+      origin: 'workspace-action' as const,
+      action: { ...confirmationContext.action, kind: 'ui-action' as const },
+    };
+    const relabeledOperation = structuredClone(sameTurnConfirmation);
+    if (relabeledOperation.type !== 'confirm-why') throw new Error('Unexpected fixture operation.');
+    relabeledOperation.sourceId = id('durable-provenance-relabeled-workspace');
+    relabeledOperation.payload.action = relabeledContext.action;
+    const relabeledResult = await storage.persistCareerMapOperation({
+      userId, leaseId: turn.leaseId, context: relabeledContext,
+      operation: relabeledOperation, moduleVersion: 'method-test@1',
+    });
+    expect(relabeledResult.status).toBe('rejected');
+    if (relabeledResult.status === 'rejected') expect(relabeledResult.error.code).toBe('invalid-operation');
+
+    expect(() => createWorkspaceActionPersistenceContext(turn, {
+      turnSequence: 3,
+      occurredAt: at(3),
+    })).toThrow(/durable agent-turn turn/);
+    await storage.completeAgentTurn({
+      userId, turnId: turn.turnId, leaseId: turn.leaseId,
+    });
+    const workspaceTurn = await beginTurn(
+      userId,
+      'durable-provenance-workspace-confirm',
+      'workspace-action',
+    );
+    const workspaceContext = createWorkspaceActionPersistenceContext(workspaceTurn, {
+      turnSequence: 3,
+      occurredAt: at(3),
+    });
+    const workspaceConfirmation = structuredClone(sameTurnConfirmation);
+    if (workspaceConfirmation.type !== 'confirm-why') throw new Error('Unexpected fixture operation.');
+    workspaceConfirmation.sourceId = id('durable-provenance-workspace-confirm');
+    workspaceConfirmation.payload.action = workspaceContext.action;
+    expect((await storage.persistCareerMapOperation({
+      userId, leaseId: workspaceTurn.leaseId, context: workspaceContext,
+      operation: workspaceConfirmation, moduleVersion: 'method-test@1',
+    })).status).toBe('committed');
+    expect(await storage.listCareerMapHistory(userId)).toHaveLength(3);
+  });
+
+  it('accepts conversational confirmation only from a later turn after completed presentation', async () => {
+    for (const [terminal, expectedStatus] of [
+      ['completed', 'committed'],
+      ['cancelled', 'rejected'],
+    ] as const) {
+      const userId = owner(`presentation-terminal-${terminal}`);
+      await storage.getOrCreateCareerMap(userId);
+      const presentationTurn = await beginTurn(
+        userId,
+        `presentation-terminal-${terminal}-first`,
+        'agent-turn',
+      );
+      const presentationContext = createAgentTurnPersistenceContext(presentationTurn, {
+        turnSequence: 1,
+        occurredAt: at(1),
+      });
+      expect((await storage.persistCareerMapOperation({
+        userId, leaseId: presentationTurn.leaseId, context: presentationContext,
+        operation: {
+          type: 'propose-why', sourceId: id(`presentation-terminal-${terminal}-propose`),
+          expectedRevision: 0, occurredAt: at(1),
+          payload: {
+            why: {
+              id: id(`presentation-terminal-${terminal}-why`), revision: 1,
+              statement: 'Make action a source of useful evidence.', serves: 'Career explorers',
+              pointOfView: 'Completed reflection should guide the next choice.',
+            },
+            presentation: presentationContext.presentation,
+          },
+        },
+        moduleVersion: 'method-test@1',
+      })).status).toBe('committed');
+      if (terminal === 'completed') {
+        await storage.completeAgentTurn({
+          userId, turnId: presentationTurn.turnId, leaseId: presentationTurn.leaseId,
+        });
+      } else {
+        await storage.cancelAgentTurn({
+          userId, turnId: presentationTurn.turnId, leaseId: presentationTurn.leaseId,
+        });
+      }
+
+      const confirmationTurn = await beginTurn(
+        userId,
+        `presentation-terminal-${terminal}-second`,
+        'agent-turn',
+      );
+      const confirmationContext = createAgentTurnPersistenceContext(confirmationTurn, {
+        turnSequence: 2,
+        occurredAt: at(2),
+      });
+      const result = await storage.persistCareerMapOperation({
+        userId, leaseId: confirmationTurn.leaseId, context: confirmationContext,
+        operation: {
+          type: 'confirm-why', sourceId: id(`presentation-terminal-${terminal}-confirm`),
+          expectedRevision: 1, occurredAt: at(2),
+          payload: {
+            whyId: id(`presentation-terminal-${terminal}-why`), whyRevision: 1,
+            action: confirmationContext.action,
+          },
+        },
+        moduleVersion: 'method-test@1',
+      });
+      expect(result.status).toBe(expectedStatus);
+      if (result.status === 'rejected') expect(result.error.code).toBe('confirmation-not-auditable');
+    }
+  });
+
+  it('binds user-supplied sources to server provenance and keeps them out of research attempts', async () => {
+    const userId = owner('user-source-boundary');
+    await storage.getOrCreateCareerMap(userId);
+    const turn = await beginTurn(userId, 'user-source-boundary', 'agent-turn');
+    const proposalContext = createAgentTurnPersistenceContext(turn, {
+      turnSequence: 1,
+      occurredAt: at(1),
+    });
+    expect((await storage.persistCareerMapOperation({
+      userId, leaseId: turn.leaseId, context: proposalContext,
+      operation: {
+        type: 'propose-why', sourceId: id('user-source-why-propose'), expectedRevision: 0, occurredAt: at(1),
+        payload: {
+          why: {
+            id: id('user-source-why'), revision: 1, statement: 'Make useful inquiry possible.',
+            serves: 'People facing unclear choices', pointOfView: 'Firsthand evidence should guide action.',
+          },
+          presentation: proposalContext.presentation,
+        },
+      },
+      moduleVersion: 'method-test@1',
+    })).status).toBe('committed');
+    await storage.completeAgentTurn({ userId, turnId: turn.turnId, leaseId: turn.leaseId });
+    const confirmationTurn = await beginTurn(userId, 'user-source-confirm', 'workspace-action');
+    const confirmationContext = createWorkspaceActionPersistenceContext(confirmationTurn, {
+      turnSequence: 2,
+      occurredAt: at(2),
+    });
+    expect((await storage.persistCareerMapOperation({
+      userId, leaseId: confirmationTurn.leaseId, context: confirmationContext,
+      operation: {
+        type: 'confirm-why', sourceId: id('user-source-why-confirm'), expectedRevision: 1, occurredAt: at(2),
+        payload: { whyId: id('user-source-why'), whyRevision: 1, action: confirmationContext.action },
+      },
+      moduleVersion: 'method-test@1',
+    })).status).toBe('committed');
+
+    await storage.completeAgentTurn({
+      userId, turnId: confirmationTurn.turnId, leaseId: confirmationTurn.leaseId,
+    });
+    const sourceTurn = await beginTurn(userId, 'user-source-paths', 'agent-turn');
+    const sourceContext = createAgentTurnPersistenceContext(sourceTurn, {
+      turnSequence: 3,
+      occurredAt: at(3),
+    });
+    const safeUserSource = {
+      kind: 'user-supplied-source' as const,
+      label: 'Explorer-provided professional association page',
+      url: 'https://example.com/explorer-source',
+      recordedBy: sourceContext.action,
+    };
+    await expect(storage.recordResearchAttempt(userId, sourceTurn.leaseId, {
+      id: id('user-source-smuggled-research'), status: 'succeeded', queryCategory: 'purpose-path',
+      attemptedAt: at(3), sources: [safeUserSource],
+    })).rejects.toBeInstanceOf(ResearchAttemptSourceError);
+
+    const sourcedPaths = paths();
+    sourcedPaths[0].sources = [safeUserSource];
+    const sourceOperation: CareerMapOperation = {
+      type: 'propose-purpose-paths', sourceId: id('user-source-paths'), expectedRevision: 2, occurredAt: at(3),
+      payload: {
+        setId: id('user-source-path-set'), setRevision: 1,
+        paths: sourcedPaths, presentation: sourceContext.presentation,
+      },
+    };
+
+    const forgedRecordedBy = structuredClone(sourceOperation);
+    if (forgedRecordedBy.type !== 'propose-purpose-paths') throw new Error('Unexpected fixture operation.');
+    const forgedSource = forgedRecordedBy.payload.paths[0].sources?.[0];
+    if (!forgedSource || forgedSource.kind !== 'user-supplied-source') throw new Error('Missing user source fixture.');
+    forgedSource.recordedBy = { ...sourceContext.action, actionId: id('forged-user-source-action') };
+    const forgedResult = await storage.persistCareerMapOperation({
+      userId, leaseId: sourceTurn.leaseId, context: sourceContext,
+      operation: forgedRecordedBy, moduleVersion: 'method-test@1',
+    });
+    expect(forgedResult.status).toBe('rejected');
+
+    for (const [scheme, url] of [
+      ['javascript', 'javascript:alert(1)'],
+      ['http', 'http://example.com/insecure'],
+      ['file', 'file:///tmp/private-source'],
+      ['ftp', 'ftp://example.com/source'],
+    ]) {
+      const unsafeUrl = structuredClone(sourceOperation);
+      if (unsafeUrl.type !== 'propose-purpose-paths') throw new Error('Unexpected fixture operation.');
+      const unsafeSource = unsafeUrl.payload.paths[0].sources?.[0];
+      if (!unsafeSource || unsafeSource.kind !== 'user-supplied-source') throw new Error('Missing user source fixture.');
+      unsafeSource.url = url;
+      unsafeUrl.sourceId = id(`user-source-unsafe-${scheme}`);
+      const unsafeResult = await storage.persistCareerMapOperation({
+        userId, leaseId: sourceTurn.leaseId, context: sourceContext,
+        operation: unsafeUrl, moduleVersion: 'method-test@1',
+      });
+      expect(unsafeResult.status).toBe('rejected');
+    }
+
+    expect((await storage.persistCareerMapOperation({
+      userId, leaseId: sourceTurn.leaseId, context: sourceContext,
+      operation: sourceOperation, moduleVersion: 'method-test@1',
+    })).status).toBe('committed');
+    const loaded = await storage.loadCareerMap(userId);
+    expect(loaded.status).toBe('ready');
+    if (loaded.status === 'ready') {
+      expect(loaded.map.pathSets[0].paths[0].sources).toEqual([safeUserSource]);
+      expect(compileCareerMapBriefing(loaded.map).markdown)
+        .toContain('Explorer-provided source: Explorer-provided professional association page');
+    }
+    expect(await storage.listResearchAttempts(userId)).toEqual([]);
+    expect(await storage.listCareerMapHistory(userId)).toHaveLength(3);
   });
 
   it('preserves an exact sourced canonical sibling across a later-turn path combination', async () => {
@@ -412,12 +798,12 @@ describe('PostgresStorage Method map, history, and ownership', () => {
         if (current === stage) throw new Error(`fault:${stage}`);
       },
     });
-    await expect(faulting.persistCareerMapOperation({
+    await expect(faulting.persistCareerMapOperation(await boundPersistenceInput({
       userId,
       leaseId: turn.leaseId,
       operation: evidenceOperation(0, id(`source-${stage}`)),
       moduleVersion: 'method-test@1',
-    })).rejects.toThrow(`fault:${stage}`);
+    }))).rejects.toThrow(`fault:${stage}`);
     const loaded = await storage.loadCareerMap(userId);
     expect(loaded.status).toBe('ready');
     if (loaded.status === 'ready') expect(loaded.map.revision).toBe(0);
@@ -527,12 +913,12 @@ describe('PostgresStorage Method map, history, and ownership', () => {
         }
       },
     });
-    const write = gated.persistCareerMapOperation({
+    const write = gated.persistCareerMapOperation(await boundPersistenceInput({
       userId,
       leaseId: turn.leaseId,
       operation: evidenceOperation(0, id('load-write-race-source')),
       moduleVersion: 'method-test@1',
-    });
+    }));
     await midpoint;
     let loadSettled = false;
     const concurrentLoad = storage.loadCareerMap(userId).finally(() => { loadSettled = true; });
@@ -572,13 +958,13 @@ describe('PostgresStorage lease and client-message turns', () => {
   it('conflicts while active, attaches without reinvocation, expires, and reclaims with fencing', async () => {
     const userId = owner('lease');
     const first = await beginTurn(userId, 'lease-first');
-    const attached = await storage.beginAgentTurn(first);
+    const attached = await storage.beginWorkspaceActionTurn(first);
     expect(attached.status).toBe('attached');
     if (attached.status === 'attached') expect(attached.shouldInvokeModel).toBe(false);
     const second = { ...first, clientMessageId: id('message-lease-second'), requestFingerprint: id('request-lease-second'), turnId: id('turn-lease-second'), leaseId: id('lease-lease-second') };
-    expect((await storage.beginAgentTurn(second)).status).toBe('conflict');
+    expect((await storage.beginWorkspaceActionTurn(second)).status).toBe('conflict');
     now = new Date(now.getTime() + 400_000);
-    const reclaimed = await storage.beginAgentTurn(second);
+    const reclaimed = await storage.beginWorkspaceActionTurn(second);
     expect(reclaimed.status).toBe('started');
     if (reclaimed.status === 'started') expect(reclaimed.reclaimedTurnId).toBe(first.turnId);
     expect((await storage.getAgentTurn(userId, first.clientMessageId))?.status).toBe('failed');
@@ -672,7 +1058,7 @@ describe('PostgresStorage lease and client-message turns', () => {
     const userId = owner('same-message-expired');
     const turn = await beginTurn(userId, 'same-message-expired');
     now = new Date(now.getTime() + 400_000);
-    const recovered = await storage.beginAgentTurn(turn);
+    const recovered = await storage.beginWorkspaceActionTurn(turn);
     expect(recovered.status).toBe('terminal');
     if (recovered.status === 'terminal') {
       expect(recovered.shouldInvokeModel).toBe(false);
@@ -682,7 +1068,7 @@ describe('PostgresStorage lease and client-message turns', () => {
       });
     }
     expect(await storage.getTurnLease(userId)).toBeUndefined();
-    expect((await storage.beginAgentTurn(turn)).status).toBe('terminal');
+    expect((await storage.beginWorkspaceActionTurn(turn)).status).toBe('terminal');
   });
 
   it('fences completion against a concurrent reclaim after expiry', async () => {
@@ -725,7 +1111,7 @@ describe('PostgresStorage lease and client-message turns', () => {
     await storage.completeAgentTurn({
       userId: completedOwner, turnId: completed.turnId, leaseId: completed.leaseId, result: completedResult,
     });
-    const completedRetry = await storage.beginAgentTurn(completed);
+    const completedRetry = await storage.beginWorkspaceActionTurn(completed);
     expect(completedRetry.status).toBe('terminal');
     if (completedRetry.status === 'terminal') {
       expect(completedRetry.shouldInvokeModel).toBe(false);
@@ -737,7 +1123,7 @@ describe('PostgresStorage lease and client-message turns', () => {
     await storage.cancelAgentTurn({
       userId: cancelledOwner, turnId: cancelled.turnId, leaseId: cancelled.leaseId, result: cancelledResult,
     });
-    const cancelledRetry = await storage.beginAgentTurn(cancelled);
+    const cancelledRetry = await storage.beginWorkspaceActionTurn(cancelled);
     expect(cancelledRetry.status).toBe('terminal');
     if (cancelledRetry.status === 'terminal') {
       expect(cancelledRetry.shouldInvokeModel).toBe(false);
@@ -750,8 +1136,8 @@ describe('PostgresStorage lease and client-message turns', () => {
     const rightOwner = owner('isolation-right');
     await Promise.all([storage.getOrCreateCareerMap(leftOwner), storage.getOrCreateCareerMap(rightOwner)]);
     const shared = { clientMessageId: id('shared-message'), requestFingerprint: id('shared-request'), turnId: id('left-turn'), leaseId: id('left-lease') };
-    expect((await storage.beginAgentTurn({ userId: leftOwner, ...shared })).status).toBe('started');
-    expect((await storage.beginAgentTurn({ userId: rightOwner, ...shared, turnId: id('right-turn'), leaseId: id('right-lease') })).status).toBe('started');
+    expect((await storage.beginWorkspaceActionTurn({ userId: leftOwner, ...shared })).status).toBe('started');
+    expect((await storage.beginWorkspaceActionTurn({ userId: rightOwner, ...shared, turnId: id('right-turn'), leaseId: id('right-lease') })).status).toBe('started');
     expect((await persist(leftOwner, shared.leaseId, evidenceOperation(0, id('shared-source')))).status).toBe('committed');
     expect((await persist(rightOwner, id('right-lease'), evidenceOperation(0, id('shared-source')))).status).toBe('committed');
     expect(await storage.listCareerMapHistory(leftOwner)).toHaveLength(1);
@@ -788,6 +1174,97 @@ describe('PostgresStorage lease and client-message turns', () => {
 });
 
 describe('PostgresStorage repair, erasure, and integrity', () => {
+  it.each(['corrupt', 'unsupported', 'sticky'] as const)(
+    'blocks turn acquisition before lease or turn writes for a %s repair row',
+    async (scenario) => {
+      const userId = owner(`repair-turn-gate-${scenario}`);
+      const created = await storage.getOrCreateCareerMap(userId);
+      expect(created.status).toBe('ready');
+      if (created.status !== 'ready') return;
+      if (scenario === 'corrupt') {
+        await db.update(careerMaps)
+          .set({ document: { ...created.map, pathSets: [{ id: 'broken' }] } as never })
+          .where(eq(careerMaps.userId, userId));
+      } else if (scenario === 'unsupported') {
+        await db.update(careerMaps)
+          .set({ schemaVersion: 999, document: { ...created.map, schemaVersion: 999 } as never })
+          .where(eq(careerMaps.userId, userId));
+      } else {
+        await db.update(careerMaps)
+          .set({ repairRequired: true })
+          .where(eq(careerMaps.userId, userId));
+      }
+
+      const result = await storage.beginAgentTurn({
+        userId,
+        clientMessageId: id(`repair-turn-gate-${scenario}-message`),
+        requestFingerprint: id(`repair-turn-gate-${scenario}-request`),
+        turnId: id(`repair-turn-gate-${scenario}-turn`),
+        leaseId: id(`repair-turn-gate-${scenario}-lease`),
+      });
+      expect(result.status).toBe('repair-required');
+      expect(await db.select().from(agentTurns).where(eq(agentTurns.userId, userId))).toHaveLength(0);
+      expect(await db.select().from(agentTurnLeases).where(eq(agentTurnLeases.userId, userId))).toHaveLength(0);
+      expect((await db.select({ repairRequired: careerMaps.repairRequired })
+        .from(careerMaps).where(eq(careerMaps.userId, userId)))[0]?.repairRequired).toBe(true);
+      await eraseOwner(userId);
+    },
+  );
+
+  it.each(['corrupt', 'unsupported', 'sticky'] as const)(
+    'blocks every auxiliary Method write for a %s repair row while preserving terminal cleanup',
+    async (scenario) => {
+      const userId = owner(`repair-aux-gate-${scenario}`);
+      const created = await storage.getOrCreateCareerMap(userId);
+      expect(created.status).toBe('ready');
+      if (created.status !== 'ready') return;
+      const turn = await beginTurn(userId, `repair-aux-gate-${scenario}`);
+      if (scenario === 'corrupt') {
+        await db.update(careerMaps)
+          .set({ document: { ...created.map, pathSets: [{ id: 'broken' }] } as never })
+          .where(eq(careerMaps.userId, userId));
+      } else if (scenario === 'unsupported') {
+        await db.update(careerMaps)
+          .set({ schemaVersion: 999, document: { ...created.map, schemaVersion: 999 } as never })
+          .where(eq(careerMaps.userId, userId));
+      } else {
+        await db.update(careerMaps)
+          .set({ repairRequired: true })
+          .where(eq(careerMaps.userId, userId));
+      }
+
+      await expect(storage.recordResearchAttempt(userId, turn.leaseId, {
+        id: id(`repair-aux-gate-${scenario}-research`),
+        status: 'failed', queryCategory: 'repair-gate', attemptedAt: at(), sources: [],
+        errorClass: 'RepairGateFixture',
+      })).rejects.toBeInstanceOf(CareerMapRepairRequiredError);
+      await expect(storage.saveCareerMapDraft({
+        userId, leaseId: turn.leaseId, id: id(`repair-aux-gate-${scenario}-draft`),
+        kind: 'outreach', content: { text: 'must not persist' },
+      })).rejects.toBeInstanceOf(CareerMapRepairRequiredError);
+      await expect(storage.setConversationMapping(
+        userId,
+        turn.leaseId,
+        id(`repair-aux-gate-${scenario}-conversation`),
+      )).rejects.toBeInstanceOf(CareerMapRepairRequiredError);
+
+      expect(await db.select().from(careerMapResearchAttempts)
+        .where(eq(careerMapResearchAttempts.userId, userId))).toHaveLength(0);
+      expect(await db.select().from(careerMapDrafts)
+        .where(eq(careerMapDrafts.userId, userId))).toHaveLength(0);
+      expect(await db.select().from(agentConversationMappings)
+        .where(eq(agentConversationMappings.userId, userId))).toHaveLength(0);
+      expect(await db.select().from(agentTurns).where(eq(agentTurns.userId, userId))).toHaveLength(1);
+      expect(await db.select().from(agentTurnLeases).where(eq(agentTurnLeases.userId, userId))).toHaveLength(1);
+
+      expect(await storage.failAgentTurn({
+        userId, turnId: turn.turnId, leaseId: turn.leaseId, errorClass: 'RepairRequired',
+      })).toMatchObject({ status: 'failed' });
+      expect(await storage.getTurnLease(userId)).toBeUndefined();
+      await eraseOwner(userId);
+    },
+  );
+
   it.each([
     ['unsupported-schema', (document: Record<string, unknown>) => ({ rowVersion: 999, document: { ...document, schemaVersion: 999 } })],
     ['invalid-document', (document: Record<string, unknown>) => ({ rowVersion: 1, document: { ...document, pathSets: [{ id: 'broken' }] } })],
@@ -904,6 +1381,7 @@ describe('PostgresStorage repair, erasure, and integrity', () => {
     expect((await storage.persistCareerMapOperation({
       userId,
       leaseId: id('erasure-blocked-lease'),
+      context: {} as never,
       operation: evidenceOperation(0, id('erasure-blocked-operation')),
       moduleVersion: 'method-test@1',
     })).status).toBe('erasure-pending');

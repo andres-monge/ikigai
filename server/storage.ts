@@ -56,6 +56,7 @@ import {
   type CareerMap,
   type CareerMapOperation,
   type ResearchAttempt,
+  type ModelPresentation,
   type SourceProvenance,
   type UserActionProvenance,
 } from '../shared/career-map/index.js';
@@ -89,18 +90,87 @@ export type PersistCareerMapResult =
   | { status: 'lease-lost'; message: string };
 
 export type AgentTurnStatus = 'pending' | 'completed' | 'cancelled' | 'failed';
+export type MethodTurnOrigin = 'agent-turn' | 'workspace-action';
 
 export interface AgentTurnRecord {
   turnId: string;
   userId: string;
   clientMessageId: string;
   requestFingerprint: string;
+  origin: MethodTurnOrigin;
   leaseId: string;
   status: AgentTurnStatus;
   terminalResult: Record<string, unknown> | null;
   createdAt: Date;
   updatedAt: Date;
   terminalAt: Date | null;
+}
+
+const methodPersistenceContextMarker = Symbol('method-persistence-context');
+
+export type MethodPersistenceContext = {
+  readonly [methodPersistenceContextMarker]: true;
+  readonly origin: MethodTurnOrigin;
+  readonly turnId: string;
+  readonly leaseId: string;
+  readonly clientMessageId: string;
+  readonly requestFingerprint: string;
+  readonly action: UserActionProvenance;
+  readonly presentation: ModelPresentation;
+};
+
+export type DurableMethodTurnIdentity = Pick<
+  AgentTurnRecord,
+  'turnId' | 'leaseId' | 'clientMessageId' | 'requestFingerprint' | 'origin'
+>;
+
+export type MethodProvenanceTiming = {
+  turnSequence: number;
+  occurredAt: string;
+};
+
+function createMethodPersistenceContext(
+  origin: MethodPersistenceContext['origin'],
+  turn: DurableMethodTurnIdentity,
+  timing: MethodProvenanceTiming,
+): MethodPersistenceContext {
+  if (turn.origin !== origin) {
+    throw new Error(`Cannot derive ${origin} provenance from a durable ${turn.origin} turn.`);
+  }
+  const action = userActionProvenanceSchema.parse({
+    kind: origin === 'workspace-action' ? 'ui-action' : 'user-message',
+    actionId: turn.clientMessageId,
+    turnId: turn.turnId,
+    turnSequence: timing.turnSequence,
+    occurredAt: timing.occurredAt,
+  });
+  return Object.freeze({
+    [methodPersistenceContextMarker]: true as const,
+    ...turn,
+    origin,
+    action,
+    presentation: {
+      kind: 'model-presentation' as const,
+      assistantTurnId: turn.turnId,
+      turnSequence: timing.turnSequence,
+      completed: true as const,
+      presentedAt: timing.occurredAt,
+    },
+  });
+}
+
+export function createAgentTurnPersistenceContext(
+  turn: DurableMethodTurnIdentity,
+  timing: MethodProvenanceTiming,
+): MethodPersistenceContext {
+  return createMethodPersistenceContext('agent-turn', turn, timing);
+}
+
+export function createWorkspaceActionPersistenceContext(
+  turn: DurableMethodTurnIdentity,
+  timing: MethodProvenanceTiming,
+): MethodPersistenceContext {
+  return createMethodPersistenceContext('workspace-action', turn, timing);
 }
 
 export type CareerMapHistoryRecord = typeof careerMapHistory.$inferSelect;
@@ -124,13 +194,14 @@ export interface CareerMapIntegrityAudit {
 }
 
 export type BeginAgentTurnResult =
-  | { status: 'started'; turn: AgentTurnRecord; shouldInvokeModel: true; reclaimedTurnId?: string }
+  | { status: 'started'; turn: AgentTurnRecord; shouldInvokeModel: boolean; reclaimedTurnId?: string }
   | { status: 'attached'; turn: AgentTurnRecord; shouldInvokeModel: false }
   | { status: 'terminal'; turn: AgentTurnRecord; shouldInvokeModel: false }
   | { status: 'conflict'; activeTurnId: string; retryAfter: Date }
   | { status: 'message-id-reused'; turn: AgentTurnRecord }
   | { status: 'map-required' }
-  | { status: 'erasure-pending' };
+  | { status: 'erasure-pending' }
+  | Extract<CareerMapLoadResult, { status: 'repair-required' }>;
 
 export class MethodErasurePendingError extends Error {
   readonly code = 'method-erasure-pending';
@@ -138,6 +209,17 @@ export class MethodErasurePendingError extends Error {
   constructor() {
     super('Method data erasure is pending; new product writes are disabled.');
     this.name = 'MethodErasurePendingError';
+  }
+}
+
+export class CareerMapRepairRequiredError extends Error {
+  readonly code = 'repair-required';
+  readonly result: Extract<CareerMapLoadResult, { status: 'repair-required' }>;
+
+  constructor(result: Extract<CareerMapLoadResult, { status: 'repair-required' }>) {
+    super('Career map repair is required; Method writes are disabled.');
+    this.name = 'CareerMapRepairRequiredError';
+    this.result = result;
   }
 }
 
@@ -165,6 +247,15 @@ export class ResearchAttemptConflictError extends Error {
   constructor() {
     super('Research attempt identity was reused with different content.');
     this.name = 'ResearchAttemptConflictError';
+  }
+}
+
+export class ResearchAttemptSourceError extends Error {
+  readonly code = 'invalid-research-source';
+
+  constructor() {
+    super('Research attempts may persist only server-resolved cited-research sources.');
+    this.name = 'ResearchAttemptSourceError';
   }
 }
 
@@ -263,11 +354,20 @@ export interface IStorage {
   persistCareerMapOperation(input: {
     userId: string;
     leaseId: string;
+    context: MethodPersistenceContext;
     operation: CareerMapOperation;
     moduleVersion: string;
   }): Promise<PersistCareerMapResult>;
   listCareerMapHistory(userId: string): Promise<CareerMapHistoryRecord[]>;
   beginAgentTurn(input: {
+    userId: string;
+    clientMessageId: string;
+    requestFingerprint: string;
+    turnId: string;
+    leaseId: string;
+    leaseDurationMs?: number;
+  }): Promise<BeginAgentTurnResult>;
+  beginWorkspaceActionTurn(input: {
     userId: string;
     clientMessageId: string;
     requestFingerprint: string;
@@ -319,10 +419,12 @@ type CareerMapRow = typeof careerMaps.$inferSelect;
 type CareerMapHistoryRow = CareerMapHistoryRecord;
 type CareerMapResearchRow = typeof careerMapResearchAttempts.$inferSelect;
 type AgentTurnRow = typeof agentTurns.$inferSelect;
+type StorageTransaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 
 function asAgentTurnRecord(row: AgentTurnRow): AgentTurnRecord {
   return {
     ...row,
+    origin: row.origin as MethodTurnOrigin,
     status: row.status as AgentTurnStatus,
     terminalResult: row.terminalResult ?? null,
   };
@@ -340,32 +442,112 @@ function operationConfirmation(
     : undefined;
 }
 
+function confirmationPresentationTurnId(
+  map: CareerMap,
+  operation: CareerMapOperation,
+): string | undefined {
+  switch (operation.type) {
+    case 'confirm-why':
+      return exactConfirmationTurn(map.foundation.whyRevisions, operation.payload.whyId, operation.payload.whyRevision);
+    case 'select-purpose-path':
+    case 'confirm-purpose-path-revision':
+      return exactConfirmationTurn(map.pathSets, operation.payload.setId, operation.payload.setRevision);
+    case 'choose-parked-purpose-path':
+      return exactConfirmationTurn(map.pathSets, operation.payload.replacementSetId, operation.payload.replacementSetRevision);
+    case 'accept-first-project':
+    case 'confirm-project-revision':
+      return exactConfirmationTurn(map.projects, operation.payload.projectId, operation.payload.projectRevision);
+    case 'select-follow-on-project':
+      return exactConfirmationTurn(map.projectOptionSets, operation.payload.setId, operation.payload.setRevision);
+    case 'confirm-peer-exposure':
+      return exactConfirmationTurn(map.peerExposures, operation.payload.exposureId, operation.payload.exposureRevision);
+    case 'confirm-proof-inventory':
+      return exactConfirmationTurn(map.proofRevisions, operation.payload.proofId, operation.payload.proofRevision);
+    case 'select-side-door':
+      return exactConfirmationTurn(map.sideDoorSets, operation.payload.setId, operation.payload.setRevision);
+    default:
+      return undefined;
+  }
+}
+
+function exactConfirmationTurn(
+  records: Array<{ id: string; revision: number; confirmation?: { presentedInTurnId: string } }>,
+  id: string,
+  revision: number,
+): string | undefined {
+  return records.find((record) => record.id === id && record.revision === revision)
+    ?.confirmation?.presentedInTurnId;
+}
+
 type CitedResearchSource = Extract<SourceProvenance, { kind: 'cited-research' }>;
 
-interface CitedSourceClaim {
-  source: CitedResearchSource;
+interface SourceClaim {
+  source: SourceProvenance;
   parent: Record<string, unknown>;
 }
 
-function collectCitedSourceClaims(value: unknown): CitedSourceClaim[] {
+function collectSourceClaims(value: unknown): SourceClaim[] {
   if (!value || typeof value !== 'object') return [];
-  if (Array.isArray(value)) return value.flatMap(collectCitedSourceClaims);
+  if (Array.isArray(value)) return value.flatMap(collectSourceClaims);
   const record = value as Record<string, unknown>;
   const direct = typeof record.id === 'string'
     && typeof record.revision === 'number'
     && Array.isArray(record.sources)
     ? record.sources
-      .filter((source): source is CitedResearchSource => Boolean(source)
+      .filter((source): source is SourceProvenance => Boolean(source)
         && typeof source === 'object'
-        && (source as Record<string, unknown>).kind === 'cited-research')
+        && ['cited-research', 'user-supplied-source'].includes(
+          String((source as Record<string, unknown>).kind),
+        ))
       .map((source) => ({ source, parent: record }))
     : [];
   return [
     ...direct,
     ...Object.entries(record)
       .filter(([key]) => key !== 'sources')
-      .flatMap(([, nested]) => collectCitedSourceClaims(nested)),
+      .flatMap(([, nested]) => collectSourceClaims(nested)),
   ];
+}
+
+function collectCitedSourceClaims(value: unknown): Array<SourceClaim & { source: CitedResearchSource }> {
+  return collectSourceClaims(value)
+    .filter((claim): claim is SourceClaim & { source: CitedResearchSource } => (
+      claim.source.kind === 'cited-research'
+    ));
+}
+
+function collectOperationActions(value: unknown, insideSources = false): UserActionProvenance[] {
+  if (!value || typeof value !== 'object') return [];
+  if (Array.isArray(value)) return value.flatMap((item) => collectOperationActions(item, insideSources));
+  const record = value as Record<string, unknown>;
+  if (!insideSources) {
+    const parsed = userActionProvenanceSchema.safeParse(record);
+    if (parsed.success) return [parsed.data];
+  }
+  return Object.entries(record).flatMap(([key, nested]) => (
+    collectOperationActions(nested, insideSources || key === 'sources')
+  ));
+}
+
+function collectOperationPresentations(value: unknown): ModelPresentation[] {
+  if (!value || typeof value !== 'object') return [];
+  if (Array.isArray(value)) return value.flatMap(collectOperationPresentations);
+  const record = value as Record<string, unknown>;
+  if (record.kind === 'model-presentation') return [record as ModelPresentation];
+  return Object.values(record).flatMap(collectOperationPresentations);
+}
+
+function sameProvenance(left: unknown, right: unknown): boolean {
+  const canonicalize = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(canonicalize);
+    if (!value || typeof value !== 'object') return value;
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey))
+        .map(([key, nested]) => [key, canonicalize(nested)]),
+    );
+  };
+  return JSON.stringify(canonicalize(left)) === JSON.stringify(canonicalize(right));
 }
 
 function citedSourceIdentity(source: CitedResearchSource): string {
@@ -395,7 +577,7 @@ function sourceBearingInputSnapshot(value: unknown): string | undefined {
   return undefined;
 }
 
-function unchangedCanonicalSourceClaim(map: CareerMap, claim: CitedSourceClaim): boolean {
+function unchangedCanonicalSourceClaim(map: CareerMap, claim: SourceClaim): boolean {
   const claimSnapshot = sourceBearingInputSnapshot(claim.parent);
   if (!claimSnapshot) return false;
   const candidates = [
@@ -518,6 +700,35 @@ function validateCareerMapRow(
     };
   }
   return { status: 'ready', map: parsed.data };
+}
+
+async function validateCareerMapForWrite(
+  transaction: StorageTransaction,
+  userId: string,
+  now: Date,
+): Promise<Exclude<CareerMapLoadResult, { status: 'erasure-pending' }>> {
+  const [row] = await transaction
+    .select()
+    .from(careerMaps)
+    .where(eq(careerMaps.userId, userId));
+  if (!row) return { status: 'not-found' };
+  const history = await transaction
+    .select()
+    .from(careerMapHistory)
+    .where(eq(careerMapHistory.userId, userId))
+    .orderBy(asc(careerMapHistory.resultRevision));
+  const research = await transaction
+    .select()
+    .from(careerMapResearchAttempts)
+    .where(eq(careerMapResearchAttempts.userId, userId));
+  const result = validateCareerMapRow(row, history, research);
+  if (result.status === 'repair-required' && !row.repairRequired) {
+    await transaction
+      .update(careerMaps)
+      .set({ repairRequired: true, updatedAt: now })
+      .where(eq(careerMaps.userId, userId));
+  }
+  return result;
 }
 
 /* ------------------------------------------------------------------ */
@@ -749,6 +960,7 @@ export class PostgresStorage implements IStorage {
   async persistCareerMapOperation(input: {
     userId: string;
     leaseId: string;
+    context: MethodPersistenceContext;
     operation: CareerMapOperation;
     moduleVersion: string;
   }): Promise<PersistCareerMapResult> {
@@ -770,6 +982,18 @@ export class PostgresStorage implements IStorage {
         ));
       if (!lease) {
         return { status: 'lease-lost', message: 'The turn lease expired or was reclaimed.' };
+      }
+      const [turn] = await tx
+        .select()
+        .from(agentTurns)
+        .where(and(
+          eq(agentTurns.userId, input.userId),
+          eq(agentTurns.turnId, lease.turnId),
+          eq(agentTurns.leaseId, input.leaseId),
+          eq(agentTurns.status, 'pending'),
+        ));
+      if (!turn) {
+        return { status: 'lease-lost', message: 'The active turn identity is missing or terminal.' };
       }
 
       const [row] = await tx
@@ -804,11 +1028,82 @@ export class PostgresStorage implements IStorage {
         return loaded;
       }
 
+      const context = input.context;
+      const contextMatchesTurn = Boolean(
+        context
+        && context[methodPersistenceContextMarker] === true
+        && context.turnId === turn.turnId
+        && context.leaseId === turn.leaseId
+        && context.clientMessageId === turn.clientMessageId
+        && context.requestFingerprint === turn.requestFingerprint
+        && context.origin === turn.origin
+        && input.leaseId === context.leaseId,
+      );
+      const actionProvenanceMatches = contextMatchesTurn
+        && collectOperationActions(input.operation.payload)
+          .every((action) => sameProvenance(action, context.action));
+      const presentationProvenanceMatches = contextMatchesTurn
+        && collectOperationPresentations(input.operation.payload)
+          .every((presentation) => sameProvenance(presentation, context.presentation));
+      if (!contextMatchesTurn || !actionProvenanceMatches || !presentationProvenanceMatches) {
+        return {
+          status: 'rejected',
+          map: loaded.map,
+          error: {
+            code: 'invalid-operation',
+            message: 'Operation provenance must be derived from the active durable turn.',
+          },
+        };
+      }
+
       const reduced = reduceCareerMapOperation(loaded.map, input.operation);
       if (reduced.status !== 'committed') return reduced;
 
-      const claimedSources = collectCitedSourceClaims(input.operation.payload)
-        .filter((claim) => !unchangedCanonicalSourceClaim(loaded.map, claim))
+      const presentedInTurnId = confirmationPresentationTurnId(reduced.map, input.operation);
+      if (context.origin === 'agent-turn' && presentedInTurnId) {
+        const [completedPresentationTurn] = await tx
+          .select({ turnId: agentTurns.turnId })
+          .from(agentTurns)
+          .where(and(
+            eq(agentTurns.userId, input.userId),
+            eq(agentTurns.turnId, presentedInTurnId),
+            eq(agentTurns.status, 'completed'),
+          ));
+        if (!completedPresentationTurn) {
+          return {
+            status: 'rejected',
+            map: loaded.map,
+            error: {
+              code: 'confirmation-not-auditable',
+              message: 'Conversational confirmation requires a completed prior presentation turn.',
+            },
+          };
+        }
+      }
+
+      const newSourceClaims = collectSourceClaims(input.operation.payload)
+        .filter((claim) => !unchangedCanonicalSourceClaim(loaded.map, claim));
+      const invalidUserSource = newSourceClaims.some((claim) => (
+        claim.source.kind === 'user-supplied-source'
+        && (
+          !sameProvenance(claim.source.recordedBy, context.action)
+          || (claim.source.url !== undefined && !claim.source.url.startsWith('https://'))
+        )
+      ));
+      if (invalidUserSource) {
+        return {
+          status: 'rejected',
+          map: loaded.map,
+          error: {
+            code: 'invalid-operation',
+            message: 'User-supplied sources must be HTTPS and bound to the active server-derived user action.',
+          },
+        };
+      }
+      const claimedSources = newSourceClaims
+        .filter((claim): claim is SourceClaim & { source: CitedResearchSource } => (
+          claim.source.kind === 'cited-research'
+        ))
         .map((claim) => claim.source);
       if (claimedSources.length > 0) {
         const researchRows = ownerResearchRows.filter((researchRow) => researchRow.turnId === lease.turnId
@@ -918,6 +1213,28 @@ export class PostgresStorage implements IStorage {
     leaseId: string;
     leaseDurationMs?: number;
   }): Promise<BeginAgentTurnResult> {
+    return this.beginMethodTurn(input, 'agent-turn');
+  }
+
+  async beginWorkspaceActionTurn(input: {
+    userId: string;
+    clientMessageId: string;
+    requestFingerprint: string;
+    turnId: string;
+    leaseId: string;
+    leaseDurationMs?: number;
+  }): Promise<BeginAgentTurnResult> {
+    return this.beginMethodTurn(input, 'workspace-action');
+  }
+
+  private async beginMethodTurn(input: {
+    userId: string;
+    clientMessageId: string;
+    requestFingerprint: string;
+    turnId: string;
+    leaseId: string;
+    leaseDurationMs?: number;
+  }, origin: MethodTurnOrigin): Promise<BeginAgentTurnResult> {
     const now = this.now();
     const leaseDurationMs = input.leaseDurationMs ?? DEFAULT_TURN_LEASE_MS;
     if (!Number.isFinite(leaseDurationMs) || leaseDurationMs <= 300_000) {
@@ -932,11 +1249,9 @@ export class PostgresStorage implements IStorage {
         .from(methodErasureJobs)
         .where(eq(methodErasureJobs.userId, input.userId));
       if (erasure) return { status: 'erasure-pending' };
-      const [mapOwner] = await tx
-        .select({ userId: careerMaps.userId })
-        .from(careerMaps)
-        .where(eq(careerMaps.userId, input.userId));
-      if (!mapOwner) return { status: 'map-required' };
+      const mapState = await validateCareerMapForWrite(tx, input.userId, now);
+      if (mapState.status === 'not-found') return { status: 'map-required' };
+      if (mapState.status === 'repair-required') return mapState;
       const [existingTurn] = await tx
         .select()
         .from(agentTurns)
@@ -946,7 +1261,7 @@ export class PostgresStorage implements IStorage {
         ));
       if (existingTurn) {
         const turn = asAgentTurnRecord(existingTurn);
-        if (turn.requestFingerprint !== input.requestFingerprint) {
+        if (turn.requestFingerprint !== input.requestFingerprint || turn.origin !== origin) {
           return { status: 'message-id-reused', turn };
         }
         if (turn.status !== 'pending') {
@@ -1037,7 +1352,7 @@ export class PostgresStorage implements IStorage {
           ));
         if (attachedAfterRace) {
           const turn = asAgentTurnRecord(attachedAfterRace);
-          if (turn.requestFingerprint !== input.requestFingerprint) {
+          if (turn.requestFingerprint !== input.requestFingerprint || turn.origin !== origin) {
             return { status: 'message-id-reused', turn };
           }
           return turn.status === 'pending'
@@ -1085,6 +1400,7 @@ export class PostgresStorage implements IStorage {
           userId: input.userId,
           clientMessageId: input.clientMessageId,
           requestFingerprint: input.requestFingerprint,
+          origin,
           leaseId: input.leaseId,
           status: 'pending',
           createdAt: now,
@@ -1098,7 +1414,7 @@ export class PostgresStorage implements IStorage {
       return {
         status: 'started',
         turn: asAgentTurnRecord(created),
-        shouldInvokeModel: true,
+        shouldInvokeModel: origin === 'agent-turn',
         ...(reclaimedTurnId ? { reclaimedTurnId } : {}),
       };
     });
@@ -1274,7 +1590,10 @@ export class PostgresStorage implements IStorage {
   /** Server-only sink for validated, isolated research output; never expose this method as a raw client write. */
   async recordResearchAttempt(userId: string, leaseId: string, input: unknown): Promise<ResearchAttempt> {
     const attempt = researchAttemptSchema.parse(input);
-    return this.database.transaction(async (tx) => {
+    if (attempt.sources.some((source) => source.kind !== 'cited-research')) {
+      throw new ResearchAttemptSourceError();
+    }
+    const result = await this.database.transaction(async (tx) => {
       await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${userId}, 20260831))`);
       const [erasure] = await tx
         .select({ userId: methodErasureJobs.userId })
@@ -1288,8 +1607,11 @@ export class PostgresStorage implements IStorage {
           eq(agentTurnLeases.userId, userId),
           eq(agentTurnLeases.leaseId, leaseId),
           gt(agentTurnLeases.expiresAt, this.now()),
-        ));
+      ));
       if (!lease) throw new TurnLeaseLostError();
+      const mapState = await validateCareerMapForWrite(tx, userId, this.now());
+      if (mapState.status === 'repair-required') return mapState;
+      if (mapState.status !== 'ready') throw new TurnLeaseLostError();
       const [existing] = await tx
         .select()
         .from(careerMapResearchAttempts)
@@ -1313,6 +1635,8 @@ export class PostgresStorage implements IStorage {
         .returning();
       return researchAttemptSchema.parse(created.attempt);
     });
+    if (result.status === 'repair-required') throw new CareerMapRepairRequiredError(result);
+    return result;
   }
 
   async listResearchAttempts(userId: string): Promise<ResearchAttempt[]> {
@@ -1332,7 +1656,7 @@ export class PostgresStorage implements IStorage {
     content: unknown;
   }): Promise<void> {
     const now = this.now();
-    await this.database.transaction(async (tx) => {
+    const result = await this.database.transaction(async (tx) => {
       await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${input.userId}, 20260831))`);
       const [erasure] = await tx
         .select({ userId: methodErasureJobs.userId })
@@ -1346,8 +1670,11 @@ export class PostgresStorage implements IStorage {
           eq(agentTurnLeases.userId, input.userId),
           eq(agentTurnLeases.leaseId, input.leaseId),
           gt(agentTurnLeases.expiresAt, now),
-        ));
+      ));
       if (!lease) throw new TurnLeaseLostError();
+      const mapState = await validateCareerMapForWrite(tx, input.userId, now);
+      if (mapState.status === 'repair-required') return mapState;
+      if (mapState.status !== 'ready') throw new TurnLeaseLostError();
       const { leaseId: _leaseId, ...draft } = input;
       await tx
         .insert(careerMapDrafts)
@@ -1357,11 +1684,12 @@ export class PostgresStorage implements IStorage {
           set: { kind: input.kind, content: input.content, updatedAt: now },
         });
     });
+    if (result?.status === 'repair-required') throw new CareerMapRepairRequiredError(result);
   }
 
   async setConversationMapping(userId: string, leaseId: string, conversationId: string): Promise<void> {
     const now = this.now();
-    await this.database.transaction(async (tx) => {
+    const result = await this.database.transaction(async (tx) => {
       await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${userId}, 20260831))`);
       const [erasure] = await tx
         .select({ userId: methodErasureJobs.userId })
@@ -1375,14 +1703,17 @@ export class PostgresStorage implements IStorage {
           eq(agentTurnLeases.userId, userId),
           eq(agentTurnLeases.leaseId, leaseId),
           gt(agentTurnLeases.expiresAt, now),
-        ));
+      ));
       if (!lease) throw new TurnLeaseLostError();
+      const mapState = await validateCareerMapForWrite(tx, userId, now);
+      if (mapState.status === 'repair-required') return mapState;
+      if (mapState.status !== 'ready') throw new TurnLeaseLostError();
       const [created] = await tx
         .insert(agentConversationMappings)
         .values({ userId, conversationId, createdAt: now, updatedAt: now })
         .onConflictDoNothing({ target: agentConversationMappings.userId })
         .returning({ conversationId: agentConversationMappings.conversationId });
-      if (created) return;
+      if (created) return undefined;
       const [existing] = await tx
         .select({ conversationId: agentConversationMappings.conversationId })
         .from(agentConversationMappings)
@@ -1391,6 +1722,7 @@ export class PostgresStorage implements IStorage {
         throw new ConversationMappingConflictError();
       }
     });
+    if (result?.status === 'repair-required') throw new CareerMapRepairRequiredError(result);
   }
 
   async getConversationMapping(userId: string): Promise<string | undefined> {

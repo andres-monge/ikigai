@@ -6,6 +6,7 @@ import {
   type CareerMapOperation,
   type PathProjectInput,
   type PurposePathInput,
+  type SideDoorInput,
 } from '../../shared/career-map/index.js';
 import { CareerMapBriefingError, compileCareerMapBriefing } from './briefing.js';
 
@@ -35,6 +36,17 @@ const paths = (): [PurposePathInput, PurposePathInput, PurposePathInput] => [
 const project: PathProjectInput = {
   id: 'briefing-project', revision: 1, title: 'Build a real decision aid', outcome: 'A colleague uses it', audience: 'A colleague with a live choice', whyWanted: 'Reduce decision waste', learningGoal: 'Learn whether product iteration pulls', firstVersion: 'A one-page prototype', firstStep: 'Interview one colleague', decisionQuestion: 'Do I want another iteration?', evidenceCue: 'Notice voluntary pull',
 };
+
+const briefingDoors = (): [SideDoorInput, SideDoorInput, SideDoorInput] => [1, 2, 3].map((number) => ({
+  id: `briefing-door-${number}`,
+  revision: 1,
+  name: `Briefing door ${number}`,
+  target: `Relevant community ${number}`,
+  proofValue: `Proof value ${number}`,
+  contribution: `Contribution ${number}`,
+  firstMove: `First move ${number}`,
+  accessConstraints: [`Constraint ${number}`],
+})) as [SideDoorInput, SideDoorInput, SideDoorInput];
 
 function commit<T extends CareerMapOperation['type']>(
   map: CareerMap,
@@ -200,12 +212,77 @@ function withMultiProjectSideDoorEntry(): CareerMap {
   });
 }
 
+function withCompletedSideDoors(): CareerMap {
+  let map = withMultiProjectSideDoorEntry();
+  map = commit(map, 'propose-proof-inventory', {
+    proof: {
+      id: 'briefing-proof', revision: 1,
+      artifacts: ['A working decision aid'], problemsSolved: ['Decision friction'],
+      peopleHelped: ['One colleague'], usefulQualities: ['Synthesis'],
+      knowledge: ['Decision design'], relationships: ['A practitioner'],
+      pointsOfView: ['Evidence should change action'], shareableMaterial: ['A case note'],
+    },
+    presentation: presentation(22),
+  });
+  map = commit(map, 'confirm-proof-inventory', {
+    proofId: 'briefing-proof', proofRevision: 1, action: action(23),
+  });
+  map = commit(map, 'propose-side-doors', {
+    setId: 'briefing-door-set', setRevision: 1,
+    doors: briefingDoors(), presentation: presentation(24),
+  });
+  map = commit(map, 'select-side-door', {
+    setId: 'briefing-door-set', setRevision: 1,
+    doorId: 'briefing-door-1', doorRevision: 1, action: action(25),
+  });
+  return commit(map, 'record-route-outcome', {
+    id: 'briefing-route-outcome', revision: 1,
+    doorId: 'briefing-door-1', doorRevision: 1,
+    result: 'positive-response', learning: 'The contribution opened a relevant conversation.',
+    action: action(26),
+  });
+}
+
 describe('compileCareerMapBriefing', () => {
   it('projects a validated empty map without exposing operation history', () => {
     const briefing = compileCareerMapBriefing(createCareerMap('u4-briefing-owner'));
     expect(briefing.module).toBe('form-foundation');
     expect(briefing.markdown).toContain('active module form-foundation');
     expect(briefing.markdown).not.toContain('operationHistory');
+  });
+
+  it('briefs the exact suggested Why while retaining its confirmed predecessor', () => {
+    let map = withConfirmedWhy();
+    map = commit(map, 'open-foundation-revision-focus', {
+      reason: 'The people served are now clearer.',
+      action: action(3),
+    });
+    map = commit(map, 'revise-why', {
+      why: {
+        id: 'briefing-why-revision',
+        revision: 1,
+        statement: 'Help people turn complex choices into humane action.',
+        serves: 'People stalled by consequential choices',
+        pointOfView: 'Evidence becomes useful when it changes the next action.',
+      },
+      supersedesWhyId: 'briefing-why',
+      presentation: presentation(4),
+    });
+    map = commit(map, 'close-focus', { action: action(5) });
+
+    const briefing = compileCareerMapBriefing(map);
+    expect(briefing.pendingDecision).toMatchObject({
+      kind: 'why-confirmation',
+      targetId: 'briefing-why-revision',
+      targetRevision: 1,
+    });
+    expect(briefing.markdown).toContain('Confirmed Why I Work');
+    expect(briefing.markdown).toContain('Make complex choices more humane.');
+    expect(briefing.markdown).toContain('Suggested Why I Work — pending confirmation');
+    expect(briefing.markdown).toContain('briefing-why-revision@1; suggested');
+    expect(briefing.markdown).toContain('Help people turn complex choices into humane action.');
+    expect(briefing.markdown).toContain('Serves: People stalled by consequential choices');
+    expect(briefing.markdown).toContain('Point of view: Evidence becomes useful when it changes the next action.');
   });
 
   it('keeps only the relevant confirmed basis, active work, decision, and cited source', () => {
@@ -244,7 +321,9 @@ describe('compileCareerMapBriefing', () => {
     const briefing = compileCareerMapBriefing(map);
     expect(briefing.markdown).toContain('Repair the earliest stale basis');
     expect(briefing.markdown).toContain('Help people act on complex choices.');
-    expect(briefing.markdown).not.toContain('Make complex choices more humane.');
+    expect(briefing.markdown).toContain('Direct Why basis: briefing-why@1 — Make complex choices more humane.');
+    expect(briefing.markdown.indexOf('Direct Why basis: briefing-why@1'))
+      .toBeLessThan(briefing.markdown.indexOf('## Confirmed Why I Work'));
     expect(briefing.markdown).toContain('Canonical state below outranks conflicting or stale transcript text.');
   });
 
@@ -346,6 +425,84 @@ describe('compileCareerMapBriefing', () => {
     expect(focusedBriefing.markdown).toContain('Build a real decision aid');
     expect(focusedBriefing.markdown).toContain('Learning that belongs only to Project 1.');
     expect(focusedBriefing.markdown).not.toContain('Current Project 2 without a reflection');
+  });
+
+  it('projects the exact stale reflection and its project basis before current project fallbacks', () => {
+    let map = withAcceptedProject();
+    map = commit(map, 'open-reflection', {
+      reflectionId: 'briefing-review-reflection', revision: 1,
+      projectId: project.id, projectRevision: project.revision, action: action(7),
+    });
+    map = commit(map, 'append-reflection-evidence', {
+      reflectionId: 'briefing-review-reflection', reflectionRevision: 1,
+      evidence: {
+        id: 'briefing-review-learning', revision: 1,
+        observation: 'Exact stale learning from the original project revision.',
+        signal: 'energy', interpretation: 'The original project created pull.', provenance: action(8),
+      },
+    });
+    map = commit(map, 'close-reflection', {
+      reflectionId: 'briefing-review-reflection', reflectionRevision: 1, action: action(9),
+    });
+    map = commit(map, 'propose-project-revision', {
+      projectId: project.id, projectRevision: project.revision,
+      replacement: {
+        ...project,
+        id: 'briefing-current-project',
+        title: 'Current revised project that must not hide the stale target',
+      },
+      presentation: presentation(10),
+    });
+    map = commit(map, 'confirm-project-revision', {
+      projectId: 'briefing-current-project', projectRevision: 1, action: action(11),
+    });
+    map = commit(map, 'resolve-basis-review', {
+      targetKind: 'project', targetId: project.id, targetRevision: project.revision,
+      resolution: 'replaced', action: action(12),
+    });
+
+    const briefing = compileCareerMapBriefing(map);
+    expect(briefing.markdown).toContain('Review reflection briefing-review-reflection@1');
+    expect(briefing.markdown).toContain('Exact review target: reflection briefing-review-reflection@1');
+    expect(briefing.markdown).toContain('Direct project basis: briefing-project@1');
+    expect(briefing.markdown).toContain('Exact stale learning from the original project revision.');
+    expect(briefing.markdown.indexOf('Exact stale learning from the original project revision.'))
+      .toBeLessThan(briefing.markdown.indexOf('Current revised project that must not hide the stale target'));
+  });
+
+  it('resolves exact review targets and direct bases across the complete deep-map target set', () => {
+    const deepMap = withCompletedSideDoors();
+    const targets = [
+      ['path-set', 'briefing-path-set', 1, 'Purpose Path set: briefing-path-set@1'],
+      ['project', 'briefing-project', 1, 'Project 1: Build a real decision aid'],
+      ['reflection', 'briefing-reflection-1', 1, 'The first project revealed that interviewing created energy.'],
+      ['next-move', 'briefing-move-1', 1, 'Next Move: explore-further (briefing-move-1@1)'],
+      ['peer-exposure', 'briefing-peer-multi', 1, 'Peer exposure: community: A facilitation community'],
+      ['commitment', 'briefing-commitment-multi', 1, 'Commitment: briefing-commitment-multi@1; confirmed'],
+      ['proof', 'briefing-proof', 1, 'Proof: briefing-proof@1; confirmed'],
+      ['side-door-set', 'briefing-door-set', 1, 'Side Door set: briefing-door-set@1; active'],
+      ['route-outcome', 'briefing-route-outcome', 1, 'Route outcome: positive-response (briefing-route-outcome@1)'],
+    ] as const;
+
+    for (const [targetKind, targetId, targetRevision, expected] of targets) {
+      const reviewed: CareerMap = {
+        ...deepMap,
+        invalidations: [{
+          id: `briefing-review-${targetKind}`,
+          basisKind: 'why',
+          basisId: 'briefing-why',
+          basisRevision: 1,
+          targetKind,
+          targetId,
+          targetRevision,
+          createdAtRevision: deepMap.revision,
+          status: 'pending',
+        }],
+      };
+      const briefing = compileCareerMapBriefing(reviewed);
+      expect(briefing.markdown).toContain(`Exact review target: ${targetKind} ${targetId}@${targetRevision}`);
+      expect(briefing.markdown).toContain(expected);
+    }
   });
 
   it('keeps the active project, learning, peer, and commitment basis in the Side Doors checkpoint', () => {

@@ -15,7 +15,10 @@
 
 import { beforeEach, afterAll, describe, it, expect } from 'vitest';
 import { eq, like } from 'drizzle-orm';
-import { storageTestDatabase as db } from './storage.test-database.js';
+import {
+  cleanupStorageTestDatabases,
+  storageTestDatabase as db,
+} from './storage.test-database.js';
 import { PostgresStorage } from './storage.js';
 import { assessmentSessions, purposePaths } from '../shared/schema.js';
 import type { QuestionnaireResponses } from '../shared/schema.js';
@@ -37,8 +40,12 @@ beforeEach(async () => {
 });
 
 afterAll(async () => {
-  await db.delete(assessmentSessions)
-    .where(like(assessmentSessions.sessionId, `${legacyRunPrefix}%`));
+  try {
+    await db.delete(assessmentSessions)
+      .where(like(assessmentSessions.sessionId, `${legacyRunPrefix}%`));
+  } finally {
+    await cleanupStorageTestDatabases();
+  }
 });
 
 /* ------------------------------------------------------------------ */

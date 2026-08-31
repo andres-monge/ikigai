@@ -37,7 +37,7 @@ function latestAcceptedProject(map: CareerMap) {
 
 function sourceLine(source: SourceProvenance): string {
   if (source.kind === 'user-supplied-source') {
-    return `- User source: ${source.label}${source.url ? ` (${source.url})` : ''}`;
+    return `- Explorer-provided source: ${source.label}${source.url ? ` (${source.url})` : ''}`;
   }
   const title = source.title ?? source.url;
   const result = source.providerResultId ? `; result ${source.providerResultId}` : '';
@@ -52,13 +52,190 @@ function appendSources(lines: string[], sources: SourceProvenance[] | undefined)
 }
 
 function appendWhy(lines: string[], map: CareerMap): void {
-  const why = map.foundation.whyRevisions.findLast((item) => item.status === 'confirmed');
-  if (!why) return;
-  lines.push('## Confirmed Why I Work');
-  lines.push(`Basis: ${why.id}@${why.revision}`);
-  lines.push(why.statement);
-  lines.push(`Serves: ${why.serves}`);
-  lines.push(`Point of view: ${why.pointOfView}`);
+  const confirmed = map.foundation.whyRevisions.findLast((item) => item.status === 'confirmed');
+  if (confirmed) {
+    lines.push('## Confirmed Why I Work');
+    lines.push(`Basis: ${confirmed.id}@${confirmed.revision}`);
+    lines.push(confirmed.statement);
+    lines.push(`Serves: ${confirmed.serves}`);
+    lines.push(`Point of view: ${confirmed.pointOfView}`);
+  }
+  const suggested = map.foundation.whyRevisions.findLast((item) => item.status === 'suggested');
+  if (suggested) {
+    lines.push('## Suggested Why I Work — pending confirmation');
+    lines.push(`Basis: ${suggested.id}@${suggested.revision}; ${suggested.status}`);
+    lines.push(suggested.statement);
+    lines.push(`Serves: ${suggested.serves}`);
+    lines.push(`Point of view: ${suggested.pointOfView}`);
+  }
+}
+
+function exactRevision<T extends { id: string; revision: number }>(
+  records: T[],
+  id: string,
+  revision: number,
+): T | undefined {
+  return records.find((record) => record.id === id && record.revision === revision);
+}
+
+function pathByRevision(map: CareerMap, id: string, revision: number) {
+  return map.pathSets.flatMap((set) => set.paths)
+    .find((path) => path.id === id && path.revision === revision);
+}
+
+function appendExactPath(lines: string[], path: ReturnType<typeof pathByRevision>): void {
+  if (!path) throw new CareerMapBriefingError();
+  lines.push(`Purpose Path: ${path.name} (${path.id}@${path.revision}; ${path.selection})`);
+  lines.push(`Serves Why: ${path.servesWhy}`);
+  lines.push(`Central unknown: ${path.centralUnknown}`);
+  lines.push(`Practical fit: ${path.practicalFit}`);
+  appendSources(lines, path.sources);
+}
+
+function appendExactProject(
+  lines: string[],
+  project: CareerMap['projects'][number] | undefined,
+): void {
+  if (!project) throw new CareerMapBriefingError();
+  lines.push(`Project ${project.number}: ${project.title} (${project.id}@${project.revision}; ${project.agreementStatus}; ${project.workStatus})`);
+  lines.push(`Outcome: ${project.outcome}`);
+  lines.push(`Learning question: ${project.decisionQuestion}`);
+  lines.push(`First step: ${project.firstStep}`);
+  appendSources(lines, project.sources);
+}
+
+function appendExactReflection(
+  lines: string[],
+  reflection: CareerMap['reflections'][number] | undefined,
+): void {
+  if (!reflection) throw new CareerMapBriefingError();
+  lines.push(`Reflection: ${reflection.id}@${reflection.revision}; ${reflection.status}`);
+  for (const evidence of currentReflectionEvidence(reflection)) {
+    lines.push(`- ${evidence.signal}: ${evidence.observation} — ${evidence.interpretation}`);
+  }
+}
+
+function appendExactReviewContext(
+  lines: string[],
+  map: CareerMap,
+  review: NonNullable<MethodCheckpoint['review']>,
+): void {
+  lines.push('## Exact basis-review context');
+  lines.push(`Exact review target: ${review.targetKind} ${review.targetId}@${review.targetRevision}`);
+
+  switch (review.targetKind) {
+    case 'path-set': {
+      const set = exactRevision(map.pathSets, review.targetId, review.targetRevision);
+      if (!set) throw new CareerMapBriefingError();
+      const why = exactRevision(map.foundation.whyRevisions, set.basisWhy.id, set.basisWhy.revision);
+      if (!why) throw new CareerMapBriefingError();
+      lines.push(`Direct Why basis: ${why.id}@${why.revision} — ${why.statement}`);
+      lines.push(`Purpose Path set: ${set.id}@${set.revision}; ${set.status}`);
+      for (const path of set.paths) appendExactPath(lines, path);
+      return;
+    }
+    case 'project': {
+      const project = exactRevision(map.projects, review.targetId, review.targetRevision);
+      if (!project) throw new CareerMapBriefingError();
+      const path = pathByRevision(map, project.basisPath.id, project.basisPath.revision);
+      if (!path) throw new CareerMapBriefingError();
+      lines.push(`Direct Purpose Path basis: ${path.id}@${path.revision}`);
+      appendExactPath(lines, path);
+      appendExactProject(lines, project);
+      return;
+    }
+    case 'reflection': {
+      const reflection = exactRevision(map.reflections, review.targetId, review.targetRevision);
+      if (!reflection) throw new CareerMapBriefingError();
+      const project = exactRevision(map.projects, reflection.projectBasis.id, reflection.projectBasis.revision);
+      if (!project) throw new CareerMapBriefingError();
+      lines.push(`Direct project basis: ${project.id}@${project.revision}`);
+      appendExactProject(lines, project);
+      appendExactReflection(lines, reflection);
+      return;
+    }
+    case 'next-move': {
+      const move = exactRevision(map.nextMoves, review.targetId, review.targetRevision);
+      if (!move) throw new CareerMapBriefingError();
+      const choice = exactRevision(map.continueChoices, move.continueChoiceBasis.id, move.continueChoiceBasis.revision);
+      if (!choice) throw new CareerMapBriefingError();
+      const reflection = exactRevision(map.reflections, choice.reflectionBasis.id, choice.reflectionBasis.revision);
+      if (!reflection) throw new CareerMapBriefingError();
+      lines.push(`Direct continue-choice basis: ${choice.id}@${choice.revision}; ${choice.wantsToContinue ? 'continue' : 'return to paths'}`);
+      lines.push(`Next Move: ${move.kind} (${move.id}@${move.revision})`);
+      appendExactReflection(lines, reflection);
+      return;
+    }
+    case 'peer-exposure': {
+      const peer = exactRevision(map.peerExposures, review.targetId, review.targetRevision);
+      if (!peer) throw new CareerMapBriefingError();
+      const path = pathByRevision(map, peer.basisPath.id, peer.basisPath.revision);
+      if (!path) throw new CareerMapBriefingError();
+      lines.push(`Direct Purpose Path basis: ${path.id}@${path.revision}`);
+      appendExactPath(lines, path);
+      lines.push(`Peer exposure: ${peer.subjectKind}: ${peer.subject} (${peer.id}@${peer.revision}; ${peer.status}) — ${peer.insight}`);
+      appendSources(lines, peer.sources);
+      return;
+    }
+    case 'commitment': {
+      const intent = map.commitmentIntent?.id === review.targetId
+        && map.commitmentIntent.revision === review.targetRevision
+        ? map.commitmentIntent
+        : undefined;
+      const commitment = map.provisionalCommitment?.id === review.targetId
+        && map.provisionalCommitment.revision === review.targetRevision
+        ? map.provisionalCommitment
+        : undefined;
+      const target = commitment ?? intent;
+      if (!target) throw new CareerMapBriefingError();
+      const path = pathByRevision(map, target.basisPath.id, target.basisPath.revision);
+      const move = exactRevision(map.nextMoves, target.basisNextMove.id, target.basisNextMove.revision);
+      if (!path || !move) throw new CareerMapBriefingError();
+      lines.push(`Direct Purpose Path basis: ${path.id}@${path.revision}`);
+      lines.push(`Direct Next Move basis: ${move.id}@${move.revision}; ${move.kind}`);
+      lines.push(`Commitment: ${target.id}@${target.revision}; ${target.status}`);
+      return;
+    }
+    case 'proof': {
+      const proof = exactRevision(map.proofRevisions, review.targetId, review.targetRevision);
+      if (!proof || !map.provisionalCommitment
+        || map.provisionalCommitment.id !== proof.basisCommitment.id
+        || map.provisionalCommitment.revision !== proof.basisCommitment.revision) {
+        throw new CareerMapBriefingError();
+      }
+      lines.push(`Direct commitment basis: ${proof.basisCommitment.id}@${proof.basisCommitment.revision}`);
+      lines.push(`Proof: ${proof.id}@${proof.revision}; ${proof.status}`);
+      lines.push(`Artifacts: ${proof.artifacts.join('; ') || 'none recorded'}`);
+      lines.push(`Problems solved: ${proof.problemsSolved.join('; ') || 'none recorded'}`);
+      return;
+    }
+    case 'side-door-set': {
+      const set = exactRevision(map.sideDoorSets, review.targetId, review.targetRevision);
+      if (!set) throw new CareerMapBriefingError();
+      const proof = exactRevision(map.proofRevisions, set.basisProof.id, set.basisProof.revision);
+      if (!proof) throw new CareerMapBriefingError();
+      lines.push(`Direct proof basis: ${proof.id}@${proof.revision}`);
+      lines.push(`Side Door set: ${set.id}@${set.revision}; ${set.status}`);
+      for (const door of set.doors) {
+        lines.push(`- ${door.name} (${door.id}@${door.revision}; ${door.selection}) — ${door.firstMove}`);
+        appendSources(lines, door.sources);
+      }
+      return;
+    }
+    case 'route-outcome': {
+      const outcome = exactRevision(map.routeOutcomes, review.targetId, review.targetRevision);
+      if (!outcome) throw new CareerMapBriefingError();
+      const set = map.sideDoorSets.find((candidate) => candidate.doors.some(
+        (door) => door.id === outcome.doorBasis.id && door.revision === outcome.doorBasis.revision,
+      ));
+      const door = set?.doors.find((candidate) => candidate.id === outcome.doorBasis.id
+        && candidate.revision === outcome.doorBasis.revision);
+      if (!set || !door) throw new CareerMapBriefingError();
+      lines.push(`Direct Side Door basis: ${door.id}@${door.revision}; set ${set.id}@${set.revision}`);
+      lines.push(`Route outcome: ${outcome.result} (${outcome.id}@${outcome.revision}) — ${outcome.learning}`);
+      return;
+    }
+  }
 }
 
 function appendPath(lines: string[], map: CareerMap, includeAlternatives: boolean): void {
@@ -256,6 +433,7 @@ export function compileCareerMapBriefing(input: unknown): CareerMapBriefing {
       `Review ${checkpoint.review.targetKind} ${checkpoint.review.targetId}@${checkpoint.review.targetRevision}; `
       + `invalidated by ${checkpoint.review.basisKind} ${checkpoint.review.basisId}@${checkpoint.review.basisRevision}.`,
     );
+    appendExactReviewContext(lines, map, checkpoint.review);
   }
   if (checkpoint.focus) {
     lines.push('## Explorer-opened focus');

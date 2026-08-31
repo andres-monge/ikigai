@@ -171,6 +171,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "origin": {
+          "name": "origin",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "lease_id": {
           "name": "lease_id",
           "type": "text",
@@ -291,6 +297,10 @@
         "agent_turns_terminal_consistency": {
           "name": "agent_turns_terminal_consistency",
           "value": "(\"agent_turns\".\"status\" = 'pending' AND \"agent_turns\".\"terminal_at\" IS NULL) OR (\"agent_turns\".\"status\" <> 'pending' AND \"agent_turns\".\"terminal_at\" IS NOT NULL)"
+        },
+        "agent_turns_valid_origin": {
+          "name": "agent_turns_valid_origin",
+          "value": "\"agent_turns\".\"origin\" IN ('agent-turn', 'workspace-action')"
         }
       },
       "isRLSEnabled": false

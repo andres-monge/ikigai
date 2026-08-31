@@ -56,7 +56,9 @@ export const sourceProvenanceSchema = z.union([
   z.object({
     kind: z.literal('user-supplied-source'),
     label: z.string().min(1).max(500),
-    url: z.string().url().optional(),
+    url: z.string().url()
+      .refine((value) => value.startsWith('https://'), 'User sources must use HTTPS.')
+      .optional(),
     recordedBy: userActionProvenanceSchema,
   }).strict(),
   citedResearchBaseSchema.extend({
