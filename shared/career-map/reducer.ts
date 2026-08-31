@@ -107,6 +107,18 @@ function pathInput(path: PurposePath): PurposePathInput {
   return input;
 }
 
+function assertPathRevisionConsistency(map: CareerMap, paths: PurposePathInput[]): void {
+  const existingPaths = map.pathSets.flatMap((set) => set.paths);
+  for (const candidate of paths) {
+    const existing = existingPaths.find((path) => sameRevision(path, candidate.id, candidate.revision));
+    assert(
+      !existing || canonicalJson(pathInput(existing)) === canonicalJson(candidate),
+      'Purpose Path content changes require a new revision.',
+      'revision-conflict',
+    );
+  }
+}
+
 function auditableConfirmation(
   target: { id: string; revision: number; presentation: ModelPresentation },
   action: UserActionProvenance,
@@ -307,6 +319,7 @@ function applyDomainOperation(map: CareerMap, operation: CareerMapOperation): vo
       const why = currentWhy(map);
       assert(why, 'Purpose Paths require a confirmed Why.');
       ensureUniqueIds(operation.payload.paths, 'Purpose Paths');
+      assertPathRevisionConsistency(map, operation.payload.paths);
       for (const set of map.pathSets.filter((item) => item.status === 'suggested')) set.status = 'superseded';
       map.pathSets.push({
         id: operation.payload.setId,
@@ -325,6 +338,7 @@ function applyDomainOperation(map: CareerMap, operation: CareerMapOperation): vo
       assert(source.paths.some((path) => path.id === operation.payload.replacedPathId), 'Replacement target is not in the source set.', 'stale-target');
       const replacements = source.paths.map((path) => path.id === operation.payload.replacedPathId ? operation.payload.replacement : pathInput(path));
       ensureUniqueIds(replacements, 'Purpose Paths');
+      assertPathRevisionConsistency(map, replacements);
       for (const set of map.pathSets.filter((item) => item.status === 'suggested')) set.status = 'superseded';
       map.pathSets.push({
         id: operation.payload.replacementSetId,
@@ -344,6 +358,7 @@ function applyDomainOperation(map: CareerMap, operation: CareerMapOperation): vo
       const [first, second] = operation.payload.combinedPathIds;
       assert(first !== second && source.paths.some((path) => path.id === first) && source.paths.some((path) => path.id === second), 'Combined paths must be two distinct members of the source set.');
       ensureUniqueIds(operation.payload.paths, 'Combined Purpose Paths');
+      assertPathRevisionConsistency(map, operation.payload.paths);
       const preserved = source.paths.find((path) => path.id !== first && path.id !== second)!;
       assert(operation.payload.paths.some((path) => sameRevision(path, preserved.id, preserved.revision)), 'A combination must preserve the uncombined sibling and add a merged path plus a new third path.');
       for (const set of map.pathSets.filter((item) => item.status === 'suggested')) set.status = 'superseded';
@@ -491,6 +506,11 @@ function applyDomainOperation(map: CareerMap, operation: CareerMapOperation): vo
       } else {
         assert(move.kind === 'explore-further', 'Follow-on projects require an explore-further Next Move.');
       }
+      assert(
+        !map.projectOptionSets.some((set) => sameRevision(set.basisNextMove, move.id, move.revision)),
+        'This Next Move already has follow-on project options.',
+        'stale-target',
+      );
       ensureUniqueIds(operation.payload.projects, 'Follow-on projects');
       for (const set of map.projectOptionSets.filter((item) => item.status === 'suggested')) set.status = 'superseded';
       const optionSet: ProjectOptionSet = {

@@ -26,7 +26,7 @@ export function Login() {
       const result = await authClient.signIn.social({
         provider: 'google',
         callbackURL: '/',
-        errorCallbackURL: '/login?error=oauth_failed',
+        errorCallbackURL: '/login',
       });
 
       if (result.error) {

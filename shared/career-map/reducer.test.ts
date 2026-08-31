@@ -220,7 +220,7 @@ describe('Method reducer', () => {
       replacementSetId: 'paths-3', replacementSetRevision: 1,
       paths: [
         { ...paths('combined')[0], id: 'path-combined' },
-        { ...paths('combined')[1], id: 'path-3', revision: 1 },
+        paths()[2],
         { ...paths('combined')[2], id: 'path-new-third' },
       ],
       presentation: presentation(5),
@@ -229,6 +229,40 @@ describe('Method reducer', () => {
     expect(current?.paths).toHaveLength(3);
     expect(current?.status).toBe('suggested');
     expect(current?.paths.every((candidate) => candidate.selection === 'available')).toBe(true);
+  });
+
+  it('requires a new revision whenever Purpose Path content changes', () => {
+    let map = withConfirmedWhy();
+    map = commit(map, 'propose-purpose-paths', {
+      setId: 'paths-1', setRevision: 1, paths: paths(), presentation: presentation(3),
+    });
+
+    const reusedRevision = applyCareerMapOperation(map, operation(map, 'replace-purpose-path', {
+      sourceSetId: 'paths-1', sourceSetRevision: 1, replacedPathId: 'path-1',
+      replacementSetId: 'paths-2', replacementSetRevision: 1,
+      replacement: { ...paths()[0], name: 'Materially changed path' },
+      presentation: presentation(4),
+    }));
+
+    expect(reusedRevision.status).toBe('rejected');
+    if (reusedRevision.status === 'rejected') {
+      expect(reusedRevision.error.code).toBe('revision-conflict');
+    }
+    expect(reusedRevision.map).toEqual(map);
+
+    const malformed = structuredClone(map);
+    malformed.pathSets.push({
+      ...structuredClone(malformed.pathSets[0]),
+      id: 'paths-2',
+      revision: 1,
+    });
+    malformed.pathSets[1].paths[0].name = 'Changed without a new revision';
+    const parsed = careerMapSchema.safeParse(malformed);
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.issues.some((issue) =>
+        issue.message === 'A Purpose Path revision must have one immutable content snapshot.')).toBe(true);
+    }
   });
 
   it('requires auditable subsequent-turn confirmation and rejects stale targets', () => {
@@ -269,6 +303,7 @@ describe('Method reducer', () => {
     let map = withCompletedLearningLoop('commit-provisionally');
     expect(map.commitmentIntent?.status).toBe('pending-peer-exposure');
     expect(map.provisionalCommitment).toBeUndefined();
+    expect(deriveMethodCheckpoint(map).availableOperations).not.toContain('propose-follow-on-projects');
 
     const blocked = applyCareerMapOperation(map, operation(map, 'complete-provisional-commitment', { id: 'commitment-1', revision: 1, intentId: map.commitmentIntent!.id, action: action(12) }));
     expect(blocked.status).toBe('rejected');
@@ -315,15 +350,26 @@ describe('Method reducer', () => {
     map = commit(map, 'close-reflection', { reflectionId: 'reflection-1', reflectionRevision: 1, action: action(10) });
     map = commit(map, 'record-continue-choice', { id: 'continue-1', revision: 1, reflectionId: 'reflection-1', reflectionRevision: 1, wantsToContinue: true, action: action(11) });
     map = commit(map, 'record-next-move', { id: 'move-1', revision: 1, continueChoiceId: 'continue-1', continueChoiceRevision: 1, kind: 'explore-further', action: action(12) });
+    expect(deriveMethodCheckpoint(map)).toMatchObject({
+      module: 'design-path-project',
+      availableOperations: ['propose-follow-on-projects'],
+    });
 
     map = commit(map, 'propose-follow-on-projects', {
       setId: 'project-options-1', setRevision: 1,
       projects: [project('option-1'), project('option-2'), project('option-3')], presentation: presentation(13),
     });
+    const duplicatedOptions = applyCareerMapOperation(map, operation(map, 'propose-follow-on-projects', {
+      setId: 'project-options-duplicate', setRevision: 1,
+      projects: [project('duplicate-1'), project('duplicate-2'), project('duplicate-3')],
+      presentation: presentation(14),
+    }));
+    expect(duplicatedOptions.status).toBe('rejected');
     const select = operation(map, 'select-follow-on-project', { setId: 'project-options-1', setRevision: 1, projectId: 'option-2', projectRevision: 1, action: action(14) }, 'select-follow-on-once');
     const selected = applyCareerMapOperation(map, select);
     expect(selected.status).toBe('committed');
     expect(selected.map.projects.at(-1)?.number).toBe(2);
+    expect(deriveMethodCheckpoint(selected.map).module).toBe('guide-path-project');
     const replayed = applyCareerMapOperation(selected.map, select);
     expect(replayed.status).toBe('replayed');
     expect(replayed.map.projects.filter((candidate) => candidate.number === 2)).toHaveLength(1);
@@ -342,6 +388,10 @@ describe('Method reducer', () => {
     map = commit(map, 'resolve-basis-review', { targetKind: 'project', targetId: 'project-1', targetRevision: 1, resolution: 'replaced', action: action(13) });
     map = commit(map, 'resolve-basis-review', { targetKind: 'reflection', targetId: 'reflection-1', targetRevision: 1, resolution: 'reaffirmed', action: action(14) });
     map = commit(map, 'resolve-basis-review', { targetKind: 'next-move', targetId: 'move-1', targetRevision: 1, resolution: 'reaffirmed', action: action(15) });
+    expect(deriveMethodCheckpoint(map)).toMatchObject({
+      module: 'design-path-project',
+      availableOperations: ['propose-follow-on-projects'],
+    });
 
     map = commit(map, 'propose-follow-on-projects', {
       setId: 'switched-options', setRevision: 1,
@@ -352,6 +402,7 @@ describe('Method reducer', () => {
     map = commit(map, 'select-follow-on-project', { setId: 'switched-options', setRevision: 1, projectId: 'switch-option-3', projectRevision: 1, action: action(17) });
     expect(map.projects.at(-1)?.number).toBe(2);
     expect(map.projects.at(-1)?.basisPath.id).toBe('path-1');
+    expect(deriveMethodCheckpoint(map).module).toBe('guide-path-project');
   });
 
   it('selects one Side Door and parks two atomically while keeping route evidence separate', () => {

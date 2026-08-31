@@ -122,6 +122,25 @@ export const careerMapSchema = composedCareerMapSchema.superRefine((map, context
     }
   }
 
+  const pathSnapshots = new Map<string, string>();
+  for (const [setIndex, set] of map.pathSets.entries()) {
+    for (const [pathIndex, path] of set.paths.entries()) {
+      const { selection: _selection, equalWeight: _equalWeight, ...input } = path;
+      const key = `${path.id}@${path.revision}`;
+      const snapshot = JSON.stringify(input);
+      const existing = pathSnapshots.get(key);
+      if (existing && existing !== snapshot) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['pathSets', setIndex, 'paths', pathIndex],
+          message: 'A Purpose Path revision must have one immutable content snapshot.',
+        });
+      } else {
+        pathSnapshots.set(key, snapshot);
+      }
+    }
+  }
+
   const acceptedNumbers = map.projects.filter((project) => project.agreementStatus === 'accepted').map((project) => project.number);
   if (!unique(acceptedNumbers.map(String))) {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ['projects'], message: 'Only one accepted Path Project may occupy a project number.' });

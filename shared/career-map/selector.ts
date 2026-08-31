@@ -85,6 +85,15 @@ function latestAcceptedProject(map: CareerMap) {
   return latest;
 }
 
+function hasProjectOptionsForMove(
+  map: CareerMap,
+  move: CareerMap['nextMoves'][number],
+): boolean {
+  return map.projectOptionSets.some(
+    (set) => set.basisNextMove.id === move.id && set.basisNextMove.revision === move.revision,
+  );
+}
+
 function pendingDecision(map: CareerMap): { module: MethodModule; decision: PendingDecision } | null {
   const why = map.foundation.whyRevisions.findLast((item) => item.status === 'suggested');
   if (why) return { module: 'form-foundation', decision: { kind: 'why-confirmation', targetId: why.id, targetRevision: why.revision } };
@@ -218,7 +227,17 @@ function normalLifecycle(map: CareerMap): { module: MethodModule; operations: Ca
     return { module: 'create-purpose-paths', operations: ['propose-purpose-paths', 'open-foundation-revision-focus'] };
   }
   if (move?.kind === 'return-to-paths') {
-    return { module: 'create-purpose-paths', operations: ['choose-parked-purpose-path', 'propose-purpose-paths', 'open-path-revision-focus', 'open-foundation-revision-focus'] };
+    const activeSet = map.pathSets.findLast((set) => set.status === 'active');
+    const pathChosenAfterMove = Boolean(
+      activeSet?.confirmation
+      && activeSet.confirmation.confirmedBy.turnSequence > move.action.turnSequence,
+    );
+    if (!pathChosenAfterMove) {
+      return { module: 'create-purpose-paths', operations: ['choose-parked-purpose-path', 'propose-purpose-paths', 'open-path-revision-focus', 'open-foundation-revision-focus'] };
+    }
+    if (!hasProjectOptionsForMove(map, move)) {
+      return { module: 'design-path-project', operations: ['propose-follow-on-projects'] };
+    }
   }
 
   if (map.provisionalCommitment) {
@@ -230,10 +249,10 @@ function normalLifecycle(map: CareerMap): { module: MethodModule; operations: Ca
   }
 
   if (map.commitmentIntent?.status === 'pending-peer-exposure') {
-    return { module: 'find-relevant-peers', operations: ['open-peer-focus', 'record-peer-exposure', 'revise-peer-exposure', 'confirm-peer-exposure', 'defer-peer-exposure', 'propose-follow-on-projects'] };
+    return { module: 'find-relevant-peers', operations: ['open-peer-focus', 'record-peer-exposure', 'revise-peer-exposure', 'confirm-peer-exposure', 'defer-peer-exposure'] };
   }
 
-  if (move?.kind === 'explore-further') {
+  if (move?.kind === 'explore-further' && !hasProjectOptionsForMove(map, move)) {
     return { module: 'design-path-project', operations: ['propose-follow-on-projects'] };
   }
 

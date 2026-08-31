@@ -31,7 +31,7 @@ describe('Google login entry', () => {
       expect(signInSocial).toHaveBeenCalledWith({
         provider: 'google',
         callbackURL: '/',
-        errorCallbackURL: '/login?error=oauth_failed',
+        errorCallbackURL: '/login',
       });
     });
   });
@@ -48,6 +48,21 @@ describe('Google login entry', () => {
 
   it('turns provider failures into safe retry copy', async () => {
     signInSocial.mockRejectedValue(new Error('provider response with token=secret'));
+    render(<Login />);
+
+    fireEvent.click(screen.getByRole('button', { name: /continue with google/i }));
+
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'Google sign-in could not be completed. Please try again.',
+    );
+    expect(screen.queryByText(/token=secret/i)).toBeNull();
+  });
+
+  it('turns resolved OAuth failures into safe retry copy', async () => {
+    signInSocial.mockResolvedValue({
+      data: null,
+      error: { message: 'provider response with token=secret' },
+    });
     render(<Login />);
 
     fireEvent.click(screen.getByRole('button', { name: /continue with google/i }));

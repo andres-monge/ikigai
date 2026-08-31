@@ -1,6 +1,7 @@
 import { isIP } from 'node:net';
 import type { IncomingMessage } from 'node:http';
 import { betterAuth, type BetterAuthOptions } from 'better-auth';
+import { createAuthMiddleware } from 'better-auth/api';
 import { Pool, type PoolConfig } from 'pg';
 import { env, type Env } from './env.js';
 
@@ -70,6 +71,7 @@ export function buildAuthPoolOptions(runtimeEnv: AuthRuntimeEnv): PoolConfig {
 
   return {
     connectionString: withAuthSchemaSearchPath(databaseUrl.toString()),
+    connectionTimeoutMillis: 5_000,
   };
 }
 
@@ -112,8 +114,17 @@ export function buildAuthOptions(
         clientSecret: runtimeEnv.GOOGLE_CLIENT_SECRET,
         disableDefaultScope: true,
         scope: [...GOOGLE_IDENTITY_SCOPES],
+        disableIdTokenSignIn: true,
         disableImplicitSignUp: !runtimeEnv.AUTH_SIGNUPS_ENABLED,
+        disableSignUp: !runtimeEnv.AUTH_SIGNUPS_ENABLED,
       },
+    },
+    hooks: {
+      before: createAuthMiddleware(async (context) => {
+        if (context.path === '/sign-in/social' && context.body?.provider === 'google') {
+          context.body.scopes = undefined;
+        }
+      }),
     },
     account: {
       encryptOAuthTokens: true,

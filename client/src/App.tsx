@@ -18,6 +18,7 @@ import { NotFound } from '@/pages/not-found';
 import { useSessionStorage } from '@/hooks/use-session-storage';
 import { useAnalytics } from '@/hooks/use-analytics';
 import { authClient } from '@/lib/auth-client';
+import { replaceDocument } from '@/lib/browser-navigation';
 import type { Language } from '@/lib/i18n';
 import type { FullAssessment } from '@/types/assessment';
 
@@ -37,6 +38,7 @@ function AuthenticatedRoot() {
   const { data: session, isPending } = authClient.useSession();
   const [, navigate] = useLocation();
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isPending && !session) {
@@ -50,12 +52,17 @@ function AuthenticatedRoot() {
 
   async function handleSignOut() {
     setIsSigningOut(true);
+    setSignOutError(null);
     try {
       const result = await authClient.signOut();
-      if (!result.error) {
-        navigate('/login', { replace: true });
+      if (result.error) {
+        setSignOutError('Sign-out could not be completed. Please try again.');
+        setIsSigningOut(false);
+      } else {
+        replaceDocument('/login');
       }
-    } finally {
+    } catch {
+      setSignOutError('Sign-out could not be completed. Please try again.');
       setIsSigningOut(false);
     }
   }
@@ -80,6 +87,12 @@ function AuthenticatedRoot() {
             {isSigningOut ? 'Signing out…' : 'Sign out'}
           </button>
         </div>
+
+        {signOutError ? (
+          <p role="alert" className="mt-6 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+            {signOutError}
+          </p>
+        ) : null}
 
         <div className="mt-12 rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
           <h2 className="text-xl font-semibold">Your workspace is ready.</h2>

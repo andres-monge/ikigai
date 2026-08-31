@@ -2,8 +2,12 @@ import express from 'express';
 import request from 'supertest';
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('./auth.js', () => ({
+const { AuthConfigurationError } = vi.hoisted(() => ({
   AuthConfigurationError: class AuthConfigurationError extends Error {},
+}));
+
+vi.mock('./auth.js', () => ({
+  AuthConfigurationError,
   getAuth: vi.fn(),
 }));
 import {
@@ -59,6 +63,23 @@ describe('server-derived protected identity', () => {
 
     expect(response.status).toBe(401);
     expect(response.body).toEqual({ error: 'Authentication required' });
+  });
+
+  it('returns a sanitized 503 when protected auth is not configured', async () => {
+    const app = express();
+    app.get(
+      '/protected',
+      requireAuthWith(() => {
+        throw new AuthConfigurationError();
+      }),
+      (_req, res) => res.json({ protected: true }),
+    );
+
+    const response = await request(app).get('/protected');
+
+    expect(response.status).toBe(503);
+    expect(response.body).toEqual({ error: 'Authentication is unavailable' });
+    expect(response.body).not.toHaveProperty('protected');
   });
 
   it('passes the frozen server identity to a protected handler', async () => {

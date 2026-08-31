@@ -3,14 +3,16 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { useSession, signOut } = vi.hoisted(() => ({
+const { useSession, signOut, replaceDocument } = vi.hoisted(() => ({
   useSession: vi.fn(),
   signOut: vi.fn(),
+  replaceDocument: vi.fn(),
 }));
 
 vi.mock('@/lib/auth-client', () => ({
   authClient: { useSession, signOut },
 }));
+vi.mock('@/lib/browser-navigation', () => ({ replaceDocument }));
 vi.mock('@vercel/analytics/react', () => ({ Analytics: () => null }));
 vi.mock('@/components/header', () => ({ Header: () => <div>Legacy header</div> }));
 vi.mock('@/components/ui/toaster', () => ({ Toaster: () => null }));
@@ -35,6 +37,7 @@ describe('canonical auth and legacy route split', () => {
   beforeEach(() => {
     useSession.mockReset();
     signOut.mockReset();
+    replaceDocument.mockReset();
     window.sessionStorage.clear();
   });
 
@@ -59,7 +62,7 @@ describe('canonical auth and legacy route split', () => {
     expect(window.location.pathname).toBe('/login');
   });
 
-  it('renders the authenticated root from server session identity and signs out', async () => {
+  it('replaces the document after sign-out so stale client session state cannot bounce', async () => {
     window.history.replaceState({}, '', '/');
     useSession.mockReturnValue({
       data: {
@@ -76,6 +79,33 @@ describe('canonical auth and legacy route split', () => {
     expect(screen.getByText('explorer@example.com')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
     await waitFor(() => expect(signOut).toHaveBeenCalledOnce());
+    expect(replaceDocument).toHaveBeenCalledWith('/login');
+    expect(window.location.pathname).toBe('/');
+    expect((screen.getByRole('button', { name: 'Signing out…' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it.each([
+    ['returned', () => signOut.mockResolvedValue({ data: null, error: { message: 'secret' } })],
+    ['thrown', () => signOut.mockRejectedValue(new Error('provider secret'))],
+  ])('recovers from a %s sign-out failure without leaking detail', async (_kind, arrangeFailure) => {
+    window.history.replaceState({}, '', '/');
+    useSession.mockReturnValue({
+      data: {
+        user: { id: 'server-user', name: 'Explorer', email: 'explorer@example.com' },
+        session: { id: 'session-id' },
+      },
+      isPending: false,
+    });
+    arrangeFailure();
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'Sign-out could not be completed. Please try again.',
+    );
+    expect((screen.getByRole('button', { name: 'Sign out' }) as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.queryByText(/provider secret/i)).toBeNull();
   });
 
   it('keeps /legacy anonymous and does not resolve an auth session', () => {

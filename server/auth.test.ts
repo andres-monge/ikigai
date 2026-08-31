@@ -46,7 +46,9 @@ describe('I2 Better Auth configuration', () => {
     expect(options.socialProviders?.google).toMatchObject({
       scope: GOOGLE_IDENTITY_SCOPES,
       disableDefaultScope: true,
+      disableIdTokenSignIn: true,
       disableImplicitSignUp: false,
+      disableSignUp: false,
     });
     expect(options.baseURL).toBe('http://localhost:5001');
     expect(options.trustedOrigins).toEqual(['http://localhost:5001']);
@@ -62,6 +64,7 @@ describe('I2 Better Auth configuration', () => {
     // the Google provider remains configured so an existing account can sign in.
     expect(options.socialProviders?.google).toMatchObject({
       disableImplicitSignUp: true,
+      disableSignUp: true,
     });
     expect(Object.keys(options.socialProviders ?? {})).toEqual(['google']);
   });
@@ -112,6 +115,19 @@ describe('I2 Better Auth configuration', () => {
     expect(result.searchParams.get('sslmode')).toBe('require');
     expect(result.searchParams.get('options')).toBe('-c search_path=auth');
     expect(poolOptions.connectionString).not.toContain('ep-app-pooler');
+    expect(poolOptions.connectionTimeoutMillis).toBe(5_000);
+  });
+
+  it('discards caller-supplied Google scopes before OAuth dispatch', async () => {
+    const options = buildAuthOptions(configuredEnv, { kind: 'test-database' });
+    const body = {
+      provider: 'google',
+      scopes: ['https://www.googleapis.com/auth/calendar'],
+    };
+
+    await options.hooks?.before?.({ path: '/sign-in/social', body } as never);
+
+    expect(body.scopes).toBeUndefined();
   });
 
   it.each([
