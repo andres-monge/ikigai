@@ -13,7 +13,7 @@ const CHILD_DATABASE_PATTERN = /^ikigai_u4_test_[a-z0-9_]+$/;
 const migrationsFolder = fileURLToPath(new URL('../migrations', import.meta.url));
 const registeredDatabases = new Map<string, StorageTestDatabaseHarness>();
 
-const rawAdminConnectionString = process.env.DATABASE_URL;
+const rawAdminConnectionString = process.env.U4_STORAGE_TEST_DATABASE_URL;
 if (process.env.NODE_ENV !== 'test') {
   throw new Error('Storage integration database provisioning is allowed only in NODE_ENV=test.');
 }
@@ -21,7 +21,7 @@ if (process.env.U4_STORAGE_TEST_DATABASE !== '1') {
   throw new Error('Set U4_STORAGE_TEST_DATABASE=1 to authorize disposable storage test databases.');
 }
 if (!rawAdminConnectionString) {
-  throw new Error('DATABASE_URL is required for storage integration tests.');
+  throw new Error('U4_STORAGE_TEST_DATABASE_URL is required for storage integration tests.');
 }
 
 const adminTarget = assertDisposableStorageTestUrl(rawAdminConnectionString);

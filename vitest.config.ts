@@ -16,6 +16,7 @@ export default defineConfig({
     exclude: [
       '**/node_modules/**',
       '**/dist/**',
+      '**/.claude/worktrees/**',
       '**/tests/**', // E2E tests handled by Playwright
     ],
     // Force sequential execution for database tests to avoid conflicts

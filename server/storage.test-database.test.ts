@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { assertDisposableStorageTestUrl } from './storage.test-database-safety.js';
 
@@ -18,5 +19,11 @@ describe('storage integration database safety', () => {
     expect(assertDisposableStorageTestUrl(
       'postgresql://postgres@127.0.0.1:55432/ikigai_u4_test_admin_worker',
     ).databaseName).toBe('ikigai_u4_test_admin_worker');
+  });
+
+  it('keeps the disposable harness separate from the application database URL', () => {
+    const source = readFileSync(new URL('./storage.test-database.ts', import.meta.url), 'utf8');
+    expect(source).toContain('process.env.U4_STORAGE_TEST_DATABASE_URL');
+    expect(source).not.toContain('process.env.DATABASE_URL');
   });
 });
