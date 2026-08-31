@@ -1,5 +1,11 @@
 import type { z } from 'zod';
-import type { Confirmation, InvalidationTargetKind, ModelPresentation, UserActionProvenance } from './common';
+import {
+  invalidationTargetOrder,
+  type Confirmation,
+  type InvalidationTargetKind,
+  type ModelPresentation,
+  type UserActionProvenance,
+} from './common';
 import { careerMapSchema, type CareerMap } from './model';
 import {
   parseCareerMapOperation,
@@ -77,7 +83,11 @@ function activePath(map: CareerMap) {
 }
 
 function latestAcceptedProject(map: CareerMap) {
-  return map.projects.filter((project) => project.agreementStatus === 'accepted').sort((a, b) => b.number - a.number)[0];
+  let latest: CareerMap['projects'][number] | undefined;
+  for (const project of map.projects) {
+    if (project.agreementStatus === 'accepted' && (!latest || project.number > latest.number)) latest = project;
+  }
+  return latest;
 }
 
 function latestNextMove(map: CareerMap) {
@@ -235,7 +245,13 @@ function ensureNoPendingReview(map: CareerMap, type: CareerMapOperationType): vo
 }
 
 function nextProjectNumber(map: CareerMap): number {
-  return Math.max(0, ...map.projects.filter((project) => project.agreementStatus === 'accepted').map((project) => project.number)) + 1;
+  let highestAcceptedNumber = 0;
+  for (const project of map.projects) {
+    if (project.agreementStatus === 'accepted' && project.number > highestAcceptedNumber) {
+      highestAcceptedNumber = project.number;
+    }
+  }
+  return highestAcceptedNumber + 1;
 }
 
 function applyDomainOperation(map: CareerMap, operation: CareerMapOperation): void {
@@ -805,10 +821,13 @@ function applyDomainOperation(map: CareerMap, operation: CareerMapOperation): vo
       return;
     }
     case 'resolve-basis-review': {
-      const pending = map.invalidations.filter((item) => item.status === 'pending');
-      const order: InvalidationTargetKind[] = ['path-set', 'project', 'reflection', 'next-move', 'peer-exposure', 'commitment', 'proof', 'side-door-set', 'route-outcome'];
-      pending.sort((a, b) => order.indexOf(a.targetKind) - order.indexOf(b.targetKind));
-      const earliest = pending[0];
+      let earliest: CareerMap['invalidations'][number] | undefined;
+      for (const item of map.invalidations) {
+        if (item.status !== 'pending') continue;
+        if (!earliest || invalidationTargetOrder.indexOf(item.targetKind) < invalidationTargetOrder.indexOf(earliest.targetKind)) {
+          earliest = item;
+        }
+      }
       assert(earliest
         && earliest.targetKind === operation.payload.targetKind
         && earliest.targetId === operation.payload.targetId

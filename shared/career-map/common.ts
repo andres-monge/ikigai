@@ -109,6 +109,18 @@ export type OperationReceipt = z.infer<typeof operationReceiptSchema>;
 export type Invalidation = z.infer<typeof invalidationSchema>;
 export type InvalidationTargetKind = z.infer<typeof invalidationTargetKindSchema>;
 
+export const invalidationTargetOrder = [
+  'path-set',
+  'project',
+  'reflection',
+  'next-move',
+  'peer-exposure',
+  'commitment',
+  'proof',
+  'side-door-set',
+  'route-outcome',
+] as const satisfies readonly InvalidationTargetKind[];
+
 export function exactThree<T extends z.ZodTypeAny>(item: T) {
   return z.tuple([item, item, item]);
 }

@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => {
     AuthConfigurationError,
     getAuth: vi.fn(),
     nodeHandler: vi.fn(),
+    toNodeHandler: vi.fn(),
   };
 });
 
@@ -22,7 +23,7 @@ vi.mock('./auth.js', () => ({
 }));
 
 vi.mock('better-auth/node', () => ({
-  toNodeHandler: () => mocks.nodeHandler,
+  toNodeHandler: mocks.toNodeHandler,
 }));
 
 vi.mock('./routes.js', () => ({
@@ -39,7 +40,9 @@ describe('Express auth integration', () => {
   beforeEach(() => {
     mocks.getAuth.mockReset();
     mocks.nodeHandler.mockReset();
+    mocks.toNodeHandler.mockReset();
     mocks.getAuth.mockReturnValue({ handler: vi.fn() });
+    mocks.toNodeHandler.mockReturnValue(mocks.nodeHandler);
   });
 
   it('mounts the Express v4 auth wildcard before both body parsers', () => {
@@ -98,5 +101,37 @@ describe('Express auth integration', () => {
     expect(authResponse.body).toEqual({ error: 'Authentication is unavailable' });
     expect(legacyResponse.status).toBe(200);
     expect(legacyResponse.body).toEqual({ anonymous: true });
+  });
+
+  it('caches the Better Auth node handler for the app instance', async () => {
+    mocks.nodeHandler.mockImplementation((_incoming, response) => {
+      response.statusCode = 204;
+      response.end();
+    });
+
+    const app = createApp();
+    const [first, second] = await Promise.all([
+      request(app).get('/api/auth/get-session'),
+      request(app).get('/api/auth/get-session'),
+    ]);
+
+    expect(first.status).toBe(204);
+    expect(second.status).toBe(204);
+    expect(mocks.getAuth).toHaveBeenCalledTimes(1);
+    expect(mocks.toNodeHandler).toHaveBeenCalledTimes(1);
+    expect(mocks.nodeHandler).toHaveBeenCalledTimes(2);
+  });
+
+  it('sanitizes asynchronous Better Auth failures at the auth boundary', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    mocks.nodeHandler.mockRejectedValue(new Error('provider secret leaked in detail'));
+
+    const response = await request(createApp()).get('/api/auth/get-session');
+
+    expect(response.status).toBe(500);
+    expect(response.body).toEqual({ error: 'Authentication request failed' });
+    expect(JSON.stringify(response.body)).not.toContain('provider secret');
+    expect(consoleError).toHaveBeenCalledWith('Authentication request failed');
+    consoleError.mockRestore();
   });
 });

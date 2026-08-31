@@ -82,22 +82,32 @@ export function createSPACatchAll(publicDir: string): RequestHandler {
  */
 export function createApp(): Express {
   const app = express();
+  let authHandler: ReturnType<typeof toNodeHandler> | undefined;
 
   // ========= Middleware Setup =========
   // Better Auth's Express v4 handler MUST remain before body parsers. The
   // handler consumes the raw request stream for OAuth and session endpoints.
-  app.all('/api/auth/*', (req, res, next) => {
+  app.all('/api/auth/*', (req, res) => {
     req.headers[INTERNAL_CLIENT_IP_HEADER] = resolveTrustedClientIp(req, env.NODE_ENV);
 
-    try {
-      const handler = toNodeHandler(getAuth());
-      Promise.resolve(handler(req, res)).catch(next);
-    } catch (error) {
+    const respondToAuthFailure = (error: unknown) => {
+      if (res.headersSent) {
+        res.end();
+        return;
+      }
       if (error instanceof AuthConfigurationError) {
         res.status(503).json({ error: 'Authentication is unavailable' });
         return;
       }
-      next(error);
+      console.error('Authentication request failed');
+      res.status(500).json({ error: 'Authentication request failed' });
+    };
+
+    try {
+      authHandler ??= toNodeHandler(getAuth());
+      Promise.resolve(authHandler(req, res)).catch(respondToAuthFailure);
+    } catch (error) {
+      respondToAuthFailure(error);
     }
   });
 

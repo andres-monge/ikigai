@@ -1,4 +1,4 @@
-import type { Invalidation, InvalidationTargetKind } from './common';
+import { invalidationTargetOrder, type Invalidation, type InvalidationTargetKind } from './common';
 import type { CareerMap, Focus } from './model';
 import type { CareerMapOperationType } from './operations';
 
@@ -33,25 +33,21 @@ export interface MethodCheckpoint {
   availableOperations: CareerMapOperationType[];
 }
 
-const invalidationOrder: InvalidationTargetKind[] = [
-  'path-set',
-  'project',
-  'reflection',
-  'next-move',
-  'peer-exposure',
-  'commitment',
-  'proof',
-  'side-door-set',
-  'route-outcome',
-];
-
 function earliestReview(map: CareerMap): Invalidation | null {
-  return map.invalidations
-    .filter((item) => item.status === 'pending')
-    .sort((a, b) => {
-      const kindDifference = invalidationOrder.indexOf(a.targetKind) - invalidationOrder.indexOf(b.targetKind);
-      return kindDifference || a.createdAtRevision - b.createdAtRevision;
-    })[0] ?? null;
+  let earliest: Invalidation | null = null;
+  for (const item of map.invalidations) {
+    if (item.status !== 'pending') continue;
+    if (!earliest) {
+      earliest = item;
+      continue;
+    }
+    const kindDifference = invalidationTargetOrder.indexOf(item.targetKind)
+      - invalidationTargetOrder.indexOf(earliest.targetKind);
+    if (kindDifference < 0 || (kindDifference === 0 && item.createdAtRevision < earliest.createdAtRevision)) {
+      earliest = item;
+    }
+  }
+  return earliest;
 }
 
 function reviewModule(kind: InvalidationTargetKind): MethodModule {
@@ -82,7 +78,11 @@ function activePath(map: CareerMap) {
 }
 
 function latestAcceptedProject(map: CareerMap) {
-  return map.projects.filter((project) => project.agreementStatus === 'accepted').sort((a, b) => b.number - a.number)[0];
+  let latest: CareerMap['projects'][number] | undefined;
+  for (const project of map.projects) {
+    if (project.agreementStatus === 'accepted' && (!latest || project.number > latest.number)) latest = project;
+  }
+  return latest;
 }
 
 function pendingDecision(map: CareerMap): { module: MethodModule; decision: PendingDecision } | null {

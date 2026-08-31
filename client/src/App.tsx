@@ -109,6 +109,10 @@ function LoginEntry() {
   return <Login />;
 }
 
+function createLegacySessionId() {
+  return Math.random().toString(36).slice(2) + Date.now().toString(36);
+}
+
 function LegacyApp() {
   const [language, setLanguage] = useSessionStorage<Language>('language', 'en');
   const [sessionId, setSessionId] = useSessionStorage<string>('sessionId', '');
@@ -119,8 +123,7 @@ function LegacyApp() {
 
   useEffect(() => {
     if (!sessionId) {
-      const newId = Math.random().toString(36).slice(2) + Date.now().toString(36);
-      setSessionId(newId);
+      setSessionId(createLegacySessionId());
     }
   }, [sessionId, setSessionId]);
 
@@ -150,8 +153,7 @@ function LegacyApp() {
     }
 
     setSession(null);
-    const newId = Math.random().toString(36).slice(2) + Date.now().toString(36);
-    setSessionId(newId);
+    setSessionId(createLegacySessionId());
     navigate('/legacy');
   };
 
