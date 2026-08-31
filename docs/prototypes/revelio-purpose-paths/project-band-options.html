@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>First project — three tint variants · Purpose Paths prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,700;9..40,800;9..40,900&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/*
+ * Second pass. Path tint is chosen; these are three variants of it, differing
+ * only in the two things the founder asked about — both of which turned out to
+ * be bugs rather than decisions:
+ *
+ *   1. Lopsided borders. `.band + .band` (two classes) was out-specifying
+ *      `.band--unknown` (one class), and it only sets the top edge, so the
+ *      marked bands kept a 1px pale rule on top against their own 2px black
+ *      rule underneath. Fixed by giving the marked-band rules equal specificity
+ *      and putting them later in source order.
+ *
+ *   2. The empty strips above and below the band. `grid-template-rows: subgrid`
+ *      inherits the parent grid's gutters, so the card was carrying the 24px row
+ *      gap from `.opts` between every section. Invisible while all bands were
+ *      white; obvious the moment one had colour. Fixed with `row-gap: 0`.
+ *
+ * Both are fixed in all three variants below. What differs is how the tinted
+ * band is drawn: how its edges are ruled, and whether it spans the card or sits
+ * inside it.
+ */
+
+:root {
+  --teal: #4db6ac; --yellow: #ffc107; --orange: #ff6b35;
+  --cream: #fff9f3; --beige: #f6f4ed;
+  --ink: #14181b; --ink-soft: #4a5157; --line: #000;
+  --display: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --body: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
+  --shadow: 6px 6px 0 rgba(0,0,0,0.65);
+  --shadow-sm: 4px 4px 0 rgba(0,0,0,0.65);
+  --shadow-xs: 2px 2px 0 rgba(0,0,0,0.65);
+  --s-1:0.5rem; --s-2:0.75rem; --s-3:1rem; --s-4:1.5rem; --s-5:2rem; --s-6:3rem;
+}
+
+*,*::before,*::after { box-sizing: border-box; }
+html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+body { margin:0; background: var(--beige); color: var(--ink); font-family: var(--body); line-height:1.6; }
+h1,h2,h3 { font-family: var(--display); font-weight:800; line-height:1.1; margin:0; text-wrap:balance; }
+p { margin:0; text-wrap:pretty; }
+
+.shell { max-width: 82rem; margin-inline:auto; padding: var(--s-6) var(--s-4) 4.5rem; }
+
+.topbar {
+  display:flex; flex-wrap:wrap; gap:var(--s-2); align-items:baseline; justify-content:space-between;
+  font-family:var(--display); font-weight:700; font-size:0.75rem; letter-spacing:0.08em;
+  text-transform:uppercase; color:var(--ink-soft);
+  padding-block-end:var(--s-2); border-block-end:2px solid var(--line); margin-block-end:var(--s-5);
+}
+.topbar a { color: var(--ink); }
+
+.intro { margin-block-end: var(--s-5); max-width: 48rem; }
+.intro h1 { font-size: clamp(1.75rem,3.4vw,2.25rem); font-weight:900; }
+.intro > p { margin-block-start: var(--s-2); font-weight:500; color: var(--ink-soft); }
+
+.opts { display:grid; grid-template-columns: repeat(3,1fr); grid-template-rows: repeat(8, auto); gap: var(--s-4); }
+.opt { display:grid; grid-template-rows: subgrid; grid-row: span 8; row-gap: 0; }
+.opt__caption { margin-block-end: var(--s-3); }
+
+.opt__key {
+  display:inline-block; font-family:var(--display); font-weight:900; font-size:0.75rem;
+  letter-spacing:0.1em; text-transform:uppercase; background:var(--ink); color:#fff;
+  padding:0.2rem 0.5rem; margin-block-end:var(--s-1);
+}
+.opt__what { font-family:var(--display); font-weight:800; font-size:1rem; }
+.opt__note { font-size:0.875rem; color:var(--ink-soft); font-weight:500; margin-block-start:0.35rem; }
+
+/* row-gap: 0 — without it, subgrid inherits the 24px gutter from .opts and puts
+   a strip of card background between every band. */
+.card {
+  display:grid; grid-template-rows: subgrid; grid-row: span 7; row-gap: 0;
+  background:#fff; border:2px solid var(--line); box-shadow: var(--shadow);
+}
+.card__head { padding: var(--s-4); border-block-end:2px solid var(--line);
+  background: linear-gradient(135deg, var(--teal), #43a89e); }
+.card__num {
+  display:inline-block; font-family:var(--display); font-weight:900; font-size:0.75rem;
+  letter-spacing:0.1em; text-transform:uppercase; background:var(--ink); color:#fff;
+  padding:0.2rem 0.5rem; margin-block-end:var(--s-2);
+}
+.card__name { font-size:1.375rem; font-weight:900; color:var(--ink); }
+.card__serves { margin-block-start:var(--s-2); font-weight:600; font-size:0.9375rem; color:var(--ink); }
+
+.band { padding: var(--s-3) var(--s-4); }
+.band + .band { border-block-start: 1px solid #e2ded2; }
+.band__label {
+  display:block; font-family:var(--display); font-weight:800; font-size:0.6875rem;
+  letter-spacing:0.09em; text-transform:uppercase; color:var(--ink-soft); margin-block-end:0.35rem;
+}
+.band__text { font-size:0.9375rem; }
+.band__q { font-family:var(--display); font-weight:800; font-size:1.125rem; line-height:1.25; }
+
+/* Two classes, and later in source order, so it wins the tie on both edges. */
+.band.band--unknown { background: var(--cream); border-block: 2px solid var(--line); }
+.band.band--unknown .band__label { color: var(--ink); }
+
+/* ---------------------------------------------- the three tint variants */
+
+/* V1 — Hard rules. 2px black top and bottom, band flush to the card edges.
+   Drawn exactly like the unknown above it, so the two marked sections match. */
+.band.p-hard {
+  background: color-mix(in srgb, var(--teal) 18%, #fff);
+  border-block: 2px solid var(--line);
+}
+
+/* V2 — Colour only. No rules at all; the tint alone marks it. Quieter, and it
+   leaves the unknown as the only hard-ruled band on the card. */
+.band.p-bare {
+  background: color-mix(in srgb, var(--teal) 18%, #fff);
+  border-block: 0;
+}
+
+/* V3 — Deliberate inset. The gap becomes intentional and symmetric instead of
+   accidental: the band sits in from all four edges with a border all round, so
+   it reads as a placed object rather than a stripe across the card. */
+.band.p-inset { padding: var(--s-3); border-block: 0; }
+.p-inset__box {
+  background: color-mix(in srgb, var(--teal) 18%, #fff);
+  border: 2px solid var(--line);
+  padding: var(--s-3);
+}
+
+.band.p-hard .band__label,
+.band.p-bare .band__label,
+.p-inset__box .band__label { color: var(--ink); }
+
+.card__foot { padding: var(--s-4); display:flex; flex-wrap:wrap; gap:var(--s-1); align-items:end; }
+
+.btn {
+  font-family:var(--display); font-weight:900; font-size:0.8125rem; letter-spacing:0.02em;
+  padding:0.6rem 0.9rem; min-height:44px; border:2px solid var(--line); border-radius:0;
+  background:#fff; color:var(--ink); box-shadow: var(--shadow-xs); cursor:pointer;
+  transition: transform 120ms ease-out, box-shadow 120ms ease-out;
+}
+.btn--go { background: var(--teal); }
+.btn:focus-visible { outline:3px solid var(--ink); outline-offset:3px; }
+@media (hover:hover) { .btn:hover { box-shadow: var(--shadow-sm); } }
+.btn:active { transform: translate(2px,2px); box-shadow: 0 0 0 rgba(0,0,0,0.65); }
+
+.tintrow {
+  margin-block-start: var(--s-5); padding: var(--s-4);
+  background:#fff; border:2px solid var(--line); box-shadow: var(--shadow-sm);
+}
+.tintrow h2 { font-size:1rem; font-weight:900; margin-block-end: var(--s-2); }
+.tintrow > p { font-size:0.875rem; color:var(--ink-soft); font-weight:500; margin-block-end:var(--s-3); }
+.tintrow__set { display:grid; grid-template-columns:repeat(3,1fr); gap:var(--s-3); }
+.swatch { border:2px solid var(--line); padding: var(--s-3); }
+.swatch--teal   { background: color-mix(in srgb, var(--teal) 18%, #fff); }
+.swatch--yellow { background: color-mix(in srgb, var(--yellow) 18%, #fff); }
+.swatch--orange { background: color-mix(in srgb, var(--orange) 18%, #fff); }
+.swatch .band__label { color: var(--ink); }
+
+.footnote { margin-block-start: var(--s-5); font-size:0.875rem; color:var(--ink-soft); max-width:48rem; }
+
+@media (max-width: 1000px) {
+  .opts { grid-template-columns: 1fr; }
+  .opt { grid-row:auto; grid-template-rows:none; }
+  .card { grid-row:auto; grid-template-rows:none; }
+  .tintrow__set { grid-template-columns:1fr; }
+}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <div class="topbar">
+    <span>Revelio · First project — three tint variants</span>
+    <a href="selected-single-view.html">← Back to the selected view</a>
+  </div>
+
+  <div class="intro">
+    <h1>Path tint, three ways of drawing it</h1>
+    <p>Both things you spotted were bugs, not decisions. The lopsided borders were a specificity collision: the rule that draws the divider between bands carries two classes and only sets the top edge, so it was overriding the one-class rule on the marked bands and leaving a pale line on top against their own black line underneath. The empty strips were the card inheriting a 24&nbsp;px row gap from the grid around it, which put a band of card background between every section — invisible while everything was white, obvious as soon as one band had colour.</p>
+    <p>Both are fixed in all three variants below. What changes between them is only how the tinted band is drawn: how its edges are ruled, and whether it spans the card or sits inside it.</p>
+  </div>
+
+  <div class="opts">
+
+    <!-- ------------------------------------------------------ variant 1 -->
+    <div class="opt">
+      <div class="opt__caption">
+        <span class="opt__key">Variant 1</span>
+        <p class="opt__what">Hard rules</p>
+        <p class="opt__note">2&nbsp;px black on both edges, flush to the card. Drawn exactly like the unknown above it, so the two marked sections match.</p>
+      </div>
+
+      <article class="card">
+        <header class="card__head">
+          <span class="card__num">Path 01</span>
+          <h2 class="card__name">Teaching the people the system was built for</h2>
+          <p class="card__serves">You stop translating complexity for one company and start making other people able to translate it for themselves.</p>
+        </header>
+        <div class="band">
+          <span class="band__label">What could become possible</span>
+          <p class="band__text">Work that pays by the cohort rather than by the year, and material that keeps earning after you’ve stopped writing it.</p>
+        </div>
+        <div class="band">
+          <span class="band__label">Evidence it may fit</span>
+          <p class="band__text">You’ve rewritten onboarding docs three times without being asked. The runbook you wrote in 2023 is still what people send to new hires.</p>
+        </div>
+        <div class="band band--unknown">
+          <span class="band__label">The central unknown</span>
+          <p class="band__q">Do you like teaching, or do you like being the person who knows?</p>
+        </div>
+        <div class="band p-hard">
+          <span class="band__label">First project</span>
+          <p class="band__text">Run one 90-minute session for six people at a local nonprofit, on the tool they already hate. Charge nothing. Watch where they get stuck.</p>
+        </div>
+        <div class="band">
+          <span class="band__label">How it could fit your life</span>
+          <p class="band__text">Independent instructors here bill €600–1,400 a day, but the first year is mostly unpaid audience-building. Evenings and one weekday would be enough to test it. No credential required.</p>
+        </div>
+        <footer class="card__foot">
+          <button class="btn btn--go" type="button">Start this path</button>
+          <button class="btn" type="button">Rewrite</button>
+        </footer>
+      </article>
+    </div>
+
+    <!-- ------------------------------------------------------ variant 2 -->
+    <div class="opt">
+      <div class="opt__caption">
+        <span class="opt__key">Variant 2</span>
+        <p class="opt__what">Colour only</p>
+        <p class="opt__note">No rules at all — the tint does the marking on its own. Leaves the unknown as the only hard-ruled band on the card.</p>
+      </div>
+
+      <article class="card">
+        <header class="card__head">
+          <span class="card__num">Path 01</span>
+          <h2 class="card__name">Teaching the people the system was built for</h2>
+          <p class="card__serves">You stop translating complexity for one company and start making other people able to translate it for themselves.</p>
+        </header>
+        <div class="band">
+          <span class="band__label">What could become possible</span>
+          <p class="band__text">Work that pays by the cohort rather than by the year, and material that keeps earning after you’ve stopped writing it.</p>
+        </div>
+        <div class="band">
+          <span class="band__label">Evidence it may fit</span>
+          <p class="band__text">You’ve rewritten onboarding docs three times without being asked. The runbook you wrote in 2023 is still what people send to new hires.</p>
+        </div>
+        <div class="band band--unknown">
+          <span class="band__label">The central unknown</span>
+          <p class="band__q">Do you like teaching, or do you like being the person who knows?</p>
+        </div>
+        <div class="band p-bare">
+          <span class="band__label">First project</span>
+          <p class="band__text">Run one 90-minute session for six people at a local nonprofit, on the tool they already hate. Charge nothing. Watch where they get stuck.</p>
+        </div>
+        <div class="band">
+          <span class="band__label">How it could fit your life</span>
+          <p class="band__text">Independent instructors here bill €600–1,400 a day, but the first year is mostly unpaid audience-building. Evenings and one weekday would be enough to test it. No credential required.</p>
+        </div>
+        <footer class="card__foot">
+          <button class="btn btn--go" type="button">Start this path</button>
+          <button class="btn" type="button">Rewrite</button>
+        </footer>
+      </article>
+    </div>
+
+    <!-- ------------------------------------------------------ variant 3 -->
+    <div class="opt">
+      <div class="opt__caption">
+        <span class="opt__key">Variant 3</span>
+        <p class="opt__what">Deliberate inset</p>
+        <p class="opt__note">The gap becomes intentional and even on all four sides, with a border all round — a placed object rather than a stripe. The only variant that indents the text.</p>
+      </div>
+
+      <article class="card">
+        <header class="card__head">
+          <span class="card__num">Path 01</span>
+          <h2 class="card__name">Teaching the people the system was built for</h2>
+          <p class="card__serves">You stop translating complexity for one company and start making other people able to translate it for themselves.</p>
+        </header>
+        <div class="band">
+          <span class="band__label">What could become possible</span>
+          <p class="band__text">Work that pays by the cohort rather than by the year, and material that keeps earning after you’ve stopped writing it.</p>
+        </div>
+        <div class="band">
+          <span class="band__label">Evidence it may fit</span>
+          <p class="band__text">You’ve rewritten onboarding docs three times without being asked. The runbook you wrote in 2023 is still what people send to new hires.</p>
+        </div>
+        <div class="band band--unknown">
+          <span class="band__label">The central unknown</span>
+          <p class="band__q">Do you like teaching, or do you like being the person who knows?</p>
+        </div>
+        <div class="band p-inset">
+          <div class="p-inset__box">
+            <span class="band__label">First project</span>
+            <p class="band__text">Run one 90-minute session for six people at a local nonprofit, on the tool they already hate. Charge nothing. Watch where they get stuck.</p>
+          </div>
+        </div>
+        <div class="band">
+          <span class="band__label">How it could fit your life</span>
+          <p class="band__text">Independent instructors here bill €600–1,400 a day, but the first year is mostly unpaid audience-building. Evenings and one weekday would be enough to test it. No credential required.</p>
+        </div>
+        <footer class="card__foot">
+          <button class="btn btn--go" type="button">Start this path</button>
+          <button class="btn" type="button">Rewrite</button>
+        </footer>
+      </article>
+    </div>
+
+  </div>
+
+  <div class="tintrow">
+    <h2>The tint across all three paths</h2>
+    <p>Whichever variant wins, the tint follows each path’s own colour, so the project band is never the same shade twice. All three sit within a point and a half of each other for contrast, so none reads louder than the others.</p>
+    <div class="tintrow__set">
+      <div class="swatch swatch--teal">
+        <span class="band__label">First project</span>
+        <p class="band__text">Run one 90-minute session for six people at a local nonprofit, on the tool they already hate.</p>
+      </div>
+      <div class="swatch swatch--yellow">
+        <span class="band__label">First project</span>
+        <p class="band__text">Spend two weekends at one veterinary practice watching their intake process.</p>
+      </div>
+      <div class="swatch swatch--orange">
+        <span class="band__label">First project</span>
+        <p class="band__text">Write a public teardown of one live public-sector tender you actually understand.</p>
+      </div>
+    </div>
+  </div>
+
+  <p class="footnote">Fixture content. The card is trimmed to two buttons here so the comparison stays on the band; the selected view keeps all three.</p>
+
+</div>
+</body>
+</html>

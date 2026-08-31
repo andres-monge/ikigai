@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A — Three columns, paced disclosure · Purpose Paths prototype</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+/*
+ * Avenue A. Organizing principle: the option governs.
+ * You hold one path at a time and go deeper into it.
+ *
+ * Equal weight is held by identical geometry plus subgrid: every section of
+ * every path shares a row, so opening one path grows that row for all three.
+ * The open path fills it; the closed ones show whitespace. Nothing shifts
+ * relative to anything else, and no path can become taller than its siblings.
+ */
+
+.columns {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--s-3);
+}
+
+.col {
+  display: grid;
+  grid-template-rows: subgrid;
+  grid-row: span 4;
+  align-content: start;
+}
+
+/* The head is a column so the unknown can stretch to fill it. Without this the
+   panel with the longest question is physically larger than the other two, and
+   the path with the wordiest doubt gets the most visual mass. */
+.col__head { display: flex; flex-direction: column; }
+.col__head .unknown { flex: 1; }
+
+.col__rest { display: block; }
+.col__actions { align-self: end; padding-block-start: var(--s-3); }
+
+.rest__inner {
+  border-block-start: 1px solid var(--border-subtle);
+  padding-block-start: var(--s-3);
+  margin-block-start: var(--s-3);
+}
+
+/* No motion here. Revealing content for the first time is not a motion moment;
+   the one authored moment in this run belongs to avenue D, where simultaneity
+   is the idea being tested. */
+[hidden] { display: none; }
+
+/* Auto width, not full bleed: a full-width bordered box with small left-aligned
+   text reads as an input rather than a control. */
+.disclose {
+  margin-block-start: var(--s-3);
+  display: block;
+  width: fit-content;
+}
+
+@media (max-width: 900px) {
+  .columns { grid-template-columns: 1fr; }
+  .col { grid-row: auto; grid-template-rows: none; }
+}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <div class="runbar">
+    <span class="runbar__id"><strong>A</strong> · three columns, paced disclosure</span>
+    <a class="runbar__back" href="index.html">← All four presentations</a>
+  </div>
+
+  <div class="why">
+    <span class="util why__label">Your Why I Work — confirmed</span>
+    <p class="why__text">I work so that people who depend on complicated systems don’t have to become experts just to get what they need. Most of that complexity was somebody’s choice, and nobody went back to revisit it.</p>
+  </div>
+
+  <div class="setline">
+    <h1 style="font-size: var(--t-display-l)">Three ways to serve that</h1>
+    <p class="setline__lede">Each one is a different way of working, not a job title. None of them is a prediction, and none is being suggested over the others.</p>
+  </div>
+
+  <div class="columns">
+
+    <!-- ---------------------------------------------------------- path 1 -->
+    <article class="col plane">
+      <div class="col__head">
+        <h2 class="path__name">Teaching the people the system was built for</h2>
+        <p class="path__serves">You stop translating complexity for one company and start making other people able to translate it for themselves.</p>
+        <div class="unknown">
+          <span class="util unknown__label">The central unknown</span>
+          <p class="unknown__q">Do you like teaching, or do you like being the person who knows?</p>
+        </div>
+      </div>
+
+      <div class="col__rest">
+        <button class="btn disclose" type="button" aria-expanded="false" aria-controls="rest-1">Read the rest of this path</button>
+        <div class="rest__inner" id="rest-1" hidden>
+          <div class="field">
+            <span class="util field__label">What could become possible</span>
+            <p class="field__value">Work that pays by the cohort rather than by the year, and material that keeps earning after you’ve stopped writing it.</p>
+          </div>
+          <div class="field">
+            <span class="util field__label">Evidence it may fit</span>
+            <p class="field__value">You’ve rewritten onboarding docs three times without being asked. The runbook you wrote in 2023 is still what people send to new hires.</p>
+          </div>
+          <div class="field">
+            <span class="util field__label">First project</span>
+            <p class="field__value field__value--project">Run one 90-minute session for six people at a local nonprofit, on the tool they already hate. Charge nothing. Watch where they get stuck.</p>
+          </div>
+          <div class="field">
+            <span class="util field__label">How it could fit your life</span>
+            <p class="field__value">Independent instructors here bill €600–1,400 a day, but the first year is mostly unpaid audience-building. Your notice period is three months; evenings and one weekday would be enough to test it. No credential is required, and the buyers are ops managers, not L&amp;D.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="col__actions">
+        <div class="actions">
+          <button class="btn" type="button" aria-label="Start the path: Teaching the people the system was built for">Start</button>
+          <button class="btn" type="button" aria-label="Rewrite the path: Teaching the people the system was built for">Rewrite</button>
+          <button class="btn" type="button" aria-label="Replace the path: Teaching the people the system was built for">Replace</button>
+        </div>
+      </div>
+    </article>
+
+    <!-- ---------------------------------------------------------- path 2 -->
+    <article class="col plane">
+      <div class="col__head">
+        <h2 class="path__name">Building the narrow tool that deletes a step</h2>
+        <p class="path__serves">Instead of explaining the complicated thing, you remove the part of it that never needed to exist.</p>
+        <div class="unknown">
+          <span class="util unknown__label">The central unknown</span>
+          <p class="unknown__q">Can you stay interested in someone else’s boring problem long enough to finish?</p>
+        </div>
+      </div>
+
+      <div class="col__rest">
+        <button class="btn disclose" type="button" aria-expanded="false" aria-controls="rest-2">Read the rest of this path</button>
+        <div class="rest__inner" id="rest-2" hidden>
+          <div class="field">
+            <span class="util field__label">What could become possible</span>
+            <p class="field__value">A product with maybe 200 customers that one person can maintain, in a trade you’d otherwise never have met.</p>
+          </div>
+          <div class="field">
+            <span class="util field__label">Evidence it may fit</span>
+            <p class="field__value">The scripts you wrote for your own team are the only side work you kept using after you stopped being paid to.</p>
+          </div>
+          <div class="field">
+            <span class="util field__label">First project</span>
+            <p class="field__value field__value--project">Spend two weekends at one veterinary practice watching their intake process, then ship the ugliest possible version of the one thing that wastes the most time.</p>
+          </div>
+          <div class="field">
+            <span class="util field__label">How it could fit your life</span>
+            <p class="field__value">Vertical micro-SaaS typically reaches €2–5k monthly recurring in 18–30 months — well under your current income for at least two years. It’s the only one of the three you can run without leaving your job. Distribution is the constraint, not code.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="col__actions">
+        <div class="actions">
+          <button class="btn" type="button" aria-label="Start the path: Building the narrow tool that deletes a step">Start</button>
+          <button class="btn" type="button" aria-label="Rewrite the path: Building the narrow tool that deletes a step">Rewrite</button>
+          <button class="btn" type="button" aria-label="Replace the path: Building the narrow tool that deletes a step">Replace</button>
+        </div>
+      </div>
+    </article>
+
+    <!-- ---------------------------------------------------------- path 3 -->
+    <article class="col plane">
+      <div class="col__head">
+        <h2 class="path__name">Working upstream, on how the systems get chosen</h2>
+        <p class="path__serves">The complexity you keep absorbing was bought by someone in a meeting. You go to the meeting.</p>
+        <div class="unknown">
+          <span class="util unknown__label">The central unknown</span>
+          <p class="unknown__q">Can you tolerate a pace where a good outcome takes two years and has your name nowhere on it?</p>
+        </div>
+      </div>
+
+      <div class="col__rest">
+        <button class="btn disclose" type="button" aria-expanded="false" aria-controls="rest-3">Read the rest of this path</button>
+        <div class="rest__inner" id="rest-3" hidden>
+          <div class="field">
+            <span class="util field__label">What could become possible</span>
+            <p class="field__value">Influence over what an entire agency or hospital group makes people use, rather than over one codebase.</p>
+          </div>
+          <div class="field">
+            <span class="util field__label">Evidence it may fit</span>
+            <p class="field__value">You already do this informally. The vendor you argued against in 2024 was dropped, and you read procurement threads for fun.</p>
+          </div>
+          <div class="field">
+            <span class="util field__label">First project</span>
+            <p class="field__value field__value--project">Write a public teardown of one live public-sector tender for a system you actually understand. Send it to three people who work in that space.</p>
+          </div>
+          <div class="field">
+            <span class="util field__label">How it could fit your life</span>
+            <p class="field__value">Civic and public-sector roles in your city pay €55–75k, a real cut from your current package. Entry usually runs through a fixed-term contract or a fellowship, and most people arrive from engineering rather than policy. No law degree needed.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="col__actions">
+        <div class="actions">
+          <button class="btn" type="button" aria-label="Start the path: Working upstream, on how the systems get chosen">Start</button>
+          <button class="btn" type="button" aria-label="Rewrite the path: Working upstream, on how the systems get chosen">Rewrite</button>
+          <button class="btn" type="button" aria-label="Replace the path: Working upstream, on how the systems get chosen">Replace</button>
+        </div>
+      </div>
+    </article>
+
+  </div>
+
+  <div class="setactions">
+    <p class="setactions__note">Rewriting or replacing a path changes only that path, and changes nothing about the other two. Nothing here is chosen until you start one.</p>
+    <button class="btn btn--set" type="button">Combine two paths</button>
+    <button class="btn btn--set" type="button">Ask about these paths</button>
+  </div>
+
+  <p class="notefoot">Fixture content. This is a presentation prototype for the Purpose Paths comparison — no live data, no model, no application code.</p>
+
+</div>
+
+<script>
+for (const button of document.querySelectorAll('.disclose')) {
+  button.addEventListener('click', () => {
+    const panel = document.getElementById(button.getAttribute('aria-controls'));
+    const open = button.getAttribute('aria-expanded') === 'true';
+    button.setAttribute('aria-expanded', String(!open));
+    panel.hidden = open;
+    button.textContent = open ? 'Read the rest of this path' : 'Hide the rest of this path';
+  });
+}
+</script>
+</body>
+</html>

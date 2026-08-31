@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>D — Lockstep depth · Purpose Paths prototype</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+/*
+ * Avenue D. Organizing principle: depth governs, and it governs globally.
+ * There is no per-path disclosure. One control sets how much of every path you
+ * are looking at, so you cannot look harder at one than at another.
+ *
+ * This is the only avenue in the run with an authored motion moment, and it is
+ * authored on purpose: the three panels opening in unison, at the same rate,
+ * with no stagger, is the mechanism's whole argument. Staggering them would
+ * imply an order and defeat the thing being tested.
+ */
+
+.depthbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-2) var(--s-3);
+  background: var(--surface-path);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-plane);
+  margin-block-end: var(--s-4);
+}
+
+.depthbar__legend { padding: 0; border: 0; margin: 0; }
+
+.segmented {
+  display: flex;
+  border: 1px solid var(--interactive);
+  border-radius: var(--radius-inner);
+  overflow: hidden;
+}
+
+.segmented__opt { position: relative; }
+
+.segmented__opt input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  margin: 0;
+  cursor: pointer;
+}
+
+.segmented__opt label {
+  display: block;
+  font-family: var(--util);
+  font-size: var(--t-util);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--interactive);
+  padding: 0.5rem 0.75rem;
+  min-height: 40px;
+  line-height: 1.6;
+  cursor: pointer;
+  transition: background-color 160ms ease-out, color 160ms ease-out;
+}
+
+.segmented__opt + .segmented__opt label { border-inline-start: 1px solid var(--interactive); }
+
+.segmented__opt input:checked + label {
+  background: var(--interactive);
+  color: #fafbfb;
+}
+
+.segmented__opt input:focus-visible + label {
+  outline: 2px solid var(--interactive);
+  outline-offset: -4px;
+}
+
+.depthbar__readout { margin-inline-start: auto; }
+
+.columns {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--s-3);
+}
+
+/* Equal-height planes with the actions pinned to the bottom, so a path whose
+   researched fit runs a line longer does not leave its controls floating
+   above its siblings. */
+.columns > .plane { display: flex; flex-direction: column; }
+.actions--foot { margin-block-start: auto; padding-block-start: var(--s-4); }
+
+/* Subgrid would be the tidy way to align the four bands across columns, but it
+   fights the 0fr -> 1fr reveal below: the outer row gets sized from the
+   collapsed state and the tiers stay clipped. So the question block reserves a
+   fixed number of lines instead, which equalises the panels without touching
+   the animation. Tuned for the three-column desktop case. */
+.unknown__q { min-height: calc(4 * 1.2em); }
+
+/* Every revealable tier is a 0fr grid row that opens to 1fr. All three paths
+   carry identical tiers, so one attribute on the container moves all of them. */
+.tier {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+
+.tier > * { overflow: hidden; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .tier {
+    transition: grid-template-rows 260ms ease-out, opacity 200ms ease-out;
+  }
+}
+
+.columns[data-depth="2"] .tier--unknown,
+.columns[data-depth="3"] .tier--unknown,
+.columns[data-depth="3"] .tier--full {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.tier--unknown > div { padding-block-start: var(--s-3); }
+.tier--full > div { padding-block-start: var(--s-1); }
+
+@media (max-width: 900px) {
+  .columns { grid-template-columns: 1fr; }
+  .depthbar__readout { margin-inline-start: 0; flex-basis: 100%; }
+}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <div class="runbar">
+    <span class="runbar__id"><strong>D</strong> · lockstep depth</span>
+    <a class="runbar__back" href="index.html">← All four presentations</a>
+  </div>
+
+  <div class="why">
+    <span class="util why__label">Your Why I Work — confirmed</span>
+    <p class="why__text">I work so that people who depend on complicated systems don’t have to become experts just to get what they need. Most of that complexity was somebody’s choice, and nobody went back to revisit it.</p>
+  </div>
+
+  <div class="setline">
+    <h1 style="font-size: var(--t-display-l)">Three ways to serve that</h1>
+    <p class="setline__lede">One control sets how much of every path you’re reading. All three always show the same amount.</p>
+  </div>
+
+  <fieldset class="depthbar depthbar__legend">
+    <legend class="util" style="float: left; margin-inline-end: var(--s-3);">Show</legend>
+    <div class="segmented">
+      <span class="segmented__opt">
+        <input type="radio" name="depth" id="depth-1" value="1" checked>
+        <label for="depth-1">The paths</label>
+      </span>
+      <span class="segmented__opt">
+        <input type="radio" name="depth" id="depth-2" value="2">
+        <label for="depth-2">+ what’s unknown</label>
+      </span>
+      <span class="segmented__opt">
+        <input type="radio" name="depth" id="depth-3" value="3">
+        <label for="depth-3">+ everything</label>
+      </span>
+    </div>
+    <span class="util depthbar__readout" id="readout" role="status">Depth 1 of 3 — name and how it serves your Why</span>
+  </fieldset>
+
+  <div class="columns" data-depth="1" id="columns">
+
+    <!-- ---------------------------------------------------------- path 1 -->
+    <article class="plane">
+      <h2 class="path__name">Teaching the people the system was built for</h2>
+      <p class="path__serves" style="margin-block-end:0">You stop translating complexity for one company and start making other people able to translate it for themselves.</p>
+
+      <div class="tier tier--unknown"><div>
+        <div class="unknown">
+          <span class="util unknown__label">The central unknown</span>
+          <p class="unknown__q">Do you like teaching, or do you like being the person who knows?</p>
+        </div>
+      </div></div>
+
+      <div class="tier tier--full"><div>
+        <div class="field">
+          <span class="util field__label">What could become possible</span>
+          <p class="field__value">Work that pays by the cohort rather than by the year, and material that keeps earning after you’ve stopped writing it.</p>
+        </div>
+        <div class="field">
+          <span class="util field__label">Evidence it may fit</span>
+          <p class="field__value">You’ve rewritten onboarding docs three times without being asked. The runbook you wrote in 2023 is still what people send to new hires.</p>
+        </div>
+        <div class="field">
+          <span class="util field__label">First project</span>
+          <p class="field__value field__value--project">Run one 90-minute session for six people at a local nonprofit, on the tool they already hate. Charge nothing. Watch where they get stuck.</p>
+        </div>
+        <div class="field">
+          <span class="util field__label">How it could fit your life</span>
+          <p class="field__value">Independent instructors here bill €600–1,400 a day, but the first year is mostly unpaid audience-building. Evenings and one weekday would be enough to test it. No credential required; the buyers are ops managers, not L&amp;D.</p>
+        </div>
+      </div></div>
+
+      <div class="actions actions--foot">
+        <button class="btn" type="button" aria-label="Start the path: Teaching the people the system was built for">Start</button>
+        <button class="btn" type="button" aria-label="Rewrite the path: Teaching the people the system was built for">Rewrite</button>
+        <button class="btn" type="button" aria-label="Replace the path: Teaching the people the system was built for">Replace</button>
+      </div>
+    </article>
+
+    <!-- ---------------------------------------------------------- path 2 -->
+    <article class="plane">
+      <h2 class="path__name">Building the narrow tool that deletes a step</h2>
+      <p class="path__serves" style="margin-block-end:0">Instead of explaining the complicated thing, you remove the part of it that never needed to exist.</p>
+
+      <div class="tier tier--unknown"><div>
+        <div class="unknown">
+          <span class="util unknown__label">The central unknown</span>
+          <p class="unknown__q">Can you stay interested in someone else’s boring problem long enough to finish?</p>
+        </div>
+      </div></div>
+
+      <div class="tier tier--full"><div>
+        <div class="field">
+          <span class="util field__label">What could become possible</span>
+          <p class="field__value">A product with maybe 200 customers that one person can maintain, in a trade you’d otherwise never have met.</p>
+        </div>
+        <div class="field">
+          <span class="util field__label">Evidence it may fit</span>
+          <p class="field__value">The scripts you wrote for your own team are the only side work you kept using after you stopped being paid to.</p>
+        </div>
+        <div class="field">
+          <span class="util field__label">First project</span>
+          <p class="field__value field__value--project">Spend two weekends at one veterinary practice watching their intake process, then ship the ugliest possible version of the one thing that wastes the most time.</p>
+        </div>
+        <div class="field">
+          <span class="util field__label">How it could fit your life</span>
+          <p class="field__value">Vertical micro-SaaS typically reaches €2–5k monthly recurring in 18–30 months — well under your current income for at least two years. The only one of the three you can run without leaving your job. Distribution is the constraint, not code.</p>
+        </div>
+      </div></div>
+
+      <div class="actions actions--foot">
+        <button class="btn" type="button" aria-label="Start the path: Building the narrow tool that deletes a step">Start</button>
+        <button class="btn" type="button" aria-label="Rewrite the path: Building the narrow tool that deletes a step">Rewrite</button>
+        <button class="btn" type="button" aria-label="Replace the path: Building the narrow tool that deletes a step">Replace</button>
+      </div>
+    </article>
+
+    <!-- ---------------------------------------------------------- path 3 -->
+    <article class="plane">
+      <h2 class="path__name">Working upstream, on how the systems get chosen</h2>
+      <p class="path__serves" style="margin-block-end:0">The complexity you keep absorbing was bought by someone in a meeting. You go to the meeting.</p>
+
+      <div class="tier tier--unknown"><div>
+        <div class="unknown">
+          <span class="util unknown__label">The central unknown</span>
+          <p class="unknown__q">Can you tolerate a pace where a good outcome takes two years and has your name nowhere on it?</p>
+        </div>
+      </div></div>
+
+      <div class="tier tier--full"><div>
+        <div class="field">
+          <span class="util field__label">What could become possible</span>
+          <p class="field__value">Influence over what an entire agency or hospital group makes people use, rather than over one codebase.</p>
+        </div>
+        <div class="field">
+          <span class="util field__label">Evidence it may fit</span>
+          <p class="field__value">You already do this informally. The vendor you argued against in 2024 was dropped, and you read procurement threads for fun.</p>
+        </div>
+        <div class="field">
+          <span class="util field__label">First project</span>
+          <p class="field__value field__value--project">Write a public teardown of one live public-sector tender for a system you actually understand. Send it to three people who work in that space.</p>
+        </div>
+        <div class="field">
+          <span class="util field__label">How it could fit your life</span>
+          <p class="field__value">Civic and public-sector roles in your city pay €55–75k, a real cut from your current package. Entry usually runs through a fixed-term contract or a fellowship, and most people arrive from engineering rather than policy.</p>
+        </div>
+      </div></div>
+
+      <div class="actions actions--foot">
+        <button class="btn" type="button" aria-label="Start the path: Working upstream, on how the systems get chosen">Start</button>
+        <button class="btn" type="button" aria-label="Rewrite the path: Working upstream, on how the systems get chosen">Rewrite</button>
+        <button class="btn" type="button" aria-label="Replace the path: Working upstream, on how the systems get chosen">Replace</button>
+      </div>
+    </article>
+
+  </div>
+
+  <div class="setactions">
+    <p class="setactions__note">Rewriting or replacing a path changes only that path, and changes nothing about the other two. Nothing here is chosen until you start one.</p>
+    <button class="btn btn--set" type="button">Combine two paths</button>
+    <button class="btn btn--set" type="button">Ask about these paths</button>
+  </div>
+
+  <p class="notefoot">Fixture content. This is a presentation prototype for the Purpose Paths comparison — no live data, no model, no application code.</p>
+
+</div>
+
+<script>
+const columns = document.getElementById('columns');
+const readout = document.getElementById('readout');
+const captions = {
+  '1': 'Depth 1 of 3 — name and how it serves your Why',
+  '2': 'Depth 2 of 3 — plus what each path would test',
+  '3': 'Depth 3 of 3 — every path in full',
+};
+for (const input of document.querySelectorAll('input[name="depth"]')) {
+  input.addEventListener('change', () => {
+    columns.setAttribute('data-depth', input.value);
+    readout.textContent = captions[input.value];
+  });
+}
+</script>
+</body>
+</html>

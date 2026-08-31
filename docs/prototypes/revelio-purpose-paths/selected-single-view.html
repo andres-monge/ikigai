@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Selected — single view, legacy design language · Purpose Paths prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,700;9..40,800;9..40,900&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/*
+ * Selected direction: D's single-surface reading with the depth control removed,
+ * rebuilt in the product's own retro-modern language.
+ *
+ * Everything is on screen at once. There is no disclosure and no depth control:
+ * the explorer sees all three paths in full, which is how the legacy results
+ * page presented them.
+ *
+ * Equal weight is carried by identical structure — same bands, same order, same
+ * sizes, same controls, aligned across columns by subgrid. It is NOT carried by
+ * stripping the design back. Colour identifies a path the way a numbered door
+ * identifies a door; it does not rank it.
+ */
+
+:root {
+  /* ikigai palette, from client/src/index.css */
+  --teal: #4db6ac;
+  --yellow: #ffc107;
+  --orange: #ff6b35;
+  --cream: #fff9f3;
+  --beige: #f6f4ed;
+
+  --ink: #14181b;
+  --ink-soft: #4a5157;
+  --line: #000;
+
+  --display: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --body: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
+
+  --shadow: 6px 6px 0 rgba(0, 0, 0, 0.65);
+  --shadow-sm: 4px 4px 0 rgba(0, 0, 0, 0.65);
+  --shadow-xs: 2px 2px 0 rgba(0, 0, 0, 0.65);
+
+  --s-1: 0.5rem;
+  --s-2: 0.75rem;
+  --s-3: 1rem;
+  --s-4: 1.5rem;
+  --s-5: 2rem;
+  --s-6: 3rem;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+
+body {
+  margin: 0;
+  background: var(--beige);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+h1, h2, h3 { font-family: var(--display); font-weight: 800; line-height: 1.1; margin: 0; text-wrap: balance; }
+p { margin: 0; text-wrap: pretty; }
+
+.shell { max-width: 82rem; margin-inline: auto; padding: var(--s-6) var(--s-4) 4.5rem; }
+
+/* ------------------------------------------------------------------- head */
+
+.topbar {
+  display: flex; flex-wrap: wrap; gap: var(--s-2);
+  align-items: baseline; justify-content: space-between;
+  font-family: var(--display); font-weight: 700; font-size: 0.75rem;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft);
+  padding-block-end: var(--s-2);
+  border-block-end: 2px solid var(--line);
+  margin-block-end: var(--s-5);
+}
+.topbar a { color: var(--ink); }
+
+/* The Why is the thing all three paths are answers to, so it gets the one
+   full-width statement on the page and none of the paths repeat it. */
+.why {
+  background: #fff;
+  border: 2px solid var(--line);
+  box-shadow: var(--shadow-sm);
+  padding: var(--s-4);
+  margin-block-end: var(--s-5);
+  max-width: 52rem;
+}
+.why__label {
+  display: block; font-family: var(--display); font-weight: 800;
+  font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-soft); margin-block-end: var(--s-1);
+}
+.why__text { font-size: 1.1875rem; font-weight: 500; }
+
+.setline { margin-block-end: var(--s-4); }
+.setline h1 { font-size: clamp(1.75rem, 3.4vw, 2.5rem); font-weight: 900; }
+.setline p { margin-block-start: var(--s-2); color: var(--ink-soft); max-width: 44rem; font-weight: 500; }
+
+/* ------------------------------------------------------------------ cards */
+
+.paths {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--s-4);
+}
+
+/* Subgrid so every band starts on the same line in all three columns. Without
+   it a longer answer in one path pushes its own later bands down and the three
+   stop reading as the same shape. */
+.card {
+  display: grid;
+  grid-template-rows: subgrid;
+  grid-row: span 7;
+  row-gap: 0;
+  background: #fff;
+  border: 2px solid var(--line);
+  box-shadow: var(--shadow);
+}
+
+.card__head { padding: var(--s-4); border-block-end: 2px solid var(--line); }
+.card--teal   .card__head { background: linear-gradient(135deg, var(--teal),   #43a89e); }
+.card--yellow .card__head { background: linear-gradient(135deg, var(--yellow), #f0b400); }
+.card--orange .card__head { background: linear-gradient(135deg, var(--orange), #f05f2a); }
+
+/* Ink on the colour rather than white: it is the readable choice on this
+   palette and it is also the more characteristic one for this style. */
+.card__num {
+  display: inline-block;
+  font-family: var(--display); font-weight: 900; font-size: 0.75rem;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  background: var(--ink); color: #fff;
+  padding: 0.2rem 0.5rem; margin-block-end: var(--s-2);
+}
+.card__name { font-size: 1.375rem; font-weight: 900; color: var(--ink); }
+.card__serves { margin-block-start: var(--s-2); font-weight: 600; font-size: 0.9375rem; color: var(--ink); }
+
+.band { padding: var(--s-3) var(--s-4); }
+.band + .band { border-block-start: 1px solid #e2ded2; }
+
+.band__label {
+  display: block; font-family: var(--display); font-weight: 800;
+  font-size: 0.6875rem; letter-spacing: 0.09em; text-transform: uppercase;
+  color: var(--ink-soft); margin-block-end: 0.35rem;
+}
+.band__text { font-size: 0.9375rem; }
+
+/* The central unknown. Every path is defined by what it would still not tell
+   you, so it is a marked block rather than one more labelled line. */
+.band.band--unknown { background: var(--cream); border-block: 2px solid var(--line); }
+.band--unknown .band__label { color: var(--ink); }
+.band__q { font-family: var(--display); font-weight: 800; font-size: 1.125rem; line-height: 1.25; }
+
+/* The first project. Marked exactly the way the unknown above it is marked --
+   2px rules on both edges, flush to the card -- because the doubt and the thing
+   you would actually do next are the two blocks a person acts on. The tint is
+   the path's own colour, so the band belongs to its path and not to the set.
+   Both classes, and after `.band + .band`, so the hairline between ordinary
+   bands cannot override the top edge. */
+.band.band--project { border-block: 2px solid var(--line); }
+.card--teal   .band--project { background: color-mix(in srgb, var(--teal)   18%, #fff); }
+.card--yellow .band--project { background: color-mix(in srgb, var(--yellow) 18%, #fff); }
+.card--orange .band--project { background: color-mix(in srgb, var(--orange) 18%, #fff); }
+.band--project .band__label { color: var(--ink); }
+
+
+.card__foot { padding: var(--s-4); display: flex; flex-wrap: wrap; gap: var(--s-1); align-items: end; }
+
+/* ---------------------------------------------------------------- buttons */
+
+.btn {
+  font-family: var(--display); font-weight: 900; font-size: 0.8125rem;
+  letter-spacing: 0.02em;
+  padding: 0.6rem 0.9rem; min-height: 44px;
+  border: 2px solid var(--line); border-radius: 0;
+  background: #fff; color: var(--ink);
+  box-shadow: var(--shadow-xs);
+  cursor: pointer;
+}
+
+.card--teal   .btn--go { background: var(--teal); }
+.card--yellow .btn--go { background: var(--yellow); }
+.card--orange .btn--go { background: var(--orange); }
+
+.btn:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+
+@media (hover: hover) {
+  .btn:hover { box-shadow: var(--shadow-sm); }
+}
+
+/* The press. Exact properties, not `all`. */
+.btn { transition: transform 120ms ease-out, box-shadow 120ms ease-out; }
+.btn:active { transform: translate(2px, 2px); box-shadow: 0 0 0 rgba(0, 0, 0, 0.65); }
+
+/* --------------------------------------------------------------- set foot */
+
+.setfoot {
+  margin-block-start: var(--s-5);
+  padding: var(--s-4);
+  background: #fff;
+  border: 2px solid var(--line);
+  box-shadow: var(--shadow-sm);
+  display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center;
+}
+.setfoot p { flex: 1 1 22rem; font-weight: 500; font-size: 0.9375rem; color: var(--ink-soft); }
+
+.footnote { margin-block-start: var(--s-5); font-size: 0.875rem; color: var(--ink-soft); max-width: 48rem; }
+
+/* -------------------------------------------------------------- animation */
+/*
+ * The legacy fadeInUp, staggered across the three cards. With the paths
+ * numbered, arriving in order reads as 1-2-3 identification rather than as a
+ * ranking — the same way a numbered door does not become the best door.
+ */
+
+@media (prefers-reduced-motion: no-preference) {
+  .card { opacity: 0; animation: fadeInUp 0.55s ease-out forwards; }
+  .card:nth-child(1) { animation-delay: 60ms; }
+  .card:nth-child(2) { animation-delay: 180ms; }
+  .card:nth-child(3) { animation-delay: 300ms; }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ------------------------------------------------------------- responsive */
+
+@media (max-width: 1000px) {
+  .paths { grid-template-columns: 1fr; }
+  .card { grid-row: auto; grid-template-rows: none; }
+}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <div class="topbar">
+    <span>Revelio · Purpose Paths · selected direction</span>
+    <a href="index.html">← All four presentations</a>
+  </div>
+
+  <div class="why">
+    <span class="why__label">Why You Work — confirmed</span>
+    <p class="why__text">I work so that people who depend on complicated systems don’t have to become experts just to get what they need. Most of that complexity was somebody’s choice, and nobody went back to revisit it.</p>
+  </div>
+
+  <div class="setline">
+    <h1>Three ways to serve that</h1>
+    <p>Each one is a different way of working, not a job title. Read all three, then start whichever you want to test first — or change any of them before you do.</p>
+  </div>
+
+  <div class="paths">
+
+    <!-- ---------------------------------------------------------- path 1 -->
+    <article class="card card--teal">
+      <header class="card__head">
+        <span class="card__num">Path 01</span>
+        <h2 class="card__name">Teaching the people the system was built for</h2>
+        <p class="card__serves">You stop translating complexity for one company and start making other people able to translate it for themselves.</p>
+      </header>
+
+      <div class="band">
+        <span class="band__label">What could become possible</span>
+        <p class="band__text">Work that pays by the cohort rather than by the year, and material that keeps earning after you’ve stopped writing it.</p>
+      </div>
+
+      <div class="band">
+        <span class="band__label">Evidence it may fit</span>
+        <p class="band__text">You’ve rewritten onboarding docs three times without being asked. The runbook you wrote in 2023 is still what people send to new hires.</p>
+      </div>
+
+      <div class="band band--unknown">
+        <span class="band__label">The central unknown</span>
+        <p class="band__q">Do you like teaching, or do you like being the person who knows?</p>
+      </div>
+
+      <div class="band band--project">
+        <span class="band__label">First project</span>
+        <p class="band__text">Run one 90-minute session for six people at a local nonprofit, on the tool they already hate. Charge nothing. Watch where they get stuck.</p>
+      </div>
+
+      <div class="band">
+        <span class="band__label">How it could fit your life</span>
+        <p class="band__text">Independent instructors here bill €600–1,400 a day, but the first year is mostly unpaid audience-building. Evenings and one weekday would be enough to test it. No credential required; the buyers are ops managers, not L&amp;D.</p>
+      </div>
+
+      <footer class="card__foot">
+        <button class="btn btn--go" type="button" aria-label="Start path 1: Teaching the people the system was built for">Start this path</button>
+        <button class="btn" type="button" aria-label="Rewrite path 1: Teaching the people the system was built for">Rewrite</button>
+        <button class="btn" type="button" aria-label="Replace path 1: Teaching the people the system was built for">Replace</button>
+      </footer>
+    </article>
+
+    <!-- ---------------------------------------------------------- path 2 -->
+    <article class="card card--yellow">
+      <header class="card__head">
+        <span class="card__num">Path 02</span>
+        <h2 class="card__name">Building the narrow tool that deletes a step</h2>
+        <p class="card__serves">Instead of explaining the complicated thing, you remove the part of it that never needed to exist.</p>
+      </header>
+
+      <div class="band">
+        <span class="band__label">What could become possible</span>
+        <p class="band__text">A product with maybe 200 customers that one person can maintain, in a trade you’d otherwise never have met.</p>
+      </div>
+
+      <div class="band">
+        <span class="band__label">Evidence it may fit</span>
+        <p class="band__text">The scripts you wrote for your own team are the only side work you kept using after you stopped being paid to.</p>
+      </div>
+
+      <div class="band band--unknown">
+        <span class="band__label">The central unknown</span>
+        <p class="band__q">Can you stay interested in someone else’s boring problem long enough to finish?</p>
+      </div>
+
+      <div class="band band--project">
+        <span class="band__label">First project</span>
+        <p class="band__text">Spend two weekends at one veterinary practice watching their intake process, then ship the ugliest possible version of the one thing that wastes the most time.</p>
+      </div>
+
+      <div class="band">
+        <span class="band__label">How it could fit your life</span>
+        <p class="band__text">Vertical micro-SaaS typically reaches €2–5k monthly recurring in 18–30 months — well under your current income for at least two years. It’s the only one of the three you can run without leaving your job. Distribution is the constraint, not code.</p>
+      </div>
+
+      <footer class="card__foot">
+        <button class="btn btn--go" type="button" aria-label="Start path 2: Building the narrow tool that deletes a step">Start this path</button>
+        <button class="btn" type="button" aria-label="Rewrite path 2: Building the narrow tool that deletes a step">Rewrite</button>
+        <button class="btn" type="button" aria-label="Replace path 2: Building the narrow tool that deletes a step">Replace</button>
+      </footer>
+    </article>
+
+    <!-- ---------------------------------------------------------- path 3 -->
+    <article class="card card--orange">
+      <header class="card__head">
+        <span class="card__num">Path 03</span>
+        <h2 class="card__name">Working upstream, on how the systems get chosen</h2>
+        <p class="card__serves">The complexity you keep absorbing was bought by someone in a meeting. You go to the meeting.</p>
+      </header>
+
+      <div class="band">
+        <span class="band__label">What could become possible</span>
+        <p class="band__text">Influence over what an entire agency or hospital group makes people use, rather than over one codebase.</p>
+      </div>
+
+      <div class="band">
+        <span class="band__label">Evidence it may fit</span>
+        <p class="band__text">You already do this informally. The vendor you argued against in 2024 was dropped, and you read procurement threads for fun.</p>
+      </div>
+
+      <div class="band band--unknown">
+        <span class="band__label">The central unknown</span>
+        <p class="band__q">Can you tolerate a pace where a good outcome takes two years and has your name nowhere on it?</p>
+      </div>
+
+      <div class="band band--project">
+        <span class="band__label">First project</span>
+        <p class="band__text">Write a public teardown of one live public-sector tender for a system you actually understand. Send it to three people who work in that space.</p>
+      </div>
+
+      <div class="band">
+        <span class="band__label">How it could fit your life</span>
+        <p class="band__text">Civic and public-sector roles in your city pay €55–75k, a real cut from your current package. Entry usually runs through a fixed-term contract or a fellowship, and most people arrive from engineering rather than policy. No law degree needed.</p>
+      </div>
+
+      <footer class="card__foot">
+        <button class="btn btn--go" type="button" aria-label="Start path 3: Working upstream, on how the systems get chosen">Start this path</button>
+        <button class="btn" type="button" aria-label="Rewrite path 3: Working upstream, on how the systems get chosen">Rewrite</button>
+        <button class="btn" type="button" aria-label="Replace path 3: Working upstream, on how the systems get chosen">Replace</button>
+      </footer>
+    </article>
+
+  </div>
+
+  <div class="setfoot">
+    <p>Rewriting or replacing a path changes only that path. Nothing is chosen until you start one.</p>
+    <button class="btn" type="button">Combine two paths</button>
+    <button class="btn" type="button">Ask about these paths</button>
+  </div>
+
+  <p class="footnote">Fixture content. Presentation prototype for the Purpose Paths comparison — no live data, no model, no application code.</p>
+
+</div>
+</body>
+</html>

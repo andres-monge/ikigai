@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>B — Dimension rows · Purpose Paths prototype</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+/*
+ * Avenue B. Organizing principle: the schema governs.
+ * You compare one question across all three paths, then move to the next.
+ *
+ * Nothing is disclosed or hidden — everything is present, but you only ever
+ * hold three things at once instead of twenty-one. No path owns a container,
+ * so no path can be made visually dominant by its own contents.
+ */
+
+.matrix {
+  display: grid;
+  grid-template-columns: 9.5rem repeat(3, 1fr);
+  column-gap: var(--s-3);
+  background: var(--surface-path);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-plane);
+  padding: var(--s-4);
+}
+
+.matrix__corner,
+.matrix__pathname {
+  position: sticky;
+  top: 0;
+  background: var(--surface-path);
+  padding-block: var(--s-2) var(--s-3);
+  border-block-end: 1px solid var(--border-default);
+  z-index: 1;
+}
+
+.matrix__pathname h2 {
+  font-size: 1.1875rem;
+  line-height: 1.2;
+}
+
+/* A dimension label and its three answers form one band. The rule separates
+   dimensions, so it encodes the schema rather than decorating the surface. */
+.band {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  padding-block: var(--s-3);
+  border-block-end: 1px solid var(--border-subtle);
+}
+
+.band:last-of-type { border-block-end: 0; }
+
+.band__label { padding-block-start: 0.2rem; }
+
+.band__cell { font-size: var(--t-body-s); }
+
+/* The unknown gets the pressed surface here too — as a full band, since in
+   this arrangement the band is the unit that holds a dimension. */
+.band--unknown {
+  background: var(--surface-unknown);
+  border-radius: var(--radius-inner);
+  padding-inline: var(--s-3);
+  margin-inline: calc(var(--s-3) * -1);
+  border-block-end: 0;
+}
+
+.band--unknown .band__cell {
+  font-family: var(--display);
+  font-size: 1.1875rem;
+  font-weight: 500;
+  line-height: 1.25;
+  color: var(--text-primary);
+  text-wrap: pretty;
+}
+
+.band--actions { border-block-end: 0; padding-block-end: 0; }
+
+.band__stackname { display: none; }
+
+@media (max-width: 940px) {
+  .matrix { grid-template-columns: 1fr; }
+  .matrix__corner { display: none; }
+  /* The names stay. Hiding them would leave the short in-band labels standing
+     in for a path's actual name, and the name is one of the seven things every
+     path is required to carry. */
+  .matrix__pathname {
+    position: static;
+    padding-block: 0 var(--s-2);
+    border-block-end: 0;
+  }
+  .matrix__pathname:last-of-type {
+    padding-block-end: var(--s-3);
+    border-block-end: 1px solid var(--border-default);
+  }
+  .band { grid-template-columns: 1fr; gap: var(--s-2); }
+  .band--unknown { margin-inline: 0; }
+  /* At narrow width the matrix collapses to one dimension per block, with each
+     answer named. The principle survives: still one question at a time,
+     compared across all three. */
+  .band__stackname {
+    display: block;
+    margin-block-end: 0.15rem;
+  }
+  .band__cell + .band__cell { border-block-start: 1px dotted var(--border-default); padding-block-start: var(--s-2); }
+}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <div class="runbar">
+    <span class="runbar__id"><strong>B</strong> · dimension rows</span>
+    <a class="runbar__back" href="index.html">← All four presentations</a>
+  </div>
+
+  <div class="why">
+    <span class="util why__label">Your Why I Work — confirmed</span>
+    <p class="why__text">I work so that people who depend on complicated systems don’t have to become experts just to get what they need. Most of that complexity was somebody’s choice, and nobody went back to revisit it.</p>
+  </div>
+
+  <div class="setline">
+    <h1 style="font-size: var(--t-display-l)">Three ways to serve that</h1>
+    <p class="setline__lede">Read across a row to compare the same question three ways. Each one is a different way of working, not a job title.</p>
+  </div>
+
+  <div class="matrix">
+
+    <div class="matrix__corner"><span class="util">The path</span></div>
+    <div class="matrix__pathname"><h2>Teaching the people the system was built for</h2></div>
+    <div class="matrix__pathname"><h2>Building the narrow tool that deletes a step</h2></div>
+    <div class="matrix__pathname"><h2>Working upstream, on how the systems get chosen</h2></div>
+
+    <div class="band">
+      <span class="util band__label">Serves your Why</span>
+      <p class="band__cell"><span class="util band__stackname">Teaching</span>You stop translating complexity for one company and start making other people able to translate it for themselves.</p>
+      <p class="band__cell"><span class="util band__stackname">Building</span>Instead of explaining the complicated thing, you remove the part of it that never needed to exist.</p>
+      <p class="band__cell"><span class="util band__stackname">Upstream</span>The complexity you keep absorbing was bought by someone in a meeting. You go to the meeting.</p>
+    </div>
+
+    <div class="band">
+      <span class="util band__label">Could become</span>
+      <p class="band__cell"><span class="util band__stackname">Teaching</span>Work that pays by the cohort rather than by the year, and material that keeps earning after you’ve stopped writing it.</p>
+      <p class="band__cell"><span class="util band__stackname">Building</span>A product with maybe 200 customers that one person can maintain, in a trade you’d otherwise never have met.</p>
+      <p class="band__cell"><span class="util band__stackname">Upstream</span>Influence over what an entire agency or hospital group makes people use, rather than over one codebase.</p>
+    </div>
+
+    <div class="band">
+      <span class="util band__label">Evidence it may fit</span>
+      <p class="band__cell"><span class="util band__stackname">Teaching</span>You’ve rewritten onboarding docs three times without being asked. The runbook you wrote in 2023 is still what people send to new hires.</p>
+      <p class="band__cell"><span class="util band__stackname">Building</span>The scripts you wrote for your own team are the only side work you kept using after you stopped being paid to.</p>
+      <p class="band__cell"><span class="util band__stackname">Upstream</span>You already do this informally. The vendor you argued against in 2024 was dropped, and you read procurement threads for fun.</p>
+    </div>
+
+    <div class="band band--unknown">
+      <span class="util band__label">The central unknown</span>
+      <p class="band__cell"><span class="util band__stackname">Teaching</span>Do you like teaching, or do you like being the person who knows?</p>
+      <p class="band__cell"><span class="util band__stackname">Building</span>Can you stay interested in someone else’s boring problem long enough to finish?</p>
+      <p class="band__cell"><span class="util band__stackname">Upstream</span>Can you tolerate a pace where a good outcome takes two years and has your name nowhere on it?</p>
+    </div>
+
+    <div class="band">
+      <span class="util band__label">First project</span>
+      <p class="band__cell"><span class="util band__stackname">Teaching</span>Run one 90-minute session for six people at a local nonprofit, on the tool they already hate. Charge nothing. Watch where they get stuck.</p>
+      <p class="band__cell"><span class="util band__stackname">Building</span>Spend two weekends at one veterinary practice watching their intake process, then ship the ugliest possible version of the one thing that wastes the most time.</p>
+      <p class="band__cell"><span class="util band__stackname">Upstream</span>Write a public teardown of one live public-sector tender for a system you actually understand. Send it to three people who work in that space.</p>
+    </div>
+
+    <div class="band">
+      <span class="util band__label">Fit with your life</span>
+      <p class="band__cell"><span class="util band__stackname">Teaching</span>Independent instructors here bill €600–1,400 a day, but the first year is mostly unpaid audience-building. Evenings and one weekday would be enough to test it. No credential required; the buyers are ops managers, not L&amp;D.</p>
+      <p class="band__cell"><span class="util band__stackname">Building</span>Vertical micro-SaaS typically reaches €2–5k monthly recurring in 18–30 months — well under your current income for at least two years. The only one of the three you can run without leaving your job. Distribution is the constraint, not code.</p>
+      <p class="band__cell"><span class="util band__stackname">Upstream</span>Civic and public-sector roles in your city pay €55–75k, a real cut from your current package. Entry usually runs through a fixed-term contract or a fellowship, and most people arrive from engineering rather than policy.</p>
+    </div>
+
+    <div class="band band--actions">
+      <span class="util band__label">Act on one</span>
+      <div class="band__cell actions">
+        <button class="btn" type="button" aria-label="Start the path: Teaching the people the system was built for">Start</button>
+        <button class="btn" type="button" aria-label="Rewrite the path: Teaching the people the system was built for">Rewrite</button>
+        <button class="btn" type="button" aria-label="Replace the path: Teaching the people the system was built for">Replace</button>
+      </div>
+      <div class="band__cell actions">
+        <button class="btn" type="button" aria-label="Start the path: Building the narrow tool that deletes a step">Start</button>
+        <button class="btn" type="button" aria-label="Rewrite the path: Building the narrow tool that deletes a step">Rewrite</button>
+        <button class="btn" type="button" aria-label="Replace the path: Building the narrow tool that deletes a step">Replace</button>
+      </div>
+      <div class="band__cell actions">
+        <button class="btn" type="button" aria-label="Start the path: Working upstream, on how the systems get chosen">Start</button>
+        <button class="btn" type="button" aria-label="Rewrite the path: Working upstream, on how the systems get chosen">Rewrite</button>
+        <button class="btn" type="button" aria-label="Replace the path: Working upstream, on how the systems get chosen">Replace</button>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="setactions">
+    <p class="setactions__note">Rewriting or replacing a path changes only that path, and changes nothing about the other two. Nothing here is chosen until you start one.</p>
+    <button class="btn btn--set" type="button">Combine two paths</button>
+    <button class="btn btn--set" type="button">Ask about these paths</button>
+  </div>
+
+  <p class="notefoot">Fixture content. This is a presentation prototype for the Purpose Paths comparison — no live data, no model, no application code.</p>
+
+</div>
+</body>
+</html>

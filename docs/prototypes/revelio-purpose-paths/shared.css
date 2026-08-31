@@ -1,0 +1,299 @@
+/*
+ * Revelio — Purpose Paths presentation prototype
+ * Shared token system and chrome. Fixture-only. Not application code.
+ *
+ * Design direction: a working notebook, not a brochure of careers.
+ * The thesis says self-knowledge is created by doing, so what you do not yet
+ * know is the actual subject. The central unknown therefore sits at the same
+ * typographic rank as the path's name, in a surface pressed into the plane.
+ *
+ * Equal-weight rules encoded here (Method R15):
+ *   - No path is ever assigned a colour. Every path uses identical surfaces.
+ *   - No path is ever numbered. Numbering implies sequence, sequence implies rank.
+ *   - No path-level action is styled more prominently than any other.
+ *   - No entrance stagger. Animating three options in order implies order.
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@500&display=swap');
+
+/* ---------------------------------------------------------------- tokens */
+
+:root {
+  /* primitives — each step exists for one job, none spare */
+  --paper: #e9ecee;   /* page ground */
+  --plane: #fafbfb;   /* the surface a path sits on */
+  --recess: #dde2e5;  /* pressed in: reserved for the central unknown */
+  --ink: #14181b;     /* primary text */
+  --ink-soft: #596066;/* secondary text, tinted from the surface it sits on */
+  --pen: #2c4a78;     /* reserved: things you can do. never decorative. */
+
+  --rule: #ccd3d7;
+  --rule-soft: #dfe4e7;
+
+  /* semantic aliases — components reference these, never the primitives */
+  --surface-page: var(--paper);
+  --surface-path: var(--plane);
+  --surface-unknown: var(--recess);
+  --text-primary: var(--ink);
+  --text-secondary: var(--ink-soft);
+  --interactive: var(--pen);
+  --border-default: var(--rule);
+  --border-subtle: var(--rule-soft);
+
+  /* type roles */
+  --display: 'Bricolage Grotesque', 'Helvetica Neue', Arial, sans-serif;
+  --body: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+  --util: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* scale — steps obvious at a glance */
+  --t-display-l: 2.125rem;  /* 34px */
+  --t-display-m: 1.5rem;    /* 24px — path name AND the unknown */
+  --t-body: 1.0625rem;      /* 17px */
+  --t-body-s: 0.9375rem;    /* 15px */
+  --t-util: 0.75rem;        /* 12px */
+
+  /* spacing — one rhythm, 1:2+ within vs between groups */
+  --s-1: 0.5rem;
+  --s-2: 0.75rem;
+  --s-3: 1rem;
+  --s-4: 1.5rem;
+  --s-5: 2rem;
+  --s-6: 3rem;
+  --s-7: 4.5rem;
+
+  --radius-plane: 10px;
+  --radius-inner: 6px; /* concentric: inner = outer - padding */
+}
+
+/* ------------------------------------------------------------------ base */
+
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  background: var(--surface-page);
+  color: var(--text-primary);
+  font-family: var(--body);
+  font-size: var(--t-body);
+  line-height: 1.6;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--display);
+  font-weight: 600;
+  line-height: 1.15;
+  margin: 0;
+  text-wrap: balance;
+}
+
+p { margin: 0; text-wrap: pretty; }
+
+a { color: var(--interactive); }
+
+.shell {
+  max-width: 78rem;
+  margin-inline: auto;
+  padding-inline: var(--s-4);
+  padding-block: var(--s-6) var(--s-7);
+}
+
+/* ------------------------------------------------- utility label (schema) */
+/*
+ * Mono is used only where it encodes a real fixed schema: the dimension names
+ * in B, the day markers in E, the depth readout in D. Not as decoration.
+ */
+
+.util {
+  font-family: var(--util);
+  font-size: var(--t-util);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+/* --------------------------------------------------------- run-level head */
+
+.runbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+  align-items: baseline;
+  justify-content: space-between;
+  padding-block-end: var(--s-3);
+  border-block-end: 1px solid var(--border-default);
+  margin-block-end: var(--s-5);
+}
+
+.runbar__id { font-family: var(--util); font-size: var(--t-util); letter-spacing: 0.06em; color: var(--text-secondary); }
+.runbar__id strong { color: var(--text-primary); font-weight: 500; }
+.runbar__back { font-family: var(--util); font-size: var(--t-util); letter-spacing: 0.06em; }
+
+/* ------------------------------------------------------------ why anchor */
+/*
+ * "How it serves the Why" is meaningless without the Why in view, so every
+ * avenue carries it. Stated once, never repeated per path.
+ */
+
+.why {
+  border-inline-start: 3px solid var(--text-primary);
+  padding-inline-start: var(--s-3);
+  margin-block-end: var(--s-5);
+  max-width: 44rem;
+}
+
+.why__label { display: block; margin-block-end: var(--s-1); }
+
+.why__text {
+  font-size: 1.1875rem;
+  line-height: 1.5;
+}
+
+/* ------------------------------------------------------------- set intro */
+
+.setline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin-block-end: var(--s-4);
+}
+
+.setline__lede {
+  font-size: var(--t-body-s);
+  color: var(--text-secondary);
+  max-width: 38rem;
+}
+
+/* --------------------------------------------------------- the unknown */
+/*
+ * The signature. Pressed into the plane, set at display rank — the same size
+ * as the path's name. What you do not know is not a footnote here.
+ */
+
+.unknown {
+  background: var(--surface-unknown);
+  border-radius: var(--radius-inner);
+  padding: var(--s-3);
+}
+
+.unknown__label { display: block; margin-block-end: var(--s-2); }
+
+.unknown__q {
+  font-family: var(--display);
+  font-size: var(--t-display-m);
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--text-primary);
+  text-wrap: pretty;
+}
+
+/* ------------------------------------------------------------- controls */
+/*
+ * All path-level actions carry identical weight. If "start" were filled and
+ * the others ghosted, the chrome would tell you what it expects — which is the
+ * recommendation R15 forbids.
+ */
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1);
+}
+
+.btn {
+  font-family: var(--util);
+  font-size: var(--t-util);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--interactive);
+  background: transparent;
+  border: 1px solid var(--interactive);
+  border-radius: var(--radius-inner);
+  padding: 0.5rem 0.6875rem;
+  min-height: 40px;
+  cursor: pointer;
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--interactive);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) {
+  .btn:hover { background: #e4e9f0; }
+}
+
+.btn--set {
+  border-style: dashed;
+}
+
+.setactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1);
+  margin-block-start: var(--s-5);
+  padding-block-start: var(--s-4);
+  border-block-start: 1px solid var(--border-default);
+}
+
+.setactions__note {
+  flex-basis: 100%;
+  font-size: var(--t-body-s);
+  color: var(--text-secondary);
+  margin-block-end: var(--s-2);
+  max-width: 42rem;
+}
+
+/* ------------------------------------------------------------ path plane */
+
+.plane {
+  background: var(--surface-path);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-plane);
+  padding: var(--s-4);
+}
+
+.path__name {
+  font-size: var(--t-display-m);
+  margin-block-end: var(--s-2);
+}
+
+.path__serves {
+  font-size: var(--t-body);
+  margin-block-end: var(--s-4);
+}
+
+.field { margin-block-start: var(--s-3); }
+.field__label { display: block; margin-block-end: var(--s-1); }
+.field__value { font-size: var(--t-body-s); }
+
+.field__value--project {
+  border-inline-start: 2px solid var(--border-default);
+  padding-inline-start: var(--s-2);
+}
+
+/* --------------------------------------------------------------- footer */
+
+.notefoot {
+  margin-block-start: var(--s-7);
+  padding-block-start: var(--s-3);
+  border-block-start: 1px solid var(--border-default);
+  font-size: var(--t-body-s);
+  color: var(--text-secondary);
+  max-width: 46rem;
+}
+
+/* ------------------------------------------------------------- reduced */
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition-duration: 0.01ms !important; }
+}

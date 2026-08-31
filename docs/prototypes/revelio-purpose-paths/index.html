@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Purpose Paths presentation prototype · Revelio U6</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+/*
+ * The comparison surface. Static by design: each avenue has interaction or
+ * scroll behaviour that a small framed panel would misrepresent, so each one
+ * opens full size instead of being nested here.
+ *
+ * The four are described, not ranked. The same rule the paths follow.
+ */
+
+.intro { max-width: 46rem; margin-block-end: var(--s-6); }
+.intro p + p { margin-block-start: var(--s-3); }
+.intro .lede { font-size: 1.1875rem; }
+
+/* Two by two, never three and an orphan. Four items in a 3+1 grid demote the
+   fourth, which is the exact thing this page claims not to be doing. */
+.avenues {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--s-3);
+}
+
+@media (max-width: 720px) {
+  .avenues { grid-template-columns: 1fr; }
+}
+
+.avenue { display: flex; flex-direction: column; }
+
+.avenue__key {
+  font-family: var(--display);
+  font-size: var(--t-display-l);
+  font-weight: 700;
+  line-height: 1;
+  color: var(--text-secondary);
+  margin-block-end: var(--s-2);
+}
+
+.avenue__title { font-size: 1.1875rem; margin-block-end: var(--s-2); }
+
+.avenue__principle {
+  font-size: var(--t-body-s);
+  margin-block-end: var(--s-3);
+}
+
+.avenue__pair { margin-block-start: var(--s-3); }
+.avenue__pair span { display: block; margin-block-end: 0.2rem; }
+.avenue__pair p { font-size: var(--t-body-s); color: var(--text-secondary); }
+
+.avenue__open { margin-block-start: var(--s-4); align-self: flex-start; }
+
+.shared {
+  margin-block-start: var(--s-6);
+  padding-block-start: var(--s-4);
+  border-block-start: 1px solid var(--border-default);
+  max-width: 52rem;
+}
+
+.shared h2 { font-size: var(--t-display-m); margin-block-end: var(--s-3); }
+.shared ul { margin: 0; padding-inline-start: 1.1rem; }
+.shared li { font-size: var(--t-body-s); margin-block-end: var(--s-2); }
+.shared li:last-child { margin-block-end: 0; }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <div class="runbar">
+    <span class="runbar__id"><strong>Revelio</strong> · Purpose Paths presentation · fixture-only prototype</span>
+    <span class="runbar__id">U6 · four presentations</span>
+  </div>
+
+  <div class="intro">
+    <h1 style="font-size: var(--t-display-l); margin-block-end: var(--s-3)">Four ways to present three Purpose Paths</h1>
+    <p class="lede">Each one shows the same three paths, with the same content, for the same fixture explorer. Only the organizing principle changes, so what you’re judging is the mechanism and not the copy.</p>
+    <p>Every path carries seven things: a name, how it serves the confirmed Why, what could become possible, evidence it may fit, the central unknown, a first project, and a researched view of how it would fit this person’s life. That’s twenty-one blocks that all have to stay equal, distinct, and short enough to read. The four presentations are four different answers to that.</p>
+    <p>These are described below, not ranked. Open each one full size.</p>
+    <p><strong>This exploration is settled.</strong> D&rsquo;s arrangement was selected, without its depth
+      control and in the product&rsquo;s own design language. The outcome is
+      <a href="selected-single-view.html">the selected single view</a>; the four avenues below are the
+      exploration that led to it, and their palette was rejected along the way.</p>
+  </div>
+
+  <div class="avenues">
+
+    <article class="avenue plane">
+      <span class="avenue__key" aria-hidden="true">A</span>
+      <h2 class="avenue__title">Three columns, paced disclosure</h2>
+      <p class="avenue__principle">The option governs. You hold one path at a time and go deeper into it.</p>
+      <div class="avenue__pair">
+        <span class="util">What you do</span>
+        <p>Read three short columns; open one path’s remaining detail when you want it. All three sections stay aligned on a shared grid, so opening one grows that row for every column.</p>
+      </div>
+      <div class="avenue__pair">
+        <span class="util">What it costs</span>
+        <p>Comparing a single dimension means opening all three and scanning across. The open path is the one you’re thinking about, which is exactly what a comparison is not.</p>
+      </div>
+      <a class="btn avenue__open" href="a-columns.html">Open A full size</a>
+    </article>
+
+    <article class="avenue plane">
+      <span class="avenue__key" aria-hidden="true">B</span>
+      <h2 class="avenue__title">Dimension rows</h2>
+      <p class="avenue__principle">The schema governs. You compare one question across all three, then move to the next.</p>
+      <div class="avenue__pair">
+        <span class="util">What you do</span>
+        <p>Read across a row. Nothing is hidden, but you only hold three things at a time instead of twenty-one, and no path owns a container that could make it larger than its siblings.</p>
+      </div>
+      <div class="avenue__pair">
+        <span class="util">What it costs</span>
+        <p>A path stops being a whole. It’s harder to feel any one of them as a life, and the full grid needs real width before it collapses to a stacked reading.</p>
+      </div>
+      <a class="btn avenue__open" href="b-dimensions.html">Open B full size</a>
+    </article>
+
+    <article class="avenue plane">
+      <span class="avenue__key" aria-hidden="true">D</span>
+      <h2 class="avenue__title">Lockstep depth</h2>
+      <p class="avenue__principle">Depth governs, and it governs globally. You cannot look harder at one path than at another.</p>
+      <div class="avenue__pair">
+        <span class="util">What you do</span>
+        <p>One control sets how much of every path is showing. There is no per-path disclosure at all, so equal weight is enforced by the mechanism rather than by the layout behaving itself.</p>
+      </div>
+      <div class="avenue__pair">
+        <span class="util">What it costs</span>
+        <p>You can’t dig into just the one you care about. At full depth it becomes three long columns, which is the density problem the other avenues are trying to solve.</p>
+      </div>
+      <a class="btn avenue__open" href="d-lockstep.html">Open D full size</a>
+    </article>
+
+    <article class="avenue plane">
+      <span class="avenue__key" aria-hidden="true">E</span>
+      <h2 class="avenue__title">A week in each path</h2>
+      <p class="avenue__principle">Time governs. You read what a week inside each path would actually contain.</p>
+      <div class="avenue__pair">
+        <span class="util">What you do</span>
+        <p>Read three short weeks in prose instead of three field sets. Every week ends on a flat beat, because three weeks that all end in triumph would rank themselves by which triumph sounds best.</p>
+      </div>
+      <div class="avenue__pair">
+        <span class="util">What it costs</span>
+        <p>Prose is the hardest form to keep even — tone can weight a path where a layout can’t. Stacking also makes reading order more noticeable than three columns do.</p>
+      </div>
+      <a class="btn avenue__open" href="e-week.html">Open E full size</a>
+    </article>
+
+  </div>
+
+  <div class="shared">
+    <h2>What all four hold constant</h2>
+    <ul>
+      <li>No path is assigned a colour. Per-path colour reads as valence — the legacy product’s teal, pink and orange cards can’t say “these are equal” while looking like a ranked set.</li>
+      <li>No path is numbered. Numbering implies sequence, and sequence implies rank.</li>
+      <li>No path-level action is styled more prominently than any other. If <em>Start</em> were filled and <em>Rewrite</em> and <em>Replace</em> were ghosted, the chrome would be telling you what it expects.</li>
+      <li>The central unknown is set at the same typographic rank as the path’s name, in a surface pressed into the plane. Career interfaces lead with the promise; this one gives the promise and the doubt equal billing.</li>
+      <li>Nothing animates on entrance. Three options revealed in sequence would imply an order. The one authored motion moment in the run is D’s depth change, where moving in unison is the argument.</li>
+      <li>Rewriting or replacing changes only the path you touched, and never confirms or activates anything.</li>
+    </ul>
+  </div>
+
+  <p class="notefoot">Fixture explorer: 38, software engineer, high-earning, burned out, feels trapped by lifestyle. Content is written to the Method contract but is not live data — there is no model and no application code here. Accessibility beyond legible contrast and visible keyboard focus is deliberately deferred to the connected U6 implementation.</p>
+
+</div>
+</body>
+</html>

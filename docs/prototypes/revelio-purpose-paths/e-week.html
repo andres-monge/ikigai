@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>E — A week in each path · Purpose Paths prototype</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+/*
+ * Avenue E. Organizing principle: time governs.
+ * Instead of a field set describing what a path claims, you read what a week
+ * inside it would actually contain — including the parts that deflate.
+ *
+ * Mono is used here for the day markers only, where it encodes real time.
+ * Every week ends on a flat beat on purpose: three weeks that all end in
+ * triumph would rank themselves by which triumph sounds best.
+ */
+
+.weeks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
+.week { padding: var(--s-5); }
+
+.week__head { max-width: 46rem; margin-block-end: var(--s-4); }
+
+.week__name { font-size: var(--t-display-m); margin-block-end: var(--s-2); }
+
+.week__serves { color: var(--text-secondary); font-size: var(--t-body-s); }
+
+.days {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 65ch);
+  column-gap: var(--s-3);
+  row-gap: var(--s-3);
+  margin-block-end: var(--s-4);
+}
+
+.days__marker { padding-block-start: 0.3rem; }
+
+.days__text { font-size: var(--t-body); }
+
+.week__tail {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: var(--s-3);
+  padding-block-start: var(--s-3);
+  border-block-start: 1px solid var(--border-subtle);
+  margin-block-start: var(--s-4);
+}
+
+.tail__label { display: block; margin-block-end: 0.2rem; }
+.tail__value { font-size: var(--t-body-s); }
+
+.week__unknown { max-width: 46rem; }
+
+@media (max-width: 700px) {
+  .week { padding: var(--s-4); }
+  .days { grid-template-columns: 1fr; row-gap: var(--s-1); }
+  .days__marker { padding-block-start: 0; }
+  .days__text { margin-block-end: var(--s-2); }
+}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <div class="runbar">
+    <span class="runbar__id"><strong>E</strong> · a week in each path</span>
+    <a class="runbar__back" href="index.html">← All four presentations</a>
+  </div>
+
+  <div class="why">
+    <span class="util why__label">Your Why I Work — confirmed</span>
+    <p class="why__text">I work so that people who depend on complicated systems don’t have to become experts just to get what they need. Most of that complexity was somebody’s choice, and nobody went back to revisit it.</p>
+  </div>
+
+  <div class="setline">
+    <h1 style="font-size: var(--t-display-l)">The same week, three ways</h1>
+    <p class="setline__lede">What each path would actually contain, including the flat parts. These are ways of working, not job titles, and none is being suggested over the others.</p>
+  </div>
+
+  <div class="weeks">
+
+    <!-- ---------------------------------------------------------- path 1 -->
+    <article class="week plane">
+      <div class="week__head">
+        <h2 class="week__name">Teaching the people the system was built for</h2>
+        <p class="week__serves">You stop translating complexity for one company and start making other people able to translate it for themselves.</p>
+      </div>
+
+      <div class="days">
+        <span class="util days__marker">Tue</span>
+        <p class="days__text">You spend the evening cutting your slides in half. The version you were proud of assumed people knew what a database was, and the six people coming on Thursday do not.</p>
+
+        <span class="util days__marker">Thu</span>
+        <p class="days__text">Ninety minutes with six people at a nonprofit, on the tool they already hate. Two of them get it in the first twenty minutes. One is on her phone. You find out that the thing you thought was the hard part isn’t.</p>
+
+        <span class="util days__marker">Sat</span>
+        <p class="days__text">You rewrite the session from scratch based on where they actually got stuck. Nobody has paid you anything, and you notice you’re looking forward to running it again.</p>
+      </div>
+
+      <div class="unknown week__unknown">
+        <span class="util unknown__label">What that week still wouldn’t tell you</span>
+        <p class="unknown__q">Do you like teaching, or do you like being the person who knows?</p>
+      </div>
+
+      <div class="week__tail">
+        <div>
+          <span class="util tail__label">Where it could go</span>
+          <p class="tail__value">Work that pays by the cohort rather than by the year, and material that keeps earning after you’ve stopped writing it.</p>
+        </div>
+        <div>
+          <span class="util tail__label">Why it might already fit</span>
+          <p class="tail__value">You’ve rewritten onboarding docs three times unasked. The runbook you wrote in 2023 is still what people send to new hires.</p>
+        </div>
+        <div>
+          <span class="util tail__label">Fit with your life</span>
+          <p class="tail__value">€600–1,400 a day once established, but the first year is mostly unpaid audience-building. Evenings and one weekday are enough to test it. No credential required.</p>
+        </div>
+      </div>
+
+      <div class="actions" style="margin-block-start: var(--s-4)">
+        <button class="btn" type="button" aria-label="Start the path: Teaching the people the system was built for">Start</button>
+        <button class="btn" type="button" aria-label="Rewrite the path: Teaching the people the system was built for">Rewrite</button>
+        <button class="btn" type="button" aria-label="Replace the path: Teaching the people the system was built for">Replace</button>
+      </div>
+    </article>
+
+    <!-- ---------------------------------------------------------- path 2 -->
+    <article class="week plane">
+      <div class="week__head">
+        <h2 class="week__name">Building the narrow tool that deletes a step</h2>
+        <p class="week__serves">Instead of explaining the complicated thing, you remove the part of it that never needed to exist.</p>
+      </div>
+
+      <div class="days">
+        <span class="util days__marker">Sat</span>
+        <p class="days__text">Two hours in the back office of a veterinary practice, watching a receptionist retype the same appointment into two systems. You are not writing code. You are watching, and it is slower than you expected.</p>
+
+        <span class="util days__marker">Sun</span>
+        <p class="days__text">You build the ugliest possible version of the one thing that wastes the most time. It has no login and no styling. It works for exactly one clinic.</p>
+
+        <span class="util days__marker">Wed</span>
+        <p class="days__text">She uses it twice and then goes back to the old way, because yours doesn’t handle the case where the owner changes the pet’s name. You fix it that night. Nobody else knows this exists.</p>
+      </div>
+
+      <div class="unknown week__unknown">
+        <span class="util unknown__label">What that week still wouldn’t tell you</span>
+        <p class="unknown__q">Can you stay interested in someone else’s boring problem long enough to finish?</p>
+      </div>
+
+      <div class="week__tail">
+        <div>
+          <span class="util tail__label">Where it could go</span>
+          <p class="tail__value">A product with maybe 200 customers that one person can maintain, in a trade you’d otherwise never have met.</p>
+        </div>
+        <div>
+          <span class="util tail__label">Why it might already fit</span>
+          <p class="tail__value">The scripts you wrote for your own team are the only side work you kept using after you stopped being paid to.</p>
+        </div>
+        <div>
+          <span class="util tail__label">Fit with your life</span>
+          <p class="tail__value">€2–5k monthly recurring in 18–30 months, well under your income for at least two years. The only one of the three you can run without leaving your job.</p>
+        </div>
+      </div>
+
+      <div class="actions" style="margin-block-start: var(--s-4)">
+        <button class="btn" type="button" aria-label="Start the path: Building the narrow tool that deletes a step">Start</button>
+        <button class="btn" type="button" aria-label="Rewrite the path: Building the narrow tool that deletes a step">Rewrite</button>
+        <button class="btn" type="button" aria-label="Replace the path: Building the narrow tool that deletes a step">Replace</button>
+      </div>
+    </article>
+
+    <!-- ---------------------------------------------------------- path 3 -->
+    <article class="week plane">
+      <div class="week__head">
+        <h2 class="week__name">Working upstream, on how the systems get chosen</h2>
+        <p class="week__serves">The complexity you keep absorbing was bought by someone in a meeting. You go to the meeting.</p>
+      </div>
+
+      <div class="days">
+        <span class="util days__marker">Mon</span>
+        <p class="days__text">You read a live public tender for a records system, 140 pages, most of it boilerplate. Around page 60 you find a requirement that guarantees the thing will be unusable, and you understand exactly why it’s there.</p>
+
+        <span class="util days__marker">Wed</span>
+        <p class="days__text">You write the teardown. It takes three evenings, and cutting it from 4,000 words to 900 is harder than writing it. You have to keep taking the contempt out.</p>
+
+        <span class="util days__marker">Fri</span>
+        <p class="days__text">You send it to three people who work in that space. One replies with a single line: “page 60 is deliberate.” The other two don’t reply at all. Nothing about the tender changes.</p>
+      </div>
+
+      <div class="unknown week__unknown">
+        <span class="util unknown__label">What that week still wouldn’t tell you</span>
+        <p class="unknown__q">Can you tolerate a pace where a good outcome takes two years and has your name nowhere on it?</p>
+      </div>
+
+      <div class="week__tail">
+        <div>
+          <span class="util tail__label">Where it could go</span>
+          <p class="tail__value">Influence over what an entire agency or hospital group makes people use, rather than over one codebase.</p>
+        </div>
+        <div>
+          <span class="util tail__label">Why it might already fit</span>
+          <p class="tail__value">You already do this informally. The vendor you argued against in 2024 was dropped, and you read procurement threads for fun.</p>
+        </div>
+        <div>
+          <span class="util tail__label">Fit with your life</span>
+          <p class="tail__value">€55–75k in your city, a real cut from your package. Entry usually runs through a fixed-term contract or a fellowship. Most people arrive from engineering, not policy.</p>
+        </div>
+      </div>
+
+      <div class="actions" style="margin-block-start: var(--s-4)">
+        <button class="btn" type="button" aria-label="Start the path: Working upstream, on how the systems get chosen">Start</button>
+        <button class="btn" type="button" aria-label="Rewrite the path: Working upstream, on how the systems get chosen">Rewrite</button>
+        <button class="btn" type="button" aria-label="Replace the path: Working upstream, on how the systems get chosen">Replace</button>
+      </div>
+    </article>
+
+  </div>
+
+  <div class="setactions">
+    <p class="setactions__note">Rewriting or replacing a path changes only that path, and changes nothing about the other two. Nothing here is chosen until you start one.</p>
+    <button class="btn btn--set" type="button">Combine two paths</button>
+    <button class="btn btn--set" type="button">Ask about these paths</button>
+  </div>
+
+  <p class="notefoot">Fixture content. This is a presentation prototype for the Purpose Paths comparison — no live data, no model, no application code.</p>
+
+</div>
+</body>
+</html>
