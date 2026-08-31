@@ -14,32 +14,31 @@
  */
 
 import { beforeEach, afterAll, describe, it, expect } from 'vitest';
-import { eq } from 'drizzle-orm';
-import { db } from './db.js';
+import { eq, like } from 'drizzle-orm';
+import { storageTestDatabase as db } from './storage.test-database.js';
 import { PostgresStorage } from './storage.js';
 import { assessmentSessions, purposePaths } from '../shared/schema.js';
 import type { QuestionnaireResponses } from '../shared/schema.js';
 
+const legacyRunPrefix = `legacy-storage-${process.pid}-${Date.now()}-`;
+const legacyId = (suffix: string) => `${legacyRunPrefix}${suffix}`;
+
 // Test instance
-const storage = new PostgresStorage();
+const storage = new PostgresStorage({ database: db });
 
 /* ------------------------------------------------------------------ */
 /*                         Test Setup & Cleanup                      */
 /* ------------------------------------------------------------------ */
 
 beforeEach(async () => {
-  // Clean tables in correct order (foreign keys first)
-  await db.delete(purposePaths);
-  await db.delete(assessmentSessions);
+  // Remove only this run's unique fixtures; never clear shared legacy data.
+  await db.delete(assessmentSessions)
+    .where(like(assessmentSessions.sessionId, `${legacyRunPrefix}%`));
 });
 
 afterAll(async () => {
-  // Clean up and close database connections to prevent hanging tests
-  await db.delete(purposePaths);
-  await db.delete(assessmentSessions);
-  
-  // Close the PostgreSQL connection pool
-  await db.$client.end();
+  await db.delete(assessmentSessions)
+    .where(like(assessmentSessions.sessionId, `${legacyRunPrefix}%`));
 });
 
 /* ------------------------------------------------------------------ */
@@ -47,7 +46,7 @@ afterAll(async () => {
 /* ------------------------------------------------------------------ */
 
 const testSessionData = {
-  sessionId: 'test-session-123',
+  sessionId: legacyId('test-session-123'),
   language: 'en' as const,
   responses: {
     passions: [
@@ -89,14 +88,14 @@ describe('PostgresStorage - Assessment Sessions', () => {
   
   it('should create a new assessment session with minimal data', async () => {
     const minimalData = {
-      sessionId: 'minimal-session',
+      sessionId: legacyId('minimal-session'),
       language: 'en' as const
     };
     
     const created = await storage.createAssessmentSession(minimalData);
     
     expect(created).toBeDefined();
-    expect(created.sessionId).toBe('minimal-session');
+    expect(created.sessionId).toBe(minimalData.sessionId);
     expect(created.language).toBe('en');
     expect(created.id).toBeTypeOf('number');
     expect(created.createdAt).toBeInstanceOf(Date);
@@ -234,12 +233,12 @@ describe('PostgresStorage - Purpose Paths', () => {
 
   it('should delete all purpose paths for a specific assessment', async () => {
     const session1 = await storage.createAssessmentSession({
-      sessionId: 'session-1',
+      sessionId: legacyId('session-1'),
       language: 'en' as const
     });
     
     const session2 = await storage.createAssessmentSession({
-      sessionId: 'session-2', 
+      sessionId: legacyId('session-2'),
       language: 'en' as const
     });
     
@@ -335,7 +334,8 @@ describe('PostgresStorage - Hydration & Relationships', () => {
     await db.delete(assessmentSessions).where(eq(assessmentSessions.id, session.id));
     
     // Verify the purpose path was automatically deleted
-    const remainingPaths = await db.select().from(purposePaths);
+    const remainingPaths = await db.select().from(purposePaths)
+      .where(eq(purposePaths.assessmentId, session.id));
     expect(remainingPaths).toHaveLength(0);
   });
 });
@@ -349,7 +349,7 @@ describe('PostgresStorage - Concurrent Operations', () => {
   it('should handle concurrent session creation without conflicts', async () => {
     const sessionPromises = Array.from({ length: 5 }, (_, i) => 
       storage.createAssessmentSession({
-        sessionId: `concurrent-session-${i}`,
+        sessionId: legacyId(`concurrent-session-${i}`),
         language: 'en' as const,
         responses: testSessionData.responses
       })
@@ -360,7 +360,7 @@ describe('PostgresStorage - Concurrent Operations', () => {
     // Verify all sessions were created successfully
     expect(sessions).toHaveLength(5);
     sessions.forEach((session, i) => {
-      expect(session.sessionId).toBe(`concurrent-session-${i}`);
+      expect(session.sessionId).toBe(legacyId(`concurrent-session-${i}`));
       expect(session.id).toBeTypeOf('number');
       expect(session.responses).toEqual(testSessionData.responses);
     });
@@ -373,7 +373,7 @@ describe('PostgresStorage - Concurrent Operations', () => {
 
   it('should handle concurrent purpose path creation for same assessment', async () => {
     const session = await storage.createAssessmentSession({
-      sessionId: 'concurrent-paths-session',
+      sessionId: legacyId('concurrent-paths-session'),
       language: 'en' as const
     });
     
@@ -402,18 +402,18 @@ describe('PostgresStorage - Concurrent Operations', () => {
 
   it('should handle concurrent reads while updates are happening', async () => {
     const session = await storage.createAssessmentSession({
-      sessionId: 'concurrent-read-write-session',
+      sessionId: legacyId('concurrent-read-write-session'),
       language: 'en' as const,
       responses: testSessionData.responses
     });
     
     // Start concurrent operations: multiple reads and one update
     const readPromises = Array.from({ length: 4 }, () =>
-      storage.getAssessmentSessionBySessionId('concurrent-read-write-session')
+      storage.getAssessmentSessionBySessionId(legacyId('concurrent-read-write-session'))
     );
     
     const updatePromise = storage.updateAssessmentSession(
-      'concurrent-read-write-session',
+      legacyId('concurrent-read-write-session'),
       {
         coreDriversAnalysis: {
           strengths: ["Concurrent testing"],
@@ -431,7 +431,7 @@ describe('PostgresStorage - Concurrent Operations', () => {
     // Verify reads were successful
     readResults.forEach(result => {
       expect(result).toBeDefined();
-      expect(result!.sessionId).toBe('concurrent-read-write-session');
+      expect(result!.sessionId).toBe(legacyId('concurrent-read-write-session'));
       expect(result!.responses).toEqual(testSessionData.responses);
     });
     
@@ -447,7 +447,7 @@ describe('PostgresStorage - Concurrent Operations', () => {
     // Create multiple sessions
     const sessionPromises = Array.from({ length: 3 }, (_, i) =>
       storage.createAssessmentSession({
-        sessionId: `concurrent-update-session-${i}`,
+        sessionId: legacyId(`concurrent-update-session-${i}`),
         language: 'en' as const
       })
     );
@@ -487,7 +487,7 @@ describe('PostgresStorage - Concurrent Operations', () => {
 
   it('should handle race conditions in purpose path deletion', async () => {
     const session = await storage.createAssessmentSession({
-      sessionId: 'race-condition-session',
+      sessionId: legacyId('race-condition-session'),
       language: 'en' as const
     });
     

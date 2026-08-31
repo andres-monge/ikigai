@@ -44,24 +44,47 @@ export const revisionRefSchema = z.object({
   revision: revisionSchema,
 }).strict();
 
-export const sourceProvenanceSchema = z.discriminatedUnion('kind', [
+const citedResearchBaseSchema = z.object({
+  kind: z.literal('cited-research'),
+  sourceHandle: entityIdSchema,
+  url: z.string().url().refine((value) => value.startsWith('https://'), 'Research sources must use HTTPS.'),
+  retrievedAt: timestampSchema,
+  title: z.string().min(1).max(1_000).optional(),
+});
+
+export const sourceProvenanceSchema = z.union([
   z.object({
     kind: z.literal('user-supplied-source'),
     label: z.string().min(1).max(500),
     url: z.string().url().optional(),
     recordedBy: userActionProvenanceSchema,
   }).strict(),
-  z.object({
-    kind: z.literal('cited-research'),
-    sourceHandle: entityIdSchema,
+  citedResearchBaseSchema.extend({
+    support: z.literal('server-validated'),
+    providerResultId: entityIdSchema,
+    excerpt: z.string().min(1).max(4_000),
+  }).strict(),
+  citedResearchBaseSchema.extend({
+    support: z.literal('cited-provenance'),
     providerResultId: entityIdSchema.optional(),
-    url: z.string().url().refine((value) => value.startsWith('https://'), 'Research sources must use HTTPS.'),
-    retrievedAt: timestampSchema,
-    title: z.string().min(1).max(1_000).optional(),
     excerpt: z.string().min(1).max(4_000).optional(),
-    support: z.enum(['server-validated', 'cited-provenance']),
   }).strict(),
 ]);
+
+/**
+ * Minimal, non-conclusive record of an isolated research attempt. Failed or
+ * insufficient attempts live outside exact-three proposal invariants so a
+ * retry can resume without inventing a canonical path, project, peer, or
+ * route. Raw queries and retrieved bodies are intentionally not retained.
+ */
+export const researchAttemptSchema = z.object({
+  id: entityIdSchema,
+  status: z.enum(['pending', 'succeeded', 'insufficient', 'failed']),
+  queryCategory: z.string().min(1).max(160),
+  attemptedAt: timestampSchema,
+  sources: z.array(sourceProvenanceSchema),
+  errorClass: z.string().min(1).max(160).optional(),
+}).strict();
 
 export const operationReceiptSchema = z.object({
   sourceId: entityIdSchema,
@@ -105,6 +128,7 @@ export type UserEvidenceProvenance = z.infer<typeof userEvidenceProvenanceSchema
 export type Confirmation = z.infer<typeof confirmationSchema>;
 export type RevisionRef = z.infer<typeof revisionRefSchema>;
 export type SourceProvenance = z.infer<typeof sourceProvenanceSchema>;
+export type ResearchAttempt = z.infer<typeof researchAttemptSchema>;
 export type OperationReceipt = z.infer<typeof operationReceiptSchema>;
 export type Invalidation = z.infer<typeof invalidationSchema>;
 export type InvalidationTargetKind = z.infer<typeof invalidationTargetKindSchema>;

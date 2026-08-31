@@ -875,7 +875,12 @@ export function applyCareerMapOperation(mapInput: CareerMap, operationInput: unk
   const parsedOperation = parseCareerMapOperation(operationInput);
   if (!parsedOperation.success) return reject(map, 'invalid-operation', 'Operation failed strict validation.', parsedOperation.error.flatten());
   const operation = parsedOperation.data;
-  const payloadFingerprint = stablePayloadFingerprint(operation);
+  // Retry identity is semantic operation content, not volatile transport
+  // envelope fields such as expectedRevision or occurredAt.
+  const payloadFingerprint = stablePayloadFingerprint({
+    type: operation.type,
+    payload: operation.payload,
+  });
   const existing = map.operationHistory.find((receipt) => receipt.sourceId === operation.sourceId);
   if (existing) {
     return existing.payloadFingerprint === payloadFingerprint

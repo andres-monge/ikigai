@@ -42,16 +42,36 @@ import {
   jsonb,
   timestamp,
   pgEnum,
+  boolean,
+  index,
+  uniqueIndex,
+  check,
 } from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod';
+import type {
+  CareerMap,
+  OperationReceipt,
+  ResearchAttempt,
+  UserActionProvenance,
+} from './career-map/index.js';
 
 /* -------------------------------------------------------------------------- */
 /* ENUM DEFINITIONS                              */
 /* -------------------------------------------------------------------------- */
 
 export const languageEnum = pgEnum('language_enum', ['en', 'es']);
+export const agentTurnStatusEnum = pgEnum('agent_turn_status', [
+  'pending',
+  'completed',
+  'cancelled',
+  'failed',
+]);
+export const erasureStatusEnum = pgEnum('method_erasure_status', [
+  'pending-provider',
+  'failed-provider',
+]);
 
 /* -------------------------------------------------------------------------- */
 /* SHARED ZOD SCHEMAS & TYPES                       */
@@ -157,6 +177,142 @@ export const analyticsEvents = pgTable('analytics_events', {
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow(),
+});
+
+/** Durable, owner-scoped Method product memory. */
+export const careerMaps = pgTable('career_maps', {
+  userId: text('user_id').primaryKey(),
+  schemaVersion: integer('schema_version').notNull(),
+  revision: integer('revision').notNull().default(0),
+  document: jsonb('document').$type<CareerMap>().notNull(),
+  repairRequired: boolean('repair_required').notNull().default(false),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  revisionNonnegative: check('career_maps_revision_nonnegative', sql`${table.revision} >= 0`),
+  schemaVersionPositive: check('career_maps_schema_version_positive', sql`${table.schemaVersion} > 0`),
+}));
+
+/** One append-only database result for every committed map revision. */
+export const careerMapHistory = pgTable('career_map_history', {
+  id: serial('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => careerMaps.userId, { onDelete: 'cascade' }),
+  operationSourceId: text('operation_source_id').notNull(),
+  operationType: text('operation_type').notNull(),
+  payloadFingerprint: text('payload_fingerprint').notNull(),
+  baseRevision: integer('base_revision').notNull(),
+  resultRevision: integer('result_revision').notNull(),
+  result: jsonb('result').$type<OperationReceipt>().notNull(),
+  confirmationProvenance: jsonb('confirmation_provenance').$type<UserActionProvenance>(),
+  moduleVersion: text('module_version').notNull(),
+  committedAt: timestamp('committed_at', { withTimezone: true }).notNull(),
+}, (table) => ({
+  operationIdentity: uniqueIndex('career_map_history_user_operation_unique')
+    .on(table.userId, table.operationSourceId),
+  resultRevision: uniqueIndex('career_map_history_user_revision_unique')
+    .on(table.userId, table.resultRevision),
+  ownerIndex: index('career_map_history_user_idx').on(table.userId),
+  revisionOrder: check(
+    'career_map_history_revision_order',
+    sql`${table.resultRevision} = ${table.baseRevision} + 1`,
+  ),
+}));
+
+/** Isolated research bookkeeping that cannot become a canonical proposal. */
+export const careerMapResearchAttempts = pgTable('career_map_research_attempts', {
+  id: text('id').notNull(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => careerMaps.userId, { onDelete: 'cascade' }),
+  turnId: text('turn_id').notNull(),
+  leaseId: text('lease_id').notNull(),
+  attempt: jsonb('attempt').$type<ResearchAttempt>().notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  identity: uniqueIndex('career_map_research_user_id_unique').on(table.userId, table.id),
+  ownerIndex: index('career_map_research_user_idx').on(table.userId),
+  turnIndex: index('career_map_research_turn_idx').on(table.userId, table.turnId, table.leaseId),
+}));
+
+/** Human-controlled draft material; no operation sends or publishes it. */
+export const careerMapDrafts = pgTable('career_map_drafts', {
+  id: text('id').notNull(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => careerMaps.userId, { onDelete: 'cascade' }),
+  kind: text('kind').notNull(),
+  content: jsonb('content').$type<unknown>().notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  identity: uniqueIndex('career_map_drafts_user_id_unique').on(table.userId, table.id),
+  ownerIndex: index('career_map_drafts_user_idx').on(table.userId),
+}));
+
+/** Per-user fencing lease shared by streamed turns and workspace operations. */
+export const agentTurnLeases = pgTable('agent_turn_leases', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => careerMaps.userId, { onDelete: 'cascade' }),
+  leaseId: text('lease_id').notNull(),
+  turnId: text('turn_id').notNull(),
+  acquiredAt: timestamp('acquired_at', { withTimezone: true }).notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+}, (table) => ({
+  expiryIndex: index('agent_turn_leases_expiry_idx').on(table.expiresAt),
+  positiveLifetime: check(
+    'agent_turn_leases_above_platform_cap',
+    sql`${table.expiresAt} > ${table.acquiredAt} + interval '300 seconds'`,
+  ),
+}));
+
+/** Durable client-message identity and terminal outcome for attach/recovery. */
+export const agentTurns = pgTable('agent_turns', {
+  turnId: text('turn_id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => careerMaps.userId, { onDelete: 'cascade' }),
+  clientMessageId: text('client_message_id').notNull(),
+  requestFingerprint: text('request_fingerprint').notNull(),
+  leaseId: text('lease_id').notNull(),
+  status: agentTurnStatusEnum('status').notNull().default('pending'),
+  terminalResult: jsonb('terminal_result').$type<Record<string, unknown>>(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+  terminalAt: timestamp('terminal_at', { withTimezone: true }),
+}, (table) => ({
+  clientIdentity: uniqueIndex('agent_turns_user_message_unique')
+    .on(table.userId, table.clientMessageId),
+  leaseIdentity: uniqueIndex('agent_turns_user_lease_unique')
+    .on(table.userId, table.leaseId),
+  ownerIndex: index('agent_turns_user_idx').on(table.userId),
+  terminalConsistency: check(
+    'agent_turns_terminal_consistency',
+    sql`(${table.status} = 'pending' AND ${table.terminalAt} IS NULL) OR (${table.status} <> 'pending' AND ${table.terminalAt} IS NOT NULL)`,
+  ),
+}));
+
+/** Server-side Conversation ownership; never accepts a client-supplied owner. */
+export const agentConversationMappings = pgTable('agent_conversation_mappings', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => careerMaps.userId, { onDelete: 'cascade' }),
+  conversationId: text('conversation_id').notNull().unique(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Non-content retry marker retained only while provider erasure is incomplete. */
+export const methodErasureJobs = pgTable('method_erasure_jobs', {
+  userId: text('user_id').primaryKey(),
+  jobId: text('job_id').notNull().unique(),
+  conversationId: text('conversation_id'),
+  status: erasureStatusEnum('status').notNull(),
+  errorClass: text('error_class'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 /* --------------------------- DRIZZLE RELATIONS ---------------------------- */
