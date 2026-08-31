@@ -16,6 +16,19 @@ const paths: [PurposePathInput, PurposePathInput, PurposePathInput] = [1, 2, 3].
   possibility: `Outcome ${n}`, evidence: [`Evidence ${n}`], centralUnknown: `Unknown ${n}`,
   projectPreview: `Project ${n}`, practicalFit: `Fit ${n}`,
 })) as [PurposePathInput, PurposePathInput, PurposePathInput];
+const project = (id = 'project-1', revision = 1) => ({
+  id,
+  revision,
+  title: 'Build an aid',
+  outcome: 'One person uses it',
+  audience: 'A real colleague',
+  whyWanted: 'Reduce decision waste',
+  learningGoal: 'Learn whether iteration pulls me in',
+  firstVersion: 'One-page prototype',
+  firstStep: 'Interview the colleague',
+  decisionQuestion: 'Do I want another iteration?',
+  evidenceCue: 'Notice voluntary pull',
+});
 
 function op<T extends CareerMapOperation['type']>(map: CareerMap, type: T, payload: Extract<CareerMapOperation, { type: T }>['payload']): Extract<CareerMapOperation, { type: T }> {
   return { type, sourceId: `${type}-${map.revision + 1}`, expectedRevision: map.revision, occurredAt: at(map.revision + 1), payload } as Extract<CareerMapOperation, { type: T }>;
@@ -25,6 +38,14 @@ function commit<T extends CareerMapOperation['type']>(map: CareerMap, type: T, p
   const result = applyCareerMapOperation(map, op(map, type, payload));
   expect(result.status).toBe('committed');
   return result.map;
+}
+
+function withSelectedPath(explorerId: string): CareerMap {
+  let map = createCareerMap(explorerId);
+  map = commit(map, 'propose-why', { why: { id: 'why-1', revision: 1, statement: 'Make difficult choices actionable.', serves: 'People in transition', pointOfView: 'Clarity must change action' }, presentation: presentation(1) });
+  map = commit(map, 'confirm-why', { whyId: 'why-1', whyRevision: 1, action: action(2) });
+  map = commit(map, 'propose-purpose-paths', { setId: 'set-1', setRevision: 1, paths, presentation: presentation(3) });
+  return commit(map, 'select-purpose-path', { setId: 'set-1', setRevision: 1, pathId: 'path-1', pathRevision: 1, action: action(4) });
 }
 
 describe('Method checkpoint selector', () => {
@@ -75,6 +96,48 @@ describe('Method checkpoint selector', () => {
     expect(checkpoint.module).toBe('form-foundation');
     expect(checkpoint.pendingDecision?.kind).toBe('why-confirmation');
     expect(checkpoint.focus).toBeNull();
+  });
+
+  it('keeps a replacement for an unaccepted first project in first-project confirmation', () => {
+    let map = withSelectedPath('explorer-first-project-replacement');
+    map = commit(map, 'propose-first-project', { project: project(), presentation: presentation(5) });
+    map = commit(map, 'replace-project-proposal', {
+      projectId: 'project-1',
+      projectRevision: 1,
+      replacement: project('project-2'),
+      presentation: presentation(6),
+    });
+
+    expect(deriveMethodCheckpoint(map)).toMatchObject({
+      module: 'design-path-project',
+      pendingDecision: { kind: 'first-project-confirmation', targetId: 'project-2', targetRevision: 1 },
+      availableOperations: ['replace-project-proposal', 'accept-first-project'],
+    });
+
+    map = commit(map, 'accept-first-project', { projectId: 'project-2', projectRevision: 1, action: action(7) });
+    expect(deriveMethodCheckpoint(map)).toMatchObject({ module: 'guide-path-project', pendingDecision: null });
+  });
+
+  it('keeps a revision of an accepted project in project-revision confirmation', () => {
+    let map = withSelectedPath('explorer-accepted-project-revision');
+    map = commit(map, 'propose-first-project', { project: project(), presentation: presentation(5) });
+    map = commit(map, 'accept-first-project', { projectId: 'project-1', projectRevision: 1, action: action(6) });
+    map = commit(map, 'propose-project-revision', {
+      projectId: 'project-1',
+      projectRevision: 1,
+      replacement: project('project-2', 2),
+      presentation: presentation(7),
+    });
+
+    expect(deriveMethodCheckpoint(map)).toMatchObject({
+      module: 'design-path-project',
+      pendingDecision: { kind: 'project-revision-confirmation', targetId: 'project-2', targetRevision: 2 },
+      availableOperations: ['replace-project-proposal', 'confirm-project-revision'],
+    });
+
+    map = commit(map, 'confirm-project-revision', { projectId: 'project-2', projectRevision: 2, action: action(8) });
+    expect(map.projects.find((item) => item.id === 'project-1')?.agreementStatus).toBe('superseded');
+    expect(map.projects.find((item) => item.id === 'project-2')?.agreementStatus).toBe('accepted');
   });
 
   it('routes the earliest unresolved basis before an explicit focus', () => {

@@ -113,10 +113,16 @@ function pendingDecision(map: CareerMap): { module: MethodModule; decision: Pend
 
   const suggestedProject = map.projects.findLast((item) => item.agreementStatus === 'suggested');
   if (suggestedProject) {
+    const revisesAcceptedProject = Boolean(
+      suggestedProject.supersedesProjectId
+      && map.projects.some(
+        (project) => project.id === suggestedProject.supersedesProjectId && project.agreementStatus === 'accepted',
+      ),
+    );
     return {
       module: 'design-path-project',
       decision: {
-        kind: suggestedProject.supersedesProjectId ? 'project-revision-confirmation' : 'first-project-confirmation',
+        kind: revisesAcceptedProject ? 'project-revision-confirmation' : 'first-project-confirmation',
         targetId: suggestedProject.id,
         targetRevision: suggestedProject.revision,
       },
