@@ -70,6 +70,11 @@ const envSchema = z.object({
     .default(''),
 
   // Better Auth Configuration (optional until authentication is mounted)
+  // Auth uses a separate direct connection so its schema-level search path
+  // never enters the pooled application/Drizzle connection.
+  BETTER_AUTH_DATABASE_URL: z
+    .string()
+    .default(''),
   BETTER_AUTH_SECRET: z
     .string()
     .default(''),
@@ -79,6 +84,8 @@ const envSchema = z.object({
   AUTH_SIGNUPS_ENABLED: z
     .string()
     .default('false')
+    // Fail closed: missing, malformed, or any value other than literal true
+    // leaves new-account creation disabled while existing sign-in remains on.
     .transform((value) => value === 'true'),
 
   // Optional Environment Metadata

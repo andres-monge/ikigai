@@ -23,7 +23,15 @@ import express, {
 } from 'express';
 import path from 'path';
 import fs from 'fs';
+import { toNodeHandler } from 'better-auth/node';
 import { registerRoutes } from './routes.js';
+import {
+  AuthConfigurationError,
+  getAuth,
+  INTERNAL_CLIENT_IP_HEADER,
+  resolveTrustedClientIp,
+} from './auth.js';
+import { env } from './env.js';
 import { log } from './utils/log.js';
 
 /**
@@ -76,6 +84,23 @@ export function createApp(): Express {
   const app = express();
 
   // ========= Middleware Setup =========
+  // Better Auth's Express v4 handler MUST remain before body parsers. The
+  // handler consumes the raw request stream for OAuth and session endpoints.
+  app.all('/api/auth/*', (req, res, next) => {
+    req.headers[INTERNAL_CLIENT_IP_HEADER] = resolveTrustedClientIp(req, env.NODE_ENV);
+
+    try {
+      const handler = toNodeHandler(getAuth());
+      Promise.resolve(handler(req, res)).catch(next);
+    } catch (error) {
+      if (error instanceof AuthConfigurationError) {
+        res.status(503).json({ error: 'Authentication is unavailable' });
+        return;
+      }
+      next(error);
+    }
+  });
+
   app.use(express.json());
   app.use(express.urlencoded({ extended: false }));
 
