@@ -65,6 +65,7 @@ describe('protected Method parser error boundary', () => {
     {
       label: 'malformed JSON request',
       route: '/api/agent',
+      routeLabel: 'agent-turn',
       status: 400,
       errorClass: 'SyntaxError',
       sentinel: 'PRIVATE_MALFORMED_JSON_SENTINEL',
@@ -76,6 +77,7 @@ describe('protected Method parser error boundary', () => {
     {
       label: 'oversized JSON request',
       route: '/api/agent',
+      routeLabel: 'agent-turn',
       status: 413,
       errorClass: 'PayloadTooLargeError',
       sentinel: 'PRIVATE_OVERSIZED_JSON_SENTINEL',
@@ -87,6 +89,7 @@ describe('protected Method parser error boundary', () => {
     {
       label: 'oversized audio request',
       route: '/api/agent/audio/transcribe',
+      routeLabel: 'audio-transcription',
       status: 413,
       errorClass: 'PayloadTooLargeError',
       sentinel: 'PRIVATE_OVERSIZED_AUDIO_SENTINEL',
@@ -95,10 +98,23 @@ describe('protected Method parser error boundary', () => {
         .set('content-type', 'audio/webm')
         .send(Buffer.concat([Buffer.from(sentinel), Buffer.alloc(2 * 1024 * 1024 + 1)])),
     },
+    {
+      label: 'malformed JSON request on an attacker-controlled Method path',
+      route: '/api/agent/PRIVATE_PARSER_PATH_SENTINEL',
+      routeLabel: 'method-unmatched',
+      status: 400,
+      errorClass: 'SyntaxError',
+      sentinel: 'PRIVATE_PARSER_PATH_SENTINEL',
+      send: (app: ReturnType<typeof createApp>, sentinel: string) => request(app)
+        .post(`/api/agent/${sentinel}`)
+        .set('content-type', 'application/json')
+        .send(`{"id":"message","message":"${sentinel}`),
+    },
   ] as const;
 
   it.each(cases)('returns payload-free metadata for a $label', async ({
     route,
+    routeLabel,
     status,
     errorClass,
     sentinel,
@@ -115,7 +131,7 @@ describe('protected Method parser error boundary', () => {
       'Protected Method request failed',
       expect.objectContaining({
         requestId: expect.any(String),
-        route,
+        route: routeLabel,
         status,
         errorClass,
       }),

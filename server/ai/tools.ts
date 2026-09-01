@@ -5,6 +5,7 @@ import {
   entityIdSchema,
   foundationEvidenceSchema,
   pathProjectInputSchema,
+  opaqueClientMessageIdSchema,
   purposePathInputSchema,
   realityConstraintSchema,
   revisionSchema,
@@ -822,7 +823,7 @@ export async function executeWorkspaceTool(input: {
 
 export const workspaceOperationRequestSchema = z.object({
   operationId: entityIdSchema,
-  clientMessageId: entityIdSchema,
+  clientMessageId: opaqueClientMessageIdSchema,
   operation: z.object({
     type: z.enum(Object.keys(OPERATION_TO_TOOL_NAME) as [keyof typeof OPERATION_TO_TOOL_NAME, ...(keyof typeof OPERATION_TO_TOOL_NAME)[]]),
     input: z.record(z.unknown()),

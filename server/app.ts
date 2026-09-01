@@ -34,6 +34,7 @@ import {
 } from './auth.js';
 import { env } from './env.js';
 import { log } from './utils/log.js';
+import { methodRouteLabel } from './routes/agent-logging.js';
 
 /**
  * Regex to match asset file extensions (with optional query parameters).
@@ -179,7 +180,7 @@ export function createApp(): Express {
       res.setHeader('x-request-id', requestId);
       console.error('Protected Method request failed', {
         requestId,
-        route: req.path,
+        route: methodRouteLabel(req.method, req.path),
         status: err && typeof err === 'object' && 'status' in err && typeof err.status === 'number'
           ? err.status
           : 500,

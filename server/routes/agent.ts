@@ -14,6 +14,7 @@ import { env, parseAgentEnabled } from '../env.js';
 import { getProtectedIdentity, requireAuth } from '../auth-middleware.js';
 import {
   MethodOwnerBusyError,
+  nextMethodTurnSequence,
   storage as defaultStorage,
   type AgentTurnRecord,
   type BeginAgentTurnResult,
@@ -50,14 +51,18 @@ import {
   type ConfirmationAuthorization,
   type MethodOperationEnvelope,
 } from '../ai/tools.js';
+import { opaqueClientMessageIdSchema } from '../../shared/career-map/index.js';
+import { methodRouteLabel } from './agent-logging.js';
 
 const agentRequestSchema = z.object({
-  id: z.string().min(1).max(160),
+  id: opaqueClientMessageIdSchema,
   message: z.string().trim().min(1).max(12_000),
 }).strict();
 
 const audioLanguageSchema = z.enum(['en', 'es']);
 const METHOD_AUDIO_LIMIT = '2mb';
+const PROVISIONING_HANDOFF_WAIT_MS = 12_000;
+const PROVISIONING_HANDOFF_POLL_MS = 25;
 
 export interface AgentRouterOptions {
   storage?: IStorage;
@@ -266,6 +271,45 @@ function throwIfRouteAborted(signal: AbortSignal): void {
     : new DOMException('Request aborted.', 'AbortError');
 }
 
+function abortableDelay(milliseconds: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) {
+      reject(signal.reason);
+      return;
+    }
+    const timeout = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, milliseconds);
+    const onAbort = () => {
+      clearTimeout(timeout);
+      reject(signal.reason);
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+async function waitForProvisioningHandoff(input: {
+  storage: Pick<IStorage, 'getTurnLease'>;
+  userId: string;
+  activeTurnId: string;
+  abortSignal: AbortSignal;
+}): Promise<boolean> {
+  const deadline = Date.now() + PROVISIONING_HANDOFF_WAIT_MS;
+  while (Date.now() < deadline) {
+    throwIfRouteAborted(input.abortSignal);
+    const lease = await input.storage.getTurnLease(input.userId);
+    if (!lease || lease.turnId !== input.activeTurnId || lease.expiresAt.getTime() <= Date.now()) {
+      return true;
+    }
+    await abortableDelay(
+      Math.min(PROVISIONING_HANDOFF_POLL_MS, Math.max(1, deadline - Date.now())),
+      input.abortSignal,
+    );
+  }
+  return false;
+}
+
 async function defaultTranscribeAudio(input: {
   audio: Buffer;
   language: 'en' | 'es';
@@ -331,7 +375,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
       log({
         type: 'method_request',
         requestId,
-        route: request.path,
+        route: methodRouteLabel(request.method, request.path),
         status: response.statusCode,
         durationMs: Date.now() - startedAt,
         ...(identity?.userId ? { userId: identity.userId } : {}),
@@ -464,13 +508,14 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
       const leasedState = await storage.loadCareerMap(identity.userId);
       if (leasedState.status !== 'ready') throw new Error('CareerMapUnavailableAfterLease');
       startingRevision = leasedState.map.revision;
+      const turnSequence = nextMethodTurnSequence(leasedState.map);
       const envelope = await executeWorkspaceTool({
         runtime: {
           storage,
           loader: await loaderPromise,
           userId: identity.userId,
           turn,
-          timing: { turnSequence: now().getTime(), occurredAt },
+          timing: { turnSequence, occurredAt },
           abortSignal: abort.signal,
         },
         operationType: parsed.data.operation.type,
@@ -601,13 +646,23 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
         return;
       }
       throwIfRouteAborted(abort.signal);
-      const begun = await storage.beginAgentTurn({
+      const beginInput = {
         userId: identity.userId,
         clientMessageId: parsed.data.id,
         requestFingerprint: requestFingerprint(parsed.data.id, parsed.data.message),
         turnId: nextId(),
         leaseId: nextId(),
-      });
+      };
+      let begun = await storage.beginAgentTurn(beginInput);
+      if (begun.status === 'conflict' && begun.waitReason === 'conversation-provisioning') {
+        const settled = await waitForProvisioningHandoff({
+          storage,
+          userId: identity.userId,
+          activeTurnId: begun.activeTurnId,
+          abortSignal: abort.signal,
+        });
+        if (settled) begun = await storage.beginAgentTurn(beginInput);
+      }
       if (begun.status !== 'started') {
         turnResponse(begun, response);
         return;
@@ -616,6 +671,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
       const leasedState = await storage.loadCareerMap(identity.userId);
       if (leasedState.status !== 'ready') throw new Error('CareerMapUnavailableAfterLease');
       startingRevision = leasedState.map.revision;
+      const turnSequence = nextMethodTurnSequence(leasedState.map);
       throwIfRouteAborted(abort.signal);
       await reconcileConversationProvisioning(identity.userId);
       let conversationId = await storage.getConversationMapping(identity.userId);
@@ -728,7 +784,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
         userId: identity.userId,
         conversationId,
         turn,
-        turnSequence: now().getTime(),
+        turnSequence,
         occurredAt: now().toISOString(),
         research,
         currentMessage: parsed.data.message,
@@ -750,7 +806,6 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
         abortSignal: abort.signal,
       });
       const displayStream = projectMethodStreamForDisplay(result.stream, {
-        streamNaturalText: turnRoute === 'conversation',
         onTextDelta: (text) => { safeAssistantText += text; },
       });
       const uiStream = toUIMessageStream({

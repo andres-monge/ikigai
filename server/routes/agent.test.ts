@@ -301,6 +301,38 @@ describe('protected Method routes', () => {
     expect(storage.beginAgentTurn).not.toHaveBeenCalled();
   });
 
+  it('rejects newline-bearing client message ids before the durable turn or provider boundary', async () => {
+    const clientIdSentinel = 'PRIVATE_CLIENT_ID_SENTINEL';
+    const logs: Array<Record<string, unknown>> = [];
+    const storage = createStorage();
+    const model = new MockLanguageModelV4({ doStream: textStream('must not run') as never });
+    const response = await request(testApp({
+      storage, requireAuth: authenticated, agentEnabled: true, model,
+      operationalLog: (entry) => logs.push(entry),
+    })).post('/api/agent').send({
+      id: `message-safe\n${clientIdSentinel}`,
+      message: 'A normal reflection.',
+    });
+
+    expect(response.status).toBe(400);
+    expect(storage.beginAgentTurn).not.toHaveBeenCalled();
+    expect(model.doStreamCalls).toHaveLength(0);
+    expect(JSON.stringify([response.body, logs])).not.toContain(clientIdSentinel);
+  });
+
+  it('collapses attacker-controlled unmatched Method paths to a static log label', async () => {
+    const pathSentinel = 'PRIVATE_LOG_PATH_SENTINEL';
+    const logs: Array<Record<string, unknown>> = [];
+    const response = await request(testApp({
+      storage: createStorage(), requireAuth: authenticated, agentEnabled: true,
+      operationalLog: (entry) => logs.push(entry),
+    })).get(`/api/agent/${pathSentinel}`);
+
+    expect(response.status).toBe(404);
+    expect(logs.at(-1)).toMatchObject({ route: 'method-unmatched', status: 404 });
+    expect(JSON.stringify(logs)).not.toContain(pathSentinel);
+  });
+
   it('executes workspace operations through the shared reducer with server provenance', async () => {
     const logs: Array<Record<string, unknown>> = [];
     const storage = createStorage();
@@ -345,11 +377,133 @@ describe('protected Method routes', () => {
     expect(storage.releaseTurnLease).toHaveBeenCalledOnce();
     expect(JSON.stringify(logs)).not.toContain(SENTINEL);
     expect(logs.at(-1)).toMatchObject({
-      route: '/workspace/operations',
+      route: 'workspace-operation',
       status: 200,
       operationId: expect.stringMatching(/^op_[a-f0-9]{16}$/),
       revision: 2,
     });
+  });
+
+  it('derives a workspace action sequence after the canonical presentation despite clock skew', async () => {
+    const skewed = pendingWhy();
+    const pending = skewed.foundation.whyRevisions.at(-1)!;
+    pending.presentation.turnSequence = new Date(timestamp(9)).getTime();
+    let map = skewed;
+    const storage = createStorage({
+      loadCareerMap: vi.fn(async () => ({ status: 'ready' as const, map })),
+      getOrCreateCareerMap: vi.fn(async () => ({ status: 'ready' as const, map })),
+      persistCareerMapOperation: vi.fn(async (input: { operation: CareerMapOperation }) => {
+        const result = applyCareerMapOperation(map, input.operation);
+        if (result.status === 'committed' || result.status === 'replayed') map = result.map;
+        return result;
+      }),
+      beginWorkspaceActionTurn: vi.fn(async (input: {
+        clientMessageId: string; requestFingerprint: string; turnId: string; leaseId: string;
+      }): Promise<BeginAgentTurnResult> => ({
+        status: 'started', shouldInvokeModel: true,
+        turn: {
+          ...turn('workspace-action'),
+          clientMessageId: input.clientMessageId,
+          requestFingerprint: input.requestFingerprint,
+          turnId: input.turnId,
+          leaseId: input.leaseId,
+        },
+      })),
+    });
+
+    const response = await request(testApp({
+      storage, requireAuth: authenticated, agentEnabled: true,
+      now: () => new Date(timestamp(1)), operationalLog: vi.fn(),
+    })).post('/api/agent/workspace/operations').send({
+      operationId: 'operation-clock-skew-confirm',
+      clientMessageId: 'message-clock-skew-confirm',
+      operation: {
+        type: 'confirm-why',
+        input: {
+          whyId: pending.id,
+          whyRevision: pending.revision,
+          presentedInTurnId: pending.presentation.assistantTurnId,
+          sourceMessageId: 'message-clock-skew-confirm',
+        },
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({ status: 'committed', authoritativeRevision: 2 });
+    expect(map.foundation.whyRevisions.at(-1)?.status).toBe('confirmed');
+  });
+
+  it('derives an agent turn sequence after a same-millisecond canonical presentation', async () => {
+    const fixedNow = new Date(timestamp(2));
+    const sameTime = pendingWhy();
+    const pending = sameTime.foundation.whyRevisions.at(-1)!;
+    pending.presentation.turnSequence = fixedNow.getTime();
+    let map = sameTime;
+    const storage = createStorage({
+      loadCareerMap: vi.fn(async () => ({ status: 'ready' as const, map })),
+      getOrCreateCareerMap: vi.fn(async () => ({ status: 'ready' as const, map })),
+      persistCareerMapOperation: vi.fn(async (input: { operation: CareerMapOperation }) => {
+        const result = applyCareerMapOperation(map, input.operation);
+        if (result.status === 'committed' || result.status === 'replayed') map = result.map;
+        return result;
+      }),
+      beginAgentTurn: vi.fn(async (input: {
+        clientMessageId: string; requestFingerprint: string; turnId: string; leaseId: string;
+      }): Promise<BeginAgentTurnResult> => ({
+        status: 'started', shouldInvokeModel: true,
+        turn: {
+          ...turn('agent-turn'),
+          clientMessageId: input.clientMessageId,
+          requestFingerprint: input.requestFingerprint,
+          turnId: input.turnId,
+          leaseId: input.leaseId,
+        },
+      })),
+      getConversationMapping: vi.fn(async () => 'server-conversation-same-time'),
+    });
+    let providerCall = 0;
+    const model = new MockLanguageModelV4({
+      doStream: async () => {
+        providerCall += 1;
+        if (providerCall === 1) {
+          return {
+            stream: simulateReadableStream({
+              chunks: [
+                { type: 'stream-start', warnings: [] },
+                {
+                  type: 'tool-call', toolCallId: 'same-time-confirm-call', toolName: 'confirm_why',
+                  input: JSON.stringify({
+                    whyId: pending.id,
+                    whyRevision: pending.revision,
+                    presentedInTurnId: pending.presentation.assistantTurnId,
+                    sourceMessageId: 'message-same-time-confirm',
+                  }),
+                },
+                { type: 'finish', finishReason: { unified: 'tool-calls', raw: 'tool-calls' }, usage: usage() },
+              ] as never,
+            }),
+          };
+        }
+        return textStream('Confirmed from the authoritative revision.');
+      },
+    });
+    const response = await request(testApp({
+      storage, requireAuth: authenticated, agentEnabled: true, model,
+      now: () => fixedNow,
+      classifyTurn: async () => 'conversation',
+      authorizeTurn: async () => ({
+        operation: 'confirm-why', targetId: pending.id, targetRevision: pending.revision,
+      }),
+      conversationClient: { listItems: vi.fn(async () => ({ data: [], hasMore: false })) },
+      researchProvider: { search: vi.fn(async () => ({ candidates: [] })) }, operationalLog: vi.fn(),
+    })).post('/api/agent').send({
+      id: 'message-same-time-confirm',
+      message: 'That is exactly right; confirm it.',
+    });
+
+    expect(response.status).toBe(200);
+    expect(map.foundation.whyRevisions.at(-1)?.status).toBe('confirmed');
+    expect(storage.persistCareerMapOperation).toHaveBeenCalledOnce();
   });
 
   it('returns the durable failed turn when completion loses its lease instead of claiming workspace success', async () => {
@@ -1111,6 +1265,107 @@ describe('protected Method routes', () => {
     expect(storage.completeAgentTurn).not.toHaveBeenCalled();
     expect(storage.releaseTurnLease).toHaveBeenCalledOnce();
     expect(model.doStreamCalls).toHaveLength(0);
+  });
+
+  it('waits for aborted first-time provisioning to settle before starting the next message', async () => {
+    const firstTurn = {
+      ...turn('agent-turn'),
+      turnId: 'provisioning-stop-turn-1',
+      clientMessageId: 'provisioning-stop-message-1',
+      leaseId: 'provisioning-stop-lease-1',
+    };
+    const secondTurn = {
+      ...turn('agent-turn'),
+      turnId: 'provisioning-stop-turn-2',
+      clientMessageId: 'provisioning-stop-message-2',
+      leaseId: 'provisioning-stop-lease-2',
+    };
+    let activeTurn: typeof firstTurn | typeof secondTurn | undefined = firstTurn;
+    let beginCount = 0;
+    let mappedConversation: string | undefined;
+    const storage = createStorage({
+      beginAgentTurn: vi.fn(async (): Promise<BeginAgentTurnResult> => {
+        beginCount += 1;
+        if (beginCount === 1) return { status: 'started', shouldInvokeModel: true, turn: firstTurn };
+        if (activeTurn?.turnId === firstTurn.turnId) {
+          return {
+            status: 'conflict',
+            activeTurnId: firstTurn.turnId,
+            retryAfter: new Date(timestamp(59)),
+            waitReason: 'conversation-provisioning',
+          };
+        }
+        activeTurn = secondTurn;
+        return { status: 'started', shouldInvokeModel: true, turn: secondTurn };
+      }),
+      getTurnLease: vi.fn(async () => activeTurn ? ({
+        userId: USER_ID,
+        turnId: activeTurn.turnId,
+        leaseId: activeTurn.leaseId,
+        acquiredAt: new Date(timestamp(1)),
+        expiresAt: new Date(timestamp(59)),
+      }) : undefined),
+      getConversationMapping: vi.fn(async () => mappedConversation),
+      setConversationMapping: vi.fn(async (_userId: string, _leaseId: string, id: string) => {
+        mappedConversation = id;
+      }),
+      releaseTurnLease: vi.fn(async (_userId: string, turnId: string, leaseId: string) => {
+        if (activeTurn?.turnId === turnId && activeTurn.leaseId === leaseId) {
+          activeTurn = undefined;
+        }
+        return true;
+      }),
+    });
+    let resolveFirstCreate!: (id: string) => void;
+    const firstCreate = new Promise<string>((resolve) => { resolveFirstCreate = resolve; });
+    const conversationClient = {
+      createConversation: vi.fn()
+        .mockImplementationOnce((_signal?: AbortSignal) => firstCreate)
+        .mockResolvedValueOnce('provider-conversation-after-stop'),
+      deleteConversation: vi.fn(async () => undefined),
+      listItems: vi.fn(async () => ({ data: [], hasMore: false })),
+    };
+    const model = new MockLanguageModelV4({ doStream: textStream('Safe next reply.') as never });
+    const app = testApp({
+      storage, requireAuth: authenticated, agentEnabled: true, model, conversationClient,
+      classifyTurn: async () => 'method', authorizeTurn: async () => undefined,
+      researchProvider: { search: vi.fn(async () => ({ candidates: [] })) }, operationalLog: vi.fn(),
+    });
+
+    const first = request(app).post('/api/agent').send({
+      id: firstTurn.clientMessageId,
+      message: 'Start while the Conversation is being provisioned.',
+    });
+    const firstSettled = Promise.resolve(first).catch(() => undefined);
+    await vi.waitFor(() => expect(conversationClient.createConversation).toHaveBeenCalledOnce());
+    first.abort();
+
+    const secondResponsePromise = Promise.resolve(request(app).post('/api/agent').send({
+      id: secondTurn.clientMessageId,
+      message: 'Start only after the stopped turn has settled.',
+    }));
+    await vi.waitFor(() => expect(storage.beginAgentTurn).toHaveBeenCalledTimes(2));
+    expect(conversationClient.createConversation).toHaveBeenCalledOnce();
+
+    resolveFirstCreate('provider-conversation-returned-after-stop');
+    await firstSettled;
+    const secondResponse = await secondResponsePromise;
+
+    expect(secondResponse.status).toBe(200);
+    expect(storage.beginAgentTurn).toHaveBeenCalledTimes(3);
+    expect(conversationClient.createConversation).toHaveBeenCalledTimes(2);
+    expect(conversationClient.deleteConversation).toHaveBeenCalledWith(
+      'provider-conversation-returned-after-stop', expect.any(AbortSignal),
+    );
+    expect(mappedConversation).toBe('provider-conversation-after-stop');
+    expect(model.doStreamCalls).toHaveLength(1);
+    expect(storage.cancelAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
+      turnId: firstTurn.turnId,
+      leaseId: firstTurn.leaseId,
+    }));
+    expect(storage.releaseTurnLease).toHaveBeenCalledWith(
+      USER_ID, firstTurn.turnId, firstTurn.leaseId,
+    );
   });
 
   it('records and compensates a Conversation returned after request abort without poisoning the mapping', async () => {

@@ -1475,7 +1475,6 @@ describe('PostgresStorage lease and client-message turns', () => {
       const narrationTraceStart = providerTrace.length;
       const narrationResult = await narrationAgent.stream({ prompt: narrationPrompt });
       const narrationDisplayStream = projectMethodStreamForDisplay(narrationResult.stream, {
-        streamNaturalText: true,
         onTextDelta: (text) => { narrationText += text; },
       });
       for await (const _part of narrationDisplayStream) { /* consume progressive natural text */ }
@@ -1573,7 +1572,6 @@ describe('PostgresStorage lease and client-message turns', () => {
         abortSignal: cancelController.signal,
       });
       const cancelledDisplayStream = projectMethodStreamForDisplay(cancellationResult.stream, {
-        streamNaturalText: true,
         onTextDelta: (text) => {
           cancelledSafeText += text;
           if (!cancelController.signal.aborted) {
@@ -1704,6 +1702,22 @@ describe('PostgresStorage lease and client-message turns', () => {
       requestFingerprint: id('message-race-changed-fingerprint'),
     });
     expect(reused.status).toBe('message-id-reused');
+  });
+
+  it('rejects a non-opaque client message id at the durable turn boundary', async () => {
+    const userId = owner('unsafe-client-message-id');
+    await storage.getOrCreateCareerMap(userId);
+    const unsafeClientMessageId = `${id('unsafe-message')}\nPRIVATE_DURABLE_ID_SENTINEL`;
+
+    await expect(storage.beginAgentTurn({
+      userId,
+      clientMessageId: unsafeClientMessageId,
+      requestFingerprint: id('unsafe-message-fingerprint'),
+      turnId: id('unsafe-message-turn'),
+      leaseId: id('unsafe-message-lease'),
+    })).rejects.toBeDefined();
+    expect(await storage.getAgentTurn(userId, unsafeClientMessageId)).toBeUndefined();
+    expect(await storage.getTurnLease(userId)).toBeUndefined();
   });
 
   it('conflicts while active, attaches without reinvocation, expires, and reclaims with fencing', async () => {

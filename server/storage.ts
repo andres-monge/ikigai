@@ -47,6 +47,7 @@ import {
   careerMapSchema,
   createCareerMap,
   operationReceiptSchema,
+  opaqueClientMessageIdSchema,
   pathProjectInputSchema,
   peerExposureInputSchema,
   purposePathInputSchema,
@@ -141,6 +142,35 @@ export type MethodProvenanceTiming = {
   occurredAt: string;
 };
 
+/**
+ * Derive ordering from the already-validated canonical map, never from a
+ * serverless instance clock. One fixed value is used for the whole durable
+ * turn, so same-turn presentation/confirmation still shares a sequence and is
+ * rejected while every later leased turn is strictly after canonical state.
+ */
+export function nextMethodTurnSequence(map: CareerMap): number {
+  let maximum = map.revision;
+  const visit = (value: unknown): void => {
+    if (!value || typeof value !== 'object') return;
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+    for (const [key, child] of Object.entries(value)) {
+      if (key === 'turnSequence' && typeof child === 'number' && Number.isSafeInteger(child)) {
+        maximum = Math.max(maximum, child);
+      } else {
+        visit(child);
+      }
+    }
+  };
+  visit(map);
+  if (!Number.isSafeInteger(maximum) || maximum >= Number.MAX_SAFE_INTEGER) {
+    throw new Error('Canonical Method turn sequence is exhausted.');
+  }
+  return maximum + 1;
+}
+
 function createMethodPersistenceContext(
   origin: MethodPersistenceContext['origin'],
   turn: DurableMethodTurnIdentity,
@@ -209,7 +239,12 @@ export type BeginAgentTurnResult =
   | { status: 'started'; turn: AgentTurnRecord; shouldInvokeModel: boolean; reclaimedTurnId?: string }
   | { status: 'attached'; turn: AgentTurnRecord; shouldInvokeModel: false }
   | { status: 'terminal'; turn: AgentTurnRecord; shouldInvokeModel: false }
-  | { status: 'conflict'; activeTurnId: string; retryAfter: Date }
+  | {
+      status: 'conflict';
+      activeTurnId: string;
+      retryAfter: Date;
+      waitReason?: 'conversation-provisioning';
+    }
   | { status: 'message-id-reused'; turn: AgentTurnRecord }
   | { status: 'map-required' }
   | { status: 'erasure-pending' }
@@ -1369,6 +1404,10 @@ export class PostgresStorage implements IStorage {
     leaseId: string;
     leaseDurationMs?: number;
   }, origin: MethodTurnOrigin): Promise<BeginAgentTurnResult> {
+    // The protected route validates this first, and the durable boundary
+    // repeats the check so alternate callers cannot persist display text or
+    // instruction-shaped content as a client identity.
+    opaqueClientMessageIdSchema.parse(input.clientMessageId);
     const now = this.now();
     const leaseDurationMs = input.leaseDurationMs ?? DEFAULT_TURN_LEASE_MS;
     if (!Number.isFinite(leaseDurationMs) || leaseDurationMs <= 300_000) {
@@ -1503,10 +1542,26 @@ export class PostgresStorage implements IStorage {
         if (!currentLease) {
           throw new Error('Lease acquisition failed without an existing lease.');
         }
+        let waitReason: 'conversation-provisioning' | undefined;
+        if (origin === 'agent-turn') {
+          const [mapping] = await tx.select({ userId: agentConversationMappings.userId })
+            .from(agentConversationMappings)
+            .where(eq(agentConversationMappings.userId, input.userId));
+          const [activeTurn] = await tx.select({ status: agentTurns.status, origin: agentTurns.origin })
+            .from(agentTurns)
+            .where(and(
+              eq(agentTurns.userId, input.userId),
+              eq(agentTurns.turnId, currentLease.turnId),
+            ));
+          if (!mapping && activeTurn?.status === 'pending' && activeTurn.origin === 'agent-turn') {
+            waitReason = 'conversation-provisioning';
+          }
+        }
         return {
           status: 'conflict',
           activeTurnId: currentLease.turnId,
           retryAfter: currentLease.expiresAt,
+          ...(waitReason ? { waitReason } : {}),
         };
       }
 

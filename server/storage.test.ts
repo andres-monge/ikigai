@@ -259,6 +259,36 @@ describe('PostgresStorage - Conversation provisioning cleanup fencing', () => {
     expect(await fencedStorage.listPendingConversationProvisioning(input.userId)).toEqual([]);
   });
 
+  it('marks only an unmapped live agent turn conflict as a waitable provisioning handoff', async () => {
+    const clock = new Date('2030-01-01T00:00:00.000Z');
+    const fencedStorage = new PostgresStorage({ database: db, now: () => clock });
+    const active = methodTurnInput('waitable-conflict-active');
+    const waiting = methodTurnInput('waitable-conflict-waiting');
+    waiting.userId = active.userId;
+    await fencedStorage.getOrCreateCareerMap(active.userId);
+    expect((await fencedStorage.beginAgentTurn(active)).status).toBe('started');
+
+    const unmappedConflict = await fencedStorage.beginAgentTurn(waiting);
+    expect(unmappedConflict).toMatchObject({
+      status: 'conflict',
+      activeTurnId: active.turnId,
+      waitReason: 'conversation-provisioning',
+    });
+
+    await fencedStorage.setConversationMapping(
+      active.userId,
+      active.leaseId,
+      legacyId('waitable-conflict-conversation'),
+    );
+    const mappedConflict = await fencedStorage.beginAgentTurn({
+      ...waiting,
+      turnId: legacyId('waitable-conflict-mapped-turn'),
+      leaseId: legacyId('waitable-conflict-mapped-lease'),
+    });
+    expect(mappedConflict).toMatchObject({ status: 'conflict', activeTurnId: active.turnId });
+    expect(mappedConflict).not.toHaveProperty('waitReason');
+  });
+
   it('serializes concurrent mapping and cleanup claims so a live Conversation is never orphaned', async () => {
     const clock = new Date('2030-01-01T00:00:00.000Z');
     const fencedStorage = new PostgresStorage({ database: db, now: () => clock });

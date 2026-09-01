@@ -16,6 +16,7 @@ import {
   classifyMethodTurn,
   createMethodAgent,
   createResultBarrierTransform,
+  NATURAL_CONVERSATION_TOOL_NAME,
   projectMethodStreamForDisplay,
 } from './agent.js';
 import { refreshMethodState } from './tools.js';
@@ -529,8 +530,10 @@ describe('authenticated Method agent loop', () => {
 
     expect(result.text).toBe(reply);
     expect(traces[0]).toContain(expectedTool);
+    expect(traces[0]).toContain(NATURAL_CONVERSATION_TOOL_NAME);
     expect(storage.map.revision).toBe(startingRevision);
     const request = model.doGenerateCalls[0];
+    expect(request?.toolChoice).toEqual({ type: 'required' });
     expect(JSON.stringify(request?.prompt)).toContain(message);
     expect(String(request?.providerOptions?.openai?.instructions))
       .toContain("Mirror the language of the explorer's latest message naturally.");
@@ -576,11 +579,23 @@ describe('authenticated Method agent loop', () => {
     let naturalController!: ReadableStreamDefaultController<Record<string, unknown>>;
     const naturalStream = new ReadableStream<Record<string, unknown>>({
       start(controller) { naturalController = controller; },
-    }).pipeThrough(createResultBarrierTransform({ streamNaturalText: true } as never)() as never);
+    }).pipeThrough(createResultBarrierTransform()() as never);
     const naturalReader = naturalStream.getReader();
+    naturalController.enqueue({ type: 'start-step' });
+    naturalController.enqueue({
+      type: 'tool-call', toolCallId: 'natural-route-call',
+      toolName: NATURAL_CONVERSATION_TOOL_NAME, input: {},
+    });
+    naturalController.enqueue({
+      type: 'tool-result', toolCallId: 'natural-route-call',
+      toolName: NATURAL_CONVERSATION_TOOL_NAME, output: { status: 'no-write-conversation' },
+    });
+    naturalController.enqueue({ type: 'finish-step' });
     naturalController.enqueue({ type: 'start-step' });
     naturalController.enqueue({ type: 'text-start', id: 'natural' });
     naturalController.enqueue({ type: 'text-delta', id: 'natural', text: 'Early natural delta.' });
+    expect((await naturalReader.read()).value).toMatchObject({ type: 'start-step' });
+    expect((await naturalReader.read()).value).toMatchObject({ type: 'finish-step' });
     expect((await naturalReader.read()).value).toMatchObject({ type: 'start-step' });
     expect((await naturalReader.read()).value).toMatchObject({ type: 'text-start' });
     const early = await Promise.race([
@@ -594,7 +609,7 @@ describe('authenticated Method agent loop', () => {
     let mutationController!: ReadableStreamDefaultController<Record<string, unknown>>;
     const mutationStream = new ReadableStream<Record<string, unknown>>({
       start(controller) { mutationController = controller; },
-    }).pipeThrough(createResultBarrierTransform({ streamNaturalText: false } as never)() as never);
+    }).pipeThrough(createResultBarrierTransform()() as never);
     const mutationReader = mutationStream.getReader();
     mutationController.enqueue({ type: 'start-step' });
     mutationController.enqueue({ type: 'text-start', id: 'mutation' });
@@ -609,6 +624,109 @@ describe('authenticated Method agent loop', () => {
       mutationOutput.push(part.value);
     }
     expect(JSON.stringify(mutationOutput)).not.toContain('Premature mutation claim');
+  });
+
+  it('does not release pre-tool prose when a conversation classifier false-negative invokes a non-confirmation Method tool', async () => {
+    const storage = new InMemoryMethodStorage(createCareerMap('explorer-1'));
+    let providerStep = 0;
+    const model = new MockLanguageModelV4({
+      doStream: async () => {
+        providerStep += 1;
+        if (providerStep === 1) {
+          return {
+            stream: simulateReadableStream({
+              chunks: [
+                { type: 'stream-start', warnings: [] },
+                { type: 'text-start', id: 'pre-tool' },
+                { type: 'text-delta', id: 'pre-tool', delta: 'I have already saved that evidence.' },
+                { type: 'text-end', id: 'pre-tool' },
+                {
+                  type: 'tool-call', toolCallId: 'evidence-call', toolName: 'append_foundation_evidence',
+                  input: JSON.stringify({
+                    id: 'evidence-from-false-negative', revision: 1, category: 'fascination',
+                    content: 'I lose track of time when I make messy information useful.',
+                  }),
+                },
+                { type: 'finish', finishReason: { unified: 'tool-calls', raw: 'tool-calls' }, usage: usage() },
+              ] as never,
+            }),
+          };
+        }
+        return {
+          stream: simulateReadableStream({
+            chunks: [
+              { type: 'stream-start', warnings: [] },
+              { type: 'text-start', id: 'post-result' },
+              { type: 'text-delta', id: 'post-result', delta: 'The evidence is now saved at revision 1.' },
+              { type: 'text-end', id: 'post-result' },
+              { type: 'finish', finishReason: { unified: 'stop', raw: 'stop' }, usage: usage() },
+            ] as never,
+          }),
+        };
+      },
+    });
+    const agent = createMethodAgent({
+      model, storage: storage as never, loader: await createMethodModuleLoader(),
+      userId: 'explorer-1', conversationId: 'server-conversation',
+      turn: {
+        turnId: 'agent-current-turn', leaseId: 'lease-current', clientMessageId: 'message-current',
+        requestFingerprint: 'request-current', origin: 'agent-turn',
+      },
+      turnSequence: 5, occurredAt: timestamp(5),
+      currentMessage: 'I lose track of time when I make messy information useful.',
+      turnRoute: 'conversation',
+    } as never);
+    const result = await agent.stream({
+      prompt: 'I lose track of time when I make messy information useful.',
+    });
+    const output: Array<Record<string, unknown>> = [];
+    for await (const part of projectMethodStreamForDisplay(result.stream) as never) {
+      output.push(part as Record<string, unknown>);
+    }
+
+    expect(JSON.stringify(output)).not.toContain('already saved');
+    expect(JSON.stringify(output)).toContain('now saved at revision 1');
+    expect(model.doStreamCalls[0]?.toolChoice).toEqual({ type: 'required' });
+    expect(model.doStreamCalls[0]?.tools?.map((definition) => definition.name)).toEqual(
+      expect.arrayContaining(['append_foundation_evidence', NATURAL_CONVERSATION_TOOL_NAME]),
+    );
+    expect(storage.map.revision).toBe(1);
+  });
+
+  it('uses a strict internal no-write route before a tool-impossible progressive step', async () => {
+    const storage = new InMemoryMethodStorage(createCareerMap('explorer-1'));
+    const model = new MockLanguageModelV4({
+      doGenerate: [
+        modelResult([{
+          type: 'tool-call', toolCallId: 'natural-route-call',
+          toolName: NATURAL_CONVERSATION_TOOL_NAME, input: JSON.stringify({}),
+        }], 'tool-calls'),
+        modelResult([{ type: 'text', text: 'A natural tool-impossible reply.' }], 'stop'),
+      ],
+    });
+    const traces: string[][] = [];
+    const agent = createMethodAgent({
+      model, storage: storage as never, loader: await createMethodModuleLoader(),
+      userId: 'explorer-1', conversationId: 'server-conversation',
+      turn: {
+        turnId: 'agent-current-turn', leaseId: 'lease-current', clientMessageId: 'message-current',
+        requestFingerprint: 'request-current', origin: 'agent-turn',
+      },
+      turnSequence: 5, occurredAt: timestamp(5), currentMessage: 'Help me think this through.',
+      turnRoute: 'conversation',
+      onPreparedStep: (trace) => traces.push(trace.activeTools),
+    } as never);
+
+    const result = await agent.generate({ prompt: 'Help me think this through.' });
+
+    expect(result.text).toBe('A natural tool-impossible reply.');
+    expect(model.doGenerateCalls[0]?.tools?.map((definition) => definition.name)).toEqual(
+      expect.arrayContaining(['append_foundation_evidence', NATURAL_CONVERSATION_TOOL_NAME]),
+    );
+    expect(model.doGenerateCalls[0]?.toolChoice).toEqual({ type: 'required' });
+    expect(traces[1]).toEqual([]);
+    expect(model.doGenerateCalls[1]?.tools).toBeUndefined();
+    expect(model.doGenerateCalls[1]?.toolChoice).toEqual({ type: 'none' });
   });
 
   it('applies the result barrier only to the outward stream after tool continuation has settled', async () => {
@@ -885,6 +1003,30 @@ describe('authenticated Method agent loop', () => {
     expect(instructions).not.toContain(providerResultId);
     expect(instructions).not.toContain('https://example.com/tainted');
     expect(storage.map.revision).toBe(3);
+  });
+
+  it('encodes the durable client message id before rendering request-scoped provider instructions', async () => {
+    const instructionSentinel = 'PRIVATE_CLIENT_ID_INSTRUCTION_SENTINEL';
+    const storage = new InMemoryMethodStorage(createCareerMap('explorer-1'));
+    const model = new MockLanguageModelV4({
+      doGenerate: modelResult([{ type: 'text', text: 'Safe reply.' }], 'stop'),
+    });
+    const agent = createMethodAgent({
+      model, storage: storage as never, loader: await createMethodModuleLoader(),
+      userId: 'explorer-1', conversationId: 'server-conversation',
+      turn: {
+        turnId: 'agent-current-turn', leaseId: 'lease-current',
+        clientMessageId: `message-current\n${instructionSentinel}`,
+        requestFingerprint: 'request-current', origin: 'agent-turn',
+      },
+      turnSequence: 5, occurredAt: timestamp(5), currentMessage: 'A normal reflection.',
+    } as never);
+
+    await agent.generate({ prompt: 'A normal reflection.' });
+
+    const instructions = String(model.doGenerateCalls[0]?.providerOptions?.openai?.instructions);
+    expect(instructions).not.toContain(`\n${instructionSentinel}`);
+    expect(instructions).toContain(`\\n${instructionSentinel}`);
   });
 });
 

@@ -1,6 +1,16 @@
 import { z } from 'zod';
 
 export const entityIdSchema = z.string().min(1).max(160);
+/**
+ * Client-supplied durable message identities are opaque transport tokens, not
+ * display text. Keeping them to a single-line ASCII grammar prevents them from
+ * becoming an instruction, log, or storage-protocol injection surface while
+ * retaining UUID, AI SDK, and existing `message-*`/`msg_*` formats.
+ */
+export const opaqueClientMessageIdSchema = z.string()
+  .min(1)
+  .max(160)
+  .regex(/^[A-Za-z0-9][A-Za-z0-9._:~-]*$/, 'Client message id must be an opaque token.');
 export const revisionSchema = z.number().int().positive();
 export const mapRevisionSchema = z.number().int().nonnegative();
 export const timestampSchema = z.string().datetime({ offset: true });
