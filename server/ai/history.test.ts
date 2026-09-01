@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   ConversationHistoryProviderError,
   OpenAIConversationClient,
+  listRecentConversationItems,
   loadConversationHistory,
   normalizeConversationItems,
   resolveDisplayProjection,
@@ -89,6 +90,25 @@ describe('protected OpenAI Conversation history adapter', () => {
     }));
     expect(listItems).toHaveBeenNthCalledWith(2, expect.objectContaining({ after: 'message-1' }));
     expect(result.messages.map((message) => message.id)).toEqual(['message-1', 'message-2']);
+  });
+
+  it('reads one newest page for terminal projection and restores chronological order', async () => {
+    const listItems = vi.fn(async () => ({
+      data: [{ id: 'newest' }, { id: 'older' }],
+      hasMore: true,
+      lastId: 'older',
+    }));
+
+    await expect(listRecentConversationItems({
+      client: { listItems },
+      conversationId: 'conversation-server-owned',
+    })).resolves.toEqual([{ id: 'older' }, { id: 'newest' }]);
+    expect(listItems).toHaveBeenCalledOnce();
+    expect(listItems).toHaveBeenCalledWith(expect.objectContaining({
+      conversationId: 'conversation-server-owned',
+      limit: 100,
+      order: 'desc',
+    }));
   });
 
   it('projects only completed durable-turn display text and ignores raw pre-tool, rejected, conflicted, and aborted provider text', async () => {

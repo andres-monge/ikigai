@@ -757,11 +757,15 @@ export function createMethodTools(runtime: MethodToolRuntime): ToolSet {
 
 export async function executeWorkspaceTool(input: {
   runtime: Omit<MethodToolRuntime, 'prepared' | 'surface'>;
+  expectedRevision: number;
   operationType: keyof typeof OPERATION_TO_TOOL_NAME;
   operationId: string;
   rawInput: unknown;
 }): Promise<MethodOperationEnvelope> {
   const prepared = await refreshMethodState(input.runtime.storage, input.runtime.loader, input.runtime.userId);
+  if (prepared.map.revision !== input.expectedRevision) {
+    return envelopeFromState(input.operationType, prepared, 'conflict', 'revision-conflict', true);
+  }
   const tools = createMethodTools({
     ...input.runtime,
     surface: 'workspace-action',
@@ -824,6 +828,7 @@ export async function executeWorkspaceTool(input: {
 export const workspaceOperationRequestSchema = z.object({
   operationId: entityIdSchema,
   clientMessageId: opaqueClientMessageIdSchema,
+  expectedRevision: z.number().int().nonnegative(),
   operation: z.object({
     type: z.enum(Object.keys(OPERATION_TO_TOOL_NAME) as [keyof typeof OPERATION_TO_TOOL_NAME, ...(keyof typeof OPERATION_TO_TOOL_NAME)[]]),
     input: z.record(z.unknown()),

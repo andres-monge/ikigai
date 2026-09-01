@@ -772,6 +772,7 @@ describe('strict state-specific Method tools', () => {
     const agentResult = await agentTools.confirm_why.execute?.(exact, { toolCallId: 'parity-operation', messages: [] } as never);
     const workspaceResult = await executeWorkspaceTool({
       runtime: { ...runtime(workspaceStorage, 'workspace-action'), loader },
+      expectedRevision: workspaceStorage.map.revision,
       operationType: 'confirm-why', operationId: 'parity-operation', rawInput: exact,
     });
 
@@ -795,6 +796,7 @@ describe('strict state-specific Method tools', () => {
     expect(agentTools).not.toHaveProperty('accept_first_project');
     const workspaceResult = await executeWorkspaceTool({
       runtime: { ...runtime(workspaceStorage, 'workspace-action'), loader },
+      expectedRevision: workspaceStorage.map.revision,
       operationType: 'accept-first-project' as never, operationId: 'accept-project-operation', rawInput: exact,
     } as never);
     expect(workspaceResult).toMatchObject({ status: 'rejected', errorClass: 'operation-unavailable' });

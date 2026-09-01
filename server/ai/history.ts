@@ -17,7 +17,7 @@ export interface ConversationItemsClient {
     conversationId: string;
     after?: string;
     limit: number;
-    order: 'asc';
+    order: 'asc' | 'desc';
     abortSignal?: AbortSignal;
   }): Promise<ConversationItemPage>;
 }
@@ -220,6 +220,28 @@ export async function listConversationItems(input: {
   return items;
 }
 
+/**
+ * Fetch only the newest provider page needed to bind a just-finished turn.
+ * History hydration and erasure keep using the exhaustive ascending reader.
+ */
+export async function listRecentConversationItems(input: {
+  client: ConversationItemsClient;
+  conversationId: string;
+  abortSignal?: AbortSignal;
+}): Promise<unknown[]> {
+  if (input.abortSignal?.aborted) {
+    throw input.abortSignal.reason ?? new DOMException('Aborted', 'AbortError');
+  }
+  const page = await input.client.listItems({
+    conversationId: input.conversationId,
+    limit: 100,
+    order: 'desc',
+    abortSignal: input.abortSignal,
+  });
+  if (!Array.isArray(page.data)) throw new ConversationHistoryProviderError('list');
+  return [...page.data].reverse();
+}
+
 export async function loadConversationHistory(input: {
   storage: Pick<IStorage, 'getConversationMapping' | 'listAgentTurns'>
     & Partial<Pick<IStorage, 'backfillAgentTurnDisplayProjection'>>;
@@ -373,7 +395,7 @@ export class OpenAIConversationClient implements ConversationItemsClient {
     conversationId: string;
     after?: string;
     limit: number;
-    order: 'asc';
+    order: 'asc' | 'desc';
     abortSignal?: AbortSignal;
   }): Promise<ConversationItemPage> {
     const params = new URLSearchParams({ limit: String(input.limit), order: input.order });

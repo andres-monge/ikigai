@@ -34,6 +34,7 @@ import {
   OpenAIConversationClient,
   createDisplayRecovery,
   listConversationItems,
+  listRecentConversationItems,
   loadConversationHistory,
   resolveDisplayProjection,
   type ConversationItemsClient,
@@ -511,7 +512,10 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
       const begun = await storage.beginWorkspaceActionTurn({
         userId: identity.userId,
         clientMessageId: parsed.data.clientMessageId,
-        requestFingerprint: requestFingerprint(parsed.data.clientMessageId, canonicalRequestValue(parsed.data.operation)),
+        requestFingerprint: requestFingerprint(parsed.data.clientMessageId, canonicalRequestValue({
+          expectedRevision: parsed.data.expectedRevision,
+          operation: parsed.data.operation,
+        })),
         turnId,
         leaseId,
       });
@@ -533,6 +537,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
           timing: { turnSequence, occurredAt },
           abortSignal: abort.signal,
         },
+        expectedRevision: parsed.data.expectedRevision,
         operationType: parsed.data.operation.type,
         operationId: parsed.data.operationId,
         rawInput: parsed.data.operation.input,
@@ -849,7 +854,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
             const authoritative = await storage.loadCareerMap(identity.userId);
             const revision = authoritative.status === 'ready' ? authoritative.map.revision : undefined;
             if (revision !== undefined) response.locals.methodLog = { ...response.locals.methodLog, revision };
-            const displayProjection = await listConversationItems({
+            const displayProjection = await listRecentConversationItems({
               client: conversationClient(),
               conversationId,
               abortSignal: AbortSignal.any([abort.signal, AbortSignal.timeout(5_000)]),

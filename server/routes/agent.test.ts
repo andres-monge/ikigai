@@ -221,6 +221,7 @@ describe('protected Method routes', () => {
       const agent = await request(app).post('/api/agent').send({ id: 'message', message: SENTINEL });
       const operation = await request(app).post('/api/agent/workspace/operations').send({
         operationId: 'operation-disabled-flag', clientMessageId: 'message-disabled-flag',
+        expectedRevision: 1,
         operation: { type: 'confirm-why', input: {} },
       });
       const audio = await request(app).post('/api/agent/audio/transcribe')
@@ -354,6 +355,7 @@ describe('protected Method routes', () => {
       .send({
         operationId: 'operation-1',
         clientMessageId: 'client-message-1',
+        expectedRevision: 1,
         operation: {
           type: 'confirm-why',
           input: {
@@ -383,6 +385,33 @@ describe('protected Method routes', () => {
       operationId: expect.stringMatching(/^op_[a-f0-9]{16}$/),
       revision: 2,
     });
+  });
+
+  it('rejects a stale workspace revision before persisting the operation', async () => {
+    const storage = createStorage();
+    const response = await request(testApp({
+      storage, requireAuth: authenticated, agentEnabled: true,
+      now: () => new Date(timestamp(3)), operationalLog: vi.fn(),
+    })).post('/api/agent/workspace/operations').send({
+      operationId: 'operation-stale-revision',
+      clientMessageId: 'message-stale-revision',
+      expectedRevision: 0,
+      operation: {
+        type: 'confirm-why',
+        input: {
+          whyId: 'why-1', whyRevision: 1,
+          presentedInTurnId: 'prior-assistant-turn', sourceMessageId: 'message-stale-revision',
+        },
+      },
+    });
+
+    expect(response.status).toBe(409);
+    expect(response.body).toMatchObject({
+      status: 'conflict', authoritativeRevision: 1,
+      errorClass: 'revision-conflict', retryable: true,
+    });
+    expect(storage.persistCareerMapOperation).not.toHaveBeenCalled();
+    expect(storage.completeAgentTurn).toHaveBeenCalledOnce();
   });
 
   it('derives a workspace action sequence after the canonical presentation despite clock skew', async () => {
@@ -418,6 +447,7 @@ describe('protected Method routes', () => {
     })).post('/api/agent/workspace/operations').send({
       operationId: 'operation-clock-skew-confirm',
       clientMessageId: 'message-clock-skew-confirm',
+      expectedRevision: skewed.revision,
       operation: {
         type: 'confirm-why',
         input: {
@@ -518,6 +548,7 @@ describe('protected Method routes', () => {
       now: () => new Date(timestamp(3)), operationalLog: vi.fn(),
     })).post('/api/agent/workspace/operations').send({
       operationId: 'operation-completion-race', clientMessageId: 'client-message-1',
+      expectedRevision: 1,
       operation: {
         type: 'confirm-why', input: {
           whyId: 'why-1', whyRevision: 1,
@@ -621,6 +652,7 @@ describe('protected Method routes', () => {
       storage, requireAuth: authenticated, agentEnabled: true, operationalLog: vi.fn(),
     })).post('/api/agent/workspace/operations').send({
       operationId: 'operation-replay', clientMessageId: 'client-message-1',
+      expectedRevision: 1,
       operation: { type: 'confirm-why', input: {} },
     });
 
@@ -651,6 +683,7 @@ describe('protected Method routes', () => {
       storage, requireAuth: authenticated, agentEnabled: true, operationalLog: vi.fn(),
     })).post('/api/agent/workspace/operations').send({
       operationId: 'operation-replay', clientMessageId: 'client-message-1',
+      expectedRevision: 1,
       operation: { type: 'confirm-why', input: {} },
     });
 
@@ -677,6 +710,7 @@ describe('protected Method routes', () => {
       storage, requireAuth: authenticated, agentEnabled: true, operationalLog: vi.fn(),
     })).post('/api/agent/workspace/operations').send({
       operationId: 'operation-replay', clientMessageId: 'client-message-1',
+      expectedRevision: 1,
       operation: { type: 'confirm-why', input: {} },
     });
 
@@ -690,8 +724,8 @@ describe('protected Method routes', () => {
     const conversationClient = {
       listItems: vi.fn(async () => ({
         data: [
-          { id: 'provider-user-item', type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Help me think this through.' }] },
           { id: 'provider-assistant-item', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'A normal reflective response without a write.' }] },
+          { id: 'provider-user-item', type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Help me think this through.' }] },
         ],
         hasMore: false,
       })),
@@ -771,6 +805,13 @@ describe('protected Method routes', () => {
     expect(storage.cancelAgentTurn).not.toHaveBeenCalled();
     expect(storage.failAgentTurn).not.toHaveBeenCalled();
     expect(storage.releaseTurnLease).toHaveBeenCalledOnce();
+    expect(conversationClient.listItems).toHaveBeenCalledOnce();
+    expect(conversationClient.listItems).toHaveBeenCalledWith({
+      conversationId: 'conversation-for-authenticated-owner',
+      limit: 100,
+      order: 'desc',
+      abortSignal: expect.any(AbortSignal),
+    });
     expect(storage.completeAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
       result: expect.objectContaining({
         kind: 'completed',
@@ -1873,6 +1914,7 @@ describe('protected Method routes', () => {
       ? await request(app).post('/api/agent').send({ id: 'client-message-1', message: 'hello' })
       : await request(app).post('/api/agent/workspace/operations').send({
         operationId: 'operation-1', clientMessageId: 'client-message-1',
+        expectedRevision: 1,
         operation: {
           type: 'confirm-why',
           input: {
@@ -1959,6 +2001,7 @@ describe('protected Method routes', () => {
       now: () => new Date(timestamp(3)), operationalLog: (entry) => logs.push(entry),
     })).post('/api/agent/workspace/operations').send({
       operationId: rawOperationId, clientMessageId: 'client-message-1',
+      expectedRevision: 1,
       operation: {
         type: 'confirm-why',
         input: {
@@ -2110,6 +2153,7 @@ describe('protected Method routes', () => {
       now: () => new Date(timestamp(3)), operationalLog: vi.fn(),
     })).post('/api/agent/workspace/operations').send({
       operationId: 'operation-after-foreign-commit', clientMessageId: 'client-message-1',
+      expectedRevision: foreign.map.revision,
       operation: {
         type: 'confirm-why',
         input: {
@@ -2154,6 +2198,7 @@ describe('protected Method routes', () => {
     });
     const body = {
       operationId: 'operation-abort-after-commit', clientMessageId: 'client-message-1',
+      expectedRevision: 1,
       operation: {
         type: 'confirm-why',
         input: {

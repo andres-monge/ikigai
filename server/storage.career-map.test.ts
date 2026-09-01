@@ -1063,6 +1063,7 @@ describe('PostgresStorage lease and client-message turns', () => {
         turn: workspaceTurn,
         timing: { turnSequence: 1, occurredAt: at(1) },
       },
+      expectedRevision: 0,
       operationType: 'append-foundation-evidence',
       operationId: id('u5-operation'),
       rawInput: {
@@ -1099,11 +1100,14 @@ describe('PostgresStorage lease and client-message turns', () => {
       rawInput: unknown,
     ) => {
       const seedTurn = await beginTurn(userId, suffix, 'workspace-action');
+      const current = await storage.loadCareerMap(userId);
+      if (current.status !== 'ready') throw new Error('Expected a ready Career Map before the seed operation.');
       const result = await executeWorkspaceTool({
         runtime: {
           storage, loader: await createMethodModuleLoader(), userId, turn: seedTurn,
           timing: { turnSequence: now.getTime(), occurredAt: at() },
         },
+        expectedRevision: current.map.revision,
         operationType,
         operationId: id(`${suffix}-operation`),
         rawInput,
@@ -1123,11 +1127,14 @@ describe('PostgresStorage lease and client-message turns', () => {
       pointOfView: 'Small decision aids can turn ambiguity into useful evidence.',
     });
     const confirmedWhyTurn = await beginTurn(userId, 'u5-confirm-why', 'workspace-action');
+    const beforeWhyConfirmation = await storage.loadCareerMap(userId);
+    if (beforeWhyConfirmation.status !== 'ready') throw new Error('Expected a ready Career Map before confirming the Why.');
     const confirmedWhy = await executeWorkspaceTool({
       runtime: {
         storage, loader: await createMethodModuleLoader(), userId, turn: confirmedWhyTurn,
         timing: { turnSequence: now.getTime() + 1, occurredAt: at(1) },
       },
+      expectedRevision: beforeWhyConfirmation.map.revision,
       operationType: 'confirm-why',
       operationId: id('u5-confirm-why-operation'),
       rawInput: {
@@ -1355,6 +1362,7 @@ describe('PostgresStorage lease and client-message turns', () => {
           storage, loader, userId, turn: proposedWhyTurn,
           timing: { turnSequence: 1, occurredAt: at(1) },
         },
+        expectedRevision: 0,
         operationType: 'propose-why',
         operationId: id('u5-live-propose-why-operation'),
         rawInput: {
@@ -1670,6 +1678,7 @@ describe('PostgresStorage lease and client-message turns', () => {
           storage, loader, userId, turn: pathsTurn,
           timing: { turnSequence: 3, occurredAt: at(3) },
         },
+        expectedRevision: 2,
         operationType: 'propose-purpose-paths',
         operationId: id('u5-live-propose-paths-operation'),
         rawInput: { setId, setRevision: 1, paths: researchablePaths() },
