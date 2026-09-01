@@ -7,6 +7,7 @@ import {
   pipeUIMessageStreamToResponse,
   toUIMessageStream,
   type LanguageModel,
+  type UIMessageChunk,
 } from 'ai';
 import { z } from 'zod';
 import { env, parseAgentEnabled } from '../env.js';
@@ -21,6 +22,7 @@ import {
 import {
   REVELIO_AGENT_MODEL,
   REVELIO_AGENT_PROVIDER,
+  classifyConsequentialAuthorization,
   classifyMethodTurn,
   createMethodAgent,
   projectMethodStreamForDisplay,
@@ -44,6 +46,8 @@ import {
   executeWorkspaceTool,
   OPERATION_TO_TOOL_NAME,
   workspaceOperationRequestSchema,
+  refreshMethodState,
+  type ConfirmationAuthorization,
   type MethodOperationEnvelope,
 } from '../ai/tools.js';
 
@@ -73,6 +77,39 @@ export interface AgentRouterOptions {
     message: string;
     abortSignal?: AbortSignal;
   }) => Promise<MethodTurnRoute>;
+  authorizeTurn?: (input: {
+    model: LanguageModel;
+    message: string;
+    state: Awaited<ReturnType<typeof refreshMethodState>>;
+    abortSignal?: AbortSignal;
+  }) => Promise<ConfirmationAuthorization | undefined>;
+}
+
+function gateTerminalUIStream(
+  stream: ReadableStream<UIMessageChunk>,
+  beforeTerminal: (terminalType: 'finish' | 'error' | 'abort') => Promise<void>,
+): ReadableStream<UIMessageChunk> {
+  const terminal: UIMessageChunk[] = [];
+  let terminalType: 'finish' | 'error' | 'abort' = 'finish';
+  return stream.pipeThrough(new TransformStream<UIMessageChunk, UIMessageChunk>({
+    transform(chunk, controller) {
+      if (chunk.type === 'finish' || chunk.type === 'error' || chunk.type === 'abort') {
+        terminal.push(chunk);
+        if (chunk.type === 'error' || chunk.type === 'abort') terminalType = chunk.type;
+        return;
+      }
+      controller.enqueue(chunk);
+    },
+    async flush(controller) {
+      await beforeTerminal(terminalType);
+      if (terminalType === 'finish') {
+        for (const chunk of terminal) controller.enqueue(chunk);
+      } else {
+        const matchingTerminal = terminal.find((chunk) => chunk.type === terminalType);
+        if (matchingTerminal) controller.enqueue(matchingTerminal);
+      }
+    },
+  }));
 }
 
 function safeErrorClass(error: unknown): string {
@@ -229,12 +266,17 @@ function throwIfRouteAborted(signal: AbortSignal): void {
     : new DOMException('Request aborted.', 'AbortError');
 }
 
-async function defaultTranscribeAudio(input: { audio: Buffer; language: 'en' | 'es' }): Promise<string> {
+async function defaultTranscribeAudio(input: {
+  audio: Buffer;
+  language: 'en' | 'es';
+  abortSignal?: AbortSignal;
+}): Promise<string> {
   if (!env.GROQ_API_KEY) throw new Error('TranscriptionUnavailable');
   const groq = createGroq({ apiKey: env.GROQ_API_KEY });
   const result = await transcribe({
     model: groq.transcription('whisper-large-v3-turbo'),
     audio: input.audio,
+    abortSignal: input.abortSignal,
     providerOptions: { groq: { language: input.language } },
   });
   return result.text;
@@ -262,18 +304,18 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
     ?? createOpenAIIsolatedResearchProvider(model(), openAI().tools.webSearch({ searchContextSize: 'low' }));
   const reconcileConversationProvisioning = async (userId: string) => {
     if (!enabled(options.agentEnabled)) return;
-    const pending = await storage.listPendingConversationProvisioning(userId);
-    const mappedConversationId = await storage.getConversationMapping(userId);
-    for (const marker of pending) {
+    while (true) {
+      const claim = await storage.claimConversationProvisioningCleanup(userId, nextId());
+      if (!claim) return;
       try {
-        if (mappedConversationId !== marker.conversationId) {
-          if (!conversationClient().deleteConversation) return;
-          await conversationClient().deleteConversation!(marker.conversationId, AbortSignal.timeout(5_000));
-        }
-        await storage.resolveConversationProvisioning(marker);
+        if (!conversationClient().deleteConversation) throw new Error('ConversationCleanupUnavailable');
+        await conversationClient().deleteConversation!(claim.conversationId, AbortSignal.timeout(5_000));
+        await storage.completeConversationProvisioningCleanup(claim);
       } catch {
         // The server-only marker remains durable for a later reconciliation or
         // full Method erasure. Provider ids never enter logs or client payloads.
+        await storage.releaseConversationProvisioningCleanup(claim).catch(() => undefined);
+        return;
       }
     }
   };
@@ -406,7 +448,6 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
         response.status(409).json({ status: map.status });
         return;
       }
-      startingRevision = map.map.revision;
       throwIfRouteAborted(abort.signal);
       const begun = await storage.beginWorkspaceActionTurn({
         userId: identity.userId,
@@ -420,6 +461,9 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
         return;
       }
       turn = begun.turn;
+      const leasedState = await storage.loadCareerMap(identity.userId);
+      if (leasedState.status !== 'ready') throw new Error('CareerMapUnavailableAfterLease');
+      startingRevision = leasedState.map.revision;
       const envelope = await executeWorkspaceTool({
         runtime: {
           storage,
@@ -524,6 +568,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
       return;
     }
     let turn: AgentTurnRecord | undefined;
+    let leaseFinalized = false;
     let startingRevision: number | undefined;
     let safeAssistantText = '';
     const cancelWithCanonicalRecovery = async () => {
@@ -555,7 +600,6 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
         response.status(409).json({ status: map.status });
         return;
       }
-      startingRevision = map.map.revision;
       throwIfRouteAborted(abort.signal);
       const begun = await storage.beginAgentTurn({
         userId: identity.userId,
@@ -569,13 +613,19 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
         return;
       }
       turn = begun.turn;
+      const leasedState = await storage.loadCareerMap(identity.userId);
+      if (leasedState.status !== 'ready') throw new Error('CareerMapUnavailableAfterLease');
+      startingRevision = leasedState.map.revision;
       throwIfRouteAborted(abort.signal);
       await reconcileConversationProvisioning(identity.userId);
       let conversationId = await storage.getConversationMapping(identity.userId);
       if (!conversationId) {
         if (!conversationClient().createConversation) throw new Error('ConversationProvisioningUnavailable');
         throwIfRouteAborted(abort.signal);
-        const provisioningSignal = AbortSignal.any([abort.signal, AbortSignal.timeout(5_000)]);
+        // A client disconnect must not discard a provider id created just
+        // before the request signal fires. Complete this bounded call to an id,
+        // persist its cleanup identity, then compensate if the request stopped.
+        const provisioningSignal = AbortSignal.timeout(5_000);
         const createdConversationId = await conversationClient().createConversation!(provisioningSignal);
         const provisioningMarker = {
           userId: identity.userId,
@@ -605,11 +655,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
           });
           throw markerError;
         }
-        try {
-          await storage.setConversationMapping(identity.userId, turn.leaseId, createdConversationId);
-          conversationId = createdConversationId;
-        } catch (bindingError) {
-          let cleanupRequired = true;
+        if (abort.signal.aborted) {
           try {
             if (!conversationClient().deleteConversation) throw new Error('ConversationCleanupUnavailable');
             await conversationClient().deleteConversation!(createdConversationId, AbortSignal.timeout(5_000));
@@ -618,14 +664,24 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
               turnId: turn.turnId,
               conversationId: createdConversationId,
             });
-            cleanupRequired = false;
           } catch {
-            cleanupRequired = true;
+            // The durable marker is retained. Once cancellation terminalizes
+            // this turn, owner-locked reconciliation may safely claim it.
           }
+          throwIfRouteAborted(abort.signal);
+        }
+        try {
+          await storage.setConversationMapping(identity.userId, turn.leaseId, createdConversationId);
+          conversationId = createdConversationId;
+        } catch (bindingError) {
+          // Binding errors are acknowledgement-ambiguous: the transaction may
+          // have committed before the driver threw. Never delete here. Keep the
+          // durable marker so owner-locked reconciliation can inspect mapping
+          // and lease state after this turn terminalizes.
           options.conversationCleanupSignal?.({
             type: 'conversation_provisioning_compensated',
             conversationToken: `conv_${createHash('sha256').update(createdConversationId).digest('hex').slice(0, 16)}`,
-            cleanupRequired,
+            cleanupRequired: true,
             errorClass: safeErrorClass(bindingError),
           });
           throw bindingError;
@@ -649,15 +705,26 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
         now,
       });
       let streamError: unknown;
-      const turnRoute = await (options.classifyTurn ?? classifyMethodTurn)({
-        model: model(),
-        message: parsed.data.message,
-        abortSignal: abort.signal,
-      });
+      const loader = await loaderPromise;
+      const authorizationState = await refreshMethodState(storage, loader, identity.userId);
+      const [classifiedRoute, confirmationAuthorization] = await Promise.all([
+        (options.classifyTurn ?? classifyMethodTurn)({
+          model: model(),
+          message: parsed.data.message,
+          abortSignal: abort.signal,
+        }),
+        (options.authorizeTurn ?? classifyConsequentialAuthorization)({
+          model: model(),
+          message: parsed.data.message,
+          state: authorizationState,
+          abortSignal: abort.signal,
+        }),
+      ]);
+      const turnRoute: MethodTurnRoute = confirmationAuthorization ? 'method' : classifiedRoute;
       const agent = createMethodAgent({
         model: model(),
         storage,
-        loader: await loaderPromise,
+        loader,
         userId: identity.userId,
         conversationId,
         turn,
@@ -666,6 +733,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
         research,
         currentMessage: parsed.data.message,
         turnRoute,
+        confirmationAuthorization,
         abortSignal: abort.signal,
         onError: (error) => {
           streamError = error;
@@ -685,9 +753,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
         streamNaturalText: turnRoute === 'conversation',
         onTextDelta: (text) => { safeAssistantText += text; },
       });
-      await pipeUIMessageStreamToResponse({
-        response,
-        stream: toUIMessageStream({
+      const uiStream = toUIMessageStream({
           stream: displayStream,
           sendReasoning: false,
           sendSources: false,
@@ -696,44 +762,92 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
             response.locals.methodLog = { ...response.locals.methodLog, errorClass: safeErrorClass(error) };
             return 'The agent request failed.';
           },
-        }),
-      });
-      if (streamError) throw streamError;
-      if (abort.signal.aborted) {
-        await cancelWithCanonicalRecovery();
-      } else {
-        const authoritative = await storage.loadCareerMap(identity.userId);
-        const revision = authoritative.status === 'ready' ? authoritative.map.revision : undefined;
-        if (revision !== undefined) response.locals.methodLog = { ...response.locals.methodLog, revision };
-        const displayProjection = await listConversationItems({
-          client: conversationClient(),
-          conversationId,
-          abortSignal: AbortSignal.timeout(5_000),
-        }).then((items) => resolveDisplayProjection(items, parsed.data.message, safeAssistantText))
-          .catch(() => undefined);
-        const completed = await storage.completeAgentTurn({
-          userId: identity.userId,
-          turnId: turn.turnId,
-          leaseId: turn.leaseId,
-          result: {
-            kind: 'completed', refetch: true,
-            ...(revision !== undefined ? { revision } : {}),
-            ...(displayProjection
-              ? { displayProjection }
-              : { displayRecovery: createDisplayRecovery(parsed.data.message, safeAssistantText, false) }),
-          },
         });
-        if (!completed || completed.status !== 'completed') {
-          response.locals.methodLog = {
-            ...response.locals.methodLog,
-            errorClass: completed?.status === 'failed' && typeof completed.terminalResult?.errorClass === 'string'
-              ? completed.terminalResult.errorClass
-              : 'TurnLeaseLostError',
-          };
+      const terminalGatedStream = gateTerminalUIStream(uiStream, async (terminalType) => {
+        let terminalFailure: unknown;
+        try {
+          if (streamError || terminalType === 'error') {
+            terminalFailure = streamError ?? new Error('The provider stream failed.');
+          } else if (abort.signal.aborted || terminalType === 'abort') {
+            const cancelled = await cancelWithCanonicalRecovery();
+            if (!cancelled || cancelled.status !== 'cancelled') {
+              const cancellationError = new Error('The turn could not be durably cancelled.');
+              cancellationError.name = 'TurnLeaseLostError';
+              terminalFailure = cancellationError;
+            }
+          } else {
+            const authoritative = await storage.loadCareerMap(identity.userId);
+            const revision = authoritative.status === 'ready' ? authoritative.map.revision : undefined;
+            if (revision !== undefined) response.locals.methodLog = { ...response.locals.methodLog, revision };
+            const displayProjection = await listConversationItems({
+              client: conversationClient(),
+              conversationId,
+              abortSignal: AbortSignal.any([abort.signal, AbortSignal.timeout(5_000)]),
+            }).then((items) => resolveDisplayProjection(items, parsed.data.message, safeAssistantText))
+              .catch(() => undefined);
+            if (abort.signal.aborted) {
+              const cancelled = await cancelWithCanonicalRecovery();
+              if (!cancelled || cancelled.status !== 'cancelled') {
+                const cancellationError = new Error('The turn could not be durably cancelled.');
+                cancellationError.name = 'TurnLeaseLostError';
+                terminalFailure = cancellationError;
+              }
+            } else {
+              const completed = await storage.completeAgentTurn({
+                userId: identity.userId,
+                turnId: turn!.turnId,
+                leaseId: turn!.leaseId,
+                result: {
+                  kind: 'completed', refetch: true,
+                  ...(revision !== undefined ? { revision } : {}),
+                  ...(displayProjection
+                    ? { displayProjection }
+                    : { displayRecovery: createDisplayRecovery(parsed.data.message, safeAssistantText, false) }),
+                },
+              });
+              if (!completed || completed.status !== 'completed') {
+                const terminalError = new Error('The turn could not be durably completed.');
+                terminalError.name = completed?.status === 'failed'
+                  && typeof completed.terminalResult?.errorClass === 'string'
+                  ? completed.terminalResult.errorClass
+                  : 'TurnLeaseLostError';
+                terminalFailure = terminalError;
+              }
+            }
+          }
+        } catch (error) {
+          terminalFailure = error;
         }
-      }
+        let terminalFailureClass: string | undefined;
+        try {
+          if (terminalFailure) {
+            const errorClass = safeErrorClass(terminalFailure);
+            terminalFailureClass = errorClass;
+            response.locals.methodLog = { ...response.locals.methodLog, errorClass };
+            const failed = await storage.failAgentTurn({
+              userId: identity.userId,
+              turnId: turn!.turnId,
+              leaseId: turn!.leaseId,
+              errorClass,
+            });
+            if (!failed || failed.status === 'pending') terminalFailureClass = 'TurnLeaseLostError';
+          }
+        } finally {
+          await storage.releaseTurnLease(identity.userId, turn!.turnId, turn!.leaseId).catch(() => false);
+          leaseFinalized = true;
+        }
+        if (terminalFailureClass) {
+          const sanitized = new Error('The agent turn failed before the terminal response boundary.');
+          sanitized.name = terminalFailureClass;
+          throw sanitized;
+        }
+      });
+      await pipeUIMessageStreamToResponse({
+        response,
+        stream: terminalGatedStream,
+      });
     } catch (error) {
-      if (turn) {
+      if (turn && !leaseFinalized) {
         if (abort.signal.aborted) {
           await cancelWithCanonicalRecovery().catch(() => undefined);
         } else {
@@ -752,7 +866,9 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
       }
     } finally {
       abort.detach();
-      if (turn) await storage.releaseTurnLease(identity.userId, turn.turnId, turn.leaseId).catch(() => undefined);
+      if (turn && !leaseFinalized) {
+        await storage.releaseTurnLease(identity.userId, turn.turnId, turn.leaseId).catch(() => undefined);
+      }
     }
   });
 

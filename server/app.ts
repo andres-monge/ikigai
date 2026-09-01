@@ -168,15 +168,15 @@ export function createApp(): Express {
   // Must be registered after routes. Uses defensive type checking for serverless safety.
   app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
     const isProtectedMethodRoute = req.path === '/api/agent' || req.path.startsWith('/api/agent/');
+    const protectedErrorName = err instanceof Error
+      && new Set(['PayloadTooLargeError', 'SyntaxError', 'TypeError']).has(err.name)
+      ? err.name
+      : 'Error';
     if (isProtectedMethodRoute) {
       const requestId = typeof res.getHeader('x-request-id') === 'string'
         ? String(res.getHeader('x-request-id'))
         : randomUUID();
       res.setHeader('x-request-id', requestId);
-      const protectedErrorName = err instanceof Error
-        && new Set(['PayloadTooLargeError', 'SyntaxError', 'TypeError']).has(err.name)
-        ? err.name
-        : 'Error';
       console.error('Protected Method request failed', {
         requestId,
         route: req.path,
@@ -205,7 +205,10 @@ export function createApp(): Express {
         ? err.message
         : "Internal Server Error";
 
-    res.status(status).json({ error: message });
+    res.status(status).json({
+      error: message,
+      ...(isProtectedMethodRoute ? { errorClass: protectedErrorName } : {}),
+    });
   });
 
   return app;

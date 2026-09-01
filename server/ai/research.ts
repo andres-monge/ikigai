@@ -5,20 +5,39 @@ import type { ResearchAttempt, SourceProvenance } from '../../shared/career-map/
 import type { IStorage } from '../storage.js';
 import type { MethodResearchSession, ResearchSourceReference } from './tools.js';
 
-const researchTargetSchema = z.object({
-  kind: z.enum(['purpose-path-set', 'path-project']),
+const researchTargetFields = {
   id: z.string().min(1).max(160),
   revision: z.number().int().positive(),
+};
+
+const purposePathSetTargetSchema = z.object({
+  kind: z.literal('purpose-path-set'),
+  ...researchTargetFields,
 }).strict();
+
+const exactPurposePathTargetSchema = purposePathSetTargetSchema.extend({
+  pathId: z.string().min(1).max(160),
+  pathRevision: z.number().int().positive(),
+}).strict();
+
+const pathProjectTargetSchema = z.object({
+  kind: z.literal('path-project'),
+  ...researchTargetFields,
+}).strict();
+
+const researchTargetSchema = z.discriminatedUnion('kind', [
+  purposePathSetTargetSchema,
+  pathProjectTargetSchema,
+]);
 export const researchIntentSchema = z.discriminatedUnion('category', [
   z.object({
     category: z.literal('path-reality'),
-    target: researchTargetSchema.extend({ kind: z.literal('purpose-path-set') }),
+    target: exactPurposePathTargetSchema,
     dimension: z.enum(['day-to-day-work', 'entry-paths', 'skill-patterns', 'market-patterns']),
   }).strict(),
   z.object({
     category: z.literal('project-grounding'),
-    target: researchTargetSchema.extend({ kind: z.literal('path-project') }),
+    target: pathProjectTargetSchema,
     dimension: z.enum(['small-project-patterns', 'public-artifact-patterns', 'feedback-patterns']),
   }).strict(),
   z.object({
@@ -34,6 +53,7 @@ export const researchIntentSchema = z.discriminatedUnion('category', [
 ]);
 
 export type ResearchIntent = z.infer<typeof researchIntentSchema>;
+export type ResearchTarget = ResearchIntent['target'];
 
 const providerCandidateSchema = z.object({
   fact: z.string().min(3).max(2_000),
@@ -202,6 +222,7 @@ export interface ResearchCandidateFact {
   canonicalField: string;
   sourceHandle: string;
   support: 'server-validated' | 'cited-provenance';
+  target: ResearchTarget;
 }
 
 export interface ResearchSessionOptions {
@@ -280,6 +301,16 @@ const PUBLIC_ACTIVITY_TAXONOMY: ReadonlyArray<{
   ['practica civica y comunitaria', 'civico publico comunidad comunidades vecindario politica social local'],
 ].map(([label, terms]) => ({ label, terms: new Set(terms.split(' ')) }));
 
+const PUBLIC_ACTIVITY_SPECIALTIES: ReadonlyArray<{
+  label: string;
+  terms: ReadonlySet<string>;
+}> = [
+  ['software engineering practice', ['software', 'engineering']],
+  ['web development practice', ['web', 'development']],
+  ['data analysis practice', ['data', 'analysis']],
+  ['product design practice', ['product', 'design']],
+].map(([label, terms]) => ({ label: label as string, terms: new Set(terms as string[]) }));
+
 function normalizedPublicToken(value: string): string {
   return value.normalize('NFKD').replace(/\p{Diacritic}/gu, '').toLowerCase();
 }
@@ -288,16 +319,29 @@ function publicActivityCategories(values: readonly string[]): string[] {
   const tokens = new Set(values.flatMap((value) => (
     value.match(/\p{L}+/gu) ?? []
   )).map(normalizedPublicToken));
-  return PUBLIC_ACTIVITY_TAXONOMY
+  const broad = PUBLIC_ACTIVITY_TAXONOMY
     .filter((category) => [...category.terms].some((term) => tokens.has(term)))
     .map((category) => category.label);
+  const specialties = PUBLIC_ACTIVITY_SPECIALTIES
+    .filter((specialty) => [...specialty.terms].every((term) => tokens.has(term)))
+    .map((specialty) => specialty.label);
+  return [...new Set([...broad, ...specialties])];
+}
+
+function canonicalTargetKey(target: ResearchTarget): string {
+  return target.kind === 'purpose-path-set' && 'pathId' in target
+    ? JSON.stringify(['purpose-path', target.id, target.revision, target.pathId, target.pathRevision])
+    : JSON.stringify([target.kind, target.id, target.revision]);
 }
 
 function buildQuery(intent: ResearchIntent, descriptors: readonly string[]): string {
   const dimension = intent.dimension.replaceAll('-', ' ');
   const categories = publicActivityCategories(descriptors);
   if (categories.length === 0) throw new ResearchPrivacyError('insufficient-public-descriptor');
-  return `Research public professional patterns for these server-derived public activity categories: ${categories.join('; ')}. Focus on the ${dimension} dimension. Use public professional sources only.`;
+  const exactCandidate = intent.category === 'path-reality'
+    ? ` Keep the exact candidate isolated under server reference path_${createHash('sha256').update(canonicalTargetKey(intent.target)).digest('hex').slice(0, 12)}.`
+    : '';
+  return `Research public professional patterns for these server-derived public activity categories: ${categories.join('; ')}. Focus on the ${dimension} dimension.${exactCandidate} Use public professional sources only.`;
 }
 
 function canonicalFieldFor(intent: ResearchIntent): string {
@@ -319,15 +363,30 @@ function canonicalFieldFor(intent: ResearchIntent): string {
 export class ResearchSession implements MethodResearchSession {
   private readonly now: () => Date;
   private readonly turnSecret = randomUUID();
-  private readonly handles = new Map<string, { claim: string; field: string; source: SourceProvenance }>();
+  private readonly handles = new Map<string, {
+    claim: string;
+    field: string;
+    target: ResearchTarget;
+    targetKey: string;
+    source: SourceProvenance;
+  }>();
 
   constructor(private readonly options: ResearchSessionOptions) {
     this.now = options.now ?? (() => new Date());
   }
 
-  private handleFor(providerResultId: string | undefined, url: string, fact: string): string {
+  private targetKey(target: ResearchTarget): string {
+    return canonicalTargetKey(target);
+  }
+
+  private handleFor(
+    providerResultId: string | undefined,
+    url: string,
+    fact: string,
+    target: ResearchTarget,
+  ): string {
     return `src_${createHash('sha256')
-      .update(`${this.turnSecret}\u0000${providerResultId ?? ''}\u0000${url}\u0000${fact}`)
+      .update(`${this.turnSecret}\u0000${this.targetKey(target)}\u0000${providerResultId ?? ''}\u0000${url}\u0000${fact}`)
       .digest('hex')
       .slice(0, 24)}`;
   }
@@ -335,6 +394,22 @@ export class ResearchSession implements MethodResearchSession {
   private async resolvePublicTarget(intent: ResearchIntent): Promise<string[]> {
     const loaded = await this.options.storage.loadCareerMap(this.options.userId);
     if (loaded.status !== 'ready') throw new ResearchTargetMismatchError();
+    if (intent.category === 'path-reality') {
+      const set = loaded.map.pathSets.find((candidate) => (
+        candidate.id === intent.target.id
+        && candidate.revision === intent.target.revision
+        && candidate.status === 'suggested'
+      ));
+      if (!set) throw new ResearchTargetMismatchError();
+      const path = set.paths.find((candidate) => (
+        candidate.id === intent.target.pathId
+        && candidate.revision === intent.target.pathRevision
+      ));
+      if (!path) throw new ResearchTargetMismatchError();
+      // These are proposal-facing, server-generated public descriptors. Private
+      // Foundation, fit, unknown, and reflection fields are intentionally absent.
+      return [path.name, path.possibility, path.projectPreview];
+    }
     if (intent.target.kind === 'purpose-path-set') {
       const set = loaded.map.pathSets.find((candidate) => (
         candidate.id === intent.target.id
@@ -342,8 +417,9 @@ export class ResearchSession implements MethodResearchSession {
         && candidate.status === 'suggested'
       ));
       if (!set) throw new ResearchTargetMismatchError();
-      // These are proposal-facing, server-generated public descriptors. Private
-      // Foundation, fit, unknown, and reflection fields are intentionally absent.
+      // Peer and Side Door discovery may still apply to the complete pending
+      // set. It crosses the isolation boundary only through the same bounded,
+      // lossy public taxonomy used for exact-path research.
       return set.paths.flatMap((path) => [path.name, path.possibility, path.projectPreview]);
     }
     const project = loaded.map.projects.find((candidate) => (
@@ -391,7 +467,12 @@ export class ResearchSession implements MethodResearchSession {
           && !contentIsUntrustedInstruction
           && supportingContent.trim() === parsed.data.fact.trim(),
         );
-        const sourceHandle = this.handleFor(parsed.data.providerResultId, parsed.data.url, parsed.data.fact);
+        const sourceHandle = this.handleFor(
+          parsed.data.providerResultId,
+          parsed.data.url,
+          parsed.data.fact,
+          intent.target,
+        );
         if (this.handles.has(sourceHandle)) continue;
         const source: SourceProvenance = serverValidated
           ? {
@@ -414,9 +495,21 @@ export class ResearchSession implements MethodResearchSession {
               ...(supportingContent ? { excerpt: supportingContent } : {}),
               support: 'cited-provenance',
             };
-        this.handles.set(sourceHandle, { claim: parsed.data.fact, field: canonicalField, source });
+        this.handles.set(sourceHandle, {
+          claim: parsed.data.fact,
+          field: canonicalField,
+          target: intent.target,
+          targetKey: this.targetKey(intent.target),
+          source,
+        });
         sources.push(source);
-        candidates.push({ fact: parsed.data.fact, canonicalField, sourceHandle, support: source.support });
+        candidates.push({
+          fact: parsed.data.fact,
+          canonicalField,
+          sourceHandle,
+          support: source.support,
+          target: intent.target,
+        });
       }
 
       const status = candidates.length > 0 ? 'succeeded' as const : 'insufficient' as const;
@@ -444,13 +537,24 @@ export class ResearchSession implements MethodResearchSession {
     }
   }
 
-  resolveSources(references: readonly ResearchSourceReference[]): SourceProvenance[] {
+  resolveSources(
+    references: readonly ResearchSourceReference[],
+    expectedTarget?: ResearchTarget,
+  ): SourceProvenance[] {
     if (new Set(references.map((reference) => reference.handle)).size !== references.length) {
       throw new ResearchHandleError();
     }
     return references.map((reference) => {
       const resolved = this.handles.get(reference.handle);
-      if (!resolved || resolved.claim !== reference.claim || resolved.field !== reference.field) {
+      const requiresExactPathTarget = resolved?.target.kind === 'purpose-path-set'
+        && 'pathId' in resolved.target;
+      if (
+        !resolved
+        || resolved.claim !== reference.claim
+        || resolved.field !== reference.field
+        || (requiresExactPathTarget && !expectedTarget)
+        || (expectedTarget && resolved.targetKey !== this.targetKey(expectedTarget))
+      ) {
         throw new ResearchHandleError();
       }
       return resolved.source;

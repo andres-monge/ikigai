@@ -14,6 +14,16 @@ import {
 const pathTarget = { kind: 'purpose-path-set' as const, id: 'paths-suggested-1', revision: 1 };
 const alternatePathTarget = { kind: 'purpose-path-set' as const, id: 'paths-suggested-2', revision: 1 };
 const projectTarget = { kind: 'path-project' as const, id: 'project-suggested-1', revision: 1 };
+const firstPathRealityTarget = {
+  ...pathTarget,
+  pathId: `${pathTarget.id}-path-1`,
+  pathRevision: 1,
+};
+const secondPathRealityTarget = {
+  ...pathTarget,
+  pathId: `${pathTarget.id}-path-2`,
+  pathRevision: 1,
+};
 
 const privateSentinels = {
   name: 'PRIVATE-NAME-Jane-Doe',
@@ -212,43 +222,51 @@ describe('isolated Method research', () => {
     expect(JSON.stringify(result)).not.toContain('supportingContent');
   });
 
-  it('derives distinct bounded public queries from the exact current Suggested path and project targets', async () => {
+  it('derives each bounded public query from only the exact path revision in the pending Suggested set', async () => {
     const firstPath = harness([], researchMap({ path: pathTarget }));
-    const alternatePath = harness([], researchMap({ path: alternatePathTarget }));
+    const secondPath = harness([], researchMap({ path: pathTarget }));
     const project = harness([], researchMap({ path: pathTarget }));
 
     await firstPath.session.research({
-      category: 'path-reality', target: pathTarget, dimension: 'market-patterns',
+      category: 'path-reality', target: firstPathRealityTarget, dimension: 'market-patterns',
     });
-    await alternatePath.session.research({
-      category: 'path-reality', target: alternatePathTarget, dimension: 'market-patterns',
+    await secondPath.session.research({
+      category: 'path-reality', target: secondPathRealityTarget, dimension: 'market-patterns',
     });
     await project.session.research({
       category: 'project-grounding', target: projectTarget, dimension: 'small-project-patterns',
     });
 
     const firstPathRequest = firstPath.provider.search.mock.calls[0][0];
-    const alternatePathRequest = alternatePath.provider.search.mock.calls[0][0];
+    const secondPathRequest = secondPath.provider.search.mock.calls[0][0];
     const projectRequest = project.provider.search.mock.calls[0][0];
-    const queries = [firstPathRequest.query, alternatePathRequest.query, projectRequest.query];
+    const queries = [firstPathRequest.query, secondPathRequest.query, projectRequest.query];
 
     expect.soft(firstPath.storage.loadCareerMap).toHaveBeenCalledWith('explorer-1');
-    expect.soft(alternatePath.storage.loadCareerMap).toHaveBeenCalledWith('explorer-1');
+    expect.soft(secondPath.storage.loadCareerMap).toHaveBeenCalledWith('explorer-1');
     expect.soft(project.storage.loadCareerMap).toHaveBeenCalledWith('explorer-1');
     expect.soft(new Set(queries).size).toBe(3);
     expect.soft(firstPathRequest.query).toContain('decision-support work');
-    expect.soft(firstPathRequest.query).toContain('research and knowledge work');
-    expect.soft(alternatePathRequest.query).toContain('learning and facilitation work');
-    expect.soft(alternatePathRequest.query).toContain('publishing and communication work');
+    expect.soft(firstPathRequest.query).toContain('design and prototyping work');
+    expect.soft(firstPathRequest.query).not.toContain('research and knowledge work');
+    expect.soft(firstPathRequest.query).not.toContain('learning and facilitation work');
+    expect.soft(firstPathRequest.query).not.toContain('publishing and communication work');
+    expect.soft(secondPathRequest.query).toContain('research and knowledge work');
+    expect.soft(secondPathRequest.query).toContain('learning and facilitation work');
+    expect.soft(secondPathRequest.query).not.toContain('decision-support work');
+    expect.soft(secondPathRequest.query).not.toContain('design and prototyping work');
+    expect.soft(secondPathRequest.query).not.toContain('publishing and communication work');
     expect.soft(projectRequest.query).toContain('design and prototyping work');
     expect.soft(projectRequest.query).toContain('civic and community practice');
 
-    for (const request of [firstPathRequest, alternatePathRequest, projectRequest]) {
+    for (const request of [firstPathRequest, secondPathRequest, projectRequest]) {
       expect.soft(Object.keys(request).sort()).toEqual(['abortSignal', 'category', 'query']);
       expect.soft(request.query.length).toBeLessThanOrEqual(1_200);
       expect.soft(request.query).not.toContain(pathTarget.id);
       expect.soft(request.query).not.toContain(alternatePathTarget.id);
       expect.soft(request.query).not.toContain(projectTarget.id);
+      expect.soft(request.query).not.toContain(firstPathRealityTarget.pathId);
+      expect.soft(request.query).not.toContain(secondPathRealityTarget.pathId);
       const serializedRequest = JSON.stringify(request);
       for (const sentinel of Object.values(privateSentinels)) {
         expect.soft(serializedRequest).not.toContain(sentinel);
@@ -257,9 +275,10 @@ describe('isolated Method research', () => {
   });
 
   it('positively filters every proposal-facing descriptor before isolated provider work', async () => {
+    const rawProposalSentinel = 'RAW-PROPOSAL-explorer-authored-private-draft';
     const map = researchMap();
     const pathSet = map.pathSets.find((candidate) => candidate.id === pathTarget.id)!;
-    pathSet.paths[0]!.name = `Community Decision Aid Design ${privateSentinels.name} María García`;
+    pathSet.paths[0]!.name = `Community Decision Aid Design ${rawProposalSentinel} ${privateSentinels.name} María García`;
     pathSet.paths[0]!.possibility = `Public teams ${privateSentinels.health} hipertensión`;
     pathSet.paths[0]!.projectPreview = `Prototype guide ${privateSentinels.income} 91.731 €`;
     pathSet.paths[1]!.name = `Civic Research ${privateSentinels.location} Calle Alcalá 42`;
@@ -271,7 +290,7 @@ describe('isolated Method research', () => {
 
     const pathHarness = harness([], map);
     await pathHarness.session.research({
-      category: 'path-reality', target: pathTarget, dimension: 'market-patterns',
+      category: 'path-reality', target: firstPathRealityTarget, dimension: 'market-patterns',
     });
     const projectHarness = harness([], map);
     await projectHarness.session.research({
@@ -284,8 +303,11 @@ describe('isolated Method research', () => {
     ]);
     expect(serialized).toContain('decision-support work');
     expect(serialized).toContain('design and prototyping work');
+    expect(pathHarness.provider.search.mock.calls[0]?.[0]?.query).not.toContain('research and knowledge work');
+    expect(pathHarness.provider.search.mock.calls[0]?.[0]?.query).not.toContain('publishing and communication work');
     for (const tainted of [
       ...Object.values(privateSentinels),
+      rawProposalSentinel,
       'María García', 'hipertensión', '91.731', 'Calle Alcalá 42',
       'cuida de dos dependientes', 'reflexión privada', 'José Núñez',
     ]) {
@@ -311,7 +333,7 @@ describe('isolated Method research', () => {
 
     for (const candidate of [marine, software, maintenance, echoedReflection]) {
       await candidate.session.research({
-        category: 'path-reality', target: pathTarget, dimension: 'market-patterns',
+        category: 'path-reality', target: firstPathRealityTarget, dimension: 'market-patterns',
       });
     }
     const queries = [marine, software, maintenance, echoedReflection]
@@ -327,21 +349,72 @@ describe('isolated Method research', () => {
     );
   });
 
+  it('derives distinct bounded public queries for two exact paths in the same broad taxonomy', async () => {
+    const map = researchMap();
+    const set = map.pathSets.find((candidate) => candidate.id === pathTarget.id)!;
+    Object.assign(set.paths[0]!, {
+      name: 'Software engineering',
+      possibility: 'Digital software systems',
+      projectPreview: 'Build a software prototype',
+    });
+    Object.assign(set.paths[1]!, {
+      name: 'Web development',
+      possibility: 'Digital web products',
+      projectPreview: 'Build a web prototype',
+    });
+    const first = harness([], map);
+    const second = harness([], map);
+
+    await first.session.research({
+      category: 'path-reality', target: firstPathRealityTarget, dimension: 'market-patterns',
+    });
+    await second.session.research({
+      category: 'path-reality', target: secondPathRealityTarget, dimension: 'market-patterns',
+    });
+
+    const firstQuery = first.provider.search.mock.calls[0]?.[0]?.query as string;
+    const secondQuery = second.provider.search.mock.calls[0]?.[0]?.query as string;
+    expect(firstQuery).toContain('software engineering practice');
+    expect(secondQuery).toContain('web development practice');
+    expect(firstQuery).not.toBe(secondQuery);
+    expect(firstQuery).not.toContain('Software engineering');
+    expect(secondQuery).not.toContain('Web development');
+  });
+
   it.each([
     {
       label: 'unresolved path set',
-      input: { category: 'path-reality', target: { ...pathTarget, id: 'paths-missing' }, dimension: 'market-patterns' },
+      input: { category: 'path-reality', target: { ...firstPathRealityTarget, id: 'paths-missing' }, dimension: 'market-patterns' },
       map: researchMap(),
     },
     {
       label: 'stale path-set revision',
-      input: { category: 'path-reality', target: { ...pathTarget, revision: 2 }, dimension: 'market-patterns' },
+      input: { category: 'path-reality', target: { ...firstPathRealityTarget, revision: 2 }, dimension: 'market-patterns' },
       map: researchMap(),
     },
     {
       label: 'non-Suggested path set',
-      input: { category: 'path-reality', target: pathTarget, dimension: 'market-patterns' },
+      input: { category: 'path-reality', target: firstPathRealityTarget, dimension: 'market-patterns' },
       map: researchMap({ pathStatus: 'superseded' }),
+    },
+    {
+      label: 'unresolved path in the Suggested set',
+      input: { category: 'path-reality', target: { ...firstPathRealityTarget, pathId: 'path-missing' }, dimension: 'market-patterns' },
+      map: researchMap(),
+    },
+    {
+      label: 'stale path revision',
+      input: { category: 'path-reality', target: { ...firstPathRealityTarget, pathRevision: 2 }, dimension: 'market-patterns' },
+      map: researchMap(),
+    },
+    {
+      label: 'path from a mismatched set',
+      input: {
+        category: 'path-reality',
+        target: { ...firstPathRealityTarget, pathId: `${alternatePathTarget.id}-path-1` },
+        dimension: 'market-patterns',
+      },
+      map: researchMap(),
     },
     {
       label: 'unresolved project',
@@ -414,14 +487,27 @@ describe('isolated Method research', () => {
       supportingContent: fact,
       supportingContentExact: true,
     }]);
-    const result = await session.research({ category: 'path-reality', target: pathTarget, dimension: 'day-to-day-work' });
+    const result = await session.research({
+      category: 'path-reality', target: firstPathRealityTarget, dimension: 'day-to-day-work',
+    });
     const handle = result.candidates[0].sourceHandle;
 
-    expect(session.resolveSources([{ handle, field: 'practicalFit', claim: fact }])[0]).toMatchObject({
+    expect(result.candidates[0].target).toEqual(firstPathRealityTarget);
+    expect(session.resolveSources(
+      [{ handle, field: 'practicalFit', claim: fact }],
+      firstPathRealityTarget,
+    )[0]).toMatchObject({
       kind: 'cited-research',
       providerResultId: 'provider-result-1',
       support: 'server-validated',
     });
+    expect(() => session.resolveSources(
+      [{ handle, field: 'practicalFit', claim: fact }],
+      secondPathRealityTarget,
+    )).toThrow(ResearchHandleError);
+    expect(() => session.resolveSources([
+      { handle, field: 'practicalFit', claim: fact },
+    ])).toThrow(ResearchHandleError);
     expect(() => session.resolveSources([{ handle: 'src_invented', field: 'practicalFit', claim: fact }])).toThrow(ResearchHandleError);
     expect(() => session.resolveSources([{ handle, field: 'practicalFit', claim: 'Different claim' }])).toThrow(ResearchHandleError);
     expect(() => session.resolveSources([{ handle, field: 'evidence', claim: fact }])).toThrow(ResearchHandleError);
@@ -433,6 +519,44 @@ describe('isolated Method research', () => {
     expect(() => nextTurn.resolveSources([{ handle, field: 'practicalFit', claim: fact }])).toThrow(ResearchHandleError);
   });
 
+  it('uses collision-free exact target tuples when ids contain delimiters', async () => {
+    const map = researchMap();
+    const firstSet = structuredClone(map.pathSets[0]!);
+    firstSet.id = 'set';
+    firstSet.revision = 1;
+    firstSet.paths[0]!.id = 'x:2:path';
+    firstSet.paths[0]!.revision = 3;
+    const secondSet = structuredClone(map.pathSets[0]!);
+    secondSet.id = 'set:1:x';
+    secondSet.revision = 2;
+    secondSet.paths[0]!.id = 'path';
+    secondSet.paths[0]!.revision = 3;
+    map.pathSets = [firstSet, secondSet];
+    const firstTarget = {
+      kind: 'purpose-path-set' as const, id: 'set', revision: 1,
+      pathId: 'x:2:path', pathRevision: 3,
+    };
+    const secondTarget = {
+      kind: 'purpose-path-set' as const, id: 'set:1:x', revision: 2,
+      pathId: 'path', pathRevision: 3,
+    };
+    const fact = 'Public professional directories describe this work pattern.';
+    const { session } = harness([{ fact, url: 'https://example.com/public-pattern' }], map);
+
+    const first = await session.research({
+      category: 'path-reality', target: firstTarget, dimension: 'day-to-day-work',
+    });
+    const second = await session.research({
+      category: 'path-reality', target: secondTarget, dimension: 'day-to-day-work',
+    });
+    expect(first.candidates[0]?.sourceHandle).not.toBe(second.candidates[0]?.sourceHandle);
+    expect(() => session.resolveSources([{
+      handle: first.candidates[0]!.sourceHandle,
+      field: 'practicalFit',
+      claim: fact,
+    }], secondTarget)).toThrow(ResearchHandleError);
+  });
+
   it('persists insufficient and payload-free failed attempts without fabricating candidates', async () => {
     const insufficient = harness([{ fact: 'missing URL' }]);
     await expect(insufficient.session.research({ category: 'side-doors', target: pathTarget, dimension: 'public-contribution-routes' }))
@@ -441,7 +565,9 @@ describe('isolated Method research', () => {
 
     const failed = harness();
     failed.provider.search.mockRejectedValueOnce(new Error('provider body sentinel should not escape'));
-    const result = await failed.session.research({ category: 'path-reality', target: pathTarget, dimension: 'market-patterns' });
+    const result = await failed.session.research({
+      category: 'path-reality', target: firstPathRealityTarget, dimension: 'market-patterns',
+    });
     expect(result).toEqual({
       status: 'failed',
       category: 'path-reality',
@@ -460,7 +586,7 @@ describe('isolated Method research', () => {
     }]);
 
     const result = await session.research({
-      category: 'path-reality', target: pathTarget, dimension: 'day-to-day-work',
+      category: 'path-reality', target: firstPathRealityTarget, dimension: 'day-to-day-work',
     });
 
     expect(result.candidates[0]).toMatchObject({ support: 'cited-provenance' });
@@ -470,7 +596,9 @@ describe('isolated Method research', () => {
     const { provider, session, storage } = harness();
     const controller = new AbortController();
     controller.abort(new DOMException('Stopped', 'AbortError'));
-    await expect(session.research({ category: 'path-reality', target: pathTarget, dimension: 'market-patterns' }, controller.signal))
+    await expect(session.research({
+      category: 'path-reality', target: firstPathRealityTarget, dimension: 'market-patterns',
+    }, controller.signal))
       .rejects.toMatchObject({ name: 'AbortError' });
     expect(provider.search).not.toHaveBeenCalled();
     expect(storage.recordResearchAttempt).not.toHaveBeenCalled();
@@ -491,8 +619,8 @@ describe('research intent validator', () => {
 
   it('accepts only positive public dimensions and rejects the old arbitrary subject/context carrier', () => {
     expect(validateDeidentifiedResearchIntent({
-      category: 'path-reality', target: pathTarget, dimension: 'day-to-day-work',
-    })).toEqual({ category: 'path-reality', target: pathTarget, dimension: 'day-to-day-work' });
+      category: 'path-reality', target: firstPathRealityTarget, dimension: 'day-to-day-work',
+    })).toEqual({ category: 'path-reality', target: firstPathRealityTarget, dimension: 'day-to-day-work' });
     expect(() => validateDeidentifiedResearchIntent({
       category: 'path-reality', subject: 'apparently harmless free-form text',
     })).toThrow();

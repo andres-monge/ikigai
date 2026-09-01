@@ -1167,7 +1167,10 @@ describe('PostgresStorage lease and client-message turns', () => {
     });
     const researchResult = await research.research({
       category: 'path-reality',
-      target: { kind: 'purpose-path-set', id: suggestedSetId, revision: 1 },
+      target: {
+        kind: 'purpose-path-set', id: suggestedSetId, revision: 1,
+        pathId: id('path-1'), pathRevision: 1,
+      },
       dimension: 'day-to-day-work',
     });
     expect(researchResult).toMatchObject({
@@ -1401,6 +1404,9 @@ describe('PostgresStorage lease and client-message turns', () => {
       const mainAgent = createMethodAgent({
         model, storage, loader, userId, conversationId, turn: mainTurn,
         turnSequence: 2, occurredAt: at(2), currentMessage: mainPrompt, turnRoute: 'method',
+        confirmationAuthorization: {
+          operation: 'confirm-why', targetId: whyId, targetRevision: 1,
+        },
         onPreparedStep: (trace) => traces.push({ activeTools: trace.activeTools, compaction: trace.compaction }),
         onError: (error) => mainErrors.push({
           name: error instanceof Error ? error.name : 'UnknownError',
@@ -1529,7 +1535,10 @@ describe('PostgresStorage lease and client-message turns', () => {
       } as never);
       const researchResult = await researchTools.research_current_world.execute?.({
         category: 'path-reality',
-        target: { kind: 'purpose-path-set', id: setId, revision: 1 },
+        target: {
+          kind: 'purpose-path-set', id: setId, revision: 1,
+          pathId: id('path-1'), pathRevision: 1,
+        },
         dimension: 'day-to-day-work',
       }, { toolCallId: id('u5-live-research-call'), messages: [] } as never) as Record<string, unknown>;
       const attempts = await storage.listResearchAttempts(userId);

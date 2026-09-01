@@ -149,6 +149,16 @@ function runtime(storage: ReducerStorage, origin: 'agent-turn' | 'workspace-acti
   };
 }
 
+type ConfirmationAuthorizationFixture =
+  | { operation: 'confirm-why'; targetId: string; targetRevision: number }
+  | {
+      operation: 'select-purpose-path';
+      targetId: string;
+      targetRevision: number;
+      choiceId: string;
+      choiceRevision: number;
+    };
+
 async function selectPendingPath(
   currentMessage: string,
   overrides: Partial<{
@@ -159,6 +169,7 @@ async function selectPendingPath(
     presentedInTurnId: string;
     sourceMessageId: string;
   }> = {},
+  confirmationAuthorization?: ConfirmationAuthorizationFixture,
 ) {
   const storage = new ReducerStorage(pendingPaths());
   const loader = await createMethodModuleLoader();
@@ -169,6 +180,7 @@ async function selectPendingPath(
     surface: 'agent-turn',
     prepared: { current: prepared },
     currentMessage,
+    confirmationAuthorization,
     timing: { turnSequence: 4, occurredAt: at(4) },
   } as never);
   const result = await tools.select_purpose_path.execute?.({
@@ -179,12 +191,16 @@ async function selectPendingPath(
   return { result, storage };
 }
 
-async function confirmPendingWhy(currentMessage: string) {
+async function confirmPendingWhy(
+  currentMessage: string,
+  confirmationAuthorization?: ConfirmationAuthorizationFixture,
+) {
   const storage = new ReducerStorage(pendingWhy());
   const loader = await createMethodModuleLoader();
   const prepared = await refreshMethodState(storage, loader, 'explorer-1');
   const tools = createMethodTools({
     ...runtime(storage), loader, surface: 'agent-turn', prepared: { current: prepared }, currentMessage,
+    confirmationAuthorization,
   } as never);
   const result = await tools.confirm_why.execute?.({
     whyId: 'why-1', whyRevision: 1,
@@ -254,6 +270,117 @@ describe('strict state-specific Method tools', () => {
   });
 
   it.each([
+    ['French', 'C’est exactement ce que je veux dire.'],
+    ['Japanese', 'それはまさに私の言いたいことです。'],
+  ])('accepts an exact %s Why confirmation through server-derived authorization', async (
+    _language,
+    currentMessage,
+  ) => {
+    const { result, storage } = await confirmPendingWhy(currentMessage, {
+      operation: 'confirm-why', targetId: 'why-1', targetRevision: 1,
+    });
+
+    expect(result).toMatchObject({ status: 'committed', authoritativeRevision: 2 });
+    expect(storage.map.foundation.whyRevisions.at(-1)?.status).toBe('confirmed');
+    expect(storage.persist).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ['French', 'Je choisis la deuxième voie.'],
+    ['Japanese', '2番目の道を選びます。'],
+  ])('accepts an exact %s ordinal path selection through server-derived authorization', async (
+    _language,
+    currentMessage,
+  ) => {
+    const { result, storage } = await selectPendingPath(currentMessage, {}, {
+      operation: 'select-purpose-path',
+      targetId: 'set-1', targetRevision: 1,
+      choiceId: 'path-2', choiceRevision: 1,
+    });
+
+    expect(result).toMatchObject({ status: 'committed', authoritativeRevision: 4 });
+    expect(storage.map.pathSets.at(-1)?.paths.map((path) => [path.id, path.selection])).toEqual([
+      ['path-1', 'parked'], ['path-2', 'active'], ['path-3', 'parked'],
+    ]);
+    expect(storage.persist).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ['French negation', 'Non, ne le confirme pas.'],
+    ['Japanese negation', 'いいえ、まだ確認しないでください。'],
+    ['French deferral', 'Cela me semble juste, mais attends avant de le confirmer.'],
+    ['Japanese deferral', 'その通りですが、確認するのは待ってください。'],
+  ])('fails closed on %s without server-derived authorization', async (_label, currentMessage) => {
+    const { result, storage } = await confirmPendingWhy(currentMessage, {
+      operation: 'confirm-why', targetId: 'why-1', targetRevision: 1,
+    });
+
+    expect(result).toMatchObject({ status: 'rejected', errorClass: 'ConfirmationAuthorizationError' });
+    expect(storage.persist).not.toHaveBeenCalled();
+    expect(storage.map.revision).toBe(1);
+  });
+
+  it.each([
+    ['French question', 'Devrais-je choisir la deuxième voie ?'],
+    ['Japanese question', '2番目の道を選ぶべきですか？'],
+    ['French research/refinement', 'Recherche et affine la deuxième voie avant que je choisisse.'],
+    ['Japanese research/refinement', '選ぶ前に2番目の道を調べて改善してください。'],
+    ['French multiple targets', 'Je choisis la première et la deuxième voie.'],
+    ['Japanese multiple targets', '1番目と2番目の道を選びます。'],
+  ])('fails closed on %s without server-derived authorization', async (_label, currentMessage) => {
+    const { result, storage } = await selectPendingPath(currentMessage, {}, {
+      operation: 'select-purpose-path',
+      targetId: 'set-1', targetRevision: 1,
+      choiceId: 'path-2', choiceRevision: 1,
+    });
+
+    expect(result).toMatchObject({ status: 'rejected', errorClass: 'ConfirmationAuthorizationError' });
+    expect(storage.persist).not.toHaveBeenCalled();
+    expect(storage.map.revision).toBe(3);
+  });
+
+  it.each([
+    ['exact pending choice', { pathId: 'path-3' }],
+    ['completed prior presentation', { presentedInTurnId: 'current-turn' }],
+    ['current-message provenance', { sourceMessageId: 'other-message' }],
+  ])('does not let server-derived authorization bypass %s', async (_label, overrides) => {
+    const { result, storage } = await selectPendingPath(
+      'Je choisis la deuxième voie.',
+      overrides,
+      {
+        operation: 'select-purpose-path',
+        targetId: 'set-1', targetRevision: 1,
+        choiceId: 'path-2', choiceRevision: 1,
+      },
+    );
+
+    expect(result).toMatchObject({ status: 'rejected' });
+    expect(storage.persist).not.toHaveBeenCalled();
+    expect(storage.map.revision).toBe(3);
+  });
+
+  it.each([
+    ['a different pending set', { targetId: 'set-2' }],
+    ['a different path choice', { choiceId: 'path-3' }],
+    ['a stale path choice', { choiceRevision: 2 }],
+  ])('rejects server-derived authorization for %s', async (_label, authorizationOverrides) => {
+    const { result, storage } = await selectPendingPath(
+      'Je choisis la deuxième voie.',
+      {},
+      {
+        operation: 'select-purpose-path',
+        targetId: 'set-1', targetRevision: 1,
+        choiceId: 'path-2', choiceRevision: 1,
+        ...authorizationOverrides,
+      },
+    );
+
+    expect(result).toMatchObject({ status: 'rejected' });
+    expect(storage.persist).not.toHaveBeenCalled();
+    expect(storage.map.revision).toBe(3);
+  });
+
+  it.each([
     ['English', 'That captures what I mean. Use it as my provisional foundation.'],
     ['Spanish', 'Eso refleja lo que quiero decir. Dejémoslo como mi fundamento provisional.'],
     ['English exact-right', 'That feels exactly right.'],
@@ -307,8 +434,29 @@ describe('strict state-specific Method tools', () => {
     ['Spanish explicit prohibition', 'No confirmes why-1.'],
     ['English incidental agreement word', 'Right now I need more time.'],
     ['Spanish incidental agreement word', 'Vale la pena esperar.'],
+    ['English smart-punctuation deferral', 'That feels exactly right — don’t confirm it yet.'],
+    ['English hold-off deferral', 'That feels exactly right, but hold off for now.'],
+    ['English wait deferral', 'That captures what I mean; wait before confirming.'],
+    ['Spanish wait deferral', 'Eso refleja lo que quiero decir, pero espera por ahora.'],
+    ['English quoted confirmation', 'I’m quoting “That feels exactly right.”'],
   ])('rejects %s as authority for a pending Why', async (_label, currentMessage) => {
     const { result, storage } = await confirmPendingWhy(currentMessage);
+
+    expect(result).toMatchObject({ status: 'rejected', errorClass: 'ConfirmationAuthorizationError' });
+    expect(storage.persist).not.toHaveBeenCalled();
+    expect(storage.map.revision).toBe(1);
+  });
+
+  it.each([
+    ['English smart-punctuation deferral', 'That feels exactly right — don’t confirm it yet.'],
+    ['English hold-off deferral', 'That feels exactly right, but hold off for now.'],
+    ['English wait deferral', 'That captures what I mean; wait before confirming.'],
+    ['Spanish wait deferral', 'Eso refleja lo que quiero decir, pero espera por ahora.'],
+    ['English quoted confirmation', 'I’m quoting “That feels exactly right.”'],
+  ])('does not let a false-positive semantic authorization override %s', async (_label, currentMessage) => {
+    const { result, storage } = await confirmPendingWhy(currentMessage, {
+      operation: 'confirm-why', targetId: 'why-1', targetRevision: 1,
+    });
 
     expect(result).toMatchObject({ status: 'rejected', errorClass: 'ConfirmationAuthorizationError' });
     expect(storage.persist).not.toHaveBeenCalled();
@@ -377,7 +525,10 @@ describe('strict state-specific Method tools', () => {
 
     const mismatched = await tools.research_current_world.execute?.({
       category: 'path-reality',
-      target: { kind: 'purpose-path-set', id: 'unrelated-set', revision: 1 },
+      target: {
+        kind: 'purpose-path-set', id: 'unrelated-set', revision: 1,
+        pathId: 'path-1', pathRevision: 1,
+      },
       dimension: 'day-to-day-work',
     }, { toolCallId: 'research-wrong-target', messages: [] } as never);
     expect(mismatched).toEqual({ status: 'rejected', errorClass: 'ResearchTargetMismatchError' });
@@ -385,7 +536,10 @@ describe('strict state-specific Method tools', () => {
 
     const result = await tools.research_current_world.execute?.({
       category: 'path-reality',
-      target: { kind: 'purpose-path-set', id: 'set-1', revision: 1 },
+      target: {
+        kind: 'purpose-path-set', id: 'set-1', revision: 1,
+        pathId: 'path-1', pathRevision: 1,
+      },
       dimension: 'day-to-day-work',
     }, { toolCallId: 'research-current-target', messages: [] } as never);
     expect(result).toMatchObject({ status: 'succeeded' });
@@ -393,9 +547,10 @@ describe('strict state-specific Method tools', () => {
 
     const exposed = toolNamesForCheckpoint(prepared.checkpoint, true, turnPolicy);
     expect(exposed).toEqual(expect.arrayContaining([
-      'replace_purpose_path', 'combine_purpose_paths', 'research_current_world',
+      'replace_purpose_path', 'research_current_world',
     ]));
     expect(exposed).not.toEqual(expect.arrayContaining([
+      'combine_purpose_paths',
       'select_purpose_path', 'confirm_purpose_path_revision', 'confirm_why',
       'append_foundation_evidence', 'correct_foundation_evidence', 'record_reality_constraint',
     ]));

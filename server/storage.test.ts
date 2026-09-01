@@ -213,6 +213,172 @@ describe('PostgresStorage - Assessment Sessions', () => {
   });
 });
 
+describe('PostgresStorage - Conversation provisioning cleanup fencing', () => {
+  function methodTurnInput(suffix: string) {
+    return {
+      userId: legacyId(`provisioning-owner-${suffix}`),
+      clientMessageId: legacyId(`provisioning-message-${suffix}`),
+      requestFingerprint: legacyId(`provisioning-fingerprint-${suffix}`),
+      turnId: legacyId(`provisioning-turn-${suffix}`),
+      leaseId: legacyId(`provisioning-lease-${suffix}`),
+      leaseDurationMs: 360_000,
+    };
+  }
+
+  it('never claims a live pending turn marker and atomically resolves it once mapped', async () => {
+    const clock = new Date('2030-01-01T00:00:00.000Z');
+    const fencedStorage = new PostgresStorage({ database: db, now: () => clock });
+    const input = methodTurnInput('live-before-bind');
+    const conversationId = legacyId('conversation-live-before-bind');
+    await fencedStorage.getOrCreateCareerMap(input.userId);
+    const begun = await fencedStorage.beginAgentTurn(input);
+    expect(begun.status).toBe('started');
+    await fencedStorage.recordConversationProvisioning({
+      userId: input.userId,
+      turnId: input.turnId,
+      leaseId: input.leaseId,
+      conversationId,
+    });
+
+    expect(await fencedStorage.claimConversationProvisioningCleanup(
+      input.userId,
+      legacyId('cleanup-claim-live'),
+    )).toBeUndefined();
+    expect(await fencedStorage.listPendingConversationProvisioning(input.userId)).toEqual([{
+      userId: input.userId,
+      turnId: input.turnId,
+      conversationId,
+    }]);
+
+    await fencedStorage.setConversationMapping(input.userId, input.leaseId, conversationId);
+    expect(await fencedStorage.claimConversationProvisioningCleanup(
+      input.userId,
+      legacyId('cleanup-claim-after-bind'),
+    )).toBeUndefined();
+    expect(await fencedStorage.getConversationMapping(input.userId)).toBe(conversationId);
+    expect(await fencedStorage.listPendingConversationProvisioning(input.userId)).toEqual([]);
+  });
+
+  it('serializes concurrent mapping and cleanup claims so a live Conversation is never orphaned', async () => {
+    const clock = new Date('2030-01-01T00:00:00.000Z');
+    const fencedStorage = new PostgresStorage({ database: db, now: () => clock });
+    const input = methodTurnInput('concurrent-bind-claim');
+    const conversationId = legacyId('conversation-concurrent-bind-claim');
+    await fencedStorage.getOrCreateCareerMap(input.userId);
+    expect((await fencedStorage.beginAgentTurn(input)).status).toBe('started');
+    await fencedStorage.recordConversationProvisioning({
+      userId: input.userId,
+      turnId: input.turnId,
+      leaseId: input.leaseId,
+      conversationId,
+    });
+
+    const [mappingResult, cleanupClaim] = await Promise.all([
+      fencedStorage.setConversationMapping(input.userId, input.leaseId, conversationId),
+      fencedStorage.claimConversationProvisioningCleanup(
+        input.userId,
+        legacyId('cleanup-claim-concurrent-bind'),
+      ),
+    ]);
+
+    expect(mappingResult).toBeUndefined();
+    expect(cleanupClaim).toBeUndefined();
+    expect(await fencedStorage.getConversationMapping(input.userId)).toBe(conversationId);
+    expect(await fencedStorage.listPendingConversationProvisioning(input.userId)).toEqual([]);
+  });
+
+  it('claims only abandoned markers and fences completion and retry by claim identity', async () => {
+    let clock = new Date('2030-01-01T00:00:00.000Z');
+    const fencedStorage = new PostgresStorage({ database: db, now: () => clock });
+    const input = methodTurnInput('expired');
+    const conversationId = legacyId('conversation-expired');
+    await fencedStorage.getOrCreateCareerMap(input.userId);
+    expect((await fencedStorage.beginAgentTurn(input)).status).toBe('started');
+    await fencedStorage.recordConversationProvisioning({
+      userId: input.userId,
+      turnId: input.turnId,
+      leaseId: input.leaseId,
+      conversationId,
+    });
+
+    clock = new Date(clock.getTime() + input.leaseDurationMs + 1);
+    const firstClaimId = legacyId('cleanup-claim-expired-1');
+    const firstClaim = await fencedStorage.claimConversationProvisioningCleanup(
+      input.userId,
+      firstClaimId,
+    );
+    expect(firstClaim).toEqual({
+      userId: input.userId,
+      turnId: input.turnId,
+      conversationId,
+      claimId: firstClaimId,
+    });
+    expect(await fencedStorage.claimConversationProvisioningCleanup(
+      input.userId,
+      legacyId('cleanup-competing-claim'),
+    )).toBeUndefined();
+
+    await fencedStorage.completeConversationProvisioningCleanup({
+      ...firstClaim!,
+      claimId: legacyId('cleanup-wrong-claim'),
+    });
+    expect(await fencedStorage.listPendingConversationProvisioning(input.userId)).toEqual([]);
+    await fencedStorage.releaseConversationProvisioningCleanup(firstClaim!);
+    expect(await fencedStorage.listPendingConversationProvisioning(input.userId)).toEqual([{
+      userId: input.userId,
+      turnId: input.turnId,
+      conversationId,
+    }]);
+
+    const secondClaimId = legacyId('cleanup-claim-expired-2');
+    const secondClaim = await fencedStorage.claimConversationProvisioningCleanup(
+      input.userId,
+      secondClaimId,
+    );
+    expect(secondClaim).toEqual({
+      userId: input.userId,
+      turnId: input.turnId,
+      conversationId,
+      claimId: secondClaimId,
+    });
+    await fencedStorage.completeConversationProvisioningCleanup(secondClaim!);
+    expect(await fencedStorage.listPendingConversationProvisioning(input.userId)).toEqual([]);
+  });
+
+  it('keeps a provisioning identity discoverable when releasing its turn, then claims it as terminal', async () => {
+    const clock = new Date('2030-01-01T00:00:00.000Z');
+    const fencedStorage = new PostgresStorage({ database: db, now: () => clock });
+    const input = methodTurnInput('released');
+    const conversationId = legacyId('conversation-released');
+    await fencedStorage.getOrCreateCareerMap(input.userId);
+    expect((await fencedStorage.beginAgentTurn(input)).status).toBe('started');
+    await fencedStorage.recordConversationProvisioning({
+      userId: input.userId,
+      turnId: input.turnId,
+      leaseId: input.leaseId,
+      conversationId,
+    });
+
+    expect(await fencedStorage.releaseTurnLease(
+      input.userId,
+      input.turnId,
+      input.leaseId,
+    )).toBe(true);
+    expect(await fencedStorage.listPendingConversationProvisioning(input.userId)).toEqual([{
+      userId: input.userId,
+      turnId: input.turnId,
+      conversationId,
+    }]);
+    const claimId = legacyId('cleanup-claim-released');
+    expect(await fencedStorage.claimConversationProvisioningCleanup(input.userId, claimId)).toEqual({
+      userId: input.userId,
+      turnId: input.turnId,
+      conversationId,
+      claimId,
+    });
+  });
+});
+
 /* ------------------------------------------------------------------ */
 /*                         Purpose Path Tests                        */
 /* ------------------------------------------------------------------ */

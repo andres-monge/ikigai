@@ -114,6 +114,10 @@ export interface ConversationProvisioningRecord {
   conversationId: string;
 }
 
+export interface ConversationProvisioningCleanupClaim extends ConversationProvisioningRecord {
+  claimId: string;
+}
+
 const methodPersistenceContextMarker = Symbol('method-persistence-context');
 
 export type MethodPersistenceContext = {
@@ -439,6 +443,16 @@ export interface IStorage {
   }): Promise<void>;
   listPendingConversationProvisioning(userId: string): Promise<ConversationProvisioningRecord[]>;
   resolveConversationProvisioning(input: ConversationProvisioningRecord): Promise<void>;
+  claimConversationProvisioningCleanup(
+    userId: string,
+    claimId: string,
+  ): Promise<ConversationProvisioningCleanupClaim | undefined>;
+  completeConversationProvisioningCleanup(
+    input: ConversationProvisioningCleanupClaim,
+  ): Promise<void>;
+  releaseConversationProvisioningCleanup(
+    input: ConversationProvisioningCleanupClaim,
+  ): Promise<void>;
   eraseMethodData(
     userId: string,
     provider?: MethodErasureProvider,
@@ -463,6 +477,7 @@ function asAgentTurnRecord(row: AgentTurnRow): AgentTurnRecord {
 }
 
 const CONVERSATION_CLEANUP_LIST_PREFIX = 'u5-cleanup-list:';
+const CONVERSATION_CLEANUP_CLAIM_MS = 60_000;
 
 function pendingProvisioningConversationIds(rows: Array<{ terminalResult: unknown }>): string[] {
   return rows.flatMap((row) => {
@@ -1715,11 +1730,22 @@ export class PostgresStorage implements IStorage {
         ));
       if (!lease) return false;
       const now = this.now();
+      const [turn] = await tx
+        .select({ terminalResult: agentTurns.terminalResult })
+        .from(agentTurns)
+        .where(and(
+          eq(agentTurns.userId, userId),
+          eq(agentTurns.turnId, turnId),
+          eq(agentTurns.leaseId, leaseId),
+        ));
       await tx
         .update(agentTurns)
         .set({
           status: 'failed',
-          terminalResult: { errorClass: 'TurnLeaseReleased', refetch: true },
+          terminalResult: preserveConversationProvisioning(
+            turn?.terminalResult,
+            { errorClass: 'TurnLeaseReleased', refetch: true },
+          ),
           terminalAt: now,
           updatedAt: now,
         })
@@ -1992,6 +2018,165 @@ export class PostgresStorage implements IStorage {
       if (marker?.conversationId !== input.conversationId) return;
       const { conversationProvisioning: _resolved, ...rest } = terminal;
       await tx.update(agentTurns).set({ terminalResult: rest, updatedAt: this.now() }).where(and(
+        eq(agentTurns.userId, input.userId),
+        eq(agentTurns.turnId, input.turnId),
+      ));
+    });
+  }
+
+  async claimConversationProvisioningCleanup(
+    userId: string,
+    claimId: string,
+  ): Promise<ConversationProvisioningCleanupClaim | undefined> {
+    if (claimId.length === 0 || claimId.length > 200) {
+      throw new Error('Conversation provisioning cleanup claim identity is invalid.');
+    }
+    return this.database.transaction(async (tx) => {
+      await lockMethodOwner(tx, userId);
+      const now = this.now();
+      const [mapping] = await tx
+        .select({ conversationId: agentConversationMappings.conversationId })
+        .from(agentConversationMappings)
+        .where(eq(agentConversationMappings.userId, userId));
+      const [lease] = await tx
+        .select()
+        .from(agentTurnLeases)
+        .where(eq(agentTurnLeases.userId, userId));
+      const turns = await tx
+        .select()
+        .from(agentTurns)
+        .where(eq(agentTurns.userId, userId))
+        .orderBy(asc(agentTurns.createdAt), asc(agentTurns.turnId));
+
+      for (const turn of turns) {
+        const terminal = turn.terminalResult && typeof turn.terminalResult === 'object'
+          ? turn.terminalResult as Record<string, unknown>
+          : {};
+        const marker = terminal.conversationProvisioning;
+        if (!marker || typeof marker !== 'object') continue;
+        const record = marker as Record<string, unknown>;
+        const conversationId = record.conversationId;
+        if (typeof conversationId !== 'string'
+          || conversationId.length === 0
+          || conversationId.length > 200
+        ) continue;
+
+        // A provider Conversation that is already bound belongs to this owner.
+        // Resolving its cleanup marker and deciding whether an unbound marker is
+        // deletable happen under the same owner lock as binding and leases.
+        if (mapping?.conversationId === conversationId) {
+          const { conversationProvisioning: _resolved, ...rest } = terminal;
+          await tx.update(agentTurns).set({ terminalResult: rest, updatedAt: now }).where(and(
+            eq(agentTurns.userId, userId),
+            eq(agentTurns.turnId, turn.turnId),
+          ));
+          continue;
+        }
+
+        const hasLiveOwningLease = turn.status === 'pending'
+          && lease?.turnId === turn.turnId
+          && lease.leaseId === turn.leaseId
+          && lease.expiresAt > now;
+        if (hasLiveOwningLease) continue;
+
+        const status = record.status;
+        if (status === 'cleanup-claimed') {
+          if (record.claimId === claimId) {
+            return { userId, turnId: turn.turnId, conversationId, claimId };
+          }
+          const claimedAt = typeof record.claimedAt === 'string'
+            ? Date.parse(record.claimedAt)
+            : Number.NaN;
+          if (Number.isFinite(claimedAt)
+            && claimedAt > now.getTime() - CONVERSATION_CLEANUP_CLAIM_MS
+          ) continue;
+        } else if (status !== 'pending') {
+          continue;
+        }
+
+        await tx.update(agentTurns).set({
+          terminalResult: {
+            ...terminal,
+            conversationProvisioning: {
+              status: 'cleanup-claimed',
+              conversationId,
+              claimId,
+              claimedAt: now.toISOString(),
+            },
+          },
+          updatedAt: now,
+        }).where(and(
+          eq(agentTurns.userId, userId),
+          eq(agentTurns.turnId, turn.turnId),
+        ));
+        return { userId, turnId: turn.turnId, conversationId, claimId };
+      }
+      return undefined;
+    });
+  }
+
+  async completeConversationProvisioningCleanup(
+    input: ConversationProvisioningCleanupClaim,
+  ): Promise<void> {
+    await this.database.transaction(async (tx) => {
+      await lockMethodOwner(tx, input.userId);
+      const [turn] = await tx.select().from(agentTurns).where(and(
+        eq(agentTurns.userId, input.userId),
+        eq(agentTurns.turnId, input.turnId),
+      ));
+      if (!turn) return;
+      const terminal = turn.terminalResult && typeof turn.terminalResult === 'object'
+        ? turn.terminalResult as Record<string, unknown>
+        : {};
+      const marker = terminal.conversationProvisioning;
+      if (!marker || typeof marker !== 'object') return;
+      const record = marker as Record<string, unknown>;
+      if (record.status !== 'cleanup-claimed'
+        || record.conversationId !== input.conversationId
+        || record.claimId !== input.claimId
+      ) return;
+      const { conversationProvisioning: _resolved, ...rest } = terminal;
+      await tx.update(agentTurns).set({ terminalResult: rest, updatedAt: this.now() }).where(and(
+        eq(agentTurns.userId, input.userId),
+        eq(agentTurns.turnId, input.turnId),
+      ));
+    });
+  }
+
+  async releaseConversationProvisioningCleanup(
+    input: ConversationProvisioningCleanupClaim,
+  ): Promise<void> {
+    await this.database.transaction(async (tx) => {
+      await lockMethodOwner(tx, input.userId);
+      const [turn] = await tx.select().from(agentTurns).where(and(
+        eq(agentTurns.userId, input.userId),
+        eq(agentTurns.turnId, input.turnId),
+      ));
+      if (!turn) return;
+      const terminal = turn.terminalResult && typeof turn.terminalResult === 'object'
+        ? turn.terminalResult as Record<string, unknown>
+        : {};
+      const marker = terminal.conversationProvisioning;
+      if (!marker || typeof marker !== 'object') return;
+      const record = marker as Record<string, unknown>;
+      if (record.status !== 'cleanup-claimed'
+        || record.conversationId !== input.conversationId
+        || record.claimId !== input.claimId
+      ) return;
+      const [mapping] = await tx
+        .select({ conversationId: agentConversationMappings.conversationId })
+        .from(agentConversationMappings)
+        .where(eq(agentConversationMappings.userId, input.userId));
+      const nextTerminal = mapping?.conversationId === input.conversationId
+        ? (() => {
+            const { conversationProvisioning: _resolved, ...rest } = terminal;
+            return rest;
+          })()
+        : {
+            ...terminal,
+            conversationProvisioning: { status: 'pending', conversationId: input.conversationId },
+          };
+      await tx.update(agentTurns).set({ terminalResult: nextTerminal, updatedAt: this.now() }).where(and(
         eq(agentTurns.userId, input.userId),
         eq(agentTurns.turnId, input.turnId),
       ));

@@ -129,6 +129,9 @@ function createStorage(overrides: Record<string, unknown> = {}) {
     recordConversationProvisioning: vi.fn(async () => undefined),
     listPendingConversationProvisioning: vi.fn(async () => []),
     resolveConversationProvisioning: vi.fn(async () => undefined),
+    claimConversationProvisioningCleanup: vi.fn(async () => undefined),
+    completeConversationProvisioningCleanup: vi.fn(async () => undefined),
+    releaseConversationProvisioningCleanup: vi.fn(async () => undefined),
     recordResearchAttempt: vi.fn(async () => undefined),
     ...overrides,
   };
@@ -573,6 +576,185 @@ describe('protected Method routes', () => {
     }));
   });
 
+  it('keeps the terminal stream boundary behind durable completion so immediate history and the next turn see committed state', async () => {
+    const providerConversationId = 'conversation-durable-before-terminal';
+    const firstTurn = {
+      ...turn('agent-turn'),
+      turnId: 'durability-turn-1',
+      clientMessageId: 'durability-message-1',
+      leaseId: 'durability-lease-1',
+    };
+    const secondTurn = {
+      ...turn('agent-turn'),
+      turnId: 'durability-turn-2',
+      clientMessageId: 'durability-message-2',
+      leaseId: 'durability-lease-2',
+    };
+    let durableFirstTurn = firstTurn;
+    let leaseHeld = true;
+    let beginCount = 0;
+    let completionStarted!: () => void;
+    const completionStartedGate = new Promise<void>((resolve) => { completionStarted = resolve; });
+    let releaseCompletion!: () => void;
+    const completionGate = new Promise<void>((resolve) => { releaseCompletion = resolve; });
+    let completionResolved = false;
+    const storage = createStorage({
+      getConversationMapping: vi.fn(async () => providerConversationId),
+      beginAgentTurn: vi.fn(async (): Promise<BeginAgentTurnResult> => {
+        beginCount += 1;
+        if (beginCount === 1) {
+          return { status: 'started', shouldInvokeModel: true, turn: firstTurn };
+        }
+        if (leaseHeld) {
+          return {
+            status: 'conflict',
+            activeTurnId: firstTurn.turnId,
+            retryAfter: new Date(timestamp(59)),
+          };
+        }
+        leaseHeld = true;
+        return { status: 'started', shouldInvokeModel: true, turn: secondTurn };
+      }),
+      completeAgentTurn: vi.fn(async (input: {
+        userId: string; turnId: string; leaseId: string; result?: Record<string, unknown>;
+      }) => {
+        if (input.turnId === firstTurn.turnId) {
+          completionStarted();
+          await completionGate;
+          durableFirstTurn = {
+            ...firstTurn,
+            status: 'completed',
+            terminalResult: input.result ?? null,
+            terminalAt: new Date(timestamp(3)),
+            updatedAt: new Date(timestamp(3)),
+          };
+          completionResolved = true;
+          return durableFirstTurn;
+        }
+        return {
+          ...secondTurn,
+          status: 'completed',
+          terminalResult: input.result ?? null,
+          terminalAt: new Date(timestamp(4)),
+          updatedAt: new Date(timestamp(4)),
+        };
+      }),
+      releaseTurnLease: vi.fn(async (_userId: string, turnId: string) => {
+        if (turnId === firstTurn.turnId || turnId === secondTurn.turnId) leaseHeld = false;
+        return true;
+      }),
+      listAgentTurns: vi.fn(async () => [durableFirstTurn]),
+    });
+    const conversationClient = {
+      listItems: vi.fn(async () => ({
+        data: [
+          {
+            id: 'durability-provider-user', type: 'message', role: 'user',
+            content: [{ type: 'input_text', text: 'First durable message.' }],
+          },
+          {
+            id: 'durability-provider-assistant', type: 'message', role: 'assistant',
+            content: [{ type: 'output_text', text: 'Safe progressive reply.' }],
+          },
+        ],
+        hasMore: false,
+      })),
+    };
+    const model = new MockLanguageModelV4({
+      doStream: async () => textStream('Safe progressive reply.') as never,
+    });
+    const app = testApp({
+      storage, requireAuth: authenticated, agentEnabled: true, model, conversationClient,
+      classifyTurn: async () => 'conversation',
+      researchProvider: { search: vi.fn(async () => ({ candidates: [] })) },
+      operationalLog: vi.fn(),
+    });
+    const server = await new Promise<ReturnType<typeof app.listen>>((resolve) => {
+      const candidate = app.listen(0, '127.0.0.1', () => resolve(candidate));
+    });
+
+    try {
+      const address = server.address();
+      if (!address || typeof address === 'string') throw new Error('Expected a TCP test server.');
+      const firstResponse = await fetch(`http://127.0.0.1:${address.port}/api/agent`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: firstTurn.clientMessageId, message: 'First durable message.' }),
+      });
+      if (!firstResponse.body) throw new Error('Expected a streamed response body.');
+      const reader = firstResponse.body.getReader();
+      const decoder = new TextDecoder();
+      let received = '';
+      let safeDeltaBeforeCompletion = false;
+      let terminalEnded = false;
+      const terminalBoundary = (async () => {
+        while (true) {
+          const chunk = await reader.read();
+          if (chunk.done) break;
+          received += decoder.decode(chunk.value, { stream: true });
+          if (received.includes('Safe progressive reply.') && !completionResolved) {
+            safeDeltaBeforeCompletion = true;
+          }
+        }
+        received += decoder.decode();
+        terminalEnded = true;
+      })();
+      const immediateHistory = terminalBoundary.then(() => request(app).get('/api/agent/history'));
+      const immediateNextTurn = terminalBoundary.then(() => request(app)
+        .post('/api/agent')
+        .send({ id: secondTurn.clientMessageId, message: 'Immediate next message.' }));
+
+      await completionStartedGate;
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      const terminalEndedBeforeDurableCompletion = terminalEnded;
+      releaseCompletion();
+      const [history, nextResponse] = await Promise.all([immediateHistory, immediateNextTurn]);
+
+      expect(firstResponse.status).toBe(200);
+      expect(safeDeltaBeforeCompletion).toBe(true);
+      expect(terminalEndedBeforeDurableCompletion).toBe(false);
+      expect(history.status).toBe(200);
+      expect(history.body).toEqual({
+        status: 'ready',
+        messages: [
+          {
+            id: 'durability-provider-user', role: 'user',
+            parts: [{ type: 'text', text: 'First durable message.' }],
+          },
+          {
+            id: 'durability-provider-assistant', role: 'assistant',
+            parts: [{ type: 'text', text: 'Safe progressive reply.' }],
+          },
+        ],
+      });
+      expect(nextResponse.status).toBe(200);
+      expect(storage.cancelAgentTurn).not.toHaveBeenCalled();
+      expect(storage.failAgentTurn).not.toHaveBeenCalled();
+      expect(model.doStreamCalls).toHaveLength(2);
+    } finally {
+      releaseCompletion();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
+  it('does not emit a success finish when durable completion loses the turn lease', async () => {
+    const storage = createStorage({
+      getConversationMapping: vi.fn(async () => 'server-conversation'),
+      completeAgentTurn: vi.fn(async () => undefined),
+    });
+    const model = new MockLanguageModelV4({ doStream: textStream('Safe narration before terminalization.') as never });
+    const response = await request(testApp({
+      storage, requireAuth: authenticated, agentEnabled: true, model,
+      conversationClient: { listItems: vi.fn(async () => ({ data: [], hasMore: false })) },
+      researchProvider: { search: vi.fn(async () => ({ candidates: [] })) }, operationalLog: vi.fn(),
+    })).post('/api/agent').send({ id: 'client-message-1', message: 'hello' });
+
+    expect(response.text).not.toContain('"type":"finish"');
+    expect(storage.completeAgentTurn).toHaveBeenCalledOnce();
+    expect(storage.failAgentTurn).toHaveBeenCalledOnce();
+    expect(storage.releaseTurnLease).toHaveBeenCalledOnce();
+  });
+
   it('bounds Conversation creation with a request-scoped provisioning timeout', async () => {
     const timeoutController = new AbortController();
     timeoutController.abort(new DOMException('Conversation provisioning timed out.', 'TimeoutError'));
@@ -683,9 +865,15 @@ describe('protected Method routes', () => {
   it('resolves a pending provisioning marker already bound to the user without deleting it', async () => {
     const providerConversationId = 'provider-conversation-already-bound';
     const marker = { userId: USER_ID, turnId: 'prior-turn', conversationId: providerConversationId };
+    const resolveConversationProvisioning = vi.fn(async () => undefined);
     const storage = createStorage({
       getConversationMapping: vi.fn(async () => providerConversationId),
       listPendingConversationProvisioning: vi.fn(async () => [marker]),
+      resolveConversationProvisioning,
+      claimConversationProvisioningCleanup: vi.fn(async () => {
+        await resolveConversationProvisioning(marker);
+        return undefined;
+      }),
     });
     const conversationClient = {
       createConversation: vi.fn(),
@@ -698,11 +886,91 @@ describe('protected Method routes', () => {
     })).get('/api/agent/history');
 
     expect(response.status).toBe(200);
-    expect(storage.resolveConversationProvisioning).toHaveBeenCalledWith(marker);
+    expect(storage.claimConversationProvisioningCleanup).toHaveBeenCalledWith(
+      USER_ID, expect.any(String),
+    );
+    expect(resolveConversationProvisioning).toHaveBeenCalledWith(marker);
     expect(conversationClient.deleteConversation).not.toHaveBeenCalled();
   });
 
-  it('records a newly created Conversation and resolves it after compensating for mapping failure', async () => {
+  it('does not reconcile a live provisioning marker before its valid lease binds the Conversation', async () => {
+    const providerConversationId = 'provider-conversation-live-provisioning';
+    const activeTurn = turn('agent-turn');
+    let mappedConversationId: string | undefined;
+    let pendingMarker: { userId: string; turnId: string; conversationId: string } | undefined;
+    let bindingStarted!: () => void;
+    const bindingStartedGate = new Promise<void>((resolve) => { bindingStarted = resolve; });
+    let releaseBinding!: () => void;
+    const bindingGate = new Promise<void>((resolve) => { releaseBinding = resolve; });
+    let deletedBeforeBinding = false;
+    let resolvedBeforeBinding = false;
+    const storage = createStorage({
+      getConversationMapping: vi.fn(async () => mappedConversationId),
+      recordConversationProvisioning: vi.fn(async (input: {
+        userId: string; turnId: string; leaseId: string; conversationId: string;
+      }) => {
+        pendingMarker = {
+          userId: input.userId,
+          turnId: input.turnId,
+          conversationId: input.conversationId,
+        };
+      }),
+      listPendingConversationProvisioning: vi.fn(async () => pendingMarker ? [pendingMarker] : []),
+      getTurnLease: vi.fn(async () => ({
+        userId: USER_ID,
+        turnId: activeTurn.turnId,
+        leaseId: activeTurn.leaseId,
+        acquiredAt: new Date(timestamp(1)),
+        expiresAt: new Date(timestamp(59)),
+      })),
+      listAgentTurns: vi.fn(async () => [activeTurn]),
+      setConversationMapping: vi.fn(async (_userId: string, _leaseId: string, conversationId: string) => {
+        bindingStarted();
+        await bindingGate;
+        mappedConversationId = conversationId;
+      }),
+      resolveConversationProvisioning: vi.fn(async () => {
+        if (!mappedConversationId) resolvedBeforeBinding = true;
+        pendingMarker = undefined;
+      }),
+    });
+    const conversationClient = {
+      createConversation: vi.fn(async () => providerConversationId),
+      deleteConversation: vi.fn(async () => {
+        if (!mappedConversationId) deletedBeforeBinding = true;
+      }),
+      listItems: vi.fn(async () => ({ data: [], hasMore: false })),
+    };
+    const model = new MockLanguageModelV4({ doStream: textStream('Safe reply.') as never });
+    const app = testApp({
+      storage, requireAuth: authenticated, agentEnabled: true, model, conversationClient,
+      researchProvider: { search: vi.fn(async () => ({ candidates: [] })) },
+      now: () => new Date(timestamp(3)), operationalLog: vi.fn(),
+    });
+    const activeProvisioning = Promise.resolve(request(app)
+      .post('/api/agent')
+      .send({ id: 'client-message-1', message: 'hello' }));
+    await bindingStartedGate;
+
+    const history = await Promise.resolve(request(app).get('/api/agent/history'))
+      .finally(() => releaseBinding());
+    const response = await activeProvisioning;
+
+    expect(history.status).toBe(200);
+    expect(history.body).toEqual({ status: 'empty', messages: [] });
+    expect(deletedBeforeBinding).toBe(false);
+    expect(resolvedBeforeBinding).toBe(false);
+    expect(response.status).toBe(200);
+    expect(mappedConversationId).toBe(providerConversationId);
+    expect(model.doStreamCalls).toHaveLength(1);
+    expect(model.doStreamCalls[0]?.providerOptions?.openai).toMatchObject({
+      conversation: providerConversationId,
+      store: true,
+    });
+    expect(storage.completeAgentTurn).toHaveBeenCalledOnce();
+  });
+
+  it('retains a newly created Conversation marker after an acknowledgement-ambiguous mapping failure', async () => {
     const storage = createStorage({
       setConversationMapping: vi.fn(async () => { throw new Error('binding-failed-sentinel'); }),
     });
@@ -729,18 +997,54 @@ describe('protected Method routes', () => {
     expect(storage.setConversationMapping).toHaveBeenCalledWith(
       USER_ID, 'agent-turn-lease', 'conversation-created-before-bind',
     );
-    expect(conversationClient.deleteConversation).toHaveBeenCalledWith(
-      'conversation-created-before-bind', expect.any(AbortSignal),
-    );
-    expect(storage.resolveConversationProvisioning).toHaveBeenCalledWith({
-      userId: USER_ID,
-      turnId: 'agent-turn-turn',
-      conversationId: 'conversation-created-before-bind',
-    });
+    expect(conversationClient.deleteConversation).not.toHaveBeenCalled();
+    expect(storage.resolveConversationProvisioning).not.toHaveBeenCalled();
     expect(cleanupSignals).toEqual([expect.objectContaining({
-      type: 'conversation_provisioning_compensated', cleanupRequired: false,
+      type: 'conversation_provisioning_compensated', cleanupRequired: true,
     })]);
     expect(JSON.stringify(cleanupSignals)).not.toContain('conversation-created-before-bind');
+  });
+
+  it('never deletes a Conversation when mapping commits before its acknowledgement throws', async () => {
+    const providerConversationId = 'conversation-mapped-before-ack-error';
+    let mapped: string | undefined;
+    let pending: { userId: string; turnId: string; conversationId: string } | undefined;
+    const storage = createStorage({
+      getConversationMapping: vi.fn(async () => mapped),
+      recordConversationProvisioning: vi.fn(async (input: {
+        userId: string; turnId: string; conversationId: string;
+      }) => { pending = input; }),
+      setConversationMapping: vi.fn(async (_userId: string, _leaseId: string, conversationId: string) => {
+        mapped = conversationId;
+        throw new Error('mapping-acknowledgement-lost');
+      }),
+      claimConversationProvisioningCleanup: vi.fn(async () => {
+        if (pending?.conversationId === mapped) pending = undefined;
+        return undefined;
+      }),
+    });
+    const conversationClient = {
+      createConversation: vi.fn(async () => providerConversationId),
+      deleteConversation: vi.fn(async () => undefined),
+      listItems: vi.fn(async () => ({ data: [], hasMore: false })),
+    };
+    const app = testApp({
+      storage, requireAuth: authenticated, agentEnabled: true, conversationClient, operationalLog: vi.fn(),
+    });
+
+    const failed = await request(app)
+      .post('/api/agent')
+      .send({ id: 'client-message-1', message: 'hello' });
+    expect(failed.status).toBe(502);
+    expect(mapped).toBe(providerConversationId);
+    expect(pending).toMatchObject({ conversationId: providerConversationId });
+    expect(conversationClient.deleteConversation).not.toHaveBeenCalled();
+
+    const history = await request(app).get('/api/agent/history');
+    expect(history.status).toBe(200);
+    expect(mapped).toBe(providerConversationId);
+    expect(pending).toBeUndefined();
+    expect(conversationClient.deleteConversation).not.toHaveBeenCalled();
   });
 
   it('compensates a created Conversation when the first durable marker write fails', async () => {
@@ -769,21 +1073,14 @@ describe('protected Method routes', () => {
     expect(JSON.stringify([response.body, response.text])).not.toContain(providerConversationId);
   });
 
-  it('propagates request abort during Conversation provisioning without mapping or provider dispatch', async () => {
+  it('finishes bounded Conversation creation after request abort so the returned id can be compensated', async () => {
     let provisioningSignal: AbortSignal | undefined;
-    let rejectCreate!: (error: unknown) => void;
+    let resolveCreate!: (id: string) => void;
     const storage = createStorage();
     const conversationClient = {
       createConversation: vi.fn((signal?: AbortSignal) => {
         provisioningSignal = signal;
-        return new Promise<string>((_resolve, reject) => {
-          rejectCreate = reject;
-          const rejectForAbort = () => reject(
-            signal?.reason ?? new DOMException('Conversation provisioning aborted.', 'AbortError'),
-          );
-          if (signal?.aborted) rejectForAbort();
-          else signal?.addEventListener('abort', rejectForAbort, { once: true });
-        });
+        return new Promise<string>((resolve) => { resolveCreate = resolve; });
       }),
       deleteConversation: vi.fn(async () => undefined),
       listItems: vi.fn(),
@@ -798,16 +1095,17 @@ describe('protected Method routes', () => {
     await vi.waitFor(() => expect(conversationClient.createConversation).toHaveBeenCalledOnce());
     outbound.abort();
     await new Promise((resolve) => setTimeout(resolve, 20));
-    if (!provisioningSignal?.aborted) {
-      rejectCreate(new DOMException('Test cleanup for missing provider abort.', 'AbortError'));
-    }
+    expect(provisioningSignal?.aborted).toBe(false);
+    resolveCreate('provider-conversation-after-client-abort');
     await settled;
 
     expect(conversationClient.createConversation).toHaveBeenCalledWith(expect.any(AbortSignal));
-    expect(provisioningSignal?.aborted).toBe(true);
-    expect(storage.recordConversationProvisioning).not.toHaveBeenCalled();
+    expect(storage.recordConversationProvisioning).toHaveBeenCalledOnce();
     expect(storage.setConversationMapping).not.toHaveBeenCalled();
-    expect(conversationClient.deleteConversation).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(conversationClient.deleteConversation).toHaveBeenCalledWith(
+      'provider-conversation-after-client-abort', expect.any(AbortSignal),
+    ));
+    await vi.waitFor(() => expect(storage.resolveConversationProvisioning).toHaveBeenCalledOnce());
     await vi.waitFor(() => expect(storage.cancelAgentTurn).toHaveBeenCalledOnce());
     expect(storage.failAgentTurn).not.toHaveBeenCalled();
     expect(storage.completeAgentTurn).not.toHaveBeenCalled();
@@ -815,7 +1113,7 @@ describe('protected Method routes', () => {
     expect(model.doStreamCalls).toHaveLength(0);
   });
 
-  it('records and binds a Conversation returned by a provider that ignores request abort', async () => {
+  it('records and compensates a Conversation returned after request abort without poisoning the mapping', async () => {
     const providerConversationId = 'provider-conversation-returned-after-abort';
     let provisioningSignal: AbortSignal | undefined;
     let resolveCreate!: (id: string) => void;
@@ -843,7 +1141,7 @@ describe('protected Method routes', () => {
     await settled;
 
     expect(conversationClient.createConversation).toHaveBeenCalledWith(expect.any(AbortSignal));
-    expect(provisioningSignal?.aborted).toBe(true);
+    expect(provisioningSignal?.aborted).toBe(false);
     await vi.waitFor(() => expect(storage.resolveConversationProvisioning).toHaveBeenCalledWith({
       userId: USER_ID,
       turnId: 'agent-turn-turn',
@@ -855,12 +1153,10 @@ describe('protected Method routes', () => {
       leaseId: 'agent-turn-lease',
       conversationId: providerConversationId,
     });
-    expect(storage.setConversationMapping).toHaveBeenCalledWith(
-      USER_ID, 'agent-turn-lease', providerConversationId,
+    expect(storage.setConversationMapping).not.toHaveBeenCalled();
+    expect(conversationClient.deleteConversation).toHaveBeenCalledWith(
+      providerConversationId, expect.any(AbortSignal),
     );
-    expect(storage.recordConversationProvisioning.mock.invocationCallOrder[0])
-      .toBeLessThan(storage.setConversationMapping.mock.invocationCallOrder[0]!);
-    expect(conversationClient.deleteConversation).not.toHaveBeenCalled();
     await vi.waitFor(() => expect(storage.cancelAgentTurn).toHaveBeenCalledOnce());
     expect(storage.failAgentTurn).not.toHaveBeenCalled();
     expect(storage.completeAgentTurn).not.toHaveBeenCalled();
@@ -868,11 +1164,13 @@ describe('protected Method routes', () => {
     expect(model.doStreamCalls).toHaveLength(0);
   });
 
-  it('persists failed compensation for default-router reconciliation without exposing provider ids', async () => {
+  it('cleans up failed compensation after its provisioning turn is provably abandoned without exposing provider ids', async () => {
     const providerConversationId = 'provider-orphan-conversation-sentinel';
     const cleanupFailure = `delete-failed-for-${providerConversationId}`;
     const logs: Array<Record<string, unknown>> = [];
+    let provisioningTurn = turn('agent-turn');
     let pending: { userId: string; turnId: string; conversationId: string } | undefined;
+    let cleanupClaimed = false;
     const recordConversationProvisioning = vi.fn(async (input: {
       userId: string; turnId: string; leaseId: string; conversationId: string;
     }) => {
@@ -882,9 +1180,6 @@ describe('protected Method routes', () => {
         conversationId: input.conversationId,
       };
     });
-    const listPendingConversationProvisioning = vi.fn(async (userId: string) => (
-      pending?.userId === userId ? [pending] : []
-    ));
     const resolveConversationProvisioning = vi.fn(async (input: {
       userId: string; turnId: string; conversationId: string;
     }) => {
@@ -897,8 +1192,38 @@ describe('protected Method routes', () => {
     const storage = createStorage({
       setConversationMapping: vi.fn(async () => { throw new Error(`mapping-failed-for-${providerConversationId}`); }),
       recordConversationProvisioning,
-      listPendingConversationProvisioning,
       resolveConversationProvisioning,
+      getTurnLease: vi.fn(async () => provisioningTurn.status === 'pending' ? {
+        userId: USER_ID,
+        turnId: provisioningTurn.turnId,
+        leaseId: provisioningTurn.leaseId,
+        acquiredAt: new Date(timestamp(1)),
+        expiresAt: new Date(timestamp(59)),
+      } : undefined),
+      listAgentTurns: vi.fn(async () => [provisioningTurn]),
+      claimConversationProvisioningCleanup: vi.fn(async (userId: string, claimId: string) => {
+        if (provisioningTurn.status === 'pending' || !pending || cleanupClaimed || pending.userId !== userId) {
+          return undefined;
+        }
+        cleanupClaimed = true;
+        return { ...pending, claimId };
+      }),
+      completeConversationProvisioningCleanup: vi.fn(async (claim: {
+        userId: string; turnId: string; conversationId: string; claimId: string;
+      }) => {
+        await resolveConversationProvisioning(claim);
+        cleanupClaimed = false;
+      }),
+      releaseConversationProvisioningCleanup: vi.fn(async () => { cleanupClaimed = false; }),
+      failAgentTurn: vi.fn(async () => {
+        provisioningTurn = {
+          ...turn('agent-turn', 'failed'),
+          terminalResult: {
+            conversationProvisioning: { status: 'pending', conversationId: providerConversationId },
+          },
+        };
+        return provisioningTurn;
+      }),
     });
     const conversationClient = {
       createConversation: vi.fn(async (_signal?: AbortSignal) => providerConversationId),
@@ -927,21 +1252,29 @@ describe('protected Method routes', () => {
       turnId: 'agent-turn-turn',
       conversationId: providerConversationId,
     });
+    expect(provisioningTurn.status).toBe('failed');
     expect(resolveConversationProvisioning).not.toHaveBeenCalled();
+
+    const firstHistory = await request(app).get('/api/agent/history');
+    expect(firstHistory.status).toBe(200);
+    expect(firstHistory.body).toEqual({ status: 'empty', messages: [] });
+    expect(storage.releaseConversationProvisioningCleanup).toHaveBeenCalledOnce();
+    expect(pending).toBeDefined();
 
     const history = await request(app).get('/api/agent/history');
 
     expect(history.status).toBe(200);
     expect(history.body).toEqual({ status: 'empty', messages: [] });
-    expect(listPendingConversationProvisioning).toHaveBeenCalledWith(USER_ID);
+    expect(storage.claimConversationProvisioningCleanup).toHaveBeenCalledWith(
+      USER_ID, expect.any(String),
+    );
     expect(conversationClient.deleteConversation).toHaveBeenNthCalledWith(
       2, providerConversationId, expect.any(AbortSignal),
     );
-    expect(resolveConversationProvisioning).toHaveBeenCalledWith({
-      userId: USER_ID,
-      turnId: 'agent-turn-turn',
-      conversationId: providerConversationId,
-    });
+    expect(storage.completeConversationProvisioningCleanup).toHaveBeenCalledWith(expect.objectContaining({
+      userId: USER_ID, turnId: 'agent-turn-turn', conversationId: providerConversationId,
+      claimId: expect.any(String),
+    }));
     expect(pending).toBeUndefined();
     expect(JSON.stringify([failed.body, failed.text, history.body, logs]))
       .not.toContain(providerConversationId);
@@ -981,16 +1314,35 @@ describe('protected Method routes', () => {
   });
 
   it('fails and releases exactly once on a payload-bearing agent provider error', async () => {
-    const storage = createStorage({ getConversationMapping: vi.fn(async () => 'server-conversation') });
+    let failStarted!: () => void;
+    const failStartedGate = new Promise<void>((resolve) => { failStarted = resolve; });
+    let releaseFailure!: () => void;
+    const failureGate = new Promise<void>((resolve) => { releaseFailure = resolve; });
+    const storage = createStorage({
+      getConversationMapping: vi.fn(async () => 'server-conversation'),
+      failAgentTurn: vi.fn(async () => {
+        failStarted();
+        await failureGate;
+        return turn('agent-turn', 'failed');
+      }),
+    });
     const providerError = new Error(SENTINEL);
     providerError.name = SENTINEL;
     const logs: Array<Record<string, unknown>> = [];
     const model = new MockLanguageModelV4({ doStream: errorStream(providerError) as never });
-    const response = await request(testApp({
+    const responsePromise = Promise.resolve(request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true, model,
       researchProvider: { search: vi.fn(async () => ({ candidates: [] })) },
       operationalLog: (entry) => logs.push(entry),
-    })).post('/api/agent').send({ id: 'client-message-1', message: 'hello' });
+    })).post('/api/agent').send({ id: 'client-message-1', message: 'hello' }));
+    let responseSettled = false;
+    void responsePromise.finally(() => { responseSettled = true; });
+    await failStartedGate;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(responseSettled).toBe(false);
+    expect(storage.releaseTurnLease).not.toHaveBeenCalled();
+    releaseFailure();
+    const response = await responsePromise;
 
     expect(response.text).not.toContain(SENTINEL);
     expect(JSON.stringify(logs)).not.toContain(SENTINEL);
@@ -1182,6 +1534,113 @@ describe('protected Method routes', () => {
     expect(storage.completeAgentTurn).not.toHaveBeenCalled();
     expect(storage.releaseTurnLease).toHaveBeenCalledOnce();
     expect(model.doStreamCalls).toHaveLength(0);
+  });
+
+  it('aborts provider projection promptly, terminalizes cancellation, and releases before the next turn', async () => {
+    let projectionStarted!: () => void;
+    const projectionStartedGate = new Promise<void>((resolve) => { projectionStarted = resolve; });
+    let projectionSignal: AbortSignal | undefined;
+    let listCall = 0;
+    const conversationClient = {
+      listItems: vi.fn(async (input: { abortSignal?: AbortSignal }) => {
+        listCall += 1;
+        if (listCall > 1) return { data: [], hasMore: false };
+        projectionSignal = input.abortSignal;
+        projectionStarted();
+        return new Promise<never>((_resolve, reject) => {
+          input.abortSignal?.addEventListener('abort', () => reject(input.abortSignal?.reason), { once: true });
+        });
+      }),
+    };
+    const storage = createStorage({ getConversationMapping: vi.fn(async () => 'server-conversation') });
+    const model = new MockLanguageModelV4({ doStream: textStream('Safe partial reflection.') as never });
+    const app = testApp({
+      storage, requireAuth: authenticated, agentEnabled: true, model, conversationClient,
+      classifyTurn: async () => 'conversation',
+      researchProvider: { search: vi.fn(async () => ({ candidates: [] })) }, operationalLog: vi.fn(),
+    });
+    const outbound = request(app)
+      .post('/api/agent')
+      .send({ id: 'client-message-1', message: 'Help me reflect.' });
+    const settled = Promise.resolve(outbound).catch(() => undefined);
+    await projectionStartedGate;
+    outbound.abort();
+    await settled;
+
+    await vi.waitFor(() => expect(storage.cancelAgentTurn).toHaveBeenCalledOnce());
+    expect(projectionSignal?.aborted).toBe(true);
+    expect(storage.completeAgentTurn).not.toHaveBeenCalled();
+    expect(storage.releaseTurnLease).toHaveBeenCalledOnce();
+
+    const next = await request(app)
+      .post('/api/agent')
+      .send({ id: 'client-message-2', message: 'Continue.' });
+    expect(next.status).toBe(200);
+    expect(storage.beginAgentTurn).toHaveBeenCalledTimes(2);
+    expect(storage.releaseTurnLease).toHaveBeenCalledTimes(2);
+  });
+
+  it('captures the cancellation baseline after lease acquisition so a foreign commit is not attributed to this turn', async () => {
+    const beforeLease = pendingWhy();
+    const foreign = applyCareerMapOperation(beforeLease, {
+      type: 'append-foundation-evidence',
+      sourceId: 'foreign-operation',
+      expectedRevision: beforeLease.revision,
+      occurredAt: timestamp(2),
+      payload: {
+        evidence: {
+          id: 'foreign-evidence', revision: 1, category: 'fascination',
+          content: 'A separately committed signal.',
+          provenance: {
+            kind: 'user-message', actionId: 'foreign-message', turnId: 'foreign-turn',
+            turnSequence: 2, occurredAt: timestamp(2),
+          },
+        },
+      },
+    });
+    if (foreign.status !== 'committed') throw new Error('Foreign commit fixture failed.');
+    let canonical = beforeLease;
+    let persistStarted!: () => void;
+    const persistStartedGate = new Promise<void>((resolve) => { persistStarted = resolve; });
+    let releasePersist!: () => void;
+    const persistGate = new Promise<void>((resolve) => { releasePersist = resolve; });
+    const storage = createStorage({
+      getOrCreateCareerMap: vi.fn(async () => ({ status: 'ready' as const, map: beforeLease })),
+      beginWorkspaceActionTurn: vi.fn(async (): Promise<BeginAgentTurnResult> => {
+        canonical = foreign.map;
+        return { status: 'started', shouldInvokeModel: true, turn: turn('workspace-action') };
+      }),
+      loadCareerMap: vi.fn(async () => ({ status: 'ready' as const, map: canonical })),
+      persistCareerMapOperation: vi.fn(async () => {
+        persistStarted();
+        await persistGate;
+        return { status: 'rejected' as const, map: canonical, error: { code: 'operation-unavailable' as const } };
+      }),
+    });
+    const outbound = request(testApp({
+      storage, requireAuth: authenticated, agentEnabled: true,
+      now: () => new Date(timestamp(3)), operationalLog: vi.fn(),
+    })).post('/api/agent/workspace/operations').send({
+      operationId: 'operation-after-foreign-commit', clientMessageId: 'client-message-1',
+      operation: {
+        type: 'confirm-why',
+        input: {
+          whyId: 'why-1', whyRevision: 1,
+          presentedInTurnId: 'prior-assistant-turn', sourceMessageId: 'client-message-1',
+        },
+      },
+    });
+    const settled = Promise.resolve(outbound).catch(() => undefined);
+    await persistStartedGate;
+    outbound.abort();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    releasePersist();
+    await settled;
+    await vi.waitFor(() => expect(storage.cancelAgentTurn).toHaveBeenCalledOnce());
+
+    expect(storage.cancelAgentTurn.mock.calls[0]?.[0]?.result).toMatchObject({
+      kind: 'cancelled', revision: foreign.map.revision, operationCommitted: false,
+    });
   });
 
   it('records abort-after-commit recovery markers and replays cancellation without invoking the workspace operation twice', async () => {

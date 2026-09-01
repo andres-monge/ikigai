@@ -299,6 +299,34 @@ describe('compileCareerMapBriefing', () => {
     expect(briefing.markdown).not.toContain('briefing-source-1');
   });
 
+  it('returns a model-safe projection that structurally omits retrieved research payloads', () => {
+    const titleContinuation = 'MODEL-SAFE-TITLE-CONTINUATION';
+    const excerptContinuation = 'MODEL-SAFE-EXCERPT-CONTINUATION';
+    const providerResultId = 'MODEL-SAFE-PROVIDER-RESULT';
+    const map = withPendingProject();
+    const source = map.pathSets[0].paths[0].sources?.[0];
+    if (!source || source.kind !== 'cited-research') throw new Error('Expected cited research fixture.');
+    source.title = `Visible canonical title\n${titleContinuation}`;
+    source.excerpt = `Visible canonical excerpt\n${excerptContinuation}`;
+    source.providerResultId = providerResultId;
+
+    const briefing = compileCareerMapBriefing(map) as ReturnType<typeof compileCareerMapBriefing> & {
+      modelMarkdown?: string;
+    };
+
+    expect(briefing.markdown).toContain(titleContinuation);
+    expect(briefing.markdown).toContain(excerptContinuation);
+    expect(briefing.markdown).toContain(providerResultId);
+    expect(briefing.modelMarkdown).toEqual(expect.any(String));
+    expect(briefing.modelMarkdown).toContain(
+      'Research source provenance recorded server-side; retrieved title and content omitted from instructions.',
+    );
+    expect(briefing.modelMarkdown).not.toContain(titleContinuation);
+    expect(briefing.modelMarkdown).not.toContain(excerptContinuation);
+    expect(briefing.modelMarkdown).not.toContain(providerResultId);
+    expect(briefing.modelMarkdown).not.toContain('https://example.com/current');
+  });
+
   it('includes equal parked choices only while that path decision is open', () => {
     let map = withConfirmedWhy();
     map = commit(map, 'propose-purpose-paths', { setId: 'briefing-path-set', setRevision: 1, paths: paths(), presentation: presentation(3) });
