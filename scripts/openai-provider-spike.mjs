@@ -302,6 +302,21 @@ function cleanupConversations() {
   return cleanupPromise;
 }
 
+function isStrictEmptyObjectSchema(parameters) {
+  const properties = parameters?.properties;
+  const required = parameters?.required;
+  return Boolean(
+    parameters
+    && parameters.type === 'object'
+    && parameters.additionalProperties === false
+    && properties
+    && typeof properties === 'object'
+    && !Array.isArray(properties)
+    && Object.keys(properties).length === 0
+    && (required === undefined || (Array.isArray(required) && required.length === 0)),
+  );
+}
+
 function inspectProviderRequestBody(
   serializedBody,
   { focusedBriefingMarker, rawPrivateMarkers = [] } = {},
@@ -360,15 +375,7 @@ function inspectProviderRequestBody(
         : 'other'
     )),
     naturalConversationToolStrict: naturalConversationTool?.strict === true,
-    naturalConversationToolEmptyObjectSchema: Boolean(
-      naturalParameters
-      && naturalParameters.type === 'object'
-      && naturalParameters.additionalProperties === false
-      && naturalParameters.properties
-      && Object.keys(naturalParameters.properties).length === 0
-      && Array.isArray(naturalParameters.required)
-      && naturalParameters.required.length === 0,
-    ),
+    naturalConversationToolEmptyObjectSchema: isStrictEmptyObjectSchema(naturalParameters),
   };
 }
 
@@ -384,6 +391,31 @@ function proveRequestBoundaryDetector() {
     JSON.stringify({ instructions: 'Public-only synthetic research.' }),
     detectorOptions,
   );
+  const naturalToolRequest = (parameters) => inspectProviderRequestBody(JSON.stringify({
+    tools: [{
+      type: 'function',
+      name: 'continue_natural_conversation',
+      strict: true,
+      parameters,
+    }],
+  }));
+  const strictEmptyWithoutRequired = naturalToolRequest({
+    type: 'object',
+    properties: {},
+    additionalProperties: false,
+  });
+  const strictEmptyWithRequired = naturalToolRequest({
+    type: 'object',
+    properties: {},
+    required: [],
+    additionalProperties: false,
+  });
+  const nonEmptyRequired = naturalToolRequest({
+    type: 'object',
+    properties: {},
+    required: ['unexpected'],
+    additionalProperties: false,
+  });
 
   assert(
     leaked?.rawPrivateStatePresent && leaked?.focusedBriefingPresent,
@@ -392,6 +424,17 @@ function proveRequestBoundaryDetector() {
   assert(
     !clean?.rawPrivateStatePresent && !clean?.focusedBriefingPresent,
     'The request-boundary detector produced a private-marker false positive.',
+  );
+  assert(
+    strictEmptyWithoutRequired?.naturalConversationToolStrict
+      && strictEmptyWithoutRequired.naturalConversationToolEmptyObjectSchema
+      && strictEmptyWithRequired?.naturalConversationToolStrict
+      && strictEmptyWithRequired.naturalConversationToolEmptyObjectSchema,
+    'The request-boundary detector rejected a valid strict zero-property schema.',
+  );
+  assert(
+    !nonEmptyRequired?.naturalConversationToolEmptyObjectSchema,
+    'The request-boundary detector accepted a schema with a required field.',
   );
   return true;
 }

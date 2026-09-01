@@ -3,6 +3,7 @@ import request from 'supertest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createCareerMap } from '../shared/career-map/index.js';
 import { createApiRequestLogger, createApp } from './app.js';
+import { normalizeMethodRequestPath } from './routes/agent-logging.js';
 import { storage as defaultStorage } from './storage.js';
 
 const { transcribeProtectedAudio } = vi.hoisted(() => {
@@ -39,6 +40,12 @@ afterEach(() => {
 });
 
 describe('protected Method logger boundary', () => {
+  it('normalizes only nested Method mount aliases and rejects lookalike prefixes', () => {
+    expect(normalizeMethodRequestPath('/api//AGENT/Workspace/')).toBe('/workspace');
+    expect(normalizeMethodRequestPath('/api//agentish/workspace')).toBeUndefined();
+    expect(normalizeMethodRequestPath('/api/agentish/workspace')).toBeUndefined();
+  });
+
   it('never captures protected response bodies while preserving the legacy logger behavior', async () => {
     const writeLog = vi.fn();
     const app = express();
@@ -75,6 +82,22 @@ describe('protected Method logger boundary', () => {
     expect(JSON.stringify(consoleLog.mock.calls)).toContain('workspace-read');
     expect(JSON.stringify([consoleLog.mock.calls, consoleError.mock.calls])).not.toContain(mapSentinel);
     expect(JSON.stringify(consoleLog.mock.calls)).not.toContain('/api/AGENT/Workspace/');
+  });
+
+  it('keeps the nested-mount double-separator workspace alias out of the legacy body logger', async () => {
+    const mapSentinel = 'PRIVATE_DOUBLE_SEPARATOR_MAP_SENTINEL';
+    const map = createCareerMap(mapSentinel);
+    vi.spyOn(defaultStorage, 'loadCareerMap').mockResolvedValueOnce({ status: 'ready', map });
+    const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const response = await request(createApp()).get('/api//agent/workspace');
+
+    expect(response.status).toBe(200);
+    expect(JSON.stringify(response.body)).toContain(mapSentinel);
+    expect(JSON.stringify(consoleLog.mock.calls)).toContain('workspace-read');
+    expect(JSON.stringify([consoleLog.mock.calls, consoleError.mock.calls])).not.toContain(mapSentinel);
+    expect(JSON.stringify(consoleLog.mock.calls)).not.toContain('/api//agent/workspace');
   });
 });
 
@@ -137,6 +160,18 @@ describe('protected Method parser error boundary', () => {
       sentinel: 'PRIVATE_MIXED_CASE_PARSER_SENTINEL',
       send: (app: ReturnType<typeof createApp>, sentinel: string) => request(app)
         .post('/api/AGENT/')
+        .set('content-type', 'application/json')
+        .send(`{"id":"message","message":"${sentinel}`),
+    },
+    {
+      label: 'nested-mount double-separator malformed Method request',
+      route: '/api//agent/PRIVATE_DOUBLE_SEPARATOR_PARSER_SENTINEL',
+      routeLabel: 'method-unmatched',
+      status: 400,
+      errorClass: 'SyntaxError',
+      sentinel: 'PRIVATE_DOUBLE_SEPARATOR_PARSER_SENTINEL',
+      send: (app: ReturnType<typeof createApp>, sentinel: string) => request(app)
+        .post(`/api//agent/${sentinel}`)
         .set('content-type', 'application/json')
         .send(`{"id":"message","message":"${sentinel}`),
     },

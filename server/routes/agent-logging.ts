@@ -8,14 +8,17 @@ export type MethodRouteLabel =
 
 /**
  * Match Express's default case-insensitive, non-strict Method routing without
- * changing route behavior. One optional trailing slash is canonicalized;
- * lookalike prefixes and interior/doubled slashes remain outside or unmatched.
+ * changing route behavior. Separators consumed across the nested `/api` and
+ * `/agent` mounts plus one optional trailing slash are canonicalized;
+ * lookalike prefixes and doubled separators inside the remaining path stay
+ * outside or unmatched.
  */
 export function normalizeMethodRequestPath(requestPath: string): string | undefined {
   const lowerPath = requestPath.toLowerCase();
-  if (lowerPath === '/api/agent' || lowerPath === '/api/agent/') return '/';
-  if (!lowerPath.startsWith('/api/agent/')) return undefined;
-  const relativePath = lowerPath.slice('/api/agent'.length);
+  const namespace = /^\/api\/+agent(?=\/+|$)/.exec(lowerPath);
+  if (!namespace) return undefined;
+  const suffix = lowerPath.slice(namespace[0].length);
+  const relativePath = suffix.length === 0 ? '/' : suffix.replace(/^\/+/, '/');
   if (relativePath.length > 1 && relativePath.endsWith('/') && !relativePath.endsWith('//')) {
     return relativePath.slice(0, -1);
   }
