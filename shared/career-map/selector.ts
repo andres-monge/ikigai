@@ -73,11 +73,11 @@ function focusModule(focus: Focus): MethodModule {
   }
 }
 
-function activePath(map: CareerMap) {
+export function selectActivePurposePath(map: CareerMap) {
   return map.pathSets.findLast((set) => set.status === 'active')?.paths.find((path) => path.selection === 'active');
 }
 
-function latestAcceptedProject(map: CareerMap) {
+export function selectLatestAcceptedProject(map: CareerMap) {
   let latest: CareerMap['projects'][number] | undefined;
   for (const project of map.projects) {
     if (project.agreementStatus === 'accepted' && (!latest || project.number > latest.number)) latest = project;
@@ -100,7 +100,7 @@ function pendingDecision(map: CareerMap): { module: MethodModule; decision: Pend
 
   const pathSet = map.pathSets.findLast((item) => item.status === 'suggested');
   if (pathSet) {
-    const hasActivePath = Boolean(activePath(map));
+    const hasActivePath = Boolean(selectActivePurposePath(map));
     return {
       module: 'create-purpose-paths',
       decision: {
@@ -227,7 +227,7 @@ function normalLifecycle(map: CareerMap): { module: MethodModule; operations: Ca
     ],
   };
 
-  const path = activePath(map);
+  const path = selectActivePurposePath(map);
   const move = map.nextMoves.at(-1);
   if (!path) {
     return { module: 'create-purpose-paths', operations: ['propose-purpose-paths', 'open-foundation-revision-focus'] };
@@ -262,7 +262,7 @@ function normalLifecycle(map: CareerMap): { module: MethodModule; operations: Ca
     return { module: 'design-path-project', operations: ['propose-follow-on-projects'] };
   }
 
-  const project = latestAcceptedProject(map);
+  const project = selectLatestAcceptedProject(map);
   if (!project || project.basisPath.id !== path.id || project.basisPath.revision !== path.revision) {
     const hasCompletedLoop = map.nextMoves.length > 0;
     return {

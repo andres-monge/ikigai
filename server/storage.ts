@@ -43,6 +43,7 @@ import {
 } from '../shared/schema.js';
 import {
   applyCareerMapOperation as reduceCareerMapOperation,
+  CAREER_MAP_SCHEMA_VERSION,
   careerMapSchema,
   createCareerMap,
   operationReceiptSchema,
@@ -61,8 +62,9 @@ import {
   type UserActionProvenance,
 } from '../shared/career-map/index.js';
 
-export const CURRENT_CAREER_MAP_SCHEMA_VERSION = 1;
+export const CURRENT_CAREER_MAP_SCHEMA_VERSION = CAREER_MAP_SCHEMA_VERSION;
 export const DEFAULT_TURN_LEASE_MS = 360_000;
+const METHOD_OWNER_LOCK_SEED = 20260831;
 
 export type RepairReason =
   | 'unsupported-schema'
@@ -483,7 +485,7 @@ type CitedResearchSource = Extract<SourceProvenance, { kind: 'cited-research' }>
 
 interface SourceClaim {
   source: SourceProvenance;
-  parent: Record<string, unknown>;
+  parent: Record<string, unknown> & { id: string; revision: number };
 }
 
 function collectSourceClaims(value: unknown): SourceClaim[] {
@@ -499,7 +501,10 @@ function collectSourceClaims(value: unknown): SourceClaim[] {
         && ['cited-research', 'user-supplied-source'].includes(
           String((source as Record<string, unknown>).kind),
         ))
-      .map((source) => ({ source, parent: record }))
+      .map((source) => ({
+        source,
+        parent: record as Record<string, unknown> & { id: string; revision: number },
+      }))
     : [];
   return [
     ...direct,
@@ -577,9 +582,12 @@ function sourceBearingInputSnapshot(value: unknown): string | undefined {
   return undefined;
 }
 
-function unchangedCanonicalSourceClaim(map: CareerMap, claim: SourceClaim): boolean {
-  const claimSnapshot = sourceBearingInputSnapshot(claim.parent);
-  if (!claimSnapshot) return false;
+function sourceBearingInputIdentity(value: { id: string; revision: number }): string | undefined {
+  const snapshot = sourceBearingInputSnapshot(value);
+  return snapshot ? JSON.stringify([value.id, value.revision, snapshot]) : undefined;
+}
+
+function canonicalSourceClaimIdentities(map: CareerMap): Set<string> {
   const candidates = [
     ...map.pathSets.flatMap((set) => set.paths),
     ...map.projects,
@@ -587,9 +595,10 @@ function unchangedCanonicalSourceClaim(map: CareerMap, claim: SourceClaim): bool
     ...map.peerExposures,
     ...map.sideDoorSets.flatMap((set) => set.doors),
   ];
-  return candidates.some((candidate) => candidate.id === claim.parent.id
-    && candidate.revision === claim.parent.revision
-    && sourceBearingInputSnapshot(candidate) === claimSnapshot);
+  return new Set(candidates.flatMap((candidate) => {
+    const identity = sourceBearingInputIdentity(candidate);
+    return identity ? [identity] : [];
+  }));
 }
 
 function historyMatchesMap(
@@ -705,7 +714,7 @@ function validateCareerMapRow(
 async function validateCareerMapForWrite(
   transaction: StorageTransaction,
   userId: string,
-  now: Date,
+  now: Date | (() => Date),
 ): Promise<Exclude<CareerMapLoadResult, { status: 'erasure-pending' }>> {
   const [row] = await transaction
     .select()
@@ -725,10 +734,30 @@ async function validateCareerMapForWrite(
   if (result.status === 'repair-required' && !row.repairRequired) {
     await transaction
       .update(careerMaps)
-      .set({ repairRequired: true, updatedAt: now })
+      .set({ repairRequired: true, updatedAt: typeof now === 'function' ? now() : now })
       .where(eq(careerMaps.userId, userId));
   }
   return result;
+}
+
+async function lockMethodOwner(transaction: StorageTransaction, userId: string): Promise<void> {
+  await transaction.execute(
+    sql`select pg_advisory_xact_lock(hashtextextended(${userId}, ${METHOD_OWNER_LOCK_SEED}))`,
+  );
+}
+
+function rowsByUserId<T extends { userId: string }>(rows: T[]): Map<string, T[]> {
+  const grouped = new Map<string, T[]>();
+  for (const row of rows) {
+    const ownerRows = grouped.get(row.userId) ?? [];
+    ownerRows.push(row);
+    grouped.set(row.userId, ownerRows);
+  }
+  return grouped;
+}
+
+function turnLeaseIdentity(userId: string, turnId: string, leaseId: string): string {
+  return JSON.stringify([userId, turnId, leaseId]);
 }
 
 /* ------------------------------------------------------------------ */
@@ -876,29 +905,8 @@ export class PostgresStorage implements IStorage {
     return this.database.transaction(async (tx) => {
       // A load that can make repair-required sticky must observe one atomic
       // map/history state, never the midpoint of a valid writer transaction.
-      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${userId}, 20260831))`);
-      const [row] = await tx
-        .select()
-        .from(careerMaps)
-        .where(eq(careerMaps.userId, userId));
-      if (!row) return { status: 'not-found' };
-      const history = await tx
-        .select()
-        .from(careerMapHistory)
-        .where(eq(careerMapHistory.userId, userId))
-        .orderBy(asc(careerMapHistory.resultRevision));
-      const research = await tx
-        .select()
-        .from(careerMapResearchAttempts)
-        .where(eq(careerMapResearchAttempts.userId, userId));
-      const result = validateCareerMapRow(row, history, research);
-      if (result.status === 'repair-required' && !row.repairRequired) {
-        await tx
-          .update(careerMaps)
-          .set({ repairRequired: true, updatedAt: this.now() })
-          .where(eq(careerMaps.userId, userId));
-      }
-      return result;
+      await lockMethodOwner(tx, userId);
+      return validateCareerMapForWrite(tx, userId, this.now);
     });
   }
 
@@ -906,7 +914,7 @@ export class PostgresStorage implements IStorage {
     const now = this.now();
     const map = createCareerMap(userId);
     return this.database.transaction(async (tx) => {
-      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${userId}, 20260831))`);
+      await lockMethodOwner(tx, userId);
       const [erasure] = await tx
         .select({ userId: methodErasureJobs.userId })
         .from(methodErasureJobs)
@@ -924,28 +932,7 @@ export class PostgresStorage implements IStorage {
           updatedAt: now,
         })
         .onConflictDoNothing({ target: careerMaps.userId });
-      const [row] = await tx
-        .select()
-        .from(careerMaps)
-        .where(eq(careerMaps.userId, userId));
-      if (!row) return { status: 'not-found' };
-      const history = await tx
-        .select()
-        .from(careerMapHistory)
-        .where(eq(careerMapHistory.userId, userId))
-        .orderBy(asc(careerMapHistory.resultRevision));
-      const research = await tx
-        .select()
-        .from(careerMapResearchAttempts)
-        .where(eq(careerMapResearchAttempts.userId, userId));
-      const result = validateCareerMapRow(row, history, research);
-      if (result.status === 'repair-required' && !row.repairRequired) {
-        await tx
-          .update(careerMaps)
-          .set({ repairRequired: true, updatedAt: now })
-          .where(eq(careerMaps.userId, userId));
-      }
-      return result;
+      return validateCareerMapForWrite(tx, userId, now);
     });
   }
 
@@ -966,7 +953,7 @@ export class PostgresStorage implements IStorage {
   }): Promise<PersistCareerMapResult> {
     const now = this.now();
     return this.database.transaction(async (tx) => {
-      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${input.userId}, 20260831))`);
+      await lockMethodOwner(tx, input.userId);
       const [erasure] = await tx
         .select({ userId: methodErasureJobs.userId })
         .from(methodErasureJobs)
@@ -1081,8 +1068,12 @@ export class PostgresStorage implements IStorage {
         }
       }
 
+      const canonicalSourceIdentities = canonicalSourceClaimIdentities(loaded.map);
       const newSourceClaims = collectSourceClaims(input.operation.payload)
-        .filter((claim) => !unchangedCanonicalSourceClaim(loaded.map, claim));
+        .filter((claim) => {
+          const identity = sourceBearingInputIdentity(claim.parent);
+          return !identity || !canonicalSourceIdentities.has(identity);
+        });
       const invalidUserSource = newSourceClaims.some((claim) => (
         claim.source.kind === 'user-supplied-source'
         && (
@@ -1243,7 +1234,7 @@ export class PostgresStorage implements IStorage {
     const expiresAt = new Date(now.getTime() + leaseDurationMs);
 
     return this.database.transaction(async (tx) => {
-      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${input.userId}, 20260831))`);
+      await lockMethodOwner(tx, input.userId);
       const [erasure] = await tx
         .select({ userId: methodErasureJobs.userId })
         .from(methodErasureJobs)
@@ -1429,7 +1420,7 @@ export class PostgresStorage implements IStorage {
   }): Promise<AgentTurnRecord | undefined> {
     const now = this.now();
     return this.database.transaction(async (tx) => {
-      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${input.userId}, 20260831))`);
+      await lockMethodOwner(tx, input.userId);
       const [lease] = await tx
         .select()
         .from(agentTurnLeases)
@@ -1548,7 +1539,7 @@ export class PostgresStorage implements IStorage {
 
   async releaseTurnLease(userId: string, turnId: string, leaseId: string): Promise<boolean> {
     return this.database.transaction(async (tx) => {
-      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${userId}, 20260831))`);
+      await lockMethodOwner(tx, userId);
       const [lease] = await tx
         .select({ leaseId: agentTurnLeases.leaseId })
         .from(agentTurnLeases)
@@ -1594,7 +1585,7 @@ export class PostgresStorage implements IStorage {
       throw new ResearchAttemptSourceError();
     }
     const result = await this.database.transaction(async (tx) => {
-      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${userId}, 20260831))`);
+      await lockMethodOwner(tx, userId);
       const [erasure] = await tx
         .select({ userId: methodErasureJobs.userId })
         .from(methodErasureJobs)
@@ -1657,7 +1648,7 @@ export class PostgresStorage implements IStorage {
   }): Promise<void> {
     const now = this.now();
     const result = await this.database.transaction(async (tx) => {
-      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${input.userId}, 20260831))`);
+      await lockMethodOwner(tx, input.userId);
       const [erasure] = await tx
         .select({ userId: methodErasureJobs.userId })
         .from(methodErasureJobs)
@@ -1690,7 +1681,7 @@ export class PostgresStorage implements IStorage {
   async setConversationMapping(userId: string, leaseId: string, conversationId: string): Promise<void> {
     const now = this.now();
     const result = await this.database.transaction(async (tx) => {
-      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${userId}, 20260831))`);
+      await lockMethodOwner(tx, userId);
       const [erasure] = await tx
         .select({ userId: methodErasureJobs.userId })
         .from(methodErasureJobs)
@@ -1742,7 +1733,7 @@ export class PostgresStorage implements IStorage {
     const now = this.now();
     const newJobId = randomUUID();
     const marker = await this.database.transaction(async (tx) => {
-      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${userId}, 20260831))`);
+      await lockMethodOwner(tx, userId);
       const [existingJob] = await tx
         .select()
         .from(methodErasureJobs)
@@ -1834,14 +1825,24 @@ export class PostgresStorage implements IStorage {
       const mappingRows = await tx.select().from(agentConversationMappings);
       const erasureRows = await tx.select().from(methodErasureJobs);
       const owners = new Set(rows.map((row) => row.userId));
+      const historyByUserId = rowsByUserId(historyRows);
+      const researchByUserId = rowsByUserId(researchRows);
+      const turnIdentities = new Set(turnRows.map((row) => (
+        turnLeaseIdentity(row.userId, row.turnId, row.leaseId)
+      )));
+      const pendingTurnIdentities = new Set(turnRows
+        .filter((row) => row.status === 'pending')
+        .map((row) => turnLeaseIdentity(row.userId, row.turnId, row.leaseId)));
+      const leaseIdentities = new Set(leaseRows.map((row) => (
+        turnLeaseIdentity(row.userId, row.turnId, row.leaseId)
+      )));
       const invalidRecords: Array<{ userId: string; reason: RepairReason }> = [];
       for (const row of rows) {
         const result = validateCareerMapRow(
           row,
-          historyRows
-            .filter((history) => history.userId === row.userId)
+          [...(historyByUserId.get(row.userId) ?? [])]
             .sort((left, right) => left.resultRevision - right.resultRevision),
-          researchRows.filter((research) => research.userId === row.userId),
+          researchByUserId.get(row.userId) ?? [],
         );
         if (result.status === 'repair-required') {
           invalidRecords.push({ userId: row.userId, reason: result.reason });
@@ -1849,9 +1850,7 @@ export class PostgresStorage implements IStorage {
       }
       const orphanHistory = historyRows.filter((row) => !owners.has(row.userId)).length;
       const orphanResearchAttempts = researchRows.filter((row) => !owners.has(row.userId)
-        || !turnRows.some((turn) => turn.userId === row.userId
-          && turn.turnId === row.turnId
-          && turn.leaseId === row.leaseId)).length;
+        || !turnIdentities.has(turnLeaseIdentity(row.userId, row.turnId, row.leaseId))).length;
       const invalidResearchAttempts = researchRows.filter((row) => {
         const parsed = researchAttemptSchema.safeParse(row.attempt);
         return !parsed.success || parsed.data.id !== row.id;
@@ -1860,16 +1859,11 @@ export class PostgresStorage implements IStorage {
       const orphanTurns = turnRows.filter((row) => !owners.has(row.userId)).length;
       const orphanLeases = leaseRows.filter((row) => !owners.has(row.userId)).length;
       const orphanConversationMappings = mappingRows.filter((row) => !owners.has(row.userId)).length;
-      const invalidLeases = leaseRows.filter((lease) => !turnRows.some(
-        (turn) => turn.userId === lease.userId
-          && turn.turnId === lease.turnId
-          && turn.leaseId === lease.leaseId
-          && turn.status === 'pending',
+      const invalidLeases = leaseRows.filter((lease) => !pendingTurnIdentities.has(
+        turnLeaseIdentity(lease.userId, lease.turnId, lease.leaseId),
       )).length;
       const pendingTurnsWithoutLease = turnRows.filter((turn) => turn.status === 'pending'
-        && !leaseRows.some((lease) => lease.userId === turn.userId
-          && lease.turnId === turn.turnId
-          && lease.leaseId === turn.leaseId)).length;
+        && !leaseIdentities.has(turnLeaseIdentity(turn.userId, turn.turnId, turn.leaseId))).length;
       const pendingErasureJobs = erasureRows.length;
       return {
         totalMaps: rows.length,

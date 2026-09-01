@@ -15,6 +15,11 @@ import {
   applyCareerMapOperation,
   createCareerMap,
   deriveMethodCheckpoint,
+  foundationEvidenceSchema,
+  pathProjectInputSchema,
+  purposePathInputSchema,
+  realityConstraintSchema,
+  whyInputSchema,
 } from '../shared/career-map/index.ts';
 import {
   BASE_INSTRUCTIONS_VERSION,
@@ -53,6 +58,12 @@ function assert(condition, message) {
   if (!condition) throw new EvaluationAssertionError(message);
 }
 
+function expectedR22Framing(scenario) {
+  return scenario.openingLanguage === 'en' && scenario.languageChangeTurn === undefined
+    ? R22_CANONICAL_ENGLISH
+    : R22_CANONICAL_SPANISH;
+}
+
 if (!allowedModels.has(modelId)) {
   throw new EvaluationAssertionError(`REVELIO_METHOD_MODEL must be one of the G1 native passing models; received ${modelId}.`);
 }
@@ -60,27 +71,11 @@ if (!Number.isSafeInteger(requestTimeoutMs) || requestTimeoutMs <= 0) {
   throw new EvaluationAssertionError('REVELIO_METHOD_TIMEOUT_MS must be a positive integer.');
 }
 
-const pathInputSchema = z.object({
-  name: z.string().min(1).max(300),
-  servesWhy: z.string().min(1).max(2_000),
-  possibility: z.string().min(1).max(2_000),
-  evidence: z.array(z.string().min(1).max(2_000)).min(1),
-  centralUnknown: z.string().min(1).max(2_000),
-  projectPreview: z.string().min(1).max(2_000),
-  practicalFit: z.string().min(1).max(2_000),
-}).strict();
-
-const projectInputSchema = z.object({
-  title: z.string().min(1).max(500),
-  outcome: z.string().min(1).max(3_000),
-  audience: z.string().min(1).max(2_000),
-  whyWanted: z.string().min(1).max(2_000),
-  learningGoal: z.string().min(1).max(2_000),
-  firstVersion: z.string().min(1).max(3_000),
-  firstStep: z.string().min(1).max(2_000),
-  decisionQuestion: z.string().min(1).max(2_000),
-  evidenceCue: z.string().min(1).max(2_000),
-}).strict();
+const pathInputSchema = purposePathInputSchema.omit({ id: true, revision: true, sources: true });
+const projectInputSchema = pathProjectInputSchema.omit({ id: true, revision: true, sources: true });
+const foundationEvidenceToolInputSchema = foundationEvidenceSchema.pick({ category: true, content: true });
+const realityConstraintToolInputSchema = realityConstraintSchema.pick({ kind: true, description: true });
+const whyToolInputSchema = whyInputSchema.omit({ id: true, revision: true });
 
 const projectGroundingSchema = z.discriminatedUnion('kind', [
   z.object({
@@ -297,7 +292,7 @@ function proveU2FirstProjectReplacementBoundary() {
   const checkpoint = deriveMethodCheckpoint(map);
   assert(
     checkpoint.availableOperations.includes('accept-first-project'),
-    'U2 boundary blocks U3: replacing an unaccepted first project removes accept-first-project, while confirm-project-revision requires an already accepted source project.',
+    'U2 boundary blocks U3: replacing an unaccepted first project must preserve accept-first-project for the replacement.',
   );
 }
 
@@ -418,12 +413,6 @@ function createSyntheticHarness(scenario, loader, model) {
       projectGroundingKind: privacySafeObservation.projectGroundingKind ?? null,
       projectGroundingBasisProvided: privacySafeObservation.projectGroundingBasisProvided ?? false,
       authoritativeRevision: map.revision,
-      moduleBefore: before.module,
-      moduleAfter: after.module,
-      pendingDecision: after.pendingDecision?.kind ?? null,
-      whyConfirmedBefore: map.foundation.whyRevisions.some((item) => item.status === 'confirmed') || type === 'confirm-why',
-      activePathBefore: beforeSet?.paths.find((item) => item.selection === 'active')?.id ?? null,
-      activePathAfter: afterSet?.paths.find((item) => item.selection === 'active')?.id ?? null,
       pathIdsBefore: beforeSet?.paths.map((item) => item.id) ?? [],
       pathIdsAfter: afterSet?.paths.map((item) => item.id) ?? [],
       suggestedProjectCount: map.projects.filter((item) => item.agreementStatus === 'suggested').length,
@@ -441,31 +430,21 @@ function createSyntheticHarness(scenario, loader, model) {
   const tools = {
     append_foundation_evidence: tool({
       description: 'Record one supported Foundation evidence item from the current user message. Do not duplicate evidence already in canonical state.',
-      inputSchema: z.object({
-        category: z.enum(['fascination', 'importance', 'point-of-view', 'starting-asset', 'reality-boundary', 'firsthand-evidence']),
-        content: z.string().min(1).max(8_000),
-      }).strict(),
+      inputSchema: foundationEvidenceToolInputSchema,
       execute: ({ category, content }, { toolCallId }) => commit('append-foundation-evidence', {
         evidence: { id: nextId('evidence'), revision: 1, category, content, provenance: userEvidence() },
       }, toolCallId),
     }),
     record_reality_constraint: tool({
       description: 'Record one current practical reality constraint, including an explicit absence of constraints.',
-      inputSchema: z.object({
-        kind: z.enum(['income', 'time', 'location', 'responsibility', 'health', 'risk', 'none', 'other']),
-        description: z.string().min(1).max(2_000),
-      }).strict(),
+      inputSchema: realityConstraintToolInputSchema,
       execute: ({ kind, description }, { toolCallId }) => commit('record-reality-constraint', {
         constraint: { id: nextId('constraint'), revision: 1, kind, description, provenance: userEvidence() },
       }, toolCallId),
     }),
     propose_why: tool({
       description: 'Propose one concise Why I Work only after minimum-sufficient Foundation coverage exists. This does not confirm it.',
-      inputSchema: z.object({
-        statement: z.string().min(1).max(1_000),
-        serves: z.string().min(1).max(1_000),
-        pointOfView: z.string().min(1).max(2_000),
-      }).strict(),
+      inputSchema: whyToolInputSchema,
       execute: (why, { toolCallId }) => commit('propose-why', {
         why: { id: nextId('why'), revision: 1, ...why },
         presentation: presentation(),
@@ -609,9 +588,7 @@ function createSyntheticHarness(scenario, loader, model) {
         const project = currentSuggestedProject();
         assert(project, `${scenario.id}: no first project is available to accept.`);
         assert(/\baccept\b|\bacepto\b|\baceptar\b/i.test(currentUserText), `${scenario.id}: project acceptance lacked explicit user intent.`);
-        const expectedFraming = scenario.openingLanguage === 'en' && scenario.languageChangeTurn === undefined
-          ? R22_CANONICAL_ENGLISH
-          : R22_CANONICAL_SPANISH;
+        const expectedFraming = expectedR22Framing(scenario);
         assert(summarizeR22Presentation(previousAssistantText, expectedFraming).valid, `${scenario.id}: project acceptance did not follow the strict locale-correct R22 presentation.`);
         return commit('accept-first-project', {
           projectId: project.id,
@@ -631,9 +608,11 @@ function createSyntheticHarness(scenario, loader, model) {
     prepareStep: ({ stepNumber }) => {
       const checkpoint = deriveMethodCheckpoint(map);
       const bundle = loader.load(checkpoint);
-      const activeTools = checkpoint.availableOperations
-        .map((operation) => operationToTool[operation])
-        .filter(Boolean);
+      const activeTools = checkpoint.availableOperations.map((operation) => {
+        const toolName = operationToTool[operation];
+        assert(toolName, `${scenario.id}: no evaluation tool is registered for available operation ${operation}.`);
+        return toolName;
+      });
       const instructions = [
         BASE_METHOD_INSTRUCTIONS,
         `Base instructions version: ${BASE_INSTRUCTIONS_VERSION}.`,
@@ -730,9 +709,7 @@ function assessScenario(scenario, result) {
   const projectReplacement = scenario.projectReplacementTurn === undefined
     ? null
     : summarizeFirstProjectReplacement(operations, scenario.projectReplacementTurn);
-  const expectedFraming = scenario.openingLanguage === 'en' && scenario.languageChangeTurn === undefined
-    ? R22_CANONICAL_ENGLISH
-    : R22_CANONICAL_SPANISH;
+  const expectedFraming = expectedR22Framing(scenario);
   const r22Presentation = summarizeR22Presentation(framingTurn?.replyText ?? '', expectedFraming);
 
   assert(why, `${scenario.id}: no confirmed Why remained in canonical state.`);
@@ -834,9 +811,7 @@ function retainedDiagnostic(scenario, result) {
   const framingTurn = acceptedOperation === undefined
     ? undefined
     : result.turns.find((item) => item.turnIndex === acceptedOperation.turnIndex - 1);
-  const expectedFraming = scenario.openingLanguage === 'en' && scenario.languageChangeTurn === undefined
-    ? R22_CANONICAL_ENGLISH
-    : R22_CANONICAL_SPANISH;
+  const expectedFraming = expectedR22Framing(scenario);
   return {
     sample: scenario.id,
     revision: result.map.revision,

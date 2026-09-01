@@ -1,6 +1,8 @@
 import {
   careerMapSchema,
   deriveMethodCheckpoint,
+  selectActivePurposePath,
+  selectLatestAcceptedProject,
   type CareerMap,
   type MethodCheckpoint,
   type SourceProvenance,
@@ -21,18 +23,6 @@ export interface CareerMapBriefing {
   module: MethodCheckpoint['module'];
   pendingDecision: MethodCheckpoint['pendingDecision'];
   markdown: string;
-}
-
-function activePath(map: CareerMap) {
-  return map.pathSets
-    .findLast((set) => set.status === 'active')
-    ?.paths.find((path) => path.selection === 'active');
-}
-
-function latestAcceptedProject(map: CareerMap) {
-  return map.projects
-    .filter((project) => project.agreementStatus === 'accepted')
-    .sort((left, right) => right.number - left.number)[0];
 }
 
 function sourceLine(source: SourceProvenance): string {
@@ -262,7 +252,7 @@ function appendProject(
   selectedProject?: CareerMap['projects'][number],
 ): void {
   const suggested = map.projects.findLast((item) => item.agreementStatus === 'suggested');
-  const project = selectedProject ?? suggested ?? latestAcceptedProject(map);
+  const project = selectedProject ?? suggested ?? selectLatestAcceptedProject(map);
   if (!project) return;
   lines.push('## Active Path Project');
   lines.push(`Project ${project.number}: ${project.title} (${project.id}@${project.revision}; ${project.agreementStatus}; ${project.workStatus})`);
@@ -331,7 +321,7 @@ function reflectionAndProjectForCheckpoint(
   project?: CareerMap['projects'][number];
 } {
   const reflections = latestReflectionRevisions(map);
-  const currentProject = latestAcceptedProject(map);
+  const currentProject = selectLatestAcceptedProject(map);
   const reflectionFocus = checkpoint.focus?.kind === 'reflection' ? checkpoint.focus : undefined;
   const reflection = reflectionFocus
     ? reflections.find((item) => item.id === reflectionFocus.reflectionId)
@@ -353,16 +343,21 @@ function appendProjectLearningEvidence(lines: string[], map: CareerMap): void {
     .sort((left, right) => left.number - right.number);
   if (!projects.length) return;
   const reflections = latestReflectionRevisions(map);
+  const reflectionsByProject = new Map<string, typeof reflections>();
+  for (const reflection of reflections) {
+    const key = JSON.stringify([reflection.projectBasis.id, reflection.projectBasis.revision]);
+    const projectReflections = reflectionsByProject.get(key) ?? [];
+    projectReflections.push(reflection);
+    reflectionsByProject.set(key, projectReflections);
+  }
   lines.push('## Accepted Path Project evidence for proof');
   for (const project of projects) {
     lines.push(`### Project ${project.number}: ${project.title} (${project.id}@${project.revision}; ${project.workStatus})`);
     lines.push(`Outcome: ${project.outcome}`);
     lines.push(`Learning question: ${project.decisionQuestion}`);
     appendSources(lines, project.sources);
-    for (const reflection of reflections.filter(
-      (item) => item.projectBasis.id === project.id
-        && item.projectBasis.revision === project.revision,
-    )) {
+    const projectReflections = reflectionsByProject.get(JSON.stringify([project.id, project.revision])) ?? [];
+    for (const reflection of projectReflections) {
       lines.push(`Reflection ${reflection.id}@${reflection.revision} (${reflection.status}):`);
       for (const evidence of currentReflectionEvidence(reflection)) {
         lines.push(`- ${evidence.signal}: ${evidence.observation} — ${evidence.interpretation}`);
@@ -372,7 +367,7 @@ function appendProjectLearningEvidence(lines: string[], map: CareerMap): void {
 }
 
 function appendPeers(lines: string[], map: CareerMap): void {
-  const path = activePath(map);
+  const path = selectActivePurposePath(map);
   if (!path) return;
   const peers = map.peerExposures.filter(
     (peer) => peer.status !== 'superseded'

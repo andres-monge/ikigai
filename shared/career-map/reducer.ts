@@ -15,6 +15,7 @@ import {
 import type { PurposePath, PurposePathInput, PurposePathSet } from './paths';
 import type { ProjectOptionSet } from './projects';
 import type { SideDoorInput, SideDoorSet } from './side-doors';
+import { selectActivePurposePath } from './selector';
 
 type RejectionCode =
   | 'invalid-map'
@@ -76,18 +77,6 @@ function currentWhy(map: CareerMap) {
 
 function currentPathSet(map: CareerMap) {
   return map.pathSets.findLast((set) => set.status === 'active');
-}
-
-function activePath(map: CareerMap) {
-  return currentPathSet(map)?.paths.find((path) => path.selection === 'active');
-}
-
-function latestAcceptedProject(map: CareerMap) {
-  let latest: CareerMap['projects'][number] | undefined;
-  for (const project of map.projects) {
-    if (project.agreementStatus === 'accepted' && (!latest || project.number > latest.number)) latest = project;
-  }
-  return latest;
 }
 
 function latestNextMove(map: CareerMap) {
@@ -384,7 +373,7 @@ function applyDomainOperation(map: CareerMap, operation: CareerMapOperation): vo
       const selected = set.paths.find((path) => sameRevision(path, operation.payload.pathId, operation.payload.pathRevision));
       assert(selected, 'Selected Purpose Path revision is unavailable.', 'stale-target');
       const priorSet = currentPathSet(map);
-      const priorPath = activePath(map);
+      const priorPath = selectActivePurposePath(map);
       set.confirmation = auditableConfirmation(set, operation.payload.action);
       set.status = 'active';
       set.paths = set.paths.map((path) => ({ ...path, selection: path.id === selected.id && path.revision === selected.revision ? 'active' : 'parked' })) as PurposePathSet['paths'];
@@ -424,7 +413,7 @@ function applyDomainOperation(map: CareerMap, operation: CareerMapOperation): vo
       return;
     }
     case 'propose-first-project': {
-      const path = activePath(map);
+      const path = selectActivePurposePath(map);
       assert(path, 'A first Path Project requires an active Purpose Path.');
       assert(!map.projects.some((project) => project.agreementStatus === 'accepted'), 'The singular first-project flow is no longer available.');
       for (const project of map.projects.filter((item) => item.agreementStatus === 'suggested')) project.agreementStatus = 'superseded';
@@ -497,7 +486,7 @@ function applyDomainOperation(map: CareerMap, operation: CareerMapOperation): vo
       return;
     }
     case 'propose-follow-on-projects': {
-      const path = activePath(map);
+      const path = selectActivePurposePath(map);
       const move = latestNextMove(map);
       assert(path && move, 'Follow-on projects require an active path and a completed learning loop.');
       const choice = map.continueChoices.find((item) => sameRevision(item, move.continueChoiceBasis.id, move.continueChoiceBasis.revision));
@@ -647,7 +636,7 @@ function applyDomainOperation(map: CareerMap, operation: CareerMapOperation): vo
       } else {
         assert(operation.payload.kind === 'return-to-paths', 'Continue-no returns to Purpose Paths.');
       }
-      const path = activePath(map);
+      const path = selectActivePurposePath(map);
       assert(path, 'Next Move requires an active Purpose Path.');
       map.nextMoves.push({
         id: operation.payload.id,
@@ -674,7 +663,7 @@ function applyDomainOperation(map: CareerMap, operation: CareerMapOperation): vo
       return;
     }
     case 'record-peer-exposure': {
-      const path = activePath(map);
+      const path = selectActivePurposePath(map);
       assert(path, 'Peer exposure requires an active Purpose Path.');
       map.peerExposures.push({
         ...operation.payload.exposure,
@@ -686,7 +675,7 @@ function applyDomainOperation(map: CareerMap, operation: CareerMapOperation): vo
     }
     case 'revise-peer-exposure': {
       const prior = map.peerExposures.find((item) => item.id === operation.payload.supersedesExposureId && item.status === 'confirmed');
-      const path = activePath(map);
+      const path = selectActivePurposePath(map);
       assert(prior && path && sameRevision(prior.basisPath, path.id, path.revision), 'Peer revision must target a confirmed insight on the active path.', 'stale-target');
       map.peerExposures.push({
         ...operation.payload.exposure,

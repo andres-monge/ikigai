@@ -13,6 +13,8 @@ import { continueChoiceSchema, nextMoveSchema, reflectionSessionSchema } from '.
 import { commitmentIntentSchema, peerExposureSchema, provisionalCommitmentSchema } from './peers';
 import { proofInventorySchema, routeOutcomeSchema, sideDoorSetSchema } from './side-doors';
 
+export const CAREER_MAP_SCHEMA_VERSION = 1;
+
 export const focusSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('reflection'), reflectionId: entityIdSchema, reason: z.string().min(1), openedBy: userActionProvenanceSchema }).strict(),
   z.object({ kind: z.literal('peers'), reason: z.string().min(1), openedBy: userActionProvenanceSchema }).strict(),
@@ -21,7 +23,7 @@ export const focusSchema = z.discriminatedUnion('kind', [
 ]);
 
 const composedCareerMapSchema = z.object({
-  schemaVersion: z.literal(1),
+  schemaVersion: z.literal(CAREER_MAP_SCHEMA_VERSION),
   explorerId: entityIdSchema,
   revision: mapRevisionSchema,
   foundation: foundationStateSchema,
@@ -253,7 +255,7 @@ export type CareerMap = z.infer<typeof careerMapSchema>;
 
 export function createCareerMap(explorerId: string): CareerMap {
   return careerMapSchema.parse({
-    schemaVersion: 1,
+    schemaVersion: CAREER_MAP_SCHEMA_VERSION,
     explorerId,
     revision: 0,
     foundation: { evidence: [], constraints: [], whyRevisions: [] },
