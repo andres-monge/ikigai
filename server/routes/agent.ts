@@ -677,7 +677,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
           abortSignal: abort.signal,
           timing: options.provisioningHandoffTiming,
         });
-        if (handoff === 'lease-settled') begun = await storage.beginAgentTurn(beginInput);
+        if (handoff !== 'timed-out') begun = await storage.beginAgentTurn(beginInput);
       }
       if (begun.status !== 'started') {
         turnResponse(begun, response);

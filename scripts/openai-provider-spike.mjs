@@ -858,10 +858,13 @@ async function runNativeNaturalConversation({
   assert(routeRequests.length === 2, 'Natural conversation did not make exactly two provider requests.');
   assert(
     routeRequests[0].toolChoice === 'required'
+      && routeRequests[0].toolNames.length === 2
       && routeRequests[0].toolNames.includes('continue_natural_conversation')
+      && routeRequests[0].toolNames.includes('non_applicable_checkpoint_tool')
+      && !routeRequests[0].toolNames.includes('other')
       && routeRequests[0].naturalConversationToolStrict
       && routeRequests[0].naturalConversationToolEmptyObjectSchema,
-    'Provider did not receive the strict required empty no-write tool.',
+    'Provider did not receive only the two expected strict routing tools.',
   );
   assert(
     routeRequests[1].toolChoice === 'omitted' && routeRequests[1].toolNames.length === 0,
@@ -876,6 +879,10 @@ async function runNativeNaturalConversation({
     ))
       && routeRequests[0].conversationToken === routeRequests[1].conversationToken,
     'Natural conversation lost same-Conversation request-scoped instructions.',
+  );
+  assert(
+    routeRequests.every((entry) => entry.store === true),
+    'Natural conversation did not retain store=true on every provider request.',
   );
   assert(
     routeRequests[0].contextManagementPresent && !routeRequests[1].contextManagementPresent,

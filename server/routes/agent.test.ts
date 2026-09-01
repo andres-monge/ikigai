@@ -698,7 +698,7 @@ describe('protected Method routes', () => {
     };
     let providerStep = 0;
     const model = new MockLanguageModelV4({
-      doStream: async () => {
+      doStream: async (options) => {
         providerStep += 1;
         if (providerStep === 1) {
           return {
@@ -714,6 +714,15 @@ describe('protected Method routes', () => {
             }),
           };
         }
+        expect(options.prompt).toEqual([{
+          role: 'tool',
+          content: [{
+            type: 'tool-result',
+            toolCallId: 'natural-route-call',
+            toolName: NATURAL_CONVERSATION_TOOL_NAME,
+            output: { type: 'json', value: { status: 'no-write-conversation' } },
+          }],
+        }]);
         return textStream('A normal reflective response without a write.');
       },
     });
@@ -740,6 +749,15 @@ describe('protected Method routes', () => {
       .toContain(NATURAL_CONVERSATION_TOOL_NAME);
     expect(model.doStreamCalls[1]?.toolChoice).toEqual({ type: 'none' });
     expect(model.doStreamCalls[1]?.tools).toBeUndefined();
+    expect(model.doStreamCalls[1]?.prompt).toHaveLength(1);
+    expect(model.doStreamCalls[1]?.prompt[0]).toMatchObject({
+      role: 'tool',
+      content: [expect.objectContaining({
+        type: 'tool-result',
+        toolCallId: 'natural-route-call',
+        toolName: NATURAL_CONVERSATION_TOOL_NAME,
+      })],
+    });
     expect(model.doStreamCalls[1]?.providerOptions?.openai).toMatchObject({
       conversation: 'conversation-for-authenticated-owner',
       store: true,
@@ -1343,11 +1361,96 @@ describe('protected Method routes', () => {
 
     expect(response.status).toBe(409);
     expect(response.body).toMatchObject({ status: 'conflict', retryable: true });
-    expect(storage.beginAgentTurn).toHaveBeenCalledOnce();
+    expect(storage.beginAgentTurn).toHaveBeenCalledTimes(2);
     expect(storage.getTurnLease).toHaveBeenCalledOnce();
     expect(storage.getConversationMapping).toHaveBeenCalledTimes(2);
     expect(handoffDelays).toEqual([25]);
     expect(model.doStreamCalls).toHaveLength(0);
+  });
+
+  it('retries authoritatively when a mapping appears after the provisioning lease settles', async () => {
+    const activeTurnId = 'settled-provisioning-turn';
+    const retryAfter = new Date('2100-01-01T00:00:00.000Z');
+    const resumedTurn = {
+      ...turn('agent-turn'),
+      turnId: 'resumed-after-provisioning-turn',
+      clientMessageId: 'message-after-settled-provisioning',
+      leaseId: 'resumed-after-provisioning-lease',
+    };
+    let mapping: string | undefined;
+    let leaseSettled = false;
+    let beginCount = 0;
+    const storage = createStorage({
+      beginAgentTurn: vi.fn(async (): Promise<BeginAgentTurnResult> => {
+        beginCount += 1;
+        if (beginCount === 1 || !leaseSettled) {
+          return {
+            status: 'conflict', activeTurnId, retryAfter,
+            waitReason: 'conversation-provisioning',
+          };
+        }
+        return { status: 'started', shouldInvokeModel: true, turn: resumedTurn };
+      }),
+      getConversationMapping: vi.fn(async () => mapping),
+      getTurnLease: vi.fn(async () => ({
+        userId: USER_ID,
+        turnId: activeTurnId,
+        leaseId: 'settling-provisioning-lease',
+        acquiredAt: new Date(timestamp(1)),
+        expiresAt: retryAfter,
+      })),
+    });
+    let providerStep = 0;
+    const model = new MockLanguageModelV4({
+      doStream: async () => {
+        providerStep += 1;
+        if (providerStep === 1) {
+          return {
+            stream: simulateReadableStream({
+              chunks: [
+                { type: 'stream-start', warnings: [] },
+                {
+                  type: 'tool-call', toolCallId: 'resumed-natural-route-call',
+                  toolName: NATURAL_CONVERSATION_TOOL_NAME, input: JSON.stringify({}),
+                },
+                { type: 'finish', finishReason: { unified: 'tool-calls', raw: 'tool-calls' }, usage: usage() },
+              ] as never,
+            }),
+          };
+        }
+        return textStream('Reply after the provisioning owner settled.');
+      },
+    });
+    const conversationClient = {
+      createConversation: vi.fn(async () => 'must-not-create-a-new-conversation'),
+      listItems: vi.fn(async () => ({ data: [], hasMore: false })),
+    };
+
+    const response = await request(testApp({
+      storage, requireAuth: authenticated, agentEnabled: true, model, conversationClient,
+      classifyTurn: async () => 'conversation',
+      provisioningHandoffTiming: {
+        now: () => Date.now(),
+        delay: async () => {
+          mapping = 'already-bound-provider-conversation';
+          leaseSettled = true;
+        },
+      },
+      researchProvider: { search: vi.fn(async () => ({ candidates: [] })) },
+      operationalLog: vi.fn(),
+    } as never)).post('/api/agent').send({
+      id: resumedTurn.clientMessageId,
+      message: 'Continue after the first provisioning turn settled.',
+    });
+
+    expect(response.status).toBe(200);
+    expect(storage.beginAgentTurn).toHaveBeenCalledTimes(2);
+    expect(conversationClient.createConversation).not.toHaveBeenCalled();
+    expect(model.doStreamCalls).toHaveLength(2);
+    expect(model.doStreamCalls[0]?.providerOptions?.openai).toMatchObject({
+      conversation: 'already-bound-provider-conversation',
+      store: true,
+    });
   });
 
   it('bounds provisioning handoff reads with deterministic exponential backoff', async () => {
