@@ -1,17 +1,21 @@
 import {
   ToolLoopAgent,
+  generateText,
+  tool,
   type LanguageModel,
   type StreamTextTransform,
   type TextStreamPart,
   type ToolSet,
 } from 'ai';
 import { APICallError } from '@ai-sdk/provider';
+import { z } from 'zod';
 import { BASE_INSTRUCTIONS_VERSION, BASE_METHOD_INSTRUCTIONS } from './method/base-instructions.js';
 import type { MethodModuleLoader } from './method/loader.js';
 import type { DurableMethodTurnIdentity, IStorage, MethodProvenanceTiming } from '../storage.js';
 import {
   createMethodTools,
   refreshMethodState,
+  resolveConfirmationAuthorization,
   toolNamesForCheckpoint,
   type MethodResearchSession,
   type PreparedMethodState,
@@ -41,9 +45,64 @@ export interface CreateMethodAgentOptions {
   occurredAt: string;
   research?: MethodResearchSession;
   currentMessage?: string;
+  turnRoute?: MethodTurnRoute;
   abortSignal?: AbortSignal;
   onError?: (error: unknown) => void;
   onPreparedStep?: (trace: MethodPreparedStepTrace) => void;
+}
+
+export type MethodTurnRoute = 'method' | 'conversation';
+
+const methodTurnRouteSchema = z.object({
+  route: z.enum(['method', 'conversation']),
+}).strict();
+
+/**
+ * A bounded, non-authoritative routing call separates genuinely no-write
+ * conversation (which may stream progressively) from Method work (which must
+ * remain behind the result barrier). It never sees the map or briefing and can
+ * never authorize a canonical mutation; strict tools re-check every operation.
+ * Ambiguity and provider failure fail safely to the Method route.
+ */
+export async function classifyMethodTurn(input: {
+  model: LanguageModel;
+  message: string;
+  abortSignal?: AbortSignal;
+}): Promise<MethodTurnRoute> {
+  try {
+    const result = await generateText({
+      model: privacySafeStreamingModel(input.model),
+      abortSignal: input.abortSignal,
+      prompt: input.message,
+      tools: {
+        route_method_turn: tool({
+          description: 'Classify the current explorer message for streaming safety only.',
+          inputSchema: methodTurnRouteSchema,
+          strict: true,
+        }),
+      },
+      toolChoice: { type: 'tool', toolName: 'route_method_turn' },
+      maxOutputTokens: 40,
+      providerOptions: {
+        openai: {
+          store: false,
+          reasoningEffort: 'low',
+          instructions: [
+            'Return method for any message that may add, correct, confirm, select, refine, or research Method state.',
+            'Experiences, evidence, constraints, assent, preferences, choices, and ordinal choices are Method work in any language.',
+            'Return conversation only for a natural reply or general discussion that cannot write or research Method state.',
+            'When uncertain, return method. This classification never authorizes a write.',
+          ].join(' '),
+        },
+      },
+    });
+    const call = result.toolCalls.find((candidate) => candidate.toolName === 'route_method_turn');
+    const parsed = methodTurnRouteSchema.safeParse(call?.input);
+    return parsed.success ? parsed.data.route : 'method';
+  } catch (error) {
+    if (input.abortSignal?.aborted) throw error;
+    return 'method';
+  }
 }
 
 const emptyUsage = {
@@ -289,17 +348,26 @@ export function createResultBarrierTransform<TOOLS extends ToolSet>(options: {
   };
 }
 
-export function isMutationCapableMessage(message: string): boolean {
-  const normalized = message.normalize('NFKD').replace(/\p{Diacritic}/gu, '').toLowerCase();
-  return /\b(?:yes|yep|yeah|si|confirm|select|choose|record|add|append|correct|revise|replace|combine|propose|create|design|research|investigate|explore|path\s*[123]|camino\s*[123]|ruta\s*[123])\b/.test(normalized);
+/**
+ * Projects a fully functional agent stream into the display-safe stream sent
+ * to the explorer. This must wrap `result.stream`, never `streamText`'s
+ * `experimental_transform`: client tool results are required internally for
+ * the next OpenAI Conversation step even though they must not reach the UI.
+ */
+export function projectMethodStreamForDisplay<TOOLS extends ToolSet>(
+  stream: ReadableStream<TextStreamPart<TOOLS>>,
+  options: Parameters<typeof createResultBarrierTransform<TOOLS>>[0] = {},
+): ReadableStream<TextStreamPart<TOOLS>> {
+  return stream.pipeThrough(createResultBarrierTransform<TOOLS>(options)({
+    tools: {} as TOOLS,
+    stopStream: () => undefined,
+  }));
 }
 
 export function createMethodAgent(options: CreateMethodAgentOptions) {
   const prepared: { current?: PreparedMethodState } = {};
   const turnPolicy = { researchPerformed: false };
-  const mutationCapable = options.currentMessage === undefined
-    ? true
-    : isMutationCapableMessage(options.currentMessage);
+  const turnRoute = options.turnRoute ?? 'method';
   const timing: MethodProvenanceTiming = {
     turnSequence: options.turnSequence,
     occurredAt: options.occurredAt,
@@ -323,7 +391,7 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
     maxOutputTokens: 1_500,
     tools,
     // Intentionally no top-level instructions and no custom stop condition.
-    prepareStep: async ({ stepNumber }) => {
+    prepareStep: async ({ stepNumber, steps }) => {
       if (options.abortSignal?.aborted) {
         throw options.abortSignal.reason instanceof Error
           ? options.abortSignal.reason
@@ -331,9 +399,19 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
       }
       const state = await refreshMethodState(options.storage, options.loader, options.userId);
       prepared.current = state;
-      const activeTools = mutationCapable
+      const activeTools = turnRoute === 'method'
         ? toolNamesForCheckpoint(state.checkpoint, Boolean(options.research), turnPolicy)
         : [];
+      const authorization = turnRoute === 'method' && options.currentMessage
+        ? resolveConfirmationAuthorization(state, options.currentMessage)
+        : undefined;
+      const authorizedToolName = authorization
+        ? ({
+            'confirm-why': 'confirm_why',
+            'select-purpose-path': 'select_purpose_path',
+            'confirm-purpose-path-revision': 'confirm_purpose_path_revision',
+          } as const)[authorization.operation]
+        : undefined;
       options.onPreparedStep?.({
         stepNumber,
         mapRevision: state.map.revision,
@@ -343,8 +421,19 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
         compaction: stepNumber === 0,
       });
       return {
+        ...(stepNumber > 0 ? {
+          // The stored Conversation already owns the user message, model
+          // function call, reasoning, and earlier outputs. Supplying only the
+          // immediately preceding client tool output prevents duplicate
+          // function_call_output items and pending-tool 400s.
+          messages: steps.at(-1)?.response.messages.filter(
+            (message) => message.role === 'tool',
+          ) ?? [],
+        } : {}),
         activeTools: activeTools as Array<keyof typeof tools>,
-        toolChoice: activeTools.length > 0 ? 'auto' as const : 'none' as const,
+        toolChoice: authorizedToolName && activeTools.includes(authorizedToolName)
+          ? { type: 'tool' as const, toolName: authorizedToolName }
+          : activeTools.length > 0 ? 'auto' as const : 'none' as const,
         providerOptions: {
           openai: {
             conversation: options.conversationId,

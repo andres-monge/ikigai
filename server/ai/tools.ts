@@ -87,18 +87,31 @@ const sourceReferenceSchema = z.object({
 
 const userSourceSchema = z.object({
   label: z.string().min(1).max(500),
-  url: z.string().url().refine((value) => value.startsWith('https://'), 'Sources must use HTTPS.').optional(),
+  // Avoid JSON Schema `format: uri`, which OpenAI strict functions do not
+  // accept consistently. The server still enforces the exact HTTPS contract.
+  url: z.string().min(8).max(2_048)
+    .refine((value) => {
+      try {
+        return new URL(value).protocol === 'https:';
+      } catch {
+        return false;
+      }
+    }, 'Sources must use HTTPS.')
+    .nullable(),
 }).strict();
 
 const sourceReferenceFields = {
-  researchSources: z.array(sourceReferenceSchema).min(1).max(8).optional(),
-  userSources: z.array(userSourceSchema).max(8).optional(),
+  // OpenAI strict function schemas require every property to appear in the
+  // JSON Schema `required` array. Null represents the deliberate absence of
+  // a source collection without weakening the canonical payload contract.
+  researchSources: z.array(sourceReferenceSchema).min(1).max(8).nullable(),
+  userSources: z.array(userSourceSchema).max(8).nullable(),
 };
 
 const pathToolInputSchema = purposePathInputSchema.omit({ sources: true }).extend(sourceReferenceFields).strict();
 const projectToolInputSchema = pathProjectInputSchema.omit({ sources: true }).extend(sourceReferenceFields).strict();
 const evidenceToolInputSchema = foundationEvidenceSchema.omit({ provenance: true, supersedesEvidenceId: true });
-const constraintToolInputSchema = realityConstraintSchema.omit({ provenance: true });
+const constraintToolInputSchema = realityConstraintSchema.omit({ provenance: true, supersedesConstraintId: true });
 
 const confirmationTargetSchema = z.object({
   targetId: entityIdSchema,
@@ -243,6 +256,80 @@ function normalizedMessage(value: string): string {
   return value.normalize('NFKD').replace(/\p{Diacritic}/gu, '').toLowerCase();
 }
 
+/**
+ * Consequential confirmations deliberately support a small, reviewable
+ * English/Spanish grammar. Other phrasing remains available through the
+ * explicit workspace/UI action surface; it is never guessed from model-supplied
+ * ids. The grammar is only an authorization guard, not the router that decides
+ * which state-derived tools the model may see.
+ */
+function hasConsequentialDisqualifier(message: string): boolean {
+  if (/[?¿]/.test(message)) return true;
+  return [
+    /\b(?:no|not|never|neither|except|anything except|dont|don't|do not|without|todavia no|aun no|no quiero|no elijo|no confirmes|no lo confirmes|no selecciones|nunca|jamas|ni|excepto|salvo)\b/,
+    /\b(?:research|investigate|explore|explain|revise|refine|edit|adjust|change|before i (?:decide|choose)|investiga|investigar|explora|explica|revisa|revisar|refina|refinar|cambia|cambiar|antes de (?:decidir|elegir))\b/,
+    /^\s*(?:should|can|could|would|do|does|did|is|are|what|which|why|how|deberia|puedo|podrias|podemos|confirmamos|que|cual|como)\b/,
+  ].some((pattern) => pattern.test(message));
+}
+
+function hasPositiveWhyConfirmation(message: string): boolean {
+  return [
+    /^\s*(?:yes|yep|yeah|right|correct|confirmed|si|vale|de acuerdo)\s*[.!]?\s*$/,
+    /^\s*(?:yes|si)\s*(?:[-—,:]\s*)?(?:confirm|confirma|confirmo)\b/,
+    /^\s*(?:confirm|confirma|confirmo)\s+(?:why|por que|el por que)\b/,
+    /\b(?:that (?:captures|reflects|feels|is) (?:exactly )?(?:right|what i mean)|use it as my provisional foundation|leave it as my provisional foundation)\b/,
+    /\b(?:eso (?:refleja|recoge|capta) lo que quiero decir|dejemoslo como mi fundamento provisional|se siente exactamente bien)\b/,
+  ].some((pattern) => pattern.test(message));
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function pathReferenceAliases(path: { id: string; name: string }, index: number): string[] {
+  const english = [
+    ['first', 'first one', 'the first one', 'first option', 'first path', 'first direction'],
+    ['second', 'second one', 'the second one', 'second option', 'second path', 'second direction'],
+    ['third', 'third one', 'the third one', 'third option', 'third path', 'third direction'],
+  ][index] ?? [];
+  const spanish = [
+    ['primero', 'primera', 'primera opcion', 'primer camino', 'primera ruta', 'primera direccion'],
+    ['segundo', 'segunda', 'segunda opcion', 'segundo camino', 'segunda ruta', 'segunda direccion'],
+    ['tercero', 'tercera', 'tercera opcion', 'tercer camino', 'tercera ruta', 'tercera direccion'],
+  ][index] ?? [];
+  const number = index + 1;
+  return [...new Set([
+    normalizedMessage(path.id), normalizedMessage(path.name),
+    `path ${number}`, `path number ${number}`, `camino ${number}`, `ruta ${number}`,
+    ...english, ...spanish,
+  ].filter(Boolean))];
+}
+
+function hasPositivePathSelection(
+  message: string,
+  path: { id: string; name: string },
+  index: number,
+): boolean {
+  const target = pathReferenceAliases(path, index)
+    .sort((left, right) => right.length - left.length)
+    .map(escapeRegExp)
+    .join('|');
+  const finish = [
+    String.raw`\s*[.!]?\s*`,
+    String.raw`\s+and\s+help\s+me\s+design\s+(?:the\s+)?(?:first\s+)?project\s*[.!]?\s*`,
+    String.raw`\s+y\s+ayudame\s+a\s+disenar\s+(?:el\s+)?(?:primer\s+)?proyecto\s*[.!]?\s*`,
+    String.raw`\s+as\s+the\s+direction\s+i\s+want\s+to\s+pursue\s*[.!]?\s*`,
+  ].join('|');
+  return [
+    new RegExp(`^(?:i\\s+)?(?:choose|select|pick)\\s+(?:the\\s+)?(?:${target})(?:${finish})$`, 'u'),
+    new RegExp(`^go\\s+with\\s+(?:the\\s+)?(?:${target})(?:${finish})$`, 'u'),
+    new RegExp(`^my\\s+choice\\s+is\\s+(?:the\\s+)?(?:${target})(?:${finish})$`, 'u'),
+    new RegExp(`^(?:${target})\\s+is\\s+the\\s+direction\\s+i\\s+want\\s+to\\s+pursue\\s*[.!]?\\s*$`, 'u'),
+    new RegExp(`^(?:elijo|selecciono|escojo|me\\s+quedo\\s+con)\\s+(?:(?:el|la)\\s+)?(?:${target})(?:${finish})$`, 'u'),
+    new RegExp(`^(?:${target})\\s+es\\s+la\\s+direccion\\s+que\\s+quiero\\s+seguir\\s*[.!]?\\s*$`, 'u'),
+  ].some((pattern) => pattern.test(message));
+}
+
 export function resolveConfirmationAuthorization(
   state: PreparedMethodState,
   message: string,
@@ -250,23 +337,18 @@ export function resolveConfirmationAuthorization(
   const pending = state.checkpoint.pendingDecision;
   if (!pending) return undefined;
   const normalized = normalizedMessage(message);
-  const genericAssent = /^\s*(?:yes|yep|yeah|si|confirm(?:ed)?|correct|right|vale|de acuerdo)\b/.test(normalized);
+  if (hasConsequentialDisqualifier(normalized)) return undefined;
   if (pending.kind === 'why-confirmation') {
-    if (!genericAssent && !normalized.includes(normalizedMessage(pending.targetId))) return undefined;
+    if (!hasPositiveWhyConfirmation(normalized)) return undefined;
     return { operation: 'confirm-why', targetId: pending.targetId, targetRevision: pending.targetRevision };
   }
   if (pending.kind !== 'path-selection' && pending.kind !== 'path-revision-confirmation') return undefined;
   const set = state.map.pathSets.find((candidate) => (
     candidate.id === pending.targetId && candidate.revision === pending.targetRevision
   ));
-  if (!set || genericAssent && !set.paths.some((path) => normalized.includes(normalizedMessage(path.id)) || normalized.includes(normalizedMessage(path.name)))) {
-    return undefined;
-  }
-  const ordinal = normalized.match(/\b(?:path|camino|ruta)\s*(?:number\s*)?(1|2|3)\b/)?.[1];
+  if (!set) return undefined;
   const matches = set.paths.filter((path, index) => (
-    normalized.includes(normalizedMessage(path.id))
-    || normalized.includes(normalizedMessage(path.name))
-    || ordinal === String(index + 1)
+    hasPositivePathSelection(normalized, path, index)
   ));
   if (matches.length !== 1) return undefined;
   const choice = matches[0];
@@ -286,9 +368,11 @@ function assertCurrentMessageAuthorization(runtime: MethodToolRuntime, input: {
   choiceId?: string;
   choiceRevision?: number;
 }): void {
-  if (runtime.surface === 'workspace-action' || runtime.currentMessage === undefined) return;
+  if (runtime.surface === 'workspace-action') return;
   const state = runtime.prepared.current;
-  const authorization = state ? resolveConfirmationAuthorization(state, runtime.currentMessage) : undefined;
+  const authorization = state && runtime.currentMessage
+    ? resolveConfirmationAuthorization(state, runtime.currentMessage)
+    : undefined;
   if (
     !authorization
     || authorization.operation !== input.operation
@@ -367,7 +451,10 @@ function assertExactPendingTarget(input: {
 
 function sourcesFor(
   runtime: MethodToolRuntime,
-  input: { researchSources?: ResearchSourceReference[]; userSources?: Array<{ label: string; url?: string }> },
+  input: {
+    researchSources?: ResearchSourceReference[] | null;
+    userSources?: Array<{ label: string; url?: string | null }> | null;
+  },
 ): SourceProvenance[] | undefined {
   const context = runtime.surface === 'agent-turn'
     ? createAgentTurnPersistenceContext(runtime.turn, runtime.timing)
@@ -381,7 +468,8 @@ function sourcesFor(
     : [];
   const user = (input.userSources ?? []).map((source) => ({
     kind: 'user-supplied-source' as const,
-    ...source,
+    label: source.label,
+    ...(source.url ? { url: source.url } : {}),
     recordedBy: context.action,
   }));
   const sources = [...research, ...user];
@@ -390,7 +478,10 @@ function sourcesFor(
 
 function stripSourceReferences<T extends Record<string, unknown>>(
   runtime: MethodToolRuntime,
-  input: T & { researchSources?: ResearchSourceReference[]; userSources?: Array<{ label: string; url?: string }> },
+  input: T & {
+    researchSources?: ResearchSourceReference[] | null;
+    userSources?: Array<{ label: string; url?: string | null }> | null;
+  },
   researchableFields: readonly string[],
 ): Omit<T, 'researchSources' | 'userSources'> & { sources?: SourceProvenance[] } {
   const { researchSources: _research, userSources: _user, ...value } = input;
@@ -545,9 +636,9 @@ export function createMethodTools(runtime: MethodToolRuntime): ToolSet {
     propose_why: operationTool(runtime, 'propose-why', 'Suggest one provisional Why. It cannot be confirmed in this assistant turn.', whyInputSchema, (why) => ({ why, presentation: context().presentation })),
     revise_why: operationTool(runtime, 'revise-why', 'Suggest a revision to the current confirmed Why.', z.object({ supersedesWhyId: entityIdSchema, why: whyInputSchema }).strict(), ({ supersedesWhyId, why }) => ({ supersedesWhyId, why, presentation: context().presentation })),
     confirm_why: operationTool(runtime, 'confirm-why', 'Confirm only the exact pending Why from a completed prior assistant turn and this exact user message.', whyConfirmationSchema, (input) => confirmationPayload(runtime, { ...input, targetId: input.whyId, targetRevision: input.whyRevision }, 'why-confirmation', 'whyId')),
-    propose_purpose_paths: operationTool(runtime, 'propose-purpose-paths', 'Suggest exactly three equal-weight Purpose Paths grounded in the confirmed Why.', z.object({ setId: entityIdSchema, setRevision: revisionSchema, paths: z.tuple([pathToolInputSchema, pathToolInputSchema, pathToolInputSchema]) }).strict(), ({ setId, setRevision, paths }) => ({ setId, setRevision, paths: paths.map((path) => stripSourceReferences(runtime, path, ['servesWhy', 'possibility', 'evidence', 'centralUnknown', 'projectPreview', 'practicalFit'])), presentation: context().presentation })),
+    propose_purpose_paths: operationTool(runtime, 'propose-purpose-paths', 'Suggest exactly three equal-weight Purpose Paths grounded in the confirmed Why.', z.object({ setId: entityIdSchema, setRevision: revisionSchema, paths: z.array(pathToolInputSchema).length(3) }).strict(), ({ setId, setRevision, paths }) => ({ setId, setRevision, paths: paths.map((path) => stripSourceReferences(runtime, path, ['servesWhy', 'possibility', 'evidence', 'centralUnknown', 'projectPreview', 'practicalFit'])), presentation: context().presentation })),
     replace_purpose_path: operationTool(runtime, 'replace-purpose-path', 'Replace exactly one path while preserving the other two.', z.object({ sourceSetId: entityIdSchema, sourceSetRevision: revisionSchema, replacedPathId: entityIdSchema, replacementSetId: entityIdSchema, replacementSetRevision: revisionSchema, replacement: pathToolInputSchema }).strict(), (input) => ({ ...input, replacement: stripSourceReferences(runtime, input.replacement, ['servesWhy', 'possibility', 'evidence', 'centralUnknown', 'projectPreview', 'practicalFit']), presentation: context().presentation })),
-    combine_purpose_paths: operationTool(runtime, 'combine-purpose-paths', 'Combine exactly two paths and preserve an exact-three equal-weight set.', z.object({ sourceSetId: entityIdSchema, sourceSetRevision: revisionSchema, combinedPathIds: z.tuple([entityIdSchema, entityIdSchema]), replacementSetId: entityIdSchema, replacementSetRevision: revisionSchema, paths: z.tuple([pathToolInputSchema, pathToolInputSchema, pathToolInputSchema]) }).strict(), (input) => ({ ...input, paths: input.paths.map((path) => stripSourceReferences(runtime, path, ['servesWhy', 'possibility', 'evidence', 'centralUnknown', 'projectPreview', 'practicalFit'])), presentation: context().presentation })),
+    combine_purpose_paths: operationTool(runtime, 'combine-purpose-paths', 'Combine exactly two paths and preserve an exact-three equal-weight set.', z.object({ sourceSetId: entityIdSchema, sourceSetRevision: revisionSchema, combinedPathIds: z.array(entityIdSchema).length(2), replacementSetId: entityIdSchema, replacementSetRevision: revisionSchema, paths: z.array(pathToolInputSchema).length(3) }).strict(), (input) => ({ ...input, paths: input.paths.map((path) => stripSourceReferences(runtime, path, ['servesWhy', 'possibility', 'evidence', 'centralUnknown', 'projectPreview', 'practicalFit'])), presentation: context().presentation })),
     select_purpose_path: operationTool(runtime, 'select-purpose-path', 'Select one exact pending Purpose Path from a completed prior presentation.', targetSelectionSchema, (input) => {
       const set = runtime.prepared.current?.map.pathSets.find((item) => item.id === input.setId && item.revision === input.setRevision);
       assertExactPendingTarget({ runtime, expectedKind: 'path-selection', targetId: input.setId, targetRevision: input.setRevision, presentedInTurnId: input.presentedInTurnId, sourceMessageId: input.sourceMessageId, actualPresentedInTurnId: set?.presentation.assistantTurnId });
@@ -615,7 +706,44 @@ export async function executeWorkspaceTool(input: {
     return envelopeFromState(input.operationType, prepared, 'rejected', 'operation-unavailable');
   }
   const schema = selected.inputSchema as z.ZodTypeAny;
-  const parsed = schema.safeParse(input.rawInput);
+  const normalizeSources = (value: unknown): unknown => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+    const record = value as Record<string, unknown>;
+    return {
+      ...record,
+      researchSources: record.researchSources ?? null,
+      userSources: Array.isArray(record.userSources)
+        ? record.userSources.map((source) => (
+          source && typeof source === 'object' && !Array.isArray(source)
+            ? { ...source as Record<string, unknown>, url: (source as Record<string, unknown>).url ?? null }
+            : source
+        ))
+        : record.userSources ?? null,
+    };
+  };
+  const normalizeWorkspaceInput = (): unknown => {
+    if (!input.rawInput || typeof input.rawInput !== 'object' || Array.isArray(input.rawInput)) {
+      return input.rawInput;
+    }
+    const record = input.rawInput as Record<string, unknown>;
+    switch (input.operationType) {
+      case 'propose-purpose-paths':
+      case 'combine-purpose-paths':
+        return {
+          ...record,
+          paths: Array.isArray(record.paths) ? record.paths.map(normalizeSources) : record.paths,
+        };
+      case 'replace-purpose-path':
+        return { ...record, replacement: normalizeSources(record.replacement) };
+      case 'propose-first-project':
+        return normalizeSources(record);
+      case 'replace-project-proposal':
+        return { ...record, replacement: normalizeSources(record.replacement) };
+      default:
+        return record;
+    }
+  };
+  const parsed = schema.safeParse(normalizeWorkspaceInput());
   if (!parsed.success) {
     return envelopeFromState(input.operationType, prepared, 'rejected', 'invalid-operation-input');
   }

@@ -149,6 +149,50 @@ function runtime(storage: ReducerStorage, origin: 'agent-turn' | 'workspace-acti
   };
 }
 
+async function selectPendingPath(
+  currentMessage: string,
+  overrides: Partial<{
+    setId: string;
+    setRevision: number;
+    pathId: string;
+    pathRevision: number;
+    presentedInTurnId: string;
+    sourceMessageId: string;
+  }> = {},
+) {
+  const storage = new ReducerStorage(pendingPaths());
+  const loader = await createMethodModuleLoader();
+  const prepared = await refreshMethodState(storage, loader, 'explorer-1');
+  const tools = createMethodTools({
+    ...runtime(storage),
+    loader,
+    surface: 'agent-turn',
+    prepared: { current: prepared },
+    currentMessage,
+    timing: { turnSequence: 4, occurredAt: at(4) },
+  } as never);
+  const result = await tools.select_purpose_path.execute?.({
+    setId: 'set-1', setRevision: 1, pathId: 'path-2', pathRevision: 1,
+    presentedInTurnId: 'paths-turn', sourceMessageId: 'current-message',
+    ...overrides,
+  }, { toolCallId: 'path-choice', messages: [] } as never);
+  return { result, storage };
+}
+
+async function confirmPendingWhy(currentMessage: string) {
+  const storage = new ReducerStorage(pendingWhy());
+  const loader = await createMethodModuleLoader();
+  const prepared = await refreshMethodState(storage, loader, 'explorer-1');
+  const tools = createMethodTools({
+    ...runtime(storage), loader, surface: 'agent-turn', prepared: { current: prepared }, currentMessage,
+  } as never);
+  const result = await tools.confirm_why.execute?.({
+    whyId: 'why-1', whyRevision: 1,
+    presentedInTurnId: 'prior-assistant-turn', sourceMessageId: 'current-message',
+  }, { toolCallId: 'why-confirmation', messages: [] } as never);
+  return { result, storage };
+}
+
 describe('strict state-specific Method tools', () => {
   it('contains no external-action surface and marks every tool strict', async () => {
     const storage = new ReducerStorage(pendingWhy());
@@ -156,6 +200,7 @@ describe('strict state-specific Method tools', () => {
     const prepared = await refreshMethodState(storage, loader, 'explorer-1');
     const tools = createMethodTools({
       ...runtime(storage), loader, surface: 'agent-turn', prepared: { current: prepared },
+      currentMessage: 'That feels exactly right.',
     });
     const names = Object.keys(tools);
     expect(names).not.toEqual(expect.arrayContaining([
@@ -188,6 +233,126 @@ describe('strict state-specific Method tools', () => {
     }, { toolCallId: 'arbitrary-model-target', messages: [] } as never);
 
     expect(result).toMatchObject({ status: 'rejected', errorClass: 'ConfirmationAuthorizationError' });
+    expect(storage.persist).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['English exact ordinal', 'I choose Path 2.'],
+    ['English imperative ordinal', 'Choose Path 2 and help me design the first project.'],
+    ['English conversational ordinal', 'Go with the second one.'],
+    ['Spanish exact ordinal', 'Elijo el Camino 2.'],
+    ['English natural ordinal', 'The second one is the direction I want to pursue.'],
+    ['Spanish natural ordinal', 'Me quedo con la segunda opción.'],
+  ])('accepts an unambiguous %s path choice', async (_label, currentMessage) => {
+    const { result, storage } = await selectPendingPath(currentMessage);
+
+    expect(result).toMatchObject({ status: 'committed', authoritativeRevision: 4 });
+    expect(storage.map.pathSets.at(-1)?.paths.map((path) => [path.id, path.selection])).toEqual([
+      ['path-1', 'parked'], ['path-2', 'active'], ['path-3', 'parked'],
+    ]);
+    expect(storage.persist).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ['English', 'That captures what I mean. Use it as my provisional foundation.'],
+    ['Spanish', 'Eso refleja lo que quiero decir. Dejémoslo como mi fundamento provisional.'],
+    ['English exact-right', 'That feels exactly right.'],
+    ['English short', 'Right.'],
+    ['Spanish short', 'Vale.'],
+    ['Spanish agreement', 'De acuerdo.'],
+  ])('accepts an unambiguous %s confirmation paraphrase for the sole pending Why', async (
+    _language,
+    currentMessage,
+  ) => {
+    const { result, storage } = await confirmPendingWhy(currentMessage);
+
+    expect(result).toMatchObject({ status: 'committed', authoritativeRevision: 2 });
+    expect(storage.map.foundation.whyRevisions.at(-1)?.status).toBe('confirmed');
+    expect(storage.persist).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ['English negation', "I don't choose Path 2 yet."],
+    ['Spanish negation', 'No elijo el Camino 2 todavía.'],
+    ['English question', 'Should I choose Path 2, or keep discussing it?'],
+    ['Spanish question', '¿Debería elegir el Camino 2 o seguir hablando?'],
+    ['English research request', 'Research Path 2 before I decide.'],
+    ['Spanish research request', 'Investiga el Camino 2 antes de que decida.'],
+    ['English refinement request', 'Revise Path 2 to focus more on community before I choose.'],
+    ['Spanish refinement request', 'Refina el Camino 2 para centrarnos más en la comunidad antes de elegir.'],
+    ['English explicit refusal', 'I do not want Path 2.'],
+    ['English explanation question', 'Can you explain Path 2?'],
+    ['Spanish explicit refusal', 'No quiero el Camino 2.'],
+    ['Spanish explanation question', '¿Puedes explicar el Camino 2?'],
+    ['English exclusion', 'I choose anything except Path 2.'],
+    ['English neither', 'I choose neither Path 2.'],
+    ['Spanish emphatic refusal', 'Jamás elijo el Camino 2.'],
+    ['English non-exact numeric target', 'I choose Path 20.'],
+    ['English discussion instead of choice', 'I choose to discuss Path 2.'],
+    ['Spanish delay instead of choice', 'Elijo esperar antes de seleccionar el Camino 2.'],
+  ])('rejects %s as authority for a consequential path choice', async (_label, currentMessage) => {
+    const { result, storage } = await selectPendingPath(currentMessage);
+
+    expect(result).toMatchObject({ status: 'rejected', errorClass: 'ConfirmationAuthorizationError' });
+    expect(storage.persist).not.toHaveBeenCalled();
+    expect(storage.map.revision).toBe(3);
+  });
+
+  it.each([
+    ['English negated assent', "Yes, don't confirm it yet; I want to refine it."],
+    ['Spanish negated assent', 'Sí, no lo confirmes todavía; quiero refinarlo.'],
+    ['English decision question', 'Confirm why-1 now, or should we research it first?'],
+    ['Spanish decision question', '¿Confirmamos why-1 ahora o lo investigamos antes?'],
+    ['English explicit prohibition', 'Do not confirm why-1.'],
+    ['Spanish explicit prohibition', 'No confirmes why-1.'],
+    ['English incidental agreement word', 'Right now I need more time.'],
+    ['Spanish incidental agreement word', 'Vale la pena esperar.'],
+  ])('rejects %s as authority for a pending Why', async (_label, currentMessage) => {
+    const { result, storage } = await confirmPendingWhy(currentMessage);
+
+    expect(result).toMatchObject({ status: 'rejected', errorClass: 'ConfirmationAuthorizationError' });
+    expect(storage.persist).not.toHaveBeenCalled();
+    expect(storage.map.revision).toBe(1);
+  });
+
+  it('fails closed when an agent confirmation tool has no current user message', async () => {
+    const storage = new ReducerStorage(pendingWhy());
+    const loader = await createMethodModuleLoader();
+    const prepared = await refreshMethodState(storage, loader, 'explorer-1');
+    const tools = createMethodTools({
+      ...runtime(storage), loader, surface: 'agent-turn', prepared: { current: prepared },
+    } as never);
+
+    const result = await tools.confirm_why.execute?.({
+      whyId: 'why-1', whyRevision: 1,
+      presentedInTurnId: 'prior-assistant-turn', sourceMessageId: 'current-message',
+    }, { toolCallId: 'missing-current-message', messages: [] } as never);
+
+    expect(result).toMatchObject({ status: 'rejected', errorClass: 'ConfirmationAuthorizationError' });
+    expect(storage.persist).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['English multiple targets', 'I am still choosing between Path 1 and Path 2.'],
+    ['Spanish multiple targets', 'Todavía estoy entre el Camino 1 y el Camino 2.'],
+    ['English generic target', 'Yes, whichever one you think is best.'],
+    ['Spanish generic target', 'Sí, el que tú prefieras.'],
+  ])('rejects %s instead of guessing a model-selected path', async (_label, currentMessage) => {
+    const { result, storage } = await selectPendingPath(currentMessage);
+
+    expect(result).toMatchObject({ status: 'rejected', errorClass: 'ConfirmationAuthorizationError' });
+    expect(storage.persist).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['English stale set', 'I choose Path 2.', { setRevision: 2 }, 'ConfirmationTargetMismatchError'],
+    ['Spanish stale set', 'Elijo el Camino 2.', { setRevision: 2 }, 'ConfirmationTargetMismatchError'],
+    ['English edited target', 'I choose Path 2.', { pathId: 'path-3' }, 'ConfirmationAuthorizationError'],
+    ['Spanish edited target', 'Elijo el Camino 2.', { pathId: 'path-3' }, 'ConfirmationAuthorizationError'],
+  ])('rejects an %s', async (_label, currentMessage, overrides, errorClass) => {
+    const { result, storage } = await selectPendingPath(currentMessage, overrides);
+
+    expect(result).toMatchObject({ status: 'rejected', errorClass });
     expect(storage.persist).not.toHaveBeenCalled();
   });
 
@@ -271,6 +436,7 @@ describe('strict state-specific Method tools', () => {
     const prepared = await refreshMethodState(storage, loader, 'explorer-1');
     const tools = createMethodTools({
       ...runtime(storage), loader, surface: 'agent-turn', prepared: { current: prepared },
+      currentMessage: 'That feels exactly right.',
     });
     const result = await tools.confirm_why.execute?.({
       whyId: mismatch.whyId ?? 'why-1',
@@ -443,6 +609,7 @@ describe('strict state-specific Method tools', () => {
     const agentPrepared = await refreshMethodState(agentStorage, loader, 'explorer-1');
     const agentTools = createMethodTools({
       ...runtime(agentStorage), loader, surface: 'agent-turn', prepared: { current: agentPrepared },
+      currentMessage: 'That feels exactly right.',
     });
     const exact = {
       whyId: 'why-1', whyRevision: 1, presentedInTurnId: 'prior-assistant-turn', sourceMessageId: 'current-message',

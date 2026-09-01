@@ -13,6 +13,10 @@
 
 import { z } from 'zod';
 
+export function parseAgentEnabled(value: unknown): boolean {
+  return value === 'true';
+}
+
 /* ────────────────────────────────────────────────────────────────────────── */
 /* Environment Variable Schema Definition                                     */
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -66,7 +70,7 @@ const envSchema = z.object({
   AGENT_ENABLED: z
     .string()
     .default('false')
-    .transform((value) => value === 'true'),
+    .transform(parseAgentEnabled),
 
   // Google OAuth Configuration (optional until authentication is mounted)
   GOOGLE_CLIENT_ID: z

@@ -108,6 +108,12 @@ export interface AgentTurnRecord {
   terminalAt: Date | null;
 }
 
+export interface ConversationProvisioningRecord {
+  userId: string;
+  turnId: string;
+  conversationId: string;
+}
+
 const methodPersistenceContextMarker = Symbol('method-persistence-context');
 
 export type MethodPersistenceContext = {
@@ -389,6 +395,11 @@ export interface IStorage {
   }): Promise<BeginAgentTurnResult>;
   getAgentTurn(userId: string, clientMessageId: string): Promise<AgentTurnRecord | undefined>;
   listAgentTurns(userId: string): Promise<AgentTurnRecord[]>;
+  backfillAgentTurnDisplayProjection(input: {
+    userId: string;
+    turnId: string;
+    displayProjection: { userItemId: string; assistantItemIds: string[] };
+  }): Promise<void>;
   getTurnLease(userId: string): Promise<AgentTurnLeaseRecord | undefined>;
   completeAgentTurn(input: {
     userId: string;
@@ -420,6 +431,14 @@ export interface IStorage {
   }): Promise<void>;
   setConversationMapping(userId: string, leaseId: string, conversationId: string): Promise<void>;
   getConversationMapping(userId: string): Promise<string | undefined>;
+  recordConversationProvisioning(input: {
+    userId: string;
+    turnId: string;
+    leaseId: string;
+    conversationId: string;
+  }): Promise<void>;
+  listPendingConversationProvisioning(userId: string): Promise<ConversationProvisioningRecord[]>;
+  resolveConversationProvisioning(input: ConversationProvisioningRecord): Promise<void>;
   eraseMethodData(
     userId: string,
     provider?: MethodErasureProvider,
@@ -441,6 +460,51 @@ function asAgentTurnRecord(row: AgentTurnRow): AgentTurnRecord {
     status: row.status as AgentTurnStatus,
     terminalResult: row.terminalResult ?? null,
   };
+}
+
+const CONVERSATION_CLEANUP_LIST_PREFIX = 'u5-cleanup-list:';
+
+function pendingProvisioningConversationIds(rows: Array<{ terminalResult: unknown }>): string[] {
+  return rows.flatMap((row) => {
+    if (!row.terminalResult || typeof row.terminalResult !== 'object') return [];
+    const marker = (row.terminalResult as Record<string, unknown>).conversationProvisioning;
+    if (!marker || typeof marker !== 'object') return [];
+    const id = (marker as Record<string, unknown>).conversationId;
+    return typeof id === 'string' && id.length > 0 && id.length <= 200 ? [id] : [];
+  });
+}
+
+function encodeConversationCleanupIds(ids: readonly string[]): string | null {
+  const unique = [...new Set(ids)];
+  if (unique.length === 0) return null;
+  return unique.length === 1
+    ? unique[0]
+    : `${CONVERSATION_CLEANUP_LIST_PREFIX}${JSON.stringify(unique)}`;
+}
+
+function decodeConversationCleanupIds(value: string | null): string[] {
+  if (!value) return [];
+  if (!value.startsWith(CONVERSATION_CLEANUP_LIST_PREFIX)) return [value];
+  try {
+    const parsed = JSON.parse(value.slice(CONVERSATION_CLEANUP_LIST_PREFIX.length));
+    return Array.isArray(parsed)
+      ? parsed.filter((id): id is string => typeof id === 'string' && id.length > 0 && id.length <= 200)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function preserveConversationProvisioning(
+  terminalResult: unknown,
+  next: Record<string, unknown>,
+): Record<string, unknown> {
+  const current = terminalResult && typeof terminalResult === 'object'
+    ? terminalResult as Record<string, unknown>
+    : {};
+  return current.conversationProvisioning
+    ? { ...next, conversationProvisioning: current.conversationProvisioning }
+    : next;
 }
 
 function confirmationPresentationTurnId(
@@ -1225,6 +1289,33 @@ export class PostgresStorage implements IStorage {
     return rows.map(asAgentTurnRecord);
   }
 
+  async backfillAgentTurnDisplayProjection(input: {
+    userId: string;
+    turnId: string;
+    displayProjection: { userItemId: string; assistantItemIds: string[] };
+  }): Promise<void> {
+    await this.database.transaction(async (tx) => {
+      await lockMethodOwner(tx, input.userId);
+      const [turn] = await tx.select().from(agentTurns).where(and(
+        eq(agentTurns.userId, input.userId),
+        eq(agentTurns.turnId, input.turnId),
+      ));
+      if (!turn || (turn.status !== 'completed' && turn.status !== 'cancelled')) return;
+      const terminal = turn.terminalResult && typeof turn.terminalResult === 'object'
+        ? turn.terminalResult as Record<string, unknown>
+        : {};
+      if (terminal.displayProjection) return;
+      const { displayRecovery: _displayRecovery, ...terminalWithoutRecovery } = terminal;
+      await tx.update(agentTurns).set({
+        terminalResult: { ...terminalWithoutRecovery, displayProjection: input.displayProjection },
+        updatedAt: this.now(),
+      }).where(and(
+        eq(agentTurns.userId, input.userId),
+        eq(agentTurns.turnId, input.turnId),
+      ));
+    });
+  }
+
   async getTurnLease(userId: string) {
     const [row] = await this.database
       .select()
@@ -1310,7 +1401,10 @@ export class PostgresStorage implements IStorage {
           .update(agentTurns)
           .set({
             status: 'failed',
-            terminalResult: { reason: matchingLease ? 'lease-expired' : 'lease-missing', refetch: true },
+            terminalResult: preserveConversationProvisioning(
+              existingTurn.terminalResult,
+              { reason: matchingLease ? 'lease-expired' : 'lease-missing', refetch: true },
+            ),
             updatedAt: now,
             terminalAt: now,
           })
@@ -1403,11 +1497,21 @@ export class PostgresStorage implements IStorage {
 
       let reclaimedTurnId: string | undefined;
       if (previousLease && previousLease.leaseId !== input.leaseId) {
+        const [previousTurn] = await tx.select({ terminalResult: agentTurns.terminalResult })
+          .from(agentTurns)
+          .where(and(
+            eq(agentTurns.userId, input.userId),
+            eq(agentTurns.turnId, previousLease.turnId),
+            eq(agentTurns.leaseId, previousLease.leaseId),
+          ));
         const [expiredTurn] = await tx
           .update(agentTurns)
           .set({
             status: 'failed',
-            terminalResult: { reason: 'lease-expired' },
+            terminalResult: preserveConversationProvisioning(
+              previousTurn?.terminalResult,
+              { reason: 'lease-expired', refetch: true },
+            ),
             updatedAt: now,
             terminalAt: now,
           })
@@ -1477,11 +1581,20 @@ export class PostgresStorage implements IStorage {
         return existing ? asAgentTurnRecord(existing) : undefined;
       }
       if (lease.expiresAt <= now) {
+        const [current] = await tx.select({ terminalResult: agentTurns.terminalResult })
+          .from(agentTurns)
+          .where(and(
+            eq(agentTurns.userId, input.userId),
+            eq(agentTurns.turnId, input.turnId),
+          ));
         const [expired] = await tx
           .update(agentTurns)
           .set({
             status: 'failed',
-            terminalResult: { reason: 'lease-expired', refetch: true },
+            terminalResult: preserveConversationProvisioning(
+              current?.terminalResult,
+              { reason: 'lease-expired', refetch: true },
+            ),
             updatedAt: now,
             terminalAt: now,
           })
@@ -1501,11 +1614,26 @@ export class PostgresStorage implements IStorage {
           ));
         return expired ? asAgentTurnRecord(expired) : undefined;
       }
+      const [currentTurn] = await tx
+        .select({ terminalResult: agentTurns.terminalResult })
+        .from(agentTurns)
+        .where(and(
+          eq(agentTurns.userId, input.userId),
+          eq(agentTurns.turnId, input.turnId),
+        ));
+      const existingTerminal = currentTurn?.terminalResult && typeof currentTurn.terminalResult === 'object'
+        ? currentTurn.terminalResult as Record<string, unknown>
+        : {};
       const [updated] = await tx
         .update(agentTurns)
         .set({
           status: input.status,
-          terminalResult: input.result,
+          terminalResult: {
+            ...input.result,
+            ...(existingTerminal.conversationProvisioning
+              ? { conversationProvisioning: existingTerminal.conversationProvisioning }
+              : {}),
+          },
           updatedAt: now,
           terminalAt: now,
         })
@@ -1761,6 +1889,115 @@ export class PostgresStorage implements IStorage {
     return row?.conversationId;
   }
 
+  async recordConversationProvisioning(input: {
+    userId: string;
+    turnId: string;
+    leaseId: string;
+    conversationId: string;
+  }): Promise<void> {
+    await this.database.transaction(async (tx) => {
+      await lockMethodOwner(tx, input.userId);
+      const [turn] = await tx.select().from(agentTurns).where(and(
+        eq(agentTurns.userId, input.userId),
+        eq(agentTurns.turnId, input.turnId),
+        eq(agentTurns.leaseId, input.leaseId),
+      ));
+      // This marker is cleanup metadata, not a product write. It must remain
+      // recordable after lease expiry/terminalization so a returned provider id
+      // can never become undiscoverable at the create/bind boundary.
+      if (!turn) {
+        // Erasure can win while provider creation is in flight. Preserve the
+        // late provider identity in the existing non-content erasure marker
+        // (or create a generation-fenced marker if local erasure just ended).
+        const [existingErasure] = await tx.select().from(methodErasureJobs)
+          .where(eq(methodErasureJobs.userId, input.userId));
+        const conversationId = encodeConversationCleanupIds([
+          ...decodeConversationCleanupIds(existingErasure?.conversationId ?? null),
+          input.conversationId,
+        ]);
+        const jobId = randomUUID();
+        await tx.insert(methodErasureJobs).values({
+          userId: input.userId,
+          jobId,
+          conversationId,
+          status: 'pending-provider',
+          errorClass: null,
+          createdAt: this.now(),
+          updatedAt: this.now(),
+        }).onConflictDoUpdate({
+          target: methodErasureJobs.userId,
+          set: {
+            jobId,
+            conversationId,
+            status: 'pending-provider',
+            errorClass: null,
+            updatedAt: this.now(),
+          },
+        });
+        return;
+      }
+      const terminal = turn.terminalResult && typeof turn.terminalResult === 'object'
+        ? turn.terminalResult as Record<string, unknown>
+        : {};
+      const existing = terminal.conversationProvisioning as Record<string, unknown> | undefined;
+      if (existing?.conversationId && existing.conversationId !== input.conversationId) {
+        throw new ConversationMappingConflictError();
+      }
+      await tx.update(agentTurns).set({
+        terminalResult: {
+          ...terminal,
+          conversationProvisioning: { status: 'pending', conversationId: input.conversationId },
+        },
+        updatedAt: this.now(),
+      }).where(and(
+        eq(agentTurns.userId, input.userId),
+        eq(agentTurns.turnId, input.turnId),
+      ));
+    });
+  }
+
+  async listPendingConversationProvisioning(userId: string): Promise<ConversationProvisioningRecord[]> {
+    const rows = await this.database.select({
+      turnId: agentTurns.turnId,
+      terminalResult: agentTurns.terminalResult,
+    }).from(agentTurns).where(eq(agentTurns.userId, userId));
+    return rows.flatMap((row) => {
+      const terminal = row.terminalResult && typeof row.terminalResult === 'object'
+        ? row.terminalResult as Record<string, unknown>
+        : undefined;
+      const marker = terminal?.conversationProvisioning;
+      if (!marker || typeof marker !== 'object') return [];
+      const record = marker as Record<string, unknown>;
+      return record.status === 'pending'
+        && typeof record.conversationId === 'string'
+        && record.conversationId.length > 0
+        && record.conversationId.length <= 200
+        ? [{ userId, turnId: row.turnId, conversationId: record.conversationId }]
+        : [];
+    });
+  }
+
+  async resolveConversationProvisioning(input: ConversationProvisioningRecord): Promise<void> {
+    await this.database.transaction(async (tx) => {
+      await lockMethodOwner(tx, input.userId);
+      const [turn] = await tx.select().from(agentTurns).where(and(
+        eq(agentTurns.userId, input.userId),
+        eq(agentTurns.turnId, input.turnId),
+      ));
+      if (!turn) return;
+      const terminal = turn.terminalResult && typeof turn.terminalResult === 'object'
+        ? turn.terminalResult as Record<string, unknown>
+        : {};
+      const marker = terminal.conversationProvisioning as Record<string, unknown> | undefined;
+      if (marker?.conversationId !== input.conversationId) return;
+      const { conversationProvisioning: _resolved, ...rest } = terminal;
+      await tx.update(agentTurns).set({ terminalResult: rest, updatedAt: this.now() }).where(and(
+        eq(agentTurns.userId, input.userId),
+        eq(agentTurns.turnId, input.turnId),
+      ));
+    });
+  }
+
   /* ---------------- Retryable full Method erasure ---------------- */
 
   async eraseMethodData(
@@ -1779,7 +2016,15 @@ export class PostgresStorage implements IStorage {
         .select()
         .from(agentConversationMappings)
         .where(eq(agentConversationMappings.userId, userId));
-      const conversationId = existingJob?.conversationId ?? mapping?.conversationId ?? null;
+      const pendingTurns = existingJob ? [] : await tx
+        .select({ terminalResult: agentTurns.terminalResult })
+        .from(agentTurns)
+        .where(eq(agentTurns.userId, userId));
+      const conversationId = existingJob?.conversationId
+        ?? encodeConversationCleanupIds([
+          ...(mapping?.conversationId ? [mapping.conversationId] : []),
+          ...pendingProvisioningConversationIds(pendingTurns),
+        ]);
       const [job] = await tx
         .insert(methodErasureJobs)
         .values({
@@ -1803,7 +2048,8 @@ export class PostgresStorage implements IStorage {
       return job;
     });
 
-    if (!marker.conversationId) {
+    const conversationIds = decodeConversationCleanupIds(marker.conversationId);
+    if (conversationIds.length === 0) {
       const [deleted] = await this.database.delete(methodErasureJobs)
         .where(and(
           eq(methodErasureJobs.userId, userId),
@@ -1816,7 +2062,9 @@ export class PostgresStorage implements IStorage {
     if (!provider) return { status: 'pending-provider' };
 
     try {
-      await provider.deleteConversationItemsAndConversation(marker.conversationId);
+      for (const conversationId of conversationIds) {
+        await provider.deleteConversationItemsAndConversation(conversationId);
+      }
       await this.faultInjector?.('before-erasure-marker-delete');
       const [deleted] = await this.database.delete(methodErasureJobs)
         .where(and(

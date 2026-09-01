@@ -11,7 +11,12 @@ import {
 } from '../../shared/career-map/index.js';
 import type { IStorage, PersistCareerMapResult } from '../storage.js';
 import { createMethodModuleLoader } from './method/loader.js';
-import { createMethodAgent, createResultBarrierTransform } from './agent.js';
+import {
+  classifyMethodTurn,
+  createMethodAgent,
+  createResultBarrierTransform,
+  projectMethodStreamForDisplay,
+} from './agent.js';
 
 const timestamp = (second: number) => `2030-01-01T00:00:${String(second).padStart(2, '0')}.000Z`;
 
@@ -29,6 +34,21 @@ function modelResult(content: Array<Record<string, unknown>>, finish: 'stop' | '
     usage: usage(),
     warnings: [],
   } as never;
+}
+
+function expectOpenAIStrictObjectSchemas(schema: unknown): void {
+  if (Array.isArray(schema)) {
+    for (const item of schema) expectOpenAIStrictObjectSchemas(item);
+    return;
+  }
+  if (!schema || typeof schema !== 'object') return;
+  const value = schema as Record<string, unknown>;
+  if (value.type === 'object' && value.properties && typeof value.properties === 'object') {
+    expect(new Set(value.required as string[] | undefined)).toEqual(
+      new Set(Object.keys(value.properties as Record<string, unknown>)),
+    );
+  }
+  for (const child of Object.values(value)) expectOpenAIStrictObjectSchemas(child);
 }
 
 function action(sequence: number, turnId = `user-turn-${sequence}`) {
@@ -129,6 +149,34 @@ class InMemoryMethodStorage {
 }
 
 describe('authenticated Method agent loop', () => {
+  it('uses a strict non-authoritative routing call and fails ambiguous output to the Method barrier', async () => {
+    const routedModel = new MockLanguageModelV4({
+      doGenerate: modelResult([{
+        type: 'tool-call', toolCallId: 'route-call', toolName: 'route_method_turn',
+        input: JSON.stringify({ route: 'conversation' }),
+      }], 'tool-calls'),
+    });
+    await expect(classifyMethodTurn({
+      model: routedModel,
+      message: 'Could we just talk through what this means?',
+    })).resolves.toBe('conversation');
+    expect(routedModel.doGenerateCalls[0]?.toolChoice).toEqual({
+      type: 'tool', toolName: 'route_method_turn',
+    });
+    expect(routedModel.doGenerateCalls[0]?.tools?.[0]).toMatchObject({
+      name: 'route_method_turn', strict: true,
+    });
+    expect(routedModel.doGenerateCalls[0]?.providerOptions?.openai).toMatchObject({ store: false });
+
+    const ambiguousModel = new MockLanguageModelV4({
+      doGenerate: modelResult([{ type: 'text', text: 'Maybe.' }], 'stop'),
+    });
+    await expect(classifyMethodTurn({
+      model: ambiguousModel,
+      message: 'That feels exactly right.',
+    })).resolves.toBe('method');
+  });
+
   it('confirms a previously presented Why, reloads Create Purpose Paths, and proposes paths in the same turn', async () => {
     const storage = new InMemoryMethodStorage();
     const model = new MockLanguageModelV4({
@@ -148,7 +196,11 @@ describe('authenticated Method agent loop', () => {
           type: 'tool-call',
           toolCallId: 'paths-call',
           toolName: 'propose_purpose_paths',
-          input: JSON.stringify({ setId: 'set-1', setRevision: 1, paths: paths() }),
+          input: JSON.stringify({
+            setId: 'set-1',
+            setRevision: 1,
+            paths: paths().map((path) => ({ ...path, researchSources: null, userSources: null })),
+          }),
         }], 'tool-calls'),
         modelResult([{ type: 'text', text: 'Your Why is confirmed, and three Purpose Paths are ready to compare.' }], 'stop'),
       ],
@@ -188,9 +240,14 @@ describe('authenticated Method agent loop', () => {
     ));
     expect(toolNames[0]).toContain('confirm_why');
     expect(toolNames[0]).not.toContain('propose_purpose_paths');
+    expect(model.doGenerateCalls[0]?.toolChoice).toEqual({ type: 'tool', toolName: 'confirm_why' });
+    expect(model.doGenerateCalls[1]?.toolChoice).toEqual({ type: 'auto' });
     expect(toolNames[1]).toContain('propose_purpose_paths');
     expect(toolNames[1]).not.toContain('confirm_why');
     expect(toolNames[2]).not.toContain('propose_purpose_paths');
+    expect(model.doGenerateCalls[0]?.prompt.map((message) => message.role)).toEqual(['user']);
+    expect(model.doGenerateCalls[1]?.prompt.map((message) => message.role)).toEqual(['tool']);
+    expect(model.doGenerateCalls[2]?.prompt.map((message) => message.role)).toEqual(['tool']);
 
     for (const [index, call] of model.doGenerateCalls.entries()) {
       const provider = call.providerOptions?.openai as Record<string, unknown>;
@@ -202,6 +259,9 @@ describe('authenticated Method agent loop', () => {
       expect(provider.instructions).toEqual(expect.stringContaining('Active Method module:'));
       expect(call.prompt.some((message) => message.role === 'system')).toBe(false);
       expect(call.tools?.every((definition) => definition.type !== 'function' || definition.strict === true)).toBe(true);
+      for (const definition of call.tools ?? []) {
+        if (definition.type === 'function') expectOpenAIStrictObjectSchemas(definition.inputSchema);
+      }
       if (index === 0) expect(provider.contextManagement).toBeDefined();
       else expect(provider).not.toHaveProperty('contextManagement');
     }
@@ -228,7 +288,7 @@ describe('authenticated Method agent loop', () => {
         }], 'tool-calls'),
         modelResult([{
           type: 'tool-call', toolCallId: 'propose-project-call', toolName: 'propose_first_project',
-          input: JSON.stringify(project),
+          input: JSON.stringify({ ...project, researchSources: null, userSources: null }),
         }], 'tool-calls'),
         modelResult([{ type: 'text', text: 'Path 2 is active and its first project is ready for review.' }], 'stop'),
       ],
@@ -260,6 +320,8 @@ describe('authenticated Method agent loop', () => {
     expect(storage.map.projects.at(-1)).toMatchObject({ id: 'project-1', agreementStatus: 'suggested' });
     expect(traces[0]).toContain('select_purpose_path');
     expect(traces[0]).toContain('research_current_world');
+    expect(model.doGenerateCalls[0]?.toolChoice).toEqual({ type: 'tool', toolName: 'select_purpose_path' });
+    expect(model.doGenerateCalls[1]?.toolChoice).toEqual({ type: 'auto' });
     expect(traces[1]).toContain('propose_first_project');
     expect(traces[1]).not.toContain('select_purpose_path');
     expect(traces[2]).not.toContain('propose_first_project');
@@ -268,6 +330,66 @@ describe('authenticated Method agent loop', () => {
       .not.toContain('web_search');
     expect((model.doGenerateCalls[0]?.providerOptions?.openai as Record<string, unknown>).contextManagement)
       .toBeDefined();
+  });
+
+  it.each([
+    {
+      label: 'ordinary English Foundation evidence',
+      map: () => createCareerMap('explorer-1'),
+      message: 'I lose track of time when I turn a messy idea into something another person can use.',
+      reply: 'What kind of change do you most want that work to create?',
+      expectedTool: 'append_foundation_evidence',
+    },
+    {
+      label: 'ordinary Spanish Foundation evidence',
+      map: () => createCareerMap('explorer-1'),
+      message: 'Pierdo la noción del tiempo cuando convierto una idea confusa en algo que otra persona puede usar.',
+      reply: '¿Qué cambio te gustaría que produjera ese trabajo?',
+      expectedTool: 'append_foundation_evidence',
+    },
+    {
+      label: 'a natural English ordinal choice',
+      map: seedPendingPaths,
+      message: 'The second one is the direction I want to pursue.',
+      reply: 'I’ll use that choice once the exact pending path is committed.',
+      expectedTool: 'select_purpose_path',
+    },
+    {
+      label: 'a natural Spanish ordinal choice',
+      map: seedPendingPaths,
+      message: 'La segunda es la dirección que quiero seguir.',
+      reply: 'Usaré esa elección cuando se confirme la ruta pendiente exacta.',
+      expectedTool: 'select_purpose_path',
+    },
+  ])('keeps checkpoint tools available for $label without making wording the authority', async ({
+    map, message, reply, expectedTool,
+  }) => {
+    const storage = new InMemoryMethodStorage(map());
+    const startingRevision = storage.map.revision;
+    const model = new MockLanguageModelV4({
+      doGenerate: modelResult([{ type: 'text', text: reply }], 'stop'),
+    });
+    const traces: string[][] = [];
+    const agent = createMethodAgent({
+      model, storage: storage as never, loader: await createMethodModuleLoader(),
+      userId: 'explorer-1', conversationId: 'server-conversation',
+      turn: {
+        turnId: 'agent-current-turn', leaseId: 'lease-current', clientMessageId: 'message-current',
+        requestFingerprint: 'request-current', origin: 'agent-turn',
+      },
+      turnSequence: 5, occurredAt: timestamp(5), currentMessage: message,
+      onPreparedStep: (trace) => traces.push(trace.activeTools),
+    } as never);
+
+    const result = await agent.generate({ prompt: message });
+
+    expect(result.text).toBe(reply);
+    expect(traces[0]).toContain(expectedTool);
+    expect(storage.map.revision).toBe(startingRevision);
+    const request = model.doGenerateCalls[0];
+    expect(JSON.stringify(request?.prompt)).toContain(message);
+    expect(String(request?.providerOptions?.openai?.instructions))
+      .toContain("Mirror the language of the explorer's latest message naturally.");
   });
 
   it.each(['committed', 'conflict', 'rejected'] as const)(
@@ -343,6 +465,36 @@ describe('authenticated Method agent loop', () => {
       mutationOutput.push(part.value);
     }
     expect(JSON.stringify(mutationOutput)).not.toContain('Premature mutation claim');
+  });
+
+  it('applies the result barrier only to the outward stream after tool continuation has settled', async () => {
+    const internalParts = [
+      { type: 'start-step' },
+      { type: 'tool-call', toolCallId: 'confirm-call', toolName: 'confirm_why', input: {} },
+      { type: 'tool-result', toolCallId: 'confirm-call', toolName: 'confirm_why', output: { status: 'committed' } },
+      { type: 'finish-step' },
+      { type: 'start-step' },
+      { type: 'text-start', id: 'safe' },
+      { type: 'text-delta', id: 'safe', text: 'Fresh authoritative narration.' },
+      { type: 'text-end', id: 'safe' },
+      { type: 'finish-step' },
+      { type: 'finish' },
+    ];
+    const internalStream = new ReadableStream({
+      start(controller) {
+        for (const part of internalParts) controller.enqueue(part);
+        controller.close();
+      },
+    });
+
+    const outward: unknown[] = [];
+    for await (const part of projectMethodStreamForDisplay(internalStream as never) as never) {
+      outward.push(part);
+    }
+
+    expect(JSON.stringify(outward)).toContain('Fresh authoritative narration');
+    expect(JSON.stringify(outward)).not.toContain('tool-result');
+    expect(JSON.stringify(outward)).not.toContain('confirm-call');
   });
 
   it('restores SDK retry defaults so a transient first call cannot duplicate an operation', async () => {
@@ -435,7 +587,8 @@ describe('authenticated Method agent loop', () => {
     expect(attempt).toBe(2);
     expect(observedErrors).toEqual([]);
     expect(JSON.stringify({ text, observedErrors })).not.toContain(sentinel);
-    expect(model.doStreamCalls[1]?.tools ?? []).toEqual([]);
+    expect(model.doStreamCalls.at(-1)?.tools?.map((definition) => definition.name))
+      .toContain('confirm_why');
   });
 
   it('never interpolates tainted retrieved titles or excerpts into provider instructions', async () => {

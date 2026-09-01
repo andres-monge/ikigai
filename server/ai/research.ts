@@ -205,7 +205,7 @@ export interface ResearchCandidateFact {
 }
 
 export interface ResearchSessionOptions {
-  storage: Pick<IStorage, 'recordResearchAttempt'>;
+  storage: Pick<IStorage, 'loadCareerMap' | 'recordResearchAttempt'>;
   provider: IsolatedResearchProvider;
   userId: string;
   leaseId: string;
@@ -231,6 +231,14 @@ export class ResearchHandleError extends Error {
   }
 }
 
+export class ResearchTargetMismatchError extends Error {
+  readonly code = 'research-target-mismatch';
+  constructor() {
+    super('Research target must be the exact current Suggested path or project.');
+    this.name = 'ResearchTargetMismatchError';
+  }
+}
+
 function errorClass(error: unknown): string {
   const name = error instanceof Error ? error.name : 'ResearchProviderError';
   return new Set(['APICallError', 'Error', 'NoOutputGeneratedError', 'RetryError', 'TimeoutError']).has(name)
@@ -244,9 +252,52 @@ export function validateDeidentifiedResearchIntent(input: unknown): ResearchInte
   return parsed.data;
 }
 
-function buildQuery(intent: ResearchIntent): string {
+// Proposal copy is model-authored and may echo private Foundation text. The
+// isolated boundary therefore emits only server-owned taxonomy labels, never
+// copied proposal tokens or a redacted free-form sentence.
+const PUBLIC_ACTIVITY_TAXONOMY: ReadonlyArray<{
+  label: string;
+  terms: ReadonlySet<string>;
+}> = [
+  ['science and environmental work', 'marine biology science scientific environment environmental ecology climate laboratory lab ocean'],
+  ['software and digital work', 'software digital programming developer development technology data web computing'],
+  ['industrial operations and maintenance', 'industrial maintenance manufacturing operations machinery repair production'],
+  ['engineering and technical work', 'engineering engineer technical systems machinery construction'],
+  ['decision-support work', 'decision decisions choice choices aid aids guide guides tool tools clarity'],
+  ['research and knowledge work', 'research evidence inquiry analysis knowledge findings information field'],
+  ['design and prototyping work', 'design prototype prototyping product products build building formats'],
+  ['learning and facilitation work', 'learning education teaching training workshop workshops facilitation skills'],
+  ['publishing and communication work', 'publishing publish writing media communication archive catalogue note notes'],
+  ['civic and community practice', 'civic public community communities neighbourhood policy social local'],
+  ['organizational and team practice', 'team teams organization organizations business businesses coordination market support'],
+  ['professional networks and access', 'network networks directory directories association associations access contribution routes'],
+  ['trabajo cientifico y ambiental', 'marino biologia ciencia cientifico ambiente ambiental ecologia clima laboratorio oceano'],
+  ['trabajo digital y de software', 'software digital programacion desarrollador tecnologia datos web informatica'],
+  ['operaciones industriales y mantenimiento', 'industrial mantenimiento manufactura operaciones maquinaria reparacion produccion'],
+  ['apoyo a decisiones', 'decision decisiones eleccion elecciones ayuda guia guias herramienta herramientas claridad'],
+  ['investigacion y conocimiento', 'investigacion evidencia consulta analisis conocimiento hallazgos informacion'],
+  ['aprendizaje y facilitacion', 'aprendizaje educacion ensenanza formacion taller talleres facilitacion habilidades'],
+  ['practica civica y comunitaria', 'civico publico comunidad comunidades vecindario politica social local'],
+].map(([label, terms]) => ({ label, terms: new Set(terms.split(' ')) }));
+
+function normalizedPublicToken(value: string): string {
+  return value.normalize('NFKD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+}
+
+function publicActivityCategories(values: readonly string[]): string[] {
+  const tokens = new Set(values.flatMap((value) => (
+    value.match(/\p{L}+/gu) ?? []
+  )).map(normalizedPublicToken));
+  return PUBLIC_ACTIVITY_TAXONOMY
+    .filter((category) => [...category.terms].some((term) => tokens.has(term)))
+    .map((category) => category.label);
+}
+
+function buildQuery(intent: ResearchIntent, descriptors: readonly string[]): string {
   const dimension = intent.dimension.replaceAll('-', ' ');
-  return `Research public professional patterns for the ${dimension} dimension. Use public professional sources only.`;
+  const categories = publicActivityCategories(descriptors);
+  if (categories.length === 0) throw new ResearchPrivacyError('insufficient-public-descriptor');
+  return `Research public professional patterns for these server-derived public activity categories: ${categories.join('; ')}. Focus on the ${dimension} dimension. Use public professional sources only.`;
 }
 
 function canonicalFieldFor(intent: ResearchIntent): string {
@@ -281,6 +332,31 @@ export class ResearchSession implements MethodResearchSession {
       .slice(0, 24)}`;
   }
 
+  private async resolvePublicTarget(intent: ResearchIntent): Promise<string[]> {
+    const loaded = await this.options.storage.loadCareerMap(this.options.userId);
+    if (loaded.status !== 'ready') throw new ResearchTargetMismatchError();
+    if (intent.target.kind === 'purpose-path-set') {
+      const set = loaded.map.pathSets.find((candidate) => (
+        candidate.id === intent.target.id
+        && candidate.revision === intent.target.revision
+        && candidate.status === 'suggested'
+      ));
+      if (!set) throw new ResearchTargetMismatchError();
+      // These are proposal-facing, server-generated public descriptors. Private
+      // Foundation, fit, unknown, and reflection fields are intentionally absent.
+      return set.paths.flatMap((path) => [path.name, path.possibility, path.projectPreview]);
+    }
+    const project = loaded.map.projects.find((candidate) => (
+      candidate.id === intent.target.id
+      && candidate.revision === intent.target.revision
+      && candidate.agreementStatus === 'suggested'
+    ));
+    if (!project) throw new ResearchTargetMismatchError();
+    // Project title and the bounded public first-version description are the
+    // only canonical project fields permitted across the isolated boundary.
+    return [project.title, project.firstVersion];
+  }
+
   async research(input: unknown, abortSignal?: AbortSignal): Promise<{
     status: 'succeeded' | 'insufficient' | 'failed';
     category: ResearchIntent['category'];
@@ -289,12 +365,14 @@ export class ResearchSession implements MethodResearchSession {
   }> {
     if (abortSignal?.aborted) throw abortSignal.reason ?? new DOMException('Aborted', 'AbortError');
     const intent = validateDeidentifiedResearchIntent(input);
+    const publicTarget = await this.resolvePublicTarget(intent);
+    if (abortSignal?.aborted) throw abortSignal.reason ?? new DOMException('Aborted', 'AbortError');
     const attemptedAt = this.now().toISOString();
     const attemptId = `research_${randomUUID()}`;
     try {
       const providerResult = await this.options.provider.search({
         category: intent.category,
-        query: buildQuery(intent),
+        query: buildQuery(intent, publicTarget),
         abortSignal,
       });
       if (abortSignal?.aborted) throw abortSignal.reason ?? new DOMException('Aborted', 'AbortError');

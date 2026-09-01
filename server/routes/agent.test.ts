@@ -16,6 +16,7 @@ import type {
   PersistCareerMapResult,
 } from '../storage.js';
 import { MethodOwnerBusyError } from '../storage.js';
+import { createDisplayRecovery } from '../ai/history.js';
 import { createAgentRouter } from './agent.js';
 
 const USER_ID = 'opaque-user-1';
@@ -122,8 +123,12 @@ function createStorage(overrides: Record<string, unknown> = {}) {
     failAgentTurn: vi.fn(async () => turn('agent-turn', 'failed')),
     releaseTurnLease: vi.fn(async () => true),
     listAgentTurns: vi.fn(async () => []),
+    backfillAgentTurnDisplayProjection: vi.fn(async () => undefined),
     getConversationMapping: vi.fn(async () => undefined as string | undefined),
     setConversationMapping: vi.fn(async () => undefined),
+    recordConversationProvisioning: vi.fn(async () => undefined),
+    listPendingConversationProvisioning: vi.fn(async () => []),
+    resolveConversationProvisioning: vi.fn(async () => undefined),
     recordResearchAttempt: vi.fn(async () => undefined),
     ...overrides,
   };
@@ -144,10 +149,16 @@ const unauthenticated: RequestHandler = (_request, response) => {
   response.status(401).json({ error: 'Authentication required' });
 };
 
-function testApp(input: Parameters<typeof createAgentRouter>[0]) {
+function testApp(
+  input: Parameters<typeof createAgentRouter>[0],
+  routerFactory: typeof createAgentRouter = createAgentRouter,
+) {
   const app = express();
   app.use(express.json());
-  app.use('/api/agent', createAgentRouter(input));
+  app.use('/api/agent', routerFactory({
+    classifyTurn: async () => 'method',
+    ...input,
+  }));
   app.use((error: unknown, _request: express.Request, response: express.Response, _next: express.NextFunction) => {
     response.status(413).json({ error: 'Agent request failed', errorClass: error instanceof Error ? error.name : 'Error' });
   });
@@ -173,75 +184,105 @@ describe('protected Method routes', () => {
     expect(storage.beginWorkspaceActionTurn).not.toHaveBeenCalled();
   });
 
-  it('fails closed while preserving authenticated read-only map and empty history', async () => {
-    const storage = createStorage();
-    const transcribeAudio = vi.fn();
-    const app = testApp({
-      storage,
-      requireAuth: authenticated,
-      agentEnabled: false,
-      transcribeAudio,
-      operationalLog: vi.fn(),
-      conversationClient: { listItems: vi.fn() },
-    });
+  it.each([
+    ['missing', undefined],
+    ['false', 'false'],
+  ] as const)('fails closed when AGENT_ENABLED is %s while authenticated read paths stay available', async (_label, flag) => {
+    const previous = process.env.AGENT_ENABLED;
+    if (flag === undefined) delete process.env.AGENT_ENABLED;
+    else process.env.AGENT_ENABLED = flag;
+    vi.resetModules();
 
-    const workspace = await request(app).get('/api/agent/workspace');
-    const history = await request(app).get('/api/agent/history');
-    const agent = await request(app).post('/api/agent').send({ id: 'message', message: SENTINEL });
-    const operation = await request(app).post('/api/agent/workspace/operations').send({
-      operationId: 'operation-1',
-      clientMessageId: 'message-1',
-      operation: { type: 'confirm-why', input: {} },
-    });
-    const audio = await request(app)
-      .post('/api/agent/audio/transcribe')
-      .set('content-type', 'audio/webm')
-      .send(Buffer.from('audio'));
+    try {
+      const { createAgentRouter: createFreshAgentRouter } = await import('./agent.js');
+      const storage = createStorage();
+      const transcribeAudio = vi.fn();
+      const conversationClient = {
+        createConversation: vi.fn(),
+        deleteConversation: vi.fn(),
+        listItems: vi.fn(),
+      };
+      const model = new MockLanguageModelV4({ doStream: textStream('must not run') as never });
+      const app = testApp({
+        storage,
+        requireAuth: authenticated,
+        transcribeAudio,
+        conversationClient,
+        model,
+        operationalLog: vi.fn(),
+      }, createFreshAgentRouter);
 
-    expect(workspace.status).toBe(200);
-    expect(history.body).toEqual({ status: 'empty', messages: [] });
-    expect([agent.status, operation.status, audio.status]).toEqual([503, 503, 503]);
-    expect(storage.getOrCreateCareerMap).not.toHaveBeenCalled();
-    expect(storage.beginAgentTurn).not.toHaveBeenCalled();
-    expect(storage.beginWorkspaceActionTurn).not.toHaveBeenCalled();
-    expect(storage.persistCareerMapOperation).not.toHaveBeenCalled();
-    expect(storage.recordResearchAttempt).not.toHaveBeenCalled();
-    expect(transcribeAudio).not.toHaveBeenCalled();
+      const workspace = await request(app).get('/api/agent/workspace');
+      const history = await request(app).get('/api/agent/history');
+      const agent = await request(app).post('/api/agent').send({ id: 'message', message: SENTINEL });
+      const operation = await request(app).post('/api/agent/workspace/operations').send({
+        operationId: 'operation-disabled-flag', clientMessageId: 'message-disabled-flag',
+        operation: { type: 'confirm-why', input: {} },
+      });
+      const audio = await request(app).post('/api/agent/audio/transcribe')
+        .set('content-type', 'audio/webm').send(Buffer.from('audio'));
+
+      expect(workspace.status).toBe(200);
+      expect(workspace.body).toMatchObject({ status: 'ready' });
+      expect(history.body).toEqual({ status: 'empty', messages: [] });
+      expect([agent.status, operation.status, audio.status]).toEqual([503, 503, 503]);
+      expect(storage.loadCareerMap).toHaveBeenCalledWith(USER_ID);
+      expect(storage.getConversationMapping).toHaveBeenCalledWith(USER_ID);
+      expect(storage.getOrCreateCareerMap).not.toHaveBeenCalled();
+      expect(storage.beginAgentTurn).not.toHaveBeenCalled();
+      expect(storage.beginWorkspaceActionTurn).not.toHaveBeenCalled();
+      expect(storage.persistCareerMapOperation).not.toHaveBeenCalled();
+      expect(storage.recordResearchAttempt).not.toHaveBeenCalled();
+      expect(storage.setConversationMapping).not.toHaveBeenCalled();
+      expect(storage.recordConversationProvisioning).not.toHaveBeenCalled();
+      expect(storage.listPendingConversationProvisioning).not.toHaveBeenCalled();
+      expect(storage.resolveConversationProvisioning).not.toHaveBeenCalled();
+      expect(conversationClient.createConversation).not.toHaveBeenCalled();
+      expect(conversationClient.deleteConversation).not.toHaveBeenCalled();
+      expect(conversationClient.listItems).not.toHaveBeenCalled();
+      expect(transcribeAudio).not.toHaveBeenCalled();
+      expect(model.doStreamCalls).toHaveLength(0);
+    } finally {
+      if (previous === undefined) delete process.env.AGENT_ENABLED;
+      else process.env.AGENT_ENABLED = previous;
+    }
   });
 
-  it('fails closed when AGENT_ENABLED is missing while authenticated read paths stay available', async () => {
-    const storage = createStorage();
-    const transcribeAudio = vi.fn();
-    const conversationClient = { listItems: vi.fn() };
-    const app = testApp({
-      storage,
-      requireAuth: authenticated,
-      transcribeAudio,
-      conversationClient,
-      operationalLog: vi.fn(),
+  it('keeps disabled mapped history read-only while still returning safe recoverable items', async () => {
+    const userText = 'Safe repeated prompt';
+    const assistantText = 'Safe completed answer';
+    const completed = {
+      ...turn('agent-turn', 'completed'),
+      terminalResult: {
+        kind: 'completed', refetch: true,
+        displayRecovery: createDisplayRecovery(userText, assistantText, false),
+      },
+    };
+    const storage = createStorage({
+      getConversationMapping: vi.fn(async () => 'mapped-conversation'),
+      listAgentTurns: vi.fn(async () => [completed]),
     });
+    const conversationClient = {
+      createConversation: vi.fn(), deleteConversation: vi.fn(),
+      listItems: vi.fn(async () => ({
+        data: [
+          { id: 'mapped-user', type: 'message', role: 'user', content: [{ type: 'input_text', text: userText }] },
+          { id: 'mapped-assistant', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: assistantText }] },
+        ],
+        hasMore: false,
+      })),
+    };
 
-    const workspace = await request(app).get('/api/agent/workspace');
-    const history = await request(app).get('/api/agent/history');
-    const agent = await request(app).post('/api/agent').send({ id: 'message', message: 'hello' });
-    const operation = await request(app).post('/api/agent/workspace/operations').send({
-      operationId: 'operation-missing-flag', clientMessageId: 'message-missing-flag',
-      operation: { type: 'confirm-why', input: {} },
-    });
-    const audio = await request(app).post('/api/agent/audio/transcribe')
-      .set('content-type', 'audio/webm').send(Buffer.from('audio'));
+    const response = await request(testApp({
+      storage, requireAuth: authenticated, agentEnabled: false, conversationClient, operationalLog: vi.fn(),
+    })).get('/api/agent/history');
 
-    expect(workspace.status).toBe(200);
-    expect(history.body).toEqual({ status: 'empty', messages: [] });
-    expect([agent.status, operation.status, audio.status]).toEqual([503, 503, 503]);
-    expect(storage.getOrCreateCareerMap).not.toHaveBeenCalled();
-    expect(storage.beginAgentTurn).not.toHaveBeenCalled();
-    expect(storage.beginWorkspaceActionTurn).not.toHaveBeenCalled();
-    expect(storage.persistCareerMapOperation).not.toHaveBeenCalled();
-    expect(storage.recordResearchAttempt).not.toHaveBeenCalled();
-    expect(storage.setConversationMapping).not.toHaveBeenCalled();
-    expect(conversationClient.listItems).not.toHaveBeenCalled();
-    expect(transcribeAudio).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(response.body.messages.map((message: { id: string }) => message.id))
+      .toEqual(['mapped-user', 'mapped-assistant']);
+    expect(conversationClient.listItems).toHaveBeenCalledOnce();
+    expect(storage.backfillAgentTurnDisplayProjection).not.toHaveBeenCalled();
+    expect(storage.listPendingConversationProvisioning).not.toHaveBeenCalled();
   });
 
   it('returns an empty workspace bootstrap and enforces the bounded agent message schema before storage', async () => {
@@ -380,6 +421,33 @@ describe('protected Method routes', () => {
     expect(storage.getConversationMapping).not.toHaveBeenCalled();
   });
 
+  it('reports a recovered display projection as ready without also reporting it pending', async () => {
+    const terminalTurn = {
+      ...turn('agent-turn', 'completed'),
+      terminalResult: {
+        kind: 'completed', refetch: true,
+        displayProjection: { userItemId: 'provider-user', assistantItemIds: ['provider-assistant'] },
+        displayRecovery: {
+          status: 'pending', userTextDigest: 'a'.repeat(64),
+          assistantTextDigest: 'b'.repeat(64), assistantTextLength: 10, retainPartial: false,
+        },
+      },
+    };
+    const storage = createStorage({
+      beginAgentTurn: vi.fn(async (): Promise<BeginAgentTurnResult> => ({
+        status: 'terminal', shouldInvokeModel: false, turn: terminalTurn,
+      })),
+    });
+
+    const response = await request(testApp({
+      storage, requireAuth: authenticated, agentEnabled: true, operationalLog: vi.fn(),
+    })).post('/api/agent').send({ id: 'client-message-1', message: 'retry' });
+
+    expect(response.status).toBe(200);
+    expect(response.body.result).toMatchObject({ kind: 'completed', displayReady: true });
+    expect(response.body.result).not.toHaveProperty('historyProjection');
+  });
+
   it('replays the stored workspace operation envelope without converting it to a generic completion', async () => {
     const operationEnvelope = {
       status: 'committed', operation: 'confirm-why', authoritativeRevision: 2,
@@ -479,6 +547,7 @@ describe('protected Method routes', () => {
       agentEnabled: true,
       model,
       conversationClient,
+      classifyTurn: async () => 'conversation',
       researchProvider: { search: vi.fn(async () => ({ candidates: [] })) },
       operationalLog: vi.fn(),
     })).post('/api/agent').send({ id: 'client-message-1', message: 'Help me think this through.' });
@@ -504,7 +573,136 @@ describe('protected Method routes', () => {
     }));
   });
 
-  it('binds a newly created Conversation before honoring post-create abort and deletes it if binding fails', async () => {
+  it('bounds Conversation creation with a request-scoped provisioning timeout', async () => {
+    const timeoutController = new AbortController();
+    timeoutController.abort(new DOMException('Conversation provisioning timed out.', 'TimeoutError'));
+    const timeout = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(timeoutController.signal);
+    let provisioningSignal: AbortSignal | undefined;
+    const storage = createStorage();
+    const model = new MockLanguageModelV4({ doStream: textStream('must not run') as never });
+    const conversationClient = {
+      createConversation: vi.fn(async (signal?: AbortSignal) => {
+        provisioningSignal = signal;
+        if (!signal) throw new Error('Conversation creation was not bounded.');
+        if (signal.aborted) throw signal.reason;
+        return 'provider-conversation-must-not-be-created';
+      }),
+      deleteConversation: vi.fn(),
+      listItems: vi.fn(),
+    };
+
+    try {
+      const response = await request(testApp({
+        storage, requireAuth: authenticated, agentEnabled: true, model, conversationClient,
+        researchProvider: { search: vi.fn(async () => ({ candidates: [] })) }, operationalLog: vi.fn(),
+      })).post('/api/agent').send({ id: 'client-message-1', message: 'hello' });
+
+      expect(response.status).toBe(502);
+      expect(response.body).toMatchObject({ errorClass: 'TimeoutError' });
+      expect(timeout).toHaveBeenCalledWith(5_000);
+      expect(conversationClient.createConversation).toHaveBeenCalledWith(expect.any(AbortSignal));
+      expect(provisioningSignal?.aborted).toBe(true);
+      expect(storage.recordConversationProvisioning).not.toHaveBeenCalled();
+      expect(storage.setConversationMapping).not.toHaveBeenCalled();
+      expect(storage.failAgentTurn).toHaveBeenCalledWith(expect.objectContaining({ errorClass: 'TimeoutError' }));
+      expect(storage.releaseTurnLease).toHaveBeenCalledOnce();
+      expect(model.doStreamCalls).toHaveLength(0);
+    } finally {
+      timeout.mockRestore();
+    }
+  });
+
+  it('durably records a provider Conversation before binding it and resolves the marker after mapping', async () => {
+    const providerConversationId = 'provider-conversation-success-sentinel';
+    const logs: Array<Record<string, unknown>> = [];
+    const storage = createStorage();
+    const conversationClient = {
+      createConversation: vi.fn(async (_signal?: AbortSignal) => providerConversationId),
+      deleteConversation: vi.fn(),
+      listItems: vi.fn(async () => ({ data: [], hasMore: false })),
+    };
+    const model = new MockLanguageModelV4({ doStream: textStream('Safe reply.') as never });
+    const response = await request(testApp({
+      storage, requireAuth: authenticated, agentEnabled: true, model, conversationClient,
+      researchProvider: { search: vi.fn(async () => ({ candidates: [] })) },
+      operationalLog: (entry) => logs.push(entry),
+    })).post('/api/agent').send({ id: 'client-message-1', message: 'hello' });
+
+    expect(response.status).toBe(200);
+    expect(conversationClient.createConversation).toHaveBeenCalledWith(expect.any(AbortSignal));
+    expect(storage.recordConversationProvisioning).toHaveBeenCalledWith({
+      userId: USER_ID,
+      turnId: 'agent-turn-turn',
+      leaseId: 'agent-turn-lease',
+      conversationId: providerConversationId,
+    });
+    expect(storage.setConversationMapping).toHaveBeenCalledWith(
+      USER_ID, 'agent-turn-lease', providerConversationId,
+    );
+    expect(storage.resolveConversationProvisioning).toHaveBeenCalledWith({
+      userId: USER_ID,
+      turnId: 'agent-turn-turn',
+      conversationId: providerConversationId,
+    });
+    expect(storage.recordConversationProvisioning.mock.invocationCallOrder[0])
+      .toBeLessThan(storage.setConversationMapping.mock.invocationCallOrder[0]!);
+    expect(storage.setConversationMapping.mock.invocationCallOrder[0])
+      .toBeLessThan(storage.resolveConversationProvisioning.mock.invocationCallOrder[0]!);
+    expect(conversationClient.deleteConversation).not.toHaveBeenCalled();
+    expect(JSON.stringify([response.body, response.text, logs])).not.toContain(providerConversationId);
+  });
+
+  it('keeps a successfully bound Conversation when marker resolution is temporarily unavailable', async () => {
+    const providerConversationId = 'provider-conversation-bound-before-marker-resolution';
+    let mapped: string | undefined;
+    const storage = createStorage({
+      getConversationMapping: vi.fn(async () => mapped),
+      setConversationMapping: vi.fn(async (_userId: string, _leaseId: string, id: string) => { mapped = id; }),
+      resolveConversationProvisioning: vi.fn()
+        .mockRejectedValueOnce(new Error('marker-resolution-temporary-failure'))
+        .mockResolvedValue(undefined),
+    });
+    const conversationClient = {
+      createConversation: vi.fn(async () => providerConversationId),
+      deleteConversation: vi.fn(async () => undefined),
+      listItems: vi.fn(async () => ({ data: [], hasMore: false })),
+    };
+    const model = new MockLanguageModelV4({ doStream: textStream('Safe reply.') as never });
+
+    const response = await request(testApp({
+      storage, requireAuth: authenticated, agentEnabled: true, model, conversationClient,
+      researchProvider: { search: vi.fn(async () => ({ candidates: [] })) }, operationalLog: vi.fn(),
+    })).post('/api/agent').send({ id: 'client-message-1', message: 'hello' });
+
+    expect(response.status).toBe(200);
+    expect(mapped).toBe(providerConversationId);
+    expect(conversationClient.deleteConversation).not.toHaveBeenCalled();
+    expect(storage.completeAgentTurn).toHaveBeenCalledOnce();
+  });
+
+  it('resolves a pending provisioning marker already bound to the user without deleting it', async () => {
+    const providerConversationId = 'provider-conversation-already-bound';
+    const marker = { userId: USER_ID, turnId: 'prior-turn', conversationId: providerConversationId };
+    const storage = createStorage({
+      getConversationMapping: vi.fn(async () => providerConversationId),
+      listPendingConversationProvisioning: vi.fn(async () => [marker]),
+    });
+    const conversationClient = {
+      createConversation: vi.fn(),
+      deleteConversation: vi.fn(async () => undefined),
+      listItems: vi.fn(async () => ({ data: [], hasMore: false })),
+    };
+
+    const response = await request(testApp({
+      storage, requireAuth: authenticated, agentEnabled: true, conversationClient, operationalLog: vi.fn(),
+    })).get('/api/agent/history');
+
+    expect(response.status).toBe(200);
+    expect(storage.resolveConversationProvisioning).toHaveBeenCalledWith(marker);
+    expect(conversationClient.deleteConversation).not.toHaveBeenCalled();
+  });
+
+  it('records a newly created Conversation and resolves it after compensating for mapping failure', async () => {
     const storage = createStorage({
       setConversationMapping: vi.fn(async () => { throw new Error('binding-failed-sentinel'); }),
     });
@@ -522,24 +720,71 @@ describe('protected Method routes', () => {
 
     expect(response.status).toBe(502);
     expect(conversationClient.createConversation).toHaveBeenCalledOnce();
+    expect(storage.recordConversationProvisioning).toHaveBeenCalledWith({
+      userId: USER_ID,
+      turnId: 'agent-turn-turn',
+      leaseId: 'agent-turn-lease',
+      conversationId: 'conversation-created-before-bind',
+    });
     expect(storage.setConversationMapping).toHaveBeenCalledWith(
       USER_ID, 'agent-turn-lease', 'conversation-created-before-bind',
     );
     expect(conversationClient.deleteConversation).toHaveBeenCalledWith(
       'conversation-created-before-bind', expect.any(AbortSignal),
     );
+    expect(storage.resolveConversationProvisioning).toHaveBeenCalledWith({
+      userId: USER_ID,
+      turnId: 'agent-turn-turn',
+      conversationId: 'conversation-created-before-bind',
+    });
     expect(cleanupSignals).toEqual([expect.objectContaining({
       type: 'conversation_provisioning_compensated', cleanupRequired: false,
     })]);
     expect(JSON.stringify(cleanupSignals)).not.toContain('conversation-created-before-bind');
   });
 
-  it('persists a newly created Conversation before honoring post-create abort without deleting the bound mapping', async () => {
-    let resolveCreate!: (id: string) => void;
-    const createGate = new Promise<string>((resolve) => { resolveCreate = resolve; });
+  it('compensates a created Conversation when the first durable marker write fails', async () => {
+    const providerConversationId = 'conversation-marker-write-failed';
+    const storage = createStorage({
+      recordConversationProvisioning: vi.fn()
+        .mockRejectedValueOnce(new Error('marker-write-failed'))
+        .mockResolvedValue(undefined),
+    });
+    const conversationClient = {
+      createConversation: vi.fn(async () => providerConversationId),
+      deleteConversation: vi.fn(async () => { throw new Error('delete-also-failed'); }),
+      listItems: vi.fn(),
+    };
+
+    const response = await request(testApp({
+      storage, requireAuth: authenticated, agentEnabled: true, conversationClient, operationalLog: vi.fn(),
+    })).post('/api/agent').send({ id: 'client-message-1', message: 'hello' });
+
+    expect(response.status).toBe(502);
+    expect(conversationClient.deleteConversation).toHaveBeenCalledWith(
+      providerConversationId, expect.any(AbortSignal),
+    );
+    expect(storage.recordConversationProvisioning).toHaveBeenCalledTimes(2);
+    expect(storage.setConversationMapping).not.toHaveBeenCalled();
+    expect(JSON.stringify([response.body, response.text])).not.toContain(providerConversationId);
+  });
+
+  it('propagates request abort during Conversation provisioning without mapping or provider dispatch', async () => {
+    let provisioningSignal: AbortSignal | undefined;
+    let rejectCreate!: (error: unknown) => void;
     const storage = createStorage();
     const conversationClient = {
-      createConversation: vi.fn(async () => createGate),
+      createConversation: vi.fn((signal?: AbortSignal) => {
+        provisioningSignal = signal;
+        return new Promise<string>((_resolve, reject) => {
+          rejectCreate = reject;
+          const rejectForAbort = () => reject(
+            signal?.reason ?? new DOMException('Conversation provisioning aborted.', 'AbortError'),
+          );
+          if (signal?.aborted) rejectForAbort();
+          else signal?.addEventListener('abort', rejectForAbort, { once: true });
+        });
+      }),
       deleteConversation: vi.fn(async () => undefined),
       listItems: vi.fn(),
     };
@@ -553,17 +798,155 @@ describe('protected Method routes', () => {
     await vi.waitFor(() => expect(conversationClient.createConversation).toHaveBeenCalledOnce());
     outbound.abort();
     await new Promise((resolve) => setTimeout(resolve, 20));
-    resolveCreate('conversation-bound-before-abort');
+    if (!provisioningSignal?.aborted) {
+      rejectCreate(new DOMException('Test cleanup for missing provider abort.', 'AbortError'));
+    }
     await settled;
 
-    await vi.waitFor(() => expect(storage.setConversationMapping).toHaveBeenCalledWith(
-      USER_ID, 'agent-turn-lease', 'conversation-bound-before-abort',
-    ));
+    expect(conversationClient.createConversation).toHaveBeenCalledWith(expect.any(AbortSignal));
+    expect(provisioningSignal?.aborted).toBe(true);
+    expect(storage.recordConversationProvisioning).not.toHaveBeenCalled();
+    expect(storage.setConversationMapping).not.toHaveBeenCalled();
     expect(conversationClient.deleteConversation).not.toHaveBeenCalled();
     await vi.waitFor(() => expect(storage.cancelAgentTurn).toHaveBeenCalledOnce());
     expect(storage.failAgentTurn).not.toHaveBeenCalled();
     expect(storage.completeAgentTurn).not.toHaveBeenCalled();
+    expect(storage.releaseTurnLease).toHaveBeenCalledOnce();
     expect(model.doStreamCalls).toHaveLength(0);
+  });
+
+  it('records and binds a Conversation returned by a provider that ignores request abort', async () => {
+    const providerConversationId = 'provider-conversation-returned-after-abort';
+    let provisioningSignal: AbortSignal | undefined;
+    let resolveCreate!: (id: string) => void;
+    const createGate = new Promise<string>((resolve) => { resolveCreate = resolve; });
+    const storage = createStorage();
+    const conversationClient = {
+      createConversation: vi.fn((signal?: AbortSignal) => {
+        provisioningSignal = signal;
+        return createGate;
+      }),
+      deleteConversation: vi.fn(async () => undefined),
+      listItems: vi.fn(),
+    };
+    const model = new MockLanguageModelV4({ doStream: textStream('must not run') as never });
+    const outbound = request(testApp({
+      storage, requireAuth: authenticated, agentEnabled: true, model, conversationClient,
+      researchProvider: { search: vi.fn(async () => ({ candidates: [] })) }, operationalLog: vi.fn(),
+    })).post('/api/agent').send({ id: 'client-message-1', message: 'hello' });
+    const settled = Promise.resolve(outbound).catch(() => undefined);
+    await vi.waitFor(() => expect(conversationClient.createConversation).toHaveBeenCalledOnce());
+
+    outbound.abort();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    resolveCreate(providerConversationId);
+    await settled;
+
+    expect(conversationClient.createConversation).toHaveBeenCalledWith(expect.any(AbortSignal));
+    expect(provisioningSignal?.aborted).toBe(true);
+    await vi.waitFor(() => expect(storage.resolveConversationProvisioning).toHaveBeenCalledWith({
+      userId: USER_ID,
+      turnId: 'agent-turn-turn',
+      conversationId: providerConversationId,
+    }));
+    expect(storage.recordConversationProvisioning).toHaveBeenCalledWith({
+      userId: USER_ID,
+      turnId: 'agent-turn-turn',
+      leaseId: 'agent-turn-lease',
+      conversationId: providerConversationId,
+    });
+    expect(storage.setConversationMapping).toHaveBeenCalledWith(
+      USER_ID, 'agent-turn-lease', providerConversationId,
+    );
+    expect(storage.recordConversationProvisioning.mock.invocationCallOrder[0])
+      .toBeLessThan(storage.setConversationMapping.mock.invocationCallOrder[0]!);
+    expect(conversationClient.deleteConversation).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(storage.cancelAgentTurn).toHaveBeenCalledOnce());
+    expect(storage.failAgentTurn).not.toHaveBeenCalled();
+    expect(storage.completeAgentTurn).not.toHaveBeenCalled();
+    expect(storage.releaseTurnLease).toHaveBeenCalledOnce();
+    expect(model.doStreamCalls).toHaveLength(0);
+  });
+
+  it('persists failed compensation for default-router reconciliation without exposing provider ids', async () => {
+    const providerConversationId = 'provider-orphan-conversation-sentinel';
+    const cleanupFailure = `delete-failed-for-${providerConversationId}`;
+    const logs: Array<Record<string, unknown>> = [];
+    let pending: { userId: string; turnId: string; conversationId: string } | undefined;
+    const recordConversationProvisioning = vi.fn(async (input: {
+      userId: string; turnId: string; leaseId: string; conversationId: string;
+    }) => {
+      pending = {
+        userId: input.userId,
+        turnId: input.turnId,
+        conversationId: input.conversationId,
+      };
+    });
+    const listPendingConversationProvisioning = vi.fn(async (userId: string) => (
+      pending?.userId === userId ? [pending] : []
+    ));
+    const resolveConversationProvisioning = vi.fn(async (input: {
+      userId: string; turnId: string; conversationId: string;
+    }) => {
+      if (pending
+        && input.userId === pending.userId
+        && input.turnId === pending.turnId
+        && input.conversationId === pending.conversationId
+      ) pending = undefined;
+    });
+    const storage = createStorage({
+      setConversationMapping: vi.fn(async () => { throw new Error(`mapping-failed-for-${providerConversationId}`); }),
+      recordConversationProvisioning,
+      listPendingConversationProvisioning,
+      resolveConversationProvisioning,
+    });
+    const conversationClient = {
+      createConversation: vi.fn(async (_signal?: AbortSignal) => providerConversationId),
+      deleteConversation: vi.fn()
+        .mockRejectedValueOnce(new Error(cleanupFailure))
+        .mockResolvedValueOnce(undefined),
+      listItems: vi.fn(),
+    };
+    const app = testApp({
+      storage, requireAuth: authenticated, agentEnabled: true, conversationClient,
+      operationalLog: (entry) => logs.push(entry),
+    });
+
+    const failed = await request(app)
+      .post('/api/agent')
+      .send({ id: 'client-message-1', message: 'hello' });
+    expect(failed.status).toBe(502);
+    expect(recordConversationProvisioning).toHaveBeenCalledWith({
+      userId: USER_ID,
+      turnId: 'agent-turn-turn',
+      leaseId: 'agent-turn-lease',
+      conversationId: providerConversationId,
+    });
+    expect(pending).toEqual({
+      userId: USER_ID,
+      turnId: 'agent-turn-turn',
+      conversationId: providerConversationId,
+    });
+    expect(resolveConversationProvisioning).not.toHaveBeenCalled();
+
+    const history = await request(app).get('/api/agent/history');
+
+    expect(history.status).toBe(200);
+    expect(history.body).toEqual({ status: 'empty', messages: [] });
+    expect(listPendingConversationProvisioning).toHaveBeenCalledWith(USER_ID);
+    expect(conversationClient.deleteConversation).toHaveBeenNthCalledWith(
+      2, providerConversationId, expect.any(AbortSignal),
+    );
+    expect(resolveConversationProvisioning).toHaveBeenCalledWith({
+      userId: USER_ID,
+      turnId: 'agent-turn-turn',
+      conversationId: providerConversationId,
+    });
+    expect(pending).toBeUndefined();
+    expect(JSON.stringify([failed.body, failed.text, history.body, logs]))
+      .not.toContain(providerConversationId);
+    expect(JSON.stringify([failed.body, failed.text, history.body, logs]))
+      .not.toContain(cleanupFailure);
   });
 
   it('keeps protected audio bounded and returns payload-free provider failures', async () => {

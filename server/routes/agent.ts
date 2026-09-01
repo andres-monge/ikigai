@@ -2,9 +2,14 @@ import { createHash, randomUUID } from 'node:crypto';
 import express, { Router, type Request, type RequestHandler } from 'express';
 import { createGroq } from '@ai-sdk/groq';
 import { createOpenAI } from '@ai-sdk/openai';
-import { experimental_transcribe as transcribe, type LanguageModel } from 'ai';
+import {
+  experimental_transcribe as transcribe,
+  pipeUIMessageStreamToResponse,
+  toUIMessageStream,
+  type LanguageModel,
+} from 'ai';
 import { z } from 'zod';
-import { env } from '../env.js';
+import { env, parseAgentEnabled } from '../env.js';
 import { getProtectedIdentity, requireAuth } from '../auth-middleware.js';
 import {
   MethodOwnerBusyError,
@@ -16,13 +21,15 @@ import {
 import {
   REVELIO_AGENT_MODEL,
   REVELIO_AGENT_PROVIDER,
+  classifyMethodTurn,
   createMethodAgent,
-  createResultBarrierTransform,
-  isMutationCapableMessage,
+  projectMethodStreamForDisplay,
+  type MethodTurnRoute,
 } from '../ai/agent.js';
 import { createMethodModuleLoader, type MethodModuleLoader } from '../ai/method/loader.js';
 import {
   OpenAIConversationClient,
+  createDisplayRecovery,
   listConversationItems,
   loadConversationHistory,
   resolveDisplayProjection,
@@ -61,6 +68,11 @@ export interface AgentRouterOptions {
   id?: () => string;
   operationalLog?: (entry: Record<string, unknown>) => void;
   conversationCleanupSignal?: (entry: Record<string, unknown>) => void;
+  classifyTurn?: (input: {
+    model: LanguageModel;
+    message: string;
+    abortSignal?: AbortSignal;
+  }) => Promise<MethodTurnRoute>;
 }
 
 function safeErrorClass(error: unknown): string {
@@ -101,7 +113,9 @@ function canonicalRequestValue(value: unknown): string {
 }
 
 function enabled(value: AgentRouterOptions['agentEnabled']): boolean {
-  return typeof value === 'function' ? value() : value ?? env.AGENT_ENABLED;
+  if (typeof value === 'function') return value();
+  if (typeof value === 'boolean') return value;
+  return parseAgentEnabled(process.env.AGENT_ENABLED);
 }
 
 function attachAbort(request: Request, response: express.Response): {
@@ -159,6 +173,7 @@ function safeTerminalResult(turn: AgentTurnRecord): Record<string, unknown> {
     ...(typeof terminal.stopped === 'boolean' ? { stopped: terminal.stopped } : {}),
     ...(typeof terminal.operationCommitted === 'boolean' ? { operationCommitted: terminal.operationCommitted } : {}),
     ...(terminal.displayProjection ? { displayReady: true } : {}),
+    ...(terminal.displayRecovery && !terminal.displayProjection ? { historyProjection: 'pending' } : {}),
   };
 }
 
@@ -245,6 +260,23 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
     ?? (defaultConversationClient ??= new OpenAIConversationClient(env.OPENAI_API_KEY));
   const researchProvider = () => options.researchProvider
     ?? createOpenAIIsolatedResearchProvider(model(), openAI().tools.webSearch({ searchContextSize: 'low' }));
+  const reconcileConversationProvisioning = async (userId: string) => {
+    if (!enabled(options.agentEnabled)) return;
+    const pending = await storage.listPendingConversationProvisioning(userId);
+    const mappedConversationId = await storage.getConversationMapping(userId);
+    for (const marker of pending) {
+      try {
+        if (mappedConversationId !== marker.conversationId) {
+          if (!conversationClient().deleteConversation) return;
+          await conversationClient().deleteConversation!(marker.conversationId, AbortSignal.timeout(5_000));
+        }
+        await storage.resolveConversationProvisioning(marker);
+      } catch {
+        // The server-only marker remains durable for a later reconciliation or
+        // full Method erasure. Provider ids never enter logs or client payloads.
+      }
+    }
+  };
 
   router.use((request, response, next) => {
     const startedAt = Date.now();
@@ -273,8 +305,15 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
     try {
       throwIfRouteAborted(abort.signal);
       const identity = getProtectedIdentity(response);
+      await reconcileConversationProvisioning(identity.userId);
+      const historyStorage = enabled(options.agentEnabled)
+        ? storage
+        : {
+            getConversationMapping: (userId: string) => storage.getConversationMapping(userId),
+            listAgentTurns: (userId: string) => storage.listAgentTurns(userId),
+          };
       const history = await loadConversationHistory({
-        storage,
+        storage: historyStorage,
         client: conversationClient(),
         userId: identity.userId,
         abortSignal: abort.signal,
@@ -486,6 +525,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
     }
     let turn: AgentTurnRecord | undefined;
     let startingRevision: number | undefined;
+    let safeAssistantText = '';
     const cancelWithCanonicalRecovery = async () => {
       if (!turn) return undefined;
       const authoritative = await storage.loadCareerMap(identity.userId).catch(() => undefined);
@@ -496,6 +536,11 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
         leaseId: turn.leaseId,
         result: {
           kind: 'cancelled', stopped: true, refetch: true,
+          displayRecovery: createDisplayRecovery(
+            parsed.data.message,
+            safeAssistantText,
+            safeAssistantText.length > 0,
+          ),
           ...(revision !== undefined ? {
             revision,
             operationCommitted: startingRevision !== undefined && revision > startingRevision,
@@ -525,11 +570,41 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
       }
       turn = begun.turn;
       throwIfRouteAborted(abort.signal);
+      await reconcileConversationProvisioning(identity.userId);
       let conversationId = await storage.getConversationMapping(identity.userId);
       if (!conversationId) {
         if (!conversationClient().createConversation) throw new Error('ConversationProvisioningUnavailable');
         throwIfRouteAborted(abort.signal);
-        const createdConversationId = await conversationClient().createConversation!();
+        const provisioningSignal = AbortSignal.any([abort.signal, AbortSignal.timeout(5_000)]);
+        const createdConversationId = await conversationClient().createConversation!(provisioningSignal);
+        const provisioningMarker = {
+          userId: identity.userId,
+          turnId: turn.turnId,
+          leaseId: turn.leaseId,
+          conversationId: createdConversationId,
+        };
+        try {
+          await storage.recordConversationProvisioning(provisioningMarker);
+        } catch (markerError) {
+          let cleanupRequired = true;
+          try {
+            if (!conversationClient().deleteConversation) throw new Error('ConversationCleanupUnavailable');
+            await conversationClient().deleteConversation!(createdConversationId, AbortSignal.timeout(5_000));
+            cleanupRequired = false;
+          } catch {
+            // A transient marker failure or erasure race gets one independent
+            // durable retry after failed provider compensation. Postgres can
+            // attach this to the turn or the generation-fenced erasure marker.
+            await storage.recordConversationProvisioning(provisioningMarker).catch(() => undefined);
+          }
+          options.conversationCleanupSignal?.({
+            type: 'conversation_provisioning_compensated',
+            conversationToken: `conv_${createHash('sha256').update(createdConversationId).digest('hex').slice(0, 16)}`,
+            cleanupRequired,
+            errorClass: safeErrorClass(markerError),
+          });
+          throw markerError;
+        }
         try {
           await storage.setConversationMapping(identity.userId, turn.leaseId, createdConversationId);
           conversationId = createdConversationId;
@@ -538,6 +613,11 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
           try {
             if (!conversationClient().deleteConversation) throw new Error('ConversationCleanupUnavailable');
             await conversationClient().deleteConversation!(createdConversationId, AbortSignal.timeout(5_000));
+            await storage.resolveConversationProvisioning({
+              userId: identity.userId,
+              turnId: turn.turnId,
+              conversationId: createdConversationId,
+            });
             cleanupRequired = false;
           } catch {
             cleanupRequired = true;
@@ -550,6 +630,14 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
           });
           throw bindingError;
         }
+        // Mapping is the ownership authority. Marker resolution is cleanup
+        // bookkeeping and must never compensate/delete an already-bound
+        // Conversation; an unresolved marker is reconciled on a later read.
+        await storage.resolveConversationProvisioning({
+          userId: identity.userId,
+          turnId: turn.turnId,
+          conversationId: createdConversationId,
+        }).catch(() => undefined);
         throwIfRouteAborted(abort.signal);
       }
       const research = new ResearchSession({
@@ -561,7 +649,11 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
         now,
       });
       let streamError: unknown;
-      let safeAssistantText = '';
+      const turnRoute = await (options.classifyTurn ?? classifyMethodTurn)({
+        model: model(),
+        message: parsed.data.message,
+        abortSignal: abort.signal,
+      });
       const agent = createMethodAgent({
         model: model(),
         storage,
@@ -573,6 +665,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
         occurredAt: now().toISOString(),
         research,
         currentMessage: parsed.data.message,
+        turnRoute,
         abortSignal: abort.signal,
         onError: (error) => {
           streamError = error;
@@ -587,19 +680,23 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
       const result = await agent.stream({
         prompt: parsed.data.message,
         abortSignal: abort.signal,
-        experimental_transform: createResultBarrierTransform({
-          streamNaturalText: !isMutationCapableMessage(parsed.data.message),
-          onTextDelta: (text) => { safeAssistantText += text; },
-        }),
       });
-      await result.pipeUIMessageStreamToResponse(response, {
-        sendReasoning: false,
-        sendSources: false,
-        onError: (error) => {
-          streamError = error;
-          response.locals.methodLog = { ...response.locals.methodLog, errorClass: safeErrorClass(error) };
-          return 'The agent request failed.';
-        },
+      const displayStream = projectMethodStreamForDisplay(result.stream, {
+        streamNaturalText: turnRoute === 'conversation',
+        onTextDelta: (text) => { safeAssistantText += text; },
+      });
+      await pipeUIMessageStreamToResponse({
+        response,
+        stream: toUIMessageStream({
+          stream: displayStream,
+          sendReasoning: false,
+          sendSources: false,
+          onError: (error) => {
+            streamError = error;
+            response.locals.methodLog = { ...response.locals.methodLog, errorClass: safeErrorClass(error) };
+            return 'The agent request failed.';
+          },
+        }),
       });
       if (streamError) throw streamError;
       if (abort.signal.aborted) {
@@ -621,7 +718,9 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
           result: {
             kind: 'completed', refetch: true,
             ...(revision !== undefined ? { revision } : {}),
-            ...(displayProjection ? { displayProjection } : {}),
+            ...(displayProjection
+              ? { displayProjection }
+              : { displayRecovery: createDisplayRecovery(parsed.data.message, safeAssistantText, false) }),
           },
         });
         if (!completed || completed.status !== 'completed') {

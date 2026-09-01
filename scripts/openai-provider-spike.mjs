@@ -31,6 +31,9 @@ const candidateModelIds = [
 const compactThreshold = 1000;
 const fallbackStepBudget = 20;
 const requestTimeoutMs = Number(process.env.OPENAI_SPIKE_TIMEOUT_MS || 60_000);
+// The pinned production-native route is authoritative by default. Set the
+// explicit diagnostic override to 0 only when intentionally probing fallback.
+const requireNativeRoute = process.env.OPENAI_SPIKE_REQUIRE_NATIVE !== '0';
 const openAiOperations = new Set([
   'create_conversation',
   'delete_conversation',
@@ -564,6 +567,41 @@ async function consumeStream(result, onPart) {
   };
 }
 
+async function consumeResultBarrierStream(result, onDisplayPart) {
+  let displayText = '';
+  let bufferedText = [];
+  let calledTool = false;
+  for await (const part of result.fullStream) {
+    if (part.type === 'text-delta') {
+      bufferedText.push(part);
+      continue;
+    }
+    if (
+      part.type === 'tool-call'
+      || part.type === 'tool-input-start'
+      || part.type === 'tool-input-delta'
+      || part.type === 'tool-input-end'
+    ) {
+      calledTool = true;
+      continue;
+    }
+    if (part.type === 'finish-step') {
+      if (!calledTool) {
+        for (const textPart of bufferedText) {
+          displayText += textPart.text;
+          onDisplayPart(textPart);
+        }
+      }
+      bufferedText = [];
+      calledTool = false;
+    }
+  }
+  return {
+    steps: await result.steps,
+    text: displayText,
+  };
+}
+
 function createToolResultMessages(toolCall, result) {
   return [{
     role: 'tool',
@@ -685,7 +723,7 @@ async function runNativeRoute({
     maxOutputTokens: 1024,
     tools,
     // Deliberately no top-level instructions and no custom stop condition.
-    prepareStep: ({ stepNumber }) => {
+    prepareStep: ({ stepNumber, steps }) => {
       const marker = `G1_STEP_${stepNumber}_${randomUUID()}`;
       instructionMarkers.push(marker);
       let activeTools;
@@ -741,6 +779,9 @@ async function runNativeRoute({
       return {
         activeTools,
         toolChoice,
+        ...(stepNumber > 0 ? {
+          messages: steps.at(-1)?.response.messages.filter((message) => message.role === 'tool') ?? [],
+        } : {}),
         providerOptions: {
           openai: {
             conversation: harness.resolveConversation(userId),
@@ -764,7 +805,7 @@ async function runNativeRoute({
     timeout: requestTimeoutMs,
     prompt: 'Confirm the synthetic foundation and continue to the next module in this turn.',
   });
-  const consumed = await consumeStream(streamed, (part) => {
+  const consumed = await consumeResultBarrierStream(streamed, (part) => {
     if (part.type === 'text-delta') {
       streamTextObserved = true;
       if (state.revision < 3 && part.text.trim().length > 0) {
@@ -894,15 +935,16 @@ async function runIsolatedResearch({ modelInstance, observedOpenai, requests, ra
   const requestStart = requests.length;
   const retrievalTime = new Date().toISOString();
   const researchRequest = {
-    city: rawResearchState.publicLocation.city,
-    country: rawResearchState.publicLocation.country,
+    activity: rawResearchState.publicTarget.activity,
+    dimension: rawResearchState.publicTarget.dimension,
   };
   const result = await generateText({
     model: modelInstance,
     abortSignal: runAbortController.signal,
     timeout: requestTimeoutMs,
     prompt: [
-      `Find the official IANA time-zone identifier for ${researchRequest.city}, ${researchRequest.country}.`,
+      `Find public professional sources about ${researchRequest.activity}.`,
+      `Focus only on ${researchRequest.dimension}.`,
       'Answer in one sentence and cite at least one HTTPS source.',
     ].join(' '),
     tools: {
@@ -1189,11 +1231,14 @@ async function runMixedHostedCustomCompaction({
     maxOutputTokens: 512,
     tools: customTools,
     // Deliberately no top-level instructions and no custom numeric stop condition.
-    prepareStep: ({ stepNumber }) => ({
+    prepareStep: ({ stepNumber, steps }) => ({
       activeTools: stepNumber === 0 ? ['settle_research_candidate'] : [],
       toolChoice: stepNumber === 0
         ? { type: 'tool', toolName: 'settle_research_candidate' }
         : 'none',
+      ...(stepNumber > 0 ? {
+        messages: steps.at(-1)?.response.messages.filter((message) => message.role === 'tool') ?? [],
+      } : {}),
       providerOptions: {
         openai: {
           conversation: conversationId,
@@ -1284,7 +1329,10 @@ async function runCandidate(modelId) {
   });
   const rawResearchState = {
     privateFoundation: rawMapSentinel,
-    publicLocation: { city: 'Madrid', country: 'Spain' },
+    publicTarget: {
+      activity: 'small-team public decision-aid prototyping',
+      dimension: 'professional practice patterns',
+    },
   };
   try {
     const methodConversationId = await createConversation(`${modelId}-native`);
@@ -1349,7 +1397,10 @@ async function runFallbackRoute(modelId) {
   });
   const rawResearchState = {
     privateFoundation: rawMapSentinel,
-    publicLocation: { city: 'Madrid', country: 'Spain' },
+    publicTarget: {
+      activity: 'small-team public decision-aid prototyping',
+      dimension: 'professional practice patterns',
+    },
   };
   const conversationId = await createConversation(`${modelId}-fallback`);
   const harness = createInMemoryTurnHarness();
@@ -1590,6 +1641,12 @@ async function runSpike() {
     fallback.status === 'passed',
     `The explicit fallback contingency did not pass: ${fallback.failureReason || 'missing result'}`,
   );
+  if (requireNativeRoute) {
+    assert(
+      selectedCandidate?.status === 'passed',
+      `The selected native route is required but failed: ${selectedCandidate?.failureReason || 'missing result'}`,
+    );
+  }
   const selectedRoute = selectedCandidate?.status === 'passed'
     ? 'ai-sdk-tool-loop-agent-prepare-step'
     : fallback.status === 'passed'
@@ -1609,6 +1666,7 @@ async function runSpike() {
     observedAt: new Date().toISOString(),
     selectedModel: selectedModelId,
     selectedRoute,
+    nativeRouteRequired: requireNativeRoute,
     fallbackStepBudget: selectedRoute === 'one-response-per-step'
       ? fallbackStepBudget
       : null,
