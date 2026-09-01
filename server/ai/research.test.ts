@@ -174,7 +174,6 @@ function harness(candidates: unknown[] = [], map: CareerMap = researchMap()) {
     provider,
     userId: 'explorer-1',
     leaseId: 'lease-1',
-    turnId: 'turn-1',
     now: () => new Date('2030-01-01T00:00:00.000Z'),
   });
   return { attempts, provider, session, storage };

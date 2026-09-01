@@ -172,18 +172,24 @@ export function resolveDisplayProjection(
   const nextUserIndex = following.findIndex((message) => message.role === 'user');
   const currentTurn = nextUserIndex < 0 ? following : following.slice(0, nextUserIndex);
   const assistants = currentTurn.filter((message) => message.role === 'assistant');
-  let selected: NormalizedHistoryMessage[] = [];
+  const assistantTexts = assistants.map(messageText);
+  let selectedStart = -1;
+  let candidateLength = 0;
   for (let start = assistants.length - 1; start >= 0; start -= 1) {
-    const candidate = assistants.slice(start);
-    if (candidate.map((message) => message.parts.map((part) => part.text).join('')).join('') === assistantText) {
-      selected = candidate;
+    candidateLength += assistantTexts[start].length;
+    if (candidateLength > assistantText.length) break;
+    if (
+      candidateLength === assistantText.length
+      && assistantTexts.slice(start).join('') === assistantText
+    ) {
+      selectedStart = start;
       break;
     }
   }
-  if (selected.length === 0) return undefined;
+  if (selectedStart < 0) return undefined;
   return displayProjectionSchema.parse({
     userItemId: normalized[userIndex].id,
-    assistantItemIds: selected.slice(-8).map((message) => message.id),
+    assistantItemIds: assistants.slice(selectedStart).slice(-8).map((message) => message.id),
   });
 }
 

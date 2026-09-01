@@ -230,7 +230,6 @@ export interface ResearchSessionOptions {
   provider: IsolatedResearchProvider;
   userId: string;
   leaseId: string;
-  turnId: string;
   now?: () => Date;
 }
 

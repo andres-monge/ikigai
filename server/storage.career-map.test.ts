@@ -1162,7 +1162,6 @@ describe('PostgresStorage lease and client-message turns', () => {
       },
       userId,
       leaseId: agentTurn.leaseId,
-      turnId: agentTurn.turnId,
       now: () => now,
     });
     const researchResult = await research.research({
@@ -1690,7 +1689,6 @@ describe('PostgresStorage lease and client-message turns', () => {
         ),
         userId,
         leaseId: researchTurn.leaseId,
-        turnId: researchTurn.turnId,
         now: () => now,
       });
       const prepared = await refreshMethodState(storage, loader, userId);

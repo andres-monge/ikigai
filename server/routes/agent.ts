@@ -773,7 +773,6 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
         provider: researchProvider(),
         userId: identity.userId,
         leaseId: turn.leaseId,
-        turnId: turn.turnId,
         now,
       });
       let streamError: unknown;
