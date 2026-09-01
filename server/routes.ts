@@ -16,6 +16,7 @@ import { assessmentRouter } from './routes/assessment/index.js';
 import { sessionRouter } from './routes/session.js';
 import { analyticsRouter } from './routes/analytics.js';
 import { transcriptionRouter } from './routes/transcription.js';
+import { agentRouter } from './routes/agent.js';
 
 /**
  * Registers all API routes with the provided Express application instance.
@@ -29,6 +30,7 @@ export function registerRoutes(app: Express): void {
   apiRouter.use(sessionRouter);
   apiRouter.use('/analytics', analyticsRouter);
   apiRouter.use('/transcribe', transcriptionRouter);
+  apiRouter.use('/agent', agentRouter);
 
   // Mount the main API router under the /api prefix
   app.use("/api", apiRouter);

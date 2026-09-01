@@ -23,6 +23,7 @@ import express, {
 } from 'express';
 import path from 'path';
 import fs from 'fs';
+import { randomUUID } from 'node:crypto';
 import { toNodeHandler } from 'better-auth/node';
 import { registerRoutes } from './routes.js';
 import {
@@ -74,6 +75,43 @@ export function createSPACatchAll(publicDir: string): RequestHandler {
   };
 }
 
+export function createApiRequestLogger(
+  writeLog: (message: string) => void = log,
+): RequestHandler {
+  return (req, res, next) => {
+    const start = Date.now();
+    const requestPath = req.path;
+
+    if (!requestPath.startsWith('/api')) return next();
+
+    // The protected Method namespace owns a metadata-only logger. Its
+    // responses can contain private map/history content or streamed assistant
+    // text, so the legacy response-prefix logger must never observe it.
+    if (requestPath === '/api/agent' || requestPath.startsWith('/api/agent/')) {
+      return next();
+    }
+
+    let capturedJsonResponse: Record<string, unknown> | undefined;
+    const originalResJson = res.json.bind(res);
+    res.json = function (bodyJson: Record<string, unknown>) {
+      capturedJsonResponse = bodyJson;
+      return originalResJson(bodyJson);
+    } as Response['json'];
+
+    res.on('finish', () => {
+      const duration = Date.now() - start;
+      let logLine = `${req.method} ${requestPath} ${res.statusCode} in ${duration}ms`;
+      if (capturedJsonResponse && Object.keys(capturedJsonResponse).length > 0) {
+        const responseLog = JSON.stringify(capturedJsonResponse);
+        logLine += ` :: ${responseLog.length > 120 ? `${responseLog.slice(0, 119)}…` : responseLog}`;
+      }
+      writeLog(logLine);
+    });
+
+    next();
+  };
+}
+
 /**
  * Creates and configures the Express application with all middleware and routes.
  * Does NOT call listen() - the caller is responsible for that.
@@ -115,42 +153,7 @@ export function createApp(): Express {
   app.use(express.urlencoded({ extended: false }));
 
   // Custom logging middleware for API requests
-  app.use((req, res, next) => {
-    const start = Date.now();
-    const path = req.path;
-
-    // We don't log non-API routes for cleaner logs
-    if (!path.startsWith("/api")) {
-      return next();
-    }
-
-    // Capture response body for logging
-    let capturedJsonResponse: Record<string, unknown> | undefined = undefined;
-    const originalResJson = res.json.bind(res);
-    res.json = function (bodyJson: Record<string, unknown>) {
-      capturedJsonResponse = bodyJson;
-      return originalResJson(bodyJson);
-    } as Response["json"];
-
-    res.on("finish", () => {
-      const duration = Date.now() - start;
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-
-      if (capturedJsonResponse && Object.keys(capturedJsonResponse).length > 0) {
-        const responseLog = JSON.stringify(capturedJsonResponse);
-        // Truncate long responses to keep logs readable
-        const truncatedResponse =
-          responseLog.length > 120
-            ? responseLog.slice(0, 119) + "…"
-            : responseLog;
-        logLine += ` :: ${truncatedResponse}`;
-      }
-
-      log(logLine);
-    });
-
-    next();
-  });
+  app.use(createApiRequestLogger());
 
   // ========= API Routes =========
   registerRoutes(app);
@@ -163,8 +166,28 @@ export function createApp(): Express {
 
   // ========= Error Handling Middleware =========
   // Must be registered after routes. Uses defensive type checking for serverless safety.
-  app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
-    console.error("Unhandled Error:", err);
+  app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
+    const isProtectedMethodRoute = req.path === '/api/agent' || req.path.startsWith('/api/agent/');
+    if (isProtectedMethodRoute) {
+      const requestId = typeof res.getHeader('x-request-id') === 'string'
+        ? String(res.getHeader('x-request-id'))
+        : randomUUID();
+      res.setHeader('x-request-id', requestId);
+      const protectedErrorName = err instanceof Error
+        && new Set(['PayloadTooLargeError', 'SyntaxError', 'TypeError']).has(err.name)
+        ? err.name
+        : 'Error';
+      console.error('Protected Method request failed', {
+        requestId,
+        route: req.path,
+        status: err && typeof err === 'object' && 'status' in err && typeof err.status === 'number'
+          ? err.status
+          : 500,
+        errorClass: protectedErrorName,
+      });
+    } else {
+      console.error("Unhandled Error:", err);
+    }
 
     // Safely extract status code with type guards
     const status =
@@ -175,7 +198,9 @@ export function createApp(): Express {
           : 500;
 
     // Safely extract error message with type guard
-    const message =
+    const message = isProtectedMethodRoute
+      ? 'Agent request failed'
+      :
       err && typeof err === "object" && "message" in err && typeof err.message === "string"
         ? err.message
         : "Internal Server Error";

@@ -1,0 +1,510 @@
+import { createHash, randomUUID } from 'node:crypto';
+import express, { Router, type Request, type RequestHandler } from 'express';
+import { createGroq } from '@ai-sdk/groq';
+import { createOpenAI } from '@ai-sdk/openai';
+import { experimental_transcribe as transcribe, type LanguageModel } from 'ai';
+import { z } from 'zod';
+import { env } from '../env.js';
+import { getProtectedIdentity, requireAuth } from '../auth-middleware.js';
+import {
+  MethodOwnerBusyError,
+  storage as defaultStorage,
+  type AgentTurnRecord,
+  type BeginAgentTurnResult,
+  type IStorage,
+} from '../storage.js';
+import {
+  REVELIO_AGENT_MODEL,
+  REVELIO_AGENT_PROVIDER,
+  createMethodAgent,
+  createResultBarrierTransform,
+} from '../ai/agent.js';
+import { createMethodModuleLoader, type MethodModuleLoader } from '../ai/method/loader.js';
+import {
+  OpenAIConversationClient,
+  loadConversationHistory,
+  type ConversationItemsClient,
+} from '../ai/history.js';
+import {
+  ResearchSession,
+  createOpenAIIsolatedResearchProvider,
+  type IsolatedResearchProvider,
+} from '../ai/research.js';
+import {
+  executeWorkspaceTool,
+  workspaceOperationRequestSchema,
+  type MethodOperationEnvelope,
+} from '../ai/tools.js';
+
+const agentRequestSchema = z.object({
+  id: z.string().min(1).max(160),
+  message: z.string().trim().min(1).max(12_000),
+}).strict();
+
+const audioLanguageSchema = z.enum(['en', 'es']);
+const METHOD_AUDIO_LIMIT = '2mb';
+
+export interface AgentRouterOptions {
+  storage?: IStorage;
+  requireAuth?: RequestHandler;
+  loader?: MethodModuleLoader | Promise<MethodModuleLoader>;
+  agentEnabled?: boolean | (() => boolean);
+  model?: LanguageModel;
+  conversationClient?: ConversationItemsClient;
+  researchProvider?: IsolatedResearchProvider;
+  transcribeAudio?: (input: { audio: Buffer; language: 'en' | 'es'; abortSignal?: AbortSignal }) => Promise<string>;
+  now?: () => Date;
+  id?: () => string;
+  operationalLog?: (entry: Record<string, unknown>) => void;
+}
+
+function safeErrorClass(error: unknown): string {
+  const candidate = error instanceof Error ? error.name : 'Error';
+  const allowlisted = new Set([
+    'AbortError',
+    'APICallError',
+    'CareerMapBriefingError',
+    'CareerMapRepairRequiredError',
+    'ConversationHistoryProviderError',
+    'Error',
+    'MethodErasurePendingError',
+    'MethodOwnerBusyError',
+    'NoOutputGeneratedError',
+    'RetryError',
+    'TimeoutError',
+    'TurnLeaseLostError',
+    'ZodError',
+  ]);
+  return allowlisted.has(candidate) ? candidate : 'ExternalProviderError';
+}
+
+function requestFingerprint(clientMessageId: string, message: string): string {
+  return createHash('sha256').update(`${clientMessageId}\u0000${message}`).digest('hex');
+}
+
+function canonicalRequestValue(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null';
+  if (Array.isArray(value)) return `[${value.map(canonicalRequestValue).join(',')}]`;
+  const record = value as Record<string, unknown>;
+  return `{${Object.keys(record).sort().map((key) => (
+    `${JSON.stringify(key)}:${canonicalRequestValue(record[key])}`
+  )).join(',')}}`;
+}
+
+function enabled(value: AgentRouterOptions['agentEnabled']): boolean {
+  return typeof value === 'function' ? value() : value ?? env.AGENT_ENABLED;
+}
+
+function attachAbort(request: Request, response: express.Response): {
+  signal: AbortSignal;
+  detach: () => void;
+} {
+  const controller = new AbortController();
+  const abort = () => {
+    if (!response.writableEnded && !controller.signal.aborted) {
+      controller.abort(new DOMException('Request closed.', 'AbortError'));
+    }
+  };
+  request.once('aborted', abort);
+  response.once('close', abort);
+  return {
+    signal: controller.signal,
+    detach: () => {
+      request.off('aborted', abort);
+      response.off('close', abort);
+    },
+  };
+}
+
+function statusForEnvelope(envelope: MethodOperationEnvelope): number {
+  if (envelope.status === 'conflict') return 409;
+  if (envelope.status === 'rejected') return 422;
+  return 200;
+}
+
+function turnResponse(result: BeginAgentTurnResult, response: express.Response): boolean {
+  switch (result.status) {
+    case 'started': return false;
+    case 'attached':
+      response.status(409).json({ status: 'in-flight', turnId: result.turn.turnId, retryable: true });
+      return true;
+    case 'terminal':
+      response.status(200).json({ status: 'completed-replay', terminal: result.turn.status, refetch: true });
+      return true;
+    case 'conflict':
+      response.status(409).json({ status: 'conflict', retryable: true, retryAfter: result.retryAfter.toISOString() });
+      return true;
+    case 'message-id-reused':
+      response.status(409).json({ status: 'message-id-reused', retryable: false });
+      return true;
+    case 'map-required':
+      response.status(409).json({ status: 'map-required', retryable: true });
+      return true;
+    case 'erasure-pending':
+      response.status(409).json({ status: 'erasure-pending', retryable: false });
+      return true;
+    case 'repair-required':
+      response.status(409).json({ status: 'repair-required', retryable: false });
+      return true;
+  }
+}
+
+function throwIfRouteAborted(signal: AbortSignal): void {
+  if (!signal.aborted) return;
+  throw signal.reason instanceof Error
+    ? signal.reason
+    : new DOMException('Request aborted.', 'AbortError');
+}
+
+async function defaultTranscribeAudio(input: { audio: Buffer; language: 'en' | 'es' }): Promise<string> {
+  if (!env.GROQ_API_KEY) throw new Error('TranscriptionUnavailable');
+  const groq = createGroq({ apiKey: env.GROQ_API_KEY });
+  const result = await transcribe({
+    model: groq.transcription('whisper-large-v3-turbo'),
+    audio: input.audio,
+    providerOptions: { groq: { language: input.language } },
+  });
+  return result.text;
+}
+
+export function createAgentRouter(options: AgentRouterOptions = {}): Router {
+  const router = Router();
+  const storage = options.storage ?? defaultStorage;
+  const now = options.now ?? (() => new Date());
+  const nextId = options.id ?? randomUUID;
+  const loaderPromise = Promise.resolve(options.loader ?? createMethodModuleLoader());
+  const log = options.operationalLog ?? ((entry) => console.log(JSON.stringify(entry)));
+  let defaultOpenAI: ReturnType<typeof createOpenAI> | undefined;
+  let defaultConversationClient: OpenAIConversationClient | undefined;
+
+  const openAI = () => {
+    if (!env.OPENAI_API_KEY) throw new Error('AgentProviderUnavailable');
+    defaultOpenAI ??= createOpenAI({ apiKey: env.OPENAI_API_KEY });
+    return defaultOpenAI;
+  };
+  const model = () => options.model ?? openAI().responses(REVELIO_AGENT_MODEL);
+  const conversationClient = () => options.conversationClient
+    ?? (defaultConversationClient ??= new OpenAIConversationClient(env.OPENAI_API_KEY));
+  const researchProvider = () => options.researchProvider
+    ?? createOpenAIIsolatedResearchProvider(model(), openAI().tools.webSearch({ searchContextSize: 'low' }));
+
+  router.use((request, response, next) => {
+    const startedAt = Date.now();
+    const requestId = nextId();
+    response.setHeader('x-request-id', requestId);
+    response.setHeader('cache-control', 'no-store');
+    response.on('finish', () => {
+      const metadata = response.locals.methodLog as Record<string, unknown> | undefined;
+      const identity = response.locals.auth as { userId?: string } | undefined;
+      log({
+        type: 'method_request',
+        requestId,
+        route: request.path,
+        status: response.statusCode,
+        durationMs: Date.now() - startedAt,
+        ...(identity?.userId ? { userId: identity.userId } : {}),
+        ...(metadata ?? {}),
+      });
+    });
+    next();
+  });
+  router.use(options.requireAuth ?? requireAuth);
+
+  router.get('/history', async (request, response) => {
+    const abort = attachAbort(request, response);
+    try {
+      throwIfRouteAborted(abort.signal);
+      const identity = getProtectedIdentity(response);
+      const history = await loadConversationHistory({
+        storage,
+        client: conversationClient(),
+        userId: identity.userId,
+        abortSignal: abort.signal,
+      });
+      throwIfRouteAborted(abort.signal);
+      response.locals.methodLog = { provider: REVELIO_AGENT_PROVIDER };
+      response.json(history);
+    } catch (error) {
+      if (abort.signal.aborted) return;
+      response.locals.methodLog = { provider: REVELIO_AGENT_PROVIDER, errorClass: safeErrorClass(error) };
+      response.status(error instanceof MethodOwnerBusyError ? 409 : 502).json({
+        error: 'History is temporarily unavailable',
+        errorClass: safeErrorClass(error),
+        ...(error instanceof MethodOwnerBusyError ? { retryable: true } : {}),
+      });
+    } finally {
+      abort.detach();
+    }
+  });
+
+  router.get('/workspace', async (_request, response) => {
+    try {
+      const identity = getProtectedIdentity(response);
+      const result = await storage.loadCareerMap(identity.userId);
+      if (result.status === 'not-found') {
+        response.json({ status: 'empty', map: null });
+        return;
+      }
+      if (result.status === 'ready') {
+        response.locals.methodLog = { revision: result.map.revision };
+        response.json({ status: 'ready', map: result.map });
+        return;
+      }
+      response.locals.methodLog = { errorClass: result.status };
+      response.status(409).json({ status: result.status });
+    } catch (error) {
+      response.locals.methodLog = { errorClass: safeErrorClass(error) };
+      response.status(error instanceof MethodOwnerBusyError ? 409 : 500).json({
+        error: 'Workspace is temporarily unavailable',
+        errorClass: safeErrorClass(error),
+        ...(error instanceof MethodOwnerBusyError ? { retryable: true } : {}),
+      });
+    }
+  });
+
+  router.post('/workspace/operations', async (request, response) => {
+    if (!enabled(options.agentEnabled)) {
+      response.locals.methodLog = { errorClass: 'AgentDisabledError' };
+      response.status(503).json({ error: 'Agent writes are disabled', errorClass: 'AgentDisabledError' });
+      return;
+    }
+    const parsed = workspaceOperationRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      response.locals.methodLog = { errorClass: 'ValidationError' };
+      response.status(400).json({ error: 'Invalid workspace operation', errorClass: 'ValidationError' });
+      return;
+    }
+    const identity = getProtectedIdentity(response);
+    const abort = attachAbort(request, response);
+    if (request.destroyed || abort.signal.aborted) {
+      abort.detach();
+      return;
+    }
+    const turnId = nextId();
+    const leaseId = nextId();
+    const occurredAt = now().toISOString();
+    let turn: AgentTurnRecord | undefined;
+    try {
+      throwIfRouteAborted(abort.signal);
+      const map = await storage.getOrCreateCareerMap(identity.userId);
+      if (map.status !== 'ready') {
+        response.status(409).json({ status: map.status });
+        return;
+      }
+      throwIfRouteAborted(abort.signal);
+      const begun = await storage.beginWorkspaceActionTurn({
+        userId: identity.userId,
+        clientMessageId: parsed.data.clientMessageId,
+        requestFingerprint: requestFingerprint(parsed.data.clientMessageId, canonicalRequestValue(parsed.data.operation)),
+        turnId,
+        leaseId,
+      });
+      if (begun.status !== 'started') {
+        turnResponse(begun, response);
+        return;
+      }
+      turn = begun.turn;
+      const envelope = await executeWorkspaceTool({
+        runtime: {
+          storage,
+          loader: await loaderPromise,
+          userId: identity.userId,
+          turn,
+          timing: { turnSequence: now().getTime(), occurredAt },
+          abortSignal: abort.signal,
+        },
+        operationType: parsed.data.operation.type,
+        operationId: parsed.data.operationId,
+        rawInput: parsed.data.operation.input,
+      });
+      await storage.completeAgentTurn({ userId: identity.userId, turnId: turn.turnId, leaseId: turn.leaseId, result: envelope as unknown as Record<string, unknown> });
+      response.locals.methodLog = { operationId: parsed.data.operationId, revision: envelope.authoritativeRevision, errorClass: envelope.errorClass };
+      response.status(statusForEnvelope(envelope)).json(envelope);
+    } catch (error) {
+      if (turn) {
+        if (abort.signal.aborted) {
+          await storage.cancelAgentTurn({ userId: identity.userId, turnId: turn.turnId, leaseId: turn.leaseId }).catch(() => undefined);
+        } else {
+          await storage.failAgentTurn({ userId: identity.userId, turnId: turn.turnId, leaseId: turn.leaseId, errorClass: safeErrorClass(error) }).catch(() => undefined);
+        }
+      }
+      if (abort.signal.aborted) return;
+      response.locals.methodLog = { operationId: parsed.data.operationId, errorClass: safeErrorClass(error) };
+      response.status(error instanceof MethodOwnerBusyError ? 409 : 500).json({
+        error: 'Workspace operation failed',
+        errorClass: safeErrorClass(error),
+        ...(error instanceof MethodOwnerBusyError ? { retryable: true } : {}),
+      });
+    } finally {
+      abort.detach();
+      if (turn) await storage.releaseTurnLease(identity.userId, turn.turnId, turn.leaseId).catch(() => undefined);
+    }
+  });
+
+  router.post('/audio/transcribe', express.raw({ type: 'audio/*', limit: METHOD_AUDIO_LIMIT }), async (request, response) => {
+    if (!enabled(options.agentEnabled)) {
+      response.locals.methodLog = { errorClass: 'AgentDisabledError' };
+      response.status(503).json({ error: 'Agent audio is disabled', errorClass: 'AgentDisabledError' });
+      return;
+    }
+    const contentType = request.headers['content-type'] ?? '';
+    const language = audioLanguageSchema.safeParse(typeof request.query.language === 'string' ? request.query.language : 'en');
+    if (!contentType.startsWith('audio/') || !Buffer.isBuffer(request.body) || request.body.length === 0 || !language.success) {
+      response.locals.methodLog = { errorClass: 'ValidationError' };
+      response.status(400).json({ error: 'Invalid bounded audio request', errorClass: 'ValidationError' });
+      return;
+    }
+    const abort = attachAbort(request, response);
+    try {
+      throwIfRouteAborted(abort.signal);
+      const text = await (options.transcribeAudio ?? defaultTranscribeAudio)({
+        audio: request.body,
+        language: language.data,
+        abortSignal: abort.signal,
+      });
+      if (abort.signal.aborted) return;
+      response.locals.methodLog = { provider: 'groq-whisper' };
+      response.json({ text });
+    } catch (error) {
+      if (abort.signal.aborted) return;
+      response.locals.methodLog = { provider: 'groq-whisper', errorClass: safeErrorClass(error) };
+      response.status(502).json({ error: 'Transcription failed', errorClass: safeErrorClass(error) });
+    } finally {
+      abort.detach();
+    }
+  });
+
+  router.post('/', async (request, response) => {
+    if (!enabled(options.agentEnabled)) {
+      response.locals.methodLog = { errorClass: 'AgentDisabledError' };
+      response.status(503).json({ error: 'Agent is disabled', errorClass: 'AgentDisabledError' });
+      return;
+    }
+    const parsed = agentRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      response.locals.methodLog = { errorClass: 'ValidationError' };
+      response.status(400).json({ error: 'Invalid agent request', errorClass: 'ValidationError' });
+      return;
+    }
+    const identity = getProtectedIdentity(response);
+    const abort = attachAbort(request, response);
+    if (request.destroyed || abort.signal.aborted) {
+      abort.detach();
+      return;
+    }
+    let turn: AgentTurnRecord | undefined;
+    try {
+      throwIfRouteAborted(abort.signal);
+      const map = await storage.getOrCreateCareerMap(identity.userId);
+      if (map.status !== 'ready') {
+        response.status(409).json({ status: map.status });
+        return;
+      }
+      throwIfRouteAborted(abort.signal);
+      const begun = await storage.beginAgentTurn({
+        userId: identity.userId,
+        clientMessageId: parsed.data.id,
+        requestFingerprint: requestFingerprint(parsed.data.id, parsed.data.message),
+        turnId: nextId(),
+        leaseId: nextId(),
+      });
+      if (begun.status !== 'started') {
+        turnResponse(begun, response);
+        return;
+      }
+      turn = begun.turn;
+      throwIfRouteAborted(abort.signal);
+      let conversationId = await storage.getConversationMapping(identity.userId);
+      if (!conversationId) {
+        if (!conversationClient().createConversation) throw new Error('ConversationProvisioningUnavailable');
+        throwIfRouteAborted(abort.signal);
+        conversationId = await conversationClient().createConversation!(abort.signal);
+        throwIfRouteAborted(abort.signal);
+        await storage.setConversationMapping(identity.userId, turn.leaseId, conversationId);
+      }
+      const research = new ResearchSession({
+        storage,
+        provider: researchProvider(),
+        userId: identity.userId,
+        leaseId: turn.leaseId,
+        turnId: turn.turnId,
+        now,
+      });
+      let streamError: unknown;
+      const agent = createMethodAgent({
+        model: model(),
+        storage,
+        loader: await loaderPromise,
+        userId: identity.userId,
+        conversationId,
+        turn,
+        turnSequence: now().getTime(),
+        occurredAt: now().toISOString(),
+        research,
+        abortSignal: abort.signal,
+        onError: (error) => {
+          streamError = error;
+          response.locals.methodLog = {
+            ...response.locals.methodLog,
+            errorClass: safeErrorClass(error),
+          };
+        },
+      });
+      response.locals.methodLog = { provider: REVELIO_AGENT_PROVIDER, turnId: turn.turnId };
+      throwIfRouteAborted(abort.signal);
+      const result = await agent.stream({
+        prompt: parsed.data.message,
+        abortSignal: abort.signal,
+        experimental_transform: createResultBarrierTransform(),
+      });
+      await result.pipeUIMessageStreamToResponse(response, {
+        sendReasoning: false,
+        sendSources: false,
+        onError: (error) => {
+          streamError = error;
+          response.locals.methodLog = { ...response.locals.methodLog, errorClass: safeErrorClass(error) };
+          return 'The agent request failed.';
+        },
+      });
+      if (streamError) throw streamError;
+      if (abort.signal.aborted) {
+        await storage.cancelAgentTurn({ userId: identity.userId, turnId: turn.turnId, leaseId: turn.leaseId });
+      } else {
+        const authoritative = await storage.loadCareerMap(identity.userId);
+        const revision = authoritative.status === 'ready' ? authoritative.map.revision : undefined;
+        if (revision !== undefined) response.locals.methodLog = { ...response.locals.methodLog, revision };
+        await storage.completeAgentTurn({
+          userId: identity.userId,
+          turnId: turn.turnId,
+          leaseId: turn.leaseId,
+          result: { completed: true, refetch: true, ...(revision !== undefined ? { revision } : {}) },
+        });
+      }
+    } catch (error) {
+      if (turn) {
+        if (abort.signal.aborted) {
+          await storage.cancelAgentTurn({ userId: identity.userId, turnId: turn.turnId, leaseId: turn.leaseId }).catch(() => undefined);
+        } else {
+          await storage.failAgentTurn({ userId: identity.userId, turnId: turn.turnId, leaseId: turn.leaseId, errorClass: safeErrorClass(error) }).catch(() => undefined);
+        }
+      }
+      response.locals.methodLog = { ...response.locals.methodLog, provider: REVELIO_AGENT_PROVIDER, errorClass: safeErrorClass(error) };
+      if (!response.headersSent && !abort.signal.aborted) {
+        response.status(error instanceof MethodOwnerBusyError ? 409 : 502).json({
+          error: 'Agent request failed',
+          errorClass: safeErrorClass(error),
+          ...(error instanceof MethodOwnerBusyError ? { retryable: true } : {}),
+        });
+      } else if (!response.writableEnded) {
+        response.end();
+      }
+    } finally {
+      abort.detach();
+      if (turn) await storage.releaseTurnLease(identity.userId, turn.turnId, turn.leaseId).catch(() => undefined);
+    }
+  });
+
+  return router;
+}
+
+export const agentRouter = createAgentRouter();

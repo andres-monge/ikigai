@@ -61,6 +61,13 @@ const envSchema = z.object({
     .string()
     .default(''),
 
+  // Emergency switch for every authenticated Method mutation/provider surface.
+  // Missing, malformed, or any value other than literal true fails closed.
+  AGENT_ENABLED: z
+    .string()
+    .default('false')
+    .transform((value) => value === 'true'),
+
   // Google OAuth Configuration (optional until authentication is mounted)
   GOOGLE_CLIENT_ID: z
     .string()

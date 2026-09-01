@@ -10,6 +10,7 @@ import {
 } from '../shared/career-map/index.js';
 import {
   createWorkspaceActionPersistenceContext,
+  MethodOwnerBusyError,
   PostgresStorage,
   type AgentTurnRecord,
 } from './storage.js';
@@ -179,7 +180,7 @@ describe('career-map durable-shape falsification bounds', () => {
     const transactionP95Ms = percentile(transactionSamples, 0.95);
 
     const concurrentStarted = performance.now();
-    const results = await Promise.all(
+    const settlements = await Promise.allSettled(
       Array.from({ length: CAREER_MAP_FALSIFICATION_BOUNDS.concurrentAttempts }, (_, index) =>
         storage.persistCareerMapOperation({
           userId: latencyOwner,
@@ -192,6 +193,18 @@ describe('career-map durable-shape falsification bounds', () => {
         })),
     );
     const concurrentSettleMs = performance.now() - concurrentStarted;
+    const unexpectedFailure = settlements.find(
+      (settlement) => settlement.status === 'rejected'
+        && !(settlement.reason instanceof MethodOwnerBusyError),
+    );
+    if (unexpectedFailure?.status === 'rejected') throw unexpectedFailure.reason;
+    const results = settlements.flatMap(
+      (settlement) => settlement.status === 'fulfilled' ? [settlement.value] : [],
+    );
+    const ownerBusy = settlements.filter(
+      (settlement) => settlement.status === 'rejected'
+        && settlement.reason instanceof MethodOwnerBusyError,
+    ).length;
     const committed = results.filter((result) => result.status === 'committed').length;
     const history = await storage.listCareerMapHistory(latencyOwner);
     console.info('U4_PERFORMANCE_DATABASE', JSON.stringify({
@@ -199,7 +212,8 @@ describe('career-map durable-shape falsification bounds', () => {
       transactionSamples: transactionSamples.length,
       hotPathBaseRevision,
       transactionP95Ms,
-      concurrentAttempts: results.length,
+      concurrentAttempts: settlements.length,
+      ownerBusy,
       concurrentSettleMs,
       committed,
       bounds: CAREER_MAP_FALSIFICATION_BOUNDS,
@@ -207,6 +221,7 @@ describe('career-map durable-shape falsification bounds', () => {
     expect(transactionP95Ms).toBeLessThanOrEqual(CAREER_MAP_FALSIFICATION_BOUNDS.transactionP95Ms);
     expect(concurrentSettleMs).toBeLessThanOrEqual(CAREER_MAP_FALSIFICATION_BOUNDS.concurrentSettleMs);
     expect(committed).toBe(1);
+    expect(results.length + ownerBusy).toBe(CAREER_MAP_FALSIFICATION_BOUNDS.concurrentAttempts);
     expect(history).toHaveLength(301);
   }, 30_000);
 });

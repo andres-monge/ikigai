@@ -270,6 +270,16 @@ export class TurnLeaseIdentityConflictError extends Error {
   }
 }
 
+export class MethodOwnerBusyError extends Error {
+  readonly code = 'method-owner-busy';
+  readonly retryable = true;
+
+  constructor() {
+    super('The Method workspace is busy; retry after the current operation finishes.');
+    this.name = 'MethodOwnerBusyError';
+  }
+}
+
 export interface MethodErasureProvider {
   /**
    * Exhaustively cancels/awaits active response work, deletes Conversation items,
@@ -727,9 +737,22 @@ async function validateCareerMapForWrite(
 }
 
 async function lockMethodOwner(transaction: StorageTransaction, userId: string): Promise<void> {
-  await transaction.execute(
-    sql`select pg_advisory_xact_lock(hashtextextended(${userId}, ${METHOD_OWNER_LOCK_SEED}))`,
-  );
+  const attempts = 25;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const result = await transaction.execute(
+      sql`select pg_try_advisory_xact_lock(hashtextextended(${userId}, ${METHOD_OWNER_LOCK_SEED})) as acquired`,
+    );
+    const rows = Array.isArray(result)
+      ? result
+      : 'rows' in result && Array.isArray(result.rows)
+        ? result.rows
+        : [];
+    if ((rows[0] as { acquired?: boolean } | undefined)?.acquired === true) return;
+    if (attempt < attempts - 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  }
+  throw new MethodOwnerBusyError();
 }
 
 function rowsByUserId<T extends { userId: string }>(rows: T[]): Map<string, T[]> {

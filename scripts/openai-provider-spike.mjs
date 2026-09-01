@@ -589,7 +589,7 @@ async function runNativeRoute({
   const seedMarker = `G1_SEED_${randomUUID()}`;
   const instructionMarkers = [];
   const prepareStepTrace = [];
-  const state = { module: 'form-foundation', revision: 0 };
+  const state = { module: 'form-foundation', pending: 'foundation-confirmation', revision: 0 };
 
   harness.bindConversation(userId, conversationId);
   assert(harness.acquireTurn(userId, messageId).kind === 'acquired', 'Native turn lease failed.');
@@ -619,6 +619,7 @@ async function runNativeRoute({
     confirm_foundation: tool({
       description: 'Confirm the synthetic foundation before changing modules.',
       inputSchema: z.object({ threadToken: z.string().min(1) }),
+      strict: true,
       execute: async ({ threadToken: recalledToken }, { toolCallId }) => {
         assert(recalledToken === threadToken, 'Conversation threading did not preserve the seed token.');
         return commitOperation({
@@ -626,6 +627,7 @@ async function runNativeRoute({
           fingerprint: createHash('sha256').update(recalledToken).digest('hex'),
           apply: () => {
             state.module = 'create-purpose-paths';
+            state.pending = 'path-proposal';
             state.revision += 1;
             return {
               status: 'committed',
@@ -640,17 +642,38 @@ async function runNativeRoute({
     propose_paths: tool({
       description: 'Commit the synthetic next-module proposal.',
       inputSchema: z.object({ transition: z.string().min(1) }),
+      strict: true,
       execute: async ({ transition }, { toolCallId }) => commitOperation({
         toolCallId,
         fingerprint: createHash('sha256').update(transition).digest('hex'),
         apply: () => {
-          state.module = 'complete';
+          state.pending = 'path-selection';
           state.revision += 1;
           return {
             status: 'committed',
             authoritativeRevision: state.revision,
             derivedModule: state.module,
-            pendingDecision: null,
+            pendingDecision: state.pending,
+          };
+        },
+      }),
+    }),
+    select_path: tool({
+      description: 'Select the synthetic path and transition to Design a Path Project.',
+      inputSchema: z.object({ pathId: z.literal('path-two') }),
+      strict: true,
+      execute: async ({ pathId }, { toolCallId }) => commitOperation({
+        toolCallId,
+        fingerprint: createHash('sha256').update(pathId).digest('hex'),
+        apply: () => {
+          state.module = 'design-path-project';
+          state.pending = 'first-project-proposal';
+          state.revision += 1;
+          return {
+            status: 'committed',
+            authoritativeRevision: state.revision,
+            derivedModule: state.module,
+            pendingDecision: state.pending,
           };
         },
       }),
@@ -678,7 +701,7 @@ async function runNativeRoute({
           'Call confirm_foundation with the synthetic thread token from the completed prior turn.',
           'Do not narrate a state change before its tool result.',
         ].join(' ');
-      } else if (state.module === 'create-purpose-paths') {
+      } else if (state.module === 'create-purpose-paths' && state.pending === 'path-proposal') {
         activeTools = ['propose_paths'];
         toolChoice = 'auto';
         instructions = [
@@ -688,13 +711,23 @@ async function runNativeRoute({
           'Call propose_paths with transition set to module-two.',
           'Do not narrate a state change before its tool result.',
         ].join(' ');
+      } else if (state.module === 'create-purpose-paths') {
+        activeTools = ['select_path'];
+        toolChoice = 'auto';
+        instructions = [
+          marker,
+          focusedBriefingMarker,
+          'The paths are now authoritative and await one exact selection.',
+          'Call select_path with pathId set to path-two.',
+          'Do not narrate a state change before its tool result.',
+        ].join(' ');
       } else {
         activeTools = [];
         toolChoice = 'none';
         instructions = [
           marker,
           focusedBriefingMarker,
-          'Both authoritative tool results are committed.',
+          'All three authoritative tool results are committed and Design a Path Project is active.',
           'Now reply exactly with SAME_TURN_TRANSITION_OK.',
         ].join(' ');
       }
@@ -734,7 +767,7 @@ async function runNativeRoute({
   const consumed = await consumeStream(streamed, (part) => {
     if (part.type === 'text-delta') {
       streamTextObserved = true;
-      if (state.revision < 2 && part.text.trim().length > 0) {
+      if (state.revision < 3 && part.text.trim().length > 0) {
         stateNarrationBeforeResults = true;
       }
     }
@@ -750,22 +783,23 @@ async function runNativeRoute({
       .map((step) => step.finishReason)
       .join(',')}).`,
   );
-  assert(!stateNarrationBeforeResults, 'Native route narrated state before both results committed.');
+  assert(!stateNarrationBeforeResults, 'Native route narrated state before all three results committed.');
   assert(streamTextObserved, 'Native route did not stream its final narration.');
-  assert(state.revision === 2, 'Native route did not apply exactly two operations.');
+  assert(state.revision === 3, 'Native route did not apply exactly three operations.');
   assert(
     prepareStepTrace.map((entry) => entry.module).join(',')
-      === 'form-foundation,create-purpose-paths,complete',
+      === 'form-foundation,create-purpose-paths,create-purpose-paths,design-path-project',
     'Native prepareStep did not reload and reselect the module after each result.',
   );
   assert(
     prepareStepTrace[0].activeTools.join(',') === 'confirm_foundation'
       && prepareStepTrace[1].activeTools.join(',') === 'propose_paths'
-      && prepareStepTrace[2].activeTools.length === 0,
+      && prepareStepTrace[2].activeTools.join(',') === 'select_path'
+      && prepareStepTrace[3].activeTools.length === 0,
     'Native prepareStep did not refresh the active tool set.',
   );
   assert(
-    routeRequests.length === 3
+    routeRequests.length === 4
       && routeRequests.every((entry) => entry.conversationPresent)
       && routeRequests.every((entry) => entry.instructionsPresent)
       && routeRequests.every((entry) => entry.focusedBriefingPresent)
