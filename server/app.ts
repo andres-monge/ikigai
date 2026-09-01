@@ -34,7 +34,7 @@ import {
 } from './auth.js';
 import { env } from './env.js';
 import { log } from './utils/log.js';
-import { methodRouteLabel } from './routes/agent-logging.js';
+import { methodRouteLabel, normalizeMethodRequestPath } from './routes/agent-logging.js';
 
 /**
  * Regex to match asset file extensions (with optional query parameters).
@@ -83,14 +83,12 @@ export function createApiRequestLogger(
     const start = Date.now();
     const requestPath = req.path;
 
-    if (!requestPath.startsWith('/api')) return next();
-
     // The protected Method namespace owns a metadata-only logger. Its
     // responses can contain private map/history content or streamed assistant
     // text, so the legacy response-prefix logger must never observe it.
-    if (requestPath === '/api/agent' || requestPath.startsWith('/api/agent/')) {
-      return next();
-    }
+    if (normalizeMethodRequestPath(requestPath) !== undefined) return next();
+
+    if (!requestPath.startsWith('/api')) return next();
 
     let capturedJsonResponse: Record<string, unknown> | undefined;
     const originalResJson = res.json.bind(res);
@@ -168,7 +166,7 @@ export function createApp(): Express {
   // ========= Error Handling Middleware =========
   // Must be registered after routes. Uses defensive type checking for serverless safety.
   app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
-    const isProtectedMethodRoute = req.path === '/api/agent' || req.path.startsWith('/api/agent/');
+    const isProtectedMethodRoute = normalizeMethodRequestPath(req.path) !== undefined;
     const protectedErrorName = err instanceof Error
       && new Set(['PayloadTooLargeError', 'SyntaxError', 'TypeError']).has(err.name)
       ? err.name

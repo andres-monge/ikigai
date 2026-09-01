@@ -62,7 +62,14 @@ const agentRequestSchema = z.object({
 const audioLanguageSchema = z.enum(['en', 'es']);
 const METHOD_AUDIO_LIMIT = '2mb';
 const PROVISIONING_HANDOFF_WAIT_MS = 12_000;
-const PROVISIONING_HANDOFF_POLL_MS = 25;
+const PROVISIONING_HANDOFF_INITIAL_DELAY_MS = 25;
+const PROVISIONING_HANDOFF_MAX_DELAY_MS = 1_000;
+
+type ProvisioningHandoffOutcome = 'lease-settled' | 'mapping-bound' | 'timed-out';
+type ProvisioningHandoffTiming = {
+  now: () => number;
+  delay: (milliseconds: number, signal: AbortSignal) => Promise<void>;
+};
 
 export interface AgentRouterOptions {
   storage?: IStorage;
@@ -77,6 +84,7 @@ export interface AgentRouterOptions {
   id?: () => string;
   operationalLog?: (entry: Record<string, unknown>) => void;
   conversationCleanupSignal?: (entry: Record<string, unknown>) => void;
+  provisioningHandoffTiming?: ProvisioningHandoffTiming;
   classifyTurn?: (input: {
     model: LanguageModel;
     message: string;
@@ -290,24 +298,31 @@ function abortableDelay(milliseconds: number, signal: AbortSignal): Promise<void
 }
 
 async function waitForProvisioningHandoff(input: {
-  storage: Pick<IStorage, 'getTurnLease'>;
+  storage: Pick<IStorage, 'getConversationMapping' | 'getTurnLease'>;
   userId: string;
   activeTurnId: string;
   abortSignal: AbortSignal;
-}): Promise<boolean> {
-  const deadline = Date.now() + PROVISIONING_HANDOFF_WAIT_MS;
-  while (Date.now() < deadline) {
+  timing?: ProvisioningHandoffTiming;
+}): Promise<ProvisioningHandoffOutcome> {
+  const now = input.timing?.now ?? Date.now;
+  const delay = input.timing?.delay ?? abortableDelay;
+  const deadline = now() + PROVISIONING_HANDOFF_WAIT_MS;
+  let delayMs = PROVISIONING_HANDOFF_INITIAL_DELAY_MS;
+  while (true) {
     throwIfRouteAborted(input.abortSignal);
-    const lease = await input.storage.getTurnLease(input.userId);
-    if (!lease || lease.turnId !== input.activeTurnId || lease.expiresAt.getTime() <= Date.now()) {
-      return true;
+    if (await input.storage.getConversationMapping(input.userId)) {
+      return 'mapping-bound';
     }
-    await abortableDelay(
-      Math.min(PROVISIONING_HANDOFF_POLL_MS, Math.max(1, deadline - Date.now())),
-      input.abortSignal,
-    );
+    const lease = await input.storage.getTurnLease(input.userId);
+    const observedAt = now();
+    if (!lease || lease.turnId !== input.activeTurnId || lease.expiresAt.getTime() <= observedAt) {
+      return 'lease-settled';
+    }
+    const remainingMs = deadline - observedAt;
+    if (remainingMs <= 0) return 'timed-out';
+    await delay(Math.min(delayMs, remainingMs), input.abortSignal);
+    delayMs = Math.min(delayMs * 2, PROVISIONING_HANDOFF_MAX_DELAY_MS);
   }
-  return false;
 }
 
 async function defaultTranscribeAudio(input: {
@@ -375,7 +390,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
       log({
         type: 'method_request',
         requestId,
-        route: methodRouteLabel(request.method, request.path),
+        route: methodRouteLabel(request.method, `${request.baseUrl}${request.path}`),
         status: response.statusCode,
         durationMs: Date.now() - startedAt,
         ...(identity?.userId ? { userId: identity.userId } : {}),
@@ -655,13 +670,14 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
       };
       let begun = await storage.beginAgentTurn(beginInput);
       if (begun.status === 'conflict' && begun.waitReason === 'conversation-provisioning') {
-        const settled = await waitForProvisioningHandoff({
+        const handoff = await waitForProvisioningHandoff({
           storage,
           userId: identity.userId,
           activeTurnId: begun.activeTurnId,
           abortSignal: abort.signal,
+          timing: options.provisioningHandoffTiming,
         });
-        if (settled) begun = await storage.beginAgentTurn(beginInput);
+        if (handoff === 'lease-settled') begun = await storage.beginAgentTurn(beginInput);
       }
       if (begun.status !== 'started') {
         turnResponse(begun, response);

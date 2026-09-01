@@ -1,7 +1,9 @@
 import express, { type RequestHandler } from 'express';
 import request from 'supertest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createCareerMap } from '../shared/career-map/index.js';
 import { createApiRequestLogger, createApp } from './app.js';
+import { storage as defaultStorage } from './storage.js';
 
 const { transcribeProtectedAudio } = vi.hoisted(() => {
   // The production provider factory is created during module evaluation; keep
@@ -58,6 +60,22 @@ describe('protected Method logger boundary', () => {
     expect(writeLog.mock.calls[0]?.[0]).toContain('visible-prefix');
     expect(JSON.stringify(writeLog.mock.calls)).not.toMatch(/PRIVATE_HISTORY|PRIVATE_BRIEFING|PRIVATE_PROVIDER/);
   });
+
+  it('keeps an actual mixed-case trailing-slash workspace response out of the legacy body logger', async () => {
+    const mapSentinel = 'PRIVATE_MIXED_CASE_MAP_SENTINEL';
+    const map = createCareerMap(mapSentinel);
+    vi.spyOn(defaultStorage, 'loadCareerMap').mockResolvedValueOnce({ status: 'ready', map });
+    const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const response = await request(createApp()).get('/api/AGENT/Workspace/');
+
+    expect(response.status).toBe(200);
+    expect(JSON.stringify(response.body)).toContain(mapSentinel);
+    expect(JSON.stringify(consoleLog.mock.calls)).toContain('workspace-read');
+    expect(JSON.stringify([consoleLog.mock.calls, consoleError.mock.calls])).not.toContain(mapSentinel);
+    expect(JSON.stringify(consoleLog.mock.calls)).not.toContain('/api/AGENT/Workspace/');
+  });
 });
 
 describe('protected Method parser error boundary', () => {
@@ -107,6 +125,18 @@ describe('protected Method parser error boundary', () => {
       sentinel: 'PRIVATE_PARSER_PATH_SENTINEL',
       send: (app: ReturnType<typeof createApp>, sentinel: string) => request(app)
         .post(`/api/agent/${sentinel}`)
+        .set('content-type', 'application/json')
+        .send(`{"id":"message","message":"${sentinel}`),
+    },
+    {
+      label: 'mixed-case trailing-slash malformed Method request',
+      route: '/api/AGENT/',
+      routeLabel: 'agent-turn',
+      status: 400,
+      errorClass: 'SyntaxError',
+      sentinel: 'PRIVATE_MIXED_CASE_PARSER_SENTINEL',
+      send: (app: ReturnType<typeof createApp>, sentinel: string) => request(app)
+        .post('/api/AGENT/')
         .set('content-type', 'application/json')
         .send(`{"id":"message","message":"${sentinel}`),
     },

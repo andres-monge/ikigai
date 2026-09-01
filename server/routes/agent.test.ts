@@ -17,6 +17,7 @@ import type {
 } from '../storage.js';
 import { MethodOwnerBusyError } from '../storage.js';
 import { createDisplayRecovery } from '../ai/history.js';
+import { NATURAL_CONVERSATION_TOOL_NAME } from '../ai/agent.js';
 import { createAgentRouter } from './agent.js';
 
 const USER_ID = 'opaque-user-1';
@@ -695,8 +696,26 @@ describe('protected Method routes', () => {
         hasMore: false,
       })),
     };
+    let providerStep = 0;
     const model = new MockLanguageModelV4({
-      doStream: textStream('A normal reflective response without a write.') as never,
+      doStream: async () => {
+        providerStep += 1;
+        if (providerStep === 1) {
+          return {
+            stream: simulateReadableStream({
+              chunks: [
+                { type: 'stream-start', warnings: [] },
+                {
+                  type: 'tool-call', toolCallId: 'natural-route-call',
+                  toolName: NATURAL_CONVERSATION_TOOL_NAME, input: JSON.stringify({}),
+                },
+                { type: 'finish', finishReason: { unified: 'tool-calls', raw: 'tool-calls' }, usage: usage() },
+              ] as never,
+            }),
+          };
+        }
+        return textStream('A normal reflective response without a write.');
+      },
     });
     const response = await request(testApp({
       storage,
@@ -715,6 +734,21 @@ describe('protected Method routes', () => {
       conversation: 'conversation-for-authenticated-owner',
       store: true,
     });
+    expect(model.doStreamCalls).toHaveLength(2);
+    expect(model.doStreamCalls[0]?.toolChoice).toEqual({ type: 'required' });
+    expect(model.doStreamCalls[0]?.tools?.map((definition) => definition.name))
+      .toContain(NATURAL_CONVERSATION_TOOL_NAME);
+    expect(model.doStreamCalls[1]?.toolChoice).toEqual({ type: 'none' });
+    expect(model.doStreamCalls[1]?.tools).toBeUndefined();
+    expect(model.doStreamCalls[1]?.providerOptions?.openai).toMatchObject({
+      conversation: 'conversation-for-authenticated-owner',
+      store: true,
+      instructions: expect.any(String),
+    });
+    expect((model.doStreamCalls[0]?.providerOptions?.openai as Record<string, unknown>).contextManagement)
+      .toBeDefined();
+    expect((model.doStreamCalls[1]?.providerOptions?.openai as Record<string, unknown>).contextManagement)
+      .toBeUndefined();
     expect(storage.completeAgentTurn).toHaveBeenCalledOnce();
     expect(storage.cancelAgentTurn).not.toHaveBeenCalled();
     expect(storage.failAgentTurn).not.toHaveBeenCalled();
@@ -1264,6 +1298,102 @@ describe('protected Method routes', () => {
     expect(storage.failAgentTurn).not.toHaveBeenCalled();
     expect(storage.completeAgentTurn).not.toHaveBeenCalled();
     expect(storage.releaseTurnLease).toHaveBeenCalledOnce();
+    expect(model.doStreamCalls).toHaveLength(0);
+  });
+
+  it('returns the normal conflict as soon as a healthy first turn binds its Conversation under a live lease', async () => {
+    const activeTurnId = 'healthy-provisioning-turn';
+    const retryAfter = new Date('2100-01-01T00:00:00.000Z');
+    let mapping: string | undefined;
+    let leaseReads = 0;
+    const handoffDelays: number[] = [];
+    const storage = createStorage({
+      beginAgentTurn: vi.fn(async (): Promise<BeginAgentTurnResult> => ({
+        status: 'conflict', activeTurnId, retryAfter,
+        waitReason: 'conversation-provisioning',
+      })),
+      getConversationMapping: vi.fn(async () => mapping),
+      getTurnLease: vi.fn(async () => {
+        leaseReads += 1;
+        return {
+          userId: USER_ID,
+          turnId: leaseReads >= 4 ? 'fallback-release-for-baseline' : activeTurnId,
+          leaseId: 'healthy-provisioning-lease',
+          acquiredAt: new Date(timestamp(1)),
+          expiresAt: retryAfter,
+        };
+      }),
+    });
+    const model = new MockLanguageModelV4({ doStream: textStream('must not run') as never });
+
+    const response = await request(testApp({
+      storage, requireAuth: authenticated, agentEnabled: true, model,
+      provisioningHandoffTiming: {
+        now: () => Date.now(),
+        delay: async (milliseconds: number) => {
+          handoffDelays.push(milliseconds);
+          mapping = 'healthy-bound-conversation';
+        },
+      },
+      operationalLog: vi.fn(),
+    } as never)).post('/api/agent').send({
+      id: 'message-during-healthy-provisioning',
+      message: 'Do not start concurrently with the healthy first turn.',
+    });
+
+    expect(response.status).toBe(409);
+    expect(response.body).toMatchObject({ status: 'conflict', retryable: true });
+    expect(storage.beginAgentTurn).toHaveBeenCalledOnce();
+    expect(storage.getTurnLease).toHaveBeenCalledOnce();
+    expect(storage.getConversationMapping).toHaveBeenCalledTimes(2);
+    expect(handoffDelays).toEqual([25]);
+    expect(model.doStreamCalls).toHaveLength(0);
+  });
+
+  it('bounds provisioning handoff reads with deterministic exponential backoff', async () => {
+    const activeTurnId = 'bounded-provisioning-turn';
+    const retryAfter = new Date('2100-01-01T00:00:00.000Z');
+    let monotonicNow = 0;
+    let leaseReads = 0;
+    const handoffDelays: number[] = [];
+    const storage = createStorage({
+      beginAgentTurn: vi.fn(async (): Promise<BeginAgentTurnResult> => ({
+        status: 'conflict', activeTurnId, retryAfter,
+        waitReason: 'conversation-provisioning',
+      })),
+      getConversationMapping: vi.fn(async () => undefined),
+      getTurnLease: vi.fn(async () => {
+        leaseReads += 1;
+        if (handoffDelays.length === 0 && leaseReads >= 7) return undefined;
+        return {
+          userId: USER_ID, turnId: activeTurnId, leaseId: 'bounded-provisioning-lease',
+          acquiredAt: new Date(timestamp(1)), expiresAt: retryAfter,
+        };
+      }),
+    });
+    const model = new MockLanguageModelV4({ doStream: textStream('must not run') as never });
+
+    const response = await request(testApp({
+      storage, requireAuth: authenticated, agentEnabled: true, model,
+      provisioningHandoffTiming: {
+        now: () => monotonicNow,
+        delay: async (milliseconds: number) => {
+          handoffDelays.push(milliseconds);
+          monotonicNow += milliseconds;
+        },
+      },
+      operationalLog: vi.fn(),
+    } as never)).post('/api/agent').send({
+      id: 'message-during-bounded-provisioning',
+      message: 'Return a normal conflict after the bounded handoff window.',
+    });
+
+    expect(response.status).toBe(409);
+    expect(storage.beginAgentTurn).toHaveBeenCalledOnce();
+    expect(handoffDelays.slice(0, 7)).toEqual([25, 50, 100, 200, 400, 800, 1_000]);
+    expect(handoffDelays.at(-1)).toBeLessThanOrEqual(1_000);
+    expect(storage.getConversationMapping.mock.calls.length).toBeLessThanOrEqual(20);
+    expect(storage.getTurnLease.mock.calls.length).toBeLessThanOrEqual(20);
     expect(model.doStreamCalls).toHaveLength(0);
   });
 

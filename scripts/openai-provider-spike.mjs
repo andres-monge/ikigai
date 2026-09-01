@@ -317,8 +317,33 @@ function inspectProviderRequestBody(
     return null;
   }
 
+  const providerTools = Array.isArray(body.tools) ? body.tools : [];
+  const naturalConversationTool = providerTools.find((candidate) => (
+    candidate?.type === 'function' && candidate?.name === 'continue_natural_conversation'
+  ));
+  const naturalParameters = naturalConversationTool?.parameters;
+  const rawToolChoice = body.tool_choice;
+  const toolChoice = rawToolChoice == null
+    ? 'omitted'
+    : typeof rawToolChoice === 'string' && ['auto', 'none', 'required'].includes(rawToolChoice)
+      ? rawToolChoice
+      : 'other';
+  const allowlistedToolNames = new Set([
+    'confirm_foundation',
+    'continue_natural_conversation',
+    'non_applicable_checkpoint_tool',
+    'propose_paths',
+    'select_path',
+    'settle_research_candidate',
+    'wait_for_abort',
+    'web_search',
+  ]);
+
   return {
     conversationPresent: typeof body.conversation === 'string',
+    conversationToken: typeof body.conversation === 'string'
+      ? createHash('sha256').update(body.conversation).digest('hex').slice(0, 16)
+      : undefined,
     contextManagementPresent:
       Array.isArray(body.context_management) && body.context_management.length > 0,
     focusedBriefingPresent:
@@ -328,6 +353,22 @@ function inspectProviderRequestBody(
     rawPrivateStatePresent:
       rawPrivateMarkers.some((marker) => serializedBody.includes(marker)),
     store: body.store,
+    toolChoice,
+    toolNames: providerTools.map((candidate) => (
+      typeof candidate?.name === 'string' && allowlistedToolNames.has(candidate.name)
+        ? candidate.name
+        : 'other'
+    )),
+    naturalConversationToolStrict: naturalConversationTool?.strict === true,
+    naturalConversationToolEmptyObjectSchema: Boolean(
+      naturalParameters
+      && naturalParameters.type === 'object'
+      && naturalParameters.additionalProperties === false
+      && naturalParameters.properties
+      && Object.keys(naturalParameters.properties).length === 0
+      && Array.isArray(naturalParameters.required)
+      && naturalParameters.required.length === 0,
+    ),
   };
 }
 
@@ -599,6 +640,220 @@ async function consumeResultBarrierStream(result, onDisplayPart) {
   return {
     steps: await result.steps,
     text: displayText,
+  };
+}
+
+async function consumeNaturalConversationBarrierStream(result) {
+  let bufferedText = [];
+  let calledTools = [];
+  let naturalRouteResults = new Set();
+  let progressiveCurrentStep = false;
+  let progressiveNextStep = false;
+  let stepNumber = -1;
+  let displayText = '';
+  let displayedPreRouteText = false;
+  let progressiveDeltaBeforeFinish = false;
+
+  for await (const part of result.fullStream) {
+    if (part.type === 'start-step') {
+      stepNumber += 1;
+      bufferedText = [];
+      calledTools = [];
+      naturalRouteResults = new Set();
+      progressiveCurrentStep = progressiveNextStep;
+      progressiveNextStep = false;
+      continue;
+    }
+    if (part.type === 'text-delta') {
+      if (progressiveCurrentStep) {
+        displayText += part.text;
+        progressiveDeltaBeforeFinish = true;
+        if (stepNumber === 0) displayedPreRouteText = true;
+      } else {
+        bufferedText.push(part.text);
+      }
+      continue;
+    }
+    if (part.type === 'tool-call') {
+      calledTools.push({ toolCallId: part.toolCallId, toolName: part.toolName });
+      continue;
+    }
+    if (part.type === 'tool-result' && part.toolName === 'continue_natural_conversation') {
+      naturalRouteResults.add(part.toolCallId);
+      continue;
+    }
+    if (part.type === 'finish-step') {
+      progressiveNextStep = calledTools.length === 1
+        && calledTools[0].toolName === 'continue_natural_conversation'
+        && naturalRouteResults.has(calledTools[0].toolCallId);
+      if (calledTools.length === 0 && !progressiveCurrentStep) {
+        const text = bufferedText.join('');
+        displayText += text;
+        if (stepNumber === 0 && text.trim().length > 0) displayedPreRouteText = true;
+      }
+      bufferedText = [];
+    }
+  }
+
+  return {
+    steps: await result.steps,
+    text: displayText,
+    displayedPreRouteText,
+    progressiveDeltaBeforeFinish,
+  };
+}
+
+async function runNativeNaturalConversation({
+  modelInstance,
+  requests,
+  conversationId,
+  focusedBriefingMarker,
+}) {
+  const preparedSteps = [];
+  const naturalTools = {
+    continue_natural_conversation: tool({
+      description: 'Continue naturally only when no checkpoint operation applies to the whole message.',
+      inputSchema: z.object({}).strict(),
+      strict: true,
+      execute: async () => ({ status: 'no-write-conversation' }),
+    }),
+    non_applicable_checkpoint_tool: tool({
+      description: 'A strict checkpoint operation that does not apply to this explicitly no-write request.',
+      inputSchema: z.object({ evidence: z.string().min(1) }).strict(),
+      strict: true,
+      execute: async () => ({ status: 'unexpected-checkpoint-call' }),
+    }),
+  };
+  const agent = new ToolLoopAgent({
+    model: modelInstance,
+    maxOutputTokens: 256,
+    tools: naturalTools,
+    // Deliberately no top-level instructions and no custom numeric stop condition.
+    prepareStep: ({ stepNumber, steps }) => {
+      const previousStep = steps.at(-1);
+      const naturalConversationStep = previousStep?.toolCalls.length === 1
+        && previousStep.toolResults.length === 1
+        && previousStep.toolCalls[0]?.toolName === 'continue_natural_conversation'
+        && previousStep.toolResults[0]?.toolName === 'continue_natural_conversation'
+        && previousStep.toolCalls[0]?.toolCallId === previousStep.toolResults[0]?.toolCallId;
+      const marker = `U5_NATURAL_STEP_${stepNumber}_${randomUUID()}`;
+      const activeTools = naturalConversationStep
+        ? []
+        : ['continue_natural_conversation', 'non_applicable_checkpoint_tool'];
+      const toolChoice = naturalConversationStep ? 'none' : 'required';
+      preparedSteps.push({ activeTools: [...activeTools], stepNumber, toolChoice });
+      return {
+        activeTools,
+        toolChoice,
+        ...(stepNumber > 0 ? {
+          messages: previousStep?.response.messages.filter((message) => message.role === 'tool') ?? [],
+        } : {}),
+        providerOptions: {
+          openai: {
+            conversation: conversationId,
+            store: true,
+            reasoningEffort: 'low',
+            instructions: naturalConversationStep
+              ? `${marker} ${focusedBriefingMarker} No tools are available. Reply exactly NATURAL_CONVERSATION_OK.`
+              : [
+                  marker,
+                  focusedBriefingMarker,
+                  'This is an explicitly no-write conversational request.',
+                  'Call continue_natural_conversation with an empty object as the sole action.',
+                  'Do not call non_applicable_checkpoint_tool and do not emit text before the tool result.',
+                ].join(' '),
+            ...(stepNumber === 0
+              ? { contextManagement: [{ type: 'compaction', compactThreshold }] }
+              : {}),
+          },
+        },
+      };
+    },
+  });
+
+  const requestStart = requests.length;
+  const streamed = await agent.stream({
+    abortSignal: runAbortController.signal,
+    timeout: requestTimeoutMs,
+    prompt: 'Route this no-write reflection safely, then give the requested natural reply.',
+  });
+  const consumed = await consumeNaturalConversationBarrierStream(streamed);
+  const routeRequests = requests.slice(requestStart);
+  const firstStep = consumed.steps[0];
+  const secondStep = consumed.steps[1];
+  const routeCall = firstStep?.toolCalls[0];
+  const routeResult = firstStep?.toolResults[0];
+
+  assert(consumed.steps.length === 2, 'Natural conversation did not use exactly two logical steps.');
+  assert(
+    firstStep.toolCalls.length === 1
+      && routeCall?.toolName === 'continue_natural_conversation'
+      && routeCall.toolCallId === routeResult?.toolCallId
+      && routeResult?.toolName === 'continue_natural_conversation',
+    'Natural conversation did not settle one matching no-write tool call and result.',
+  );
+  assert(
+    routeCall.input && Object.keys(routeCall.input).length === 0,
+    'Natural conversation route did not use the strict empty input.',
+  );
+  assert(
+    routeResult.output?.status === 'no-write-conversation',
+    'Natural conversation route returned the wrong result.',
+  );
+  assert(secondStep?.toolCalls.length === 0, 'Tool-impossible natural step unexpectedly called a tool.');
+  assert(preparedSteps.length === 2, 'Natural conversation prepareStep trace was not exactly two steps.');
+  assert(
+    preparedSteps[0].toolChoice === 'required'
+      && preparedSteps[0].activeTools.includes('continue_natural_conversation')
+      && preparedSteps[0].activeTools.includes('non_applicable_checkpoint_tool'),
+    'Natural conversation step zero did not mirror the production required tool set.',
+  );
+  assert(
+    preparedSteps[1].toolChoice === 'none' && preparedSteps[1].activeTools.length === 0,
+    'Natural conversation step one was not tool-impossible.',
+  );
+  assert(routeRequests.length === 2, 'Natural conversation did not make exactly two provider requests.');
+  assert(
+    routeRequests[0].toolChoice === 'required'
+      && routeRequests[0].toolNames.includes('continue_natural_conversation')
+      && routeRequests[0].naturalConversationToolStrict
+      && routeRequests[0].naturalConversationToolEmptyObjectSchema,
+    'Provider did not receive the strict required empty no-write tool.',
+  );
+  assert(
+    routeRequests[1].toolChoice === 'omitted' && routeRequests[1].toolNames.length === 0,
+    'Provider did not receive the SDK-normalized tool-free step after toolChoice none.',
+  );
+  assert(
+    routeRequests.every((entry) => (
+      entry.conversationPresent
+      && entry.instructionsPresent
+      && entry.focusedBriefingPresent
+      && !entry.rawPrivateStatePresent
+    ))
+      && routeRequests[0].conversationToken === routeRequests[1].conversationToken,
+    'Natural conversation lost same-Conversation request-scoped instructions.',
+  );
+  assert(
+    routeRequests[0].contextManagementPresent && !routeRequests[1].contextManagementPresent,
+    'Natural conversation compaction was not limited to step zero.',
+  );
+  assert(!consumed.displayedPreRouteText, 'Natural conversation displayed text before routing settled.');
+  assert(
+    consumed.progressiveDeltaBeforeFinish && consumed.text.includes('NATURAL_CONVERSATION_OK'),
+    'Natural conversation final text did not stream progressively before finish.',
+  );
+
+  return {
+    compactionStepZeroOnly: true,
+    noPreRouteTextDisplayed: true,
+    progressiveFinalText: true,
+    requestInstructionsEveryStep: true,
+    sameConversation: true,
+    soleNoWriteCallAndResult: true,
+    strictEmptyNoWriteTool: true,
+    toolFreeSecondStep: true,
+    topLevelInstructionsUnset: true,
   };
 }
 
@@ -1342,6 +1597,16 @@ async function runCandidate(modelId) {
       conversationId: methodConversationId,
       focusedBriefingMarker,
     });
+    let naturalConversation = null;
+    if (modelId === selectedModelId) {
+      const naturalConversationId = await createConversation(`${modelId}-natural-conversation`);
+      naturalConversation = await runNativeNaturalConversation({
+        modelInstance: provider.model,
+        requests: provider.requests,
+        conversationId: naturalConversationId,
+        focusedBriefingMarker,
+      });
+    }
     const research = await runIsolatedResearch({
       modelInstance: provider.model,
       observedOpenai: provider.openai,
@@ -1370,6 +1635,7 @@ async function runCandidate(modelId) {
       model: modelId,
       mixedCompaction,
       native,
+      naturalConversation,
       research,
       status: 'passed',
     };
