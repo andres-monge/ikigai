@@ -5,11 +5,33 @@ import type { ResearchAttempt, SourceProvenance } from '../../shared/career-map/
 import type { IStorage } from '../storage.js';
 import type { MethodResearchSession, ResearchSourceReference } from './tools.js';
 
-export const researchIntentSchema = z.object({
-  category: z.enum(['path-reality', 'project-grounding', 'peers', 'side-doors']),
-  subject: z.string().min(3).max(300),
-  publicContext: z.array(z.string().min(1).max(300)).max(3).optional(),
+const researchTargetSchema = z.object({
+  kind: z.enum(['purpose-path-set', 'path-project']),
+  id: z.string().min(1).max(160),
+  revision: z.number().int().positive(),
 }).strict();
+export const researchIntentSchema = z.discriminatedUnion('category', [
+  z.object({
+    category: z.literal('path-reality'),
+    target: researchTargetSchema.extend({ kind: z.literal('purpose-path-set') }),
+    dimension: z.enum(['day-to-day-work', 'entry-paths', 'skill-patterns', 'market-patterns']),
+  }).strict(),
+  z.object({
+    category: z.literal('project-grounding'),
+    target: researchTargetSchema.extend({ kind: z.literal('path-project') }),
+    dimension: z.enum(['small-project-patterns', 'public-artifact-patterns', 'feedback-patterns']),
+  }).strict(),
+  z.object({
+    category: z.literal('peers'),
+    target: researchTargetSchema,
+    dimension: z.enum(['public-communities', 'public-practitioner-directories']),
+  }).strict(),
+  z.object({
+    category: z.literal('side-doors'),
+    target: researchTargetSchema,
+    dimension: z.enum(['public-contribution-routes', 'public-access-patterns']),
+  }).strict(),
+]);
 
 export type ResearchIntent = z.infer<typeof researchIntentSchema>;
 
@@ -19,6 +41,7 @@ const providerCandidateSchema = z.object({
   url: z.string().url().refine((value) => value.startsWith('https://')),
   title: z.string().min(1).max(1_000).optional(),
   supportingContent: z.string().min(1).max(4_000).optional(),
+  supportingContentExact: z.literal(true).optional(),
 }).strict();
 
 export interface IsolatedResearchProvider {
@@ -27,6 +50,61 @@ export interface IsolatedResearchProvider {
     query: string;
     abortSignal?: AbortSignal;
   }): Promise<{ candidates: unknown[] }>;
+}
+
+function containsExactUrl(value: unknown, url: string): boolean {
+  if (value === url) return true;
+  if (Array.isArray(value)) return value.some((item) => containsExactUrl(item, url));
+  if (!value || typeof value !== 'object') return false;
+  return Object.values(value as Record<string, unknown>).some((item) => containsExactUrl(item, url));
+}
+
+function exactResultContent(
+  value: unknown,
+  providerCallId: string,
+  url: string,
+  claim: string,
+): string | undefined {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = exactResultContent(item, providerCallId, url, claim);
+      if (found) return found;
+    }
+    return undefined;
+  }
+  if (!value || typeof value !== 'object') return undefined;
+  const record = value as Record<string, unknown>;
+  if (record.type === 'web_search_call' && record.id === providerCallId) {
+    const findExactUrlResult = (candidate: unknown): string | undefined => {
+      if (Array.isArray(candidate)) {
+        for (const item of candidate) {
+          const found = findExactUrlResult(item);
+          if (found) return found;
+        }
+        return undefined;
+      }
+      if (!candidate || typeof candidate !== 'object') return undefined;
+      const result = candidate as Record<string, unknown>;
+      if (result.url === url) {
+        for (const key of ['content', 'snippet', 'text']) {
+          if (typeof result[key] === 'string' && result[key].trim() === claim.trim()) {
+            return result[key].trim();
+          }
+        }
+      }
+      for (const nested of Object.values(result)) {
+        const found = findExactUrlResult(nested);
+        if (found) return found;
+      }
+      return undefined;
+    };
+    return findExactUrlResult(record.results);
+  }
+  for (const nested of Object.values(record)) {
+    const found = exactResultContent(nested, providerCallId, url, claim);
+    if (found) return found;
+  }
+  return undefined;
 }
 
 export function createOpenAIIsolatedResearchProvider(
@@ -50,6 +128,7 @@ export function createOpenAIIsolatedResearchProvider(
           },
         },
         maxOutputTokens: 500,
+        include: { responseBody: true },
       });
       const source = result.sources.find((candidate) => (
         candidate.sourceType === 'url'
@@ -59,7 +138,18 @@ export function createOpenAIIsolatedResearchProvider(
       if (!source || source.sourceType !== 'url' || !('url' in source) || !result.text.trim()) {
         return { candidates: [] };
       }
-      const providerResultId = source.id;
+      const webSearchCalls = result.steps.flatMap((step) => step.content.flatMap((part) => (
+        part.type === 'tool-call' && part.toolName === 'web_search' && part.providerExecuted === true
+          ? [part.toolCallId]
+          : []
+      )));
+      const associatedCallIds = webSearchCalls.filter((toolCallId) => result.steps.some((step) => (
+        step.content.some((part) => part.type === 'tool-result'
+          && part.toolName === 'web_search'
+          && part.toolCallId === toolCallId
+          && containsExactUrl('output' in part ? part.output : undefined, source.url))
+      )));
+      const providerResultId = associatedCallIds.length === 1 ? associatedCallIds[0] : undefined;
       let supportingContent: string | undefined;
       for (const step of result.steps) {
         for (const part of step.content) {
@@ -82,13 +172,25 @@ export function createOpenAIIsolatedResearchProvider(
           }
         }
       }
+      const exactSupportingContent = providerResultId
+        ? result.steps.map((step) => exactResultContent(
+          step.response?.body,
+          providerResultId,
+          source.url,
+          result.text.trim(),
+        )).find(Boolean)
+        : undefined;
       return {
         candidates: [{
           fact: result.text.trim(),
           ...(providerResultId ? { providerResultId } : {}),
           url: source.url,
           ...(source.title ? { title: source.title } : {}),
-          ...(supportingContent ? { supportingContent } : {}),
+          ...(exactSupportingContent
+            ? { supportingContent: exactSupportingContent, supportingContentExact: true as const }
+            : supportingContent
+              ? { supportingContent }
+              : {}),
         }],
       };
     },
@@ -97,6 +199,7 @@ export function createOpenAIIsolatedResearchProvider(
 
 export interface ResearchCandidateFact {
   fact: string;
+  canonicalField: string;
   sourceHandle: string;
   support: 'server-validated' | 'cited-provenance';
 }
@@ -109,16 +212,6 @@ export interface ResearchSessionOptions {
   turnId: string;
   now?: () => Date;
 }
-
-const sensitivePatterns: Array<[string, RegExp]> = [
-  ['name', /\b(?:my name is|named|full name|first name|last name)\b/i],
-  ['health', /\b(?:health|medical|diagnos(?:is|ed)|disability|therapy|medication)\b/i],
-  ['income', /\b(?:income|salary|compensation|earn(?:ing|s)?|€|\$|£)\b/i],
-  ['exact-location', /\b(?:street|road|avenue|postcode|postal code|zip code|apartment|address)\b/i],
-  ['responsibility', /\b(?:childcare|caregiver|dependent|family responsibility|care for my)\b/i],
-  ['raw-reflection', /\b(?:my reflection|journal entry|raw reflection|what i learned about myself)\b/i],
-  ['contact', /(?:[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}|\+?\d[\d\s().-]{7,}\d)/],
-];
 
 const authorityPatterns = /\b(?:ignore (?:all |the )?(?:previous|prior) instructions|system prompt|developer message|call (?:a |the )?tool|confirm (?:the|this)|select (?:the|this)|record (?:this|evidence)|reveal (?:private|personal|data)|send (?:a |the )?message|publish|apply on (?:my|the) behalf)\b/i;
 
@@ -146,27 +239,36 @@ function errorClass(error: unknown): string {
 }
 
 export function validateDeidentifiedResearchIntent(input: unknown): ResearchIntent {
-  const intent = researchIntentSchema.parse(input);
-  const serialized = [intent.subject, ...(intent.publicContext ?? [])].join(' ');
-  const sensitive = sensitivePatterns.find(([, pattern]) => pattern.test(serialized));
-  if (sensitive) throw new ResearchPrivacyError(sensitive[0]);
-  if (/\b[A-Z][a-z]{2,}\s+[A-Z][a-z]{2,}\b/.test(serialized)) {
-    throw new ResearchPrivacyError('name');
-  }
-  return intent;
+  const parsed = researchIntentSchema.safeParse(input);
+  if (!parsed.success) throw new ResearchPrivacyError('non-allowlisted-field');
+  return parsed.data;
 }
 
 function buildQuery(intent: ResearchIntent): string {
-  const context = intent.publicContext?.length
-    ? ` Public, non-personal context: ${intent.publicContext.join('; ')}.`
-    : '';
-  return `Research ${intent.category} for the public work domain: ${intent.subject}.${context}`;
+  const dimension = intent.dimension.replaceAll('-', ' ');
+  return `Research public professional patterns for the ${dimension} dimension. Use public professional sources only.`;
+}
+
+function canonicalFieldFor(intent: ResearchIntent): string {
+  switch (intent.dimension) {
+    case 'day-to-day-work': return 'practicalFit';
+    case 'entry-paths': return 'projectPreview';
+    case 'skill-patterns': return 'evidence';
+    case 'market-patterns': return 'possibility';
+    case 'small-project-patterns': return 'firstVersion';
+    case 'public-artifact-patterns': return 'outcome';
+    case 'feedback-patterns': return 'evidenceCue';
+    case 'public-communities': return 'practicalFit';
+    case 'public-practitioner-directories': return 'evidence';
+    case 'public-contribution-routes': return 'projectPreview';
+    case 'public-access-patterns': return 'firstStep';
+  }
 }
 
 export class ResearchSession implements MethodResearchSession {
   private readonly now: () => Date;
   private readonly turnSecret = randomUUID();
-  private readonly handles = new Map<string, { claim: string; source: SourceProvenance }>();
+  private readonly handles = new Map<string, { claim: string; field: string; source: SourceProvenance }>();
 
   constructor(private readonly options: ResearchSessionOptions) {
     this.now = options.now ?? (() => new Date());
@@ -198,6 +300,7 @@ export class ResearchSession implements MethodResearchSession {
       if (abortSignal?.aborted) throw abortSignal.reason ?? new DOMException('Aborted', 'AbortError');
       const candidates: ResearchCandidateFact[] = [];
       const sources: SourceProvenance[] = [];
+      const canonicalField = canonicalFieldFor(intent);
       for (const rawCandidate of providerResult.candidates) {
         const parsed = providerCandidateSchema.safeParse(rawCandidate);
         if (!parsed.success || authorityPatterns.test(parsed.data.fact)) continue;
@@ -206,6 +309,7 @@ export class ResearchSession implements MethodResearchSession {
         const serverValidated = Boolean(
           parsed.data.providerResultId
           && supportingContent
+          && parsed.data.supportingContentExact === true
           && !contentIsUntrustedInstruction
           && supportingContent.trim() === parsed.data.fact.trim(),
         );
@@ -232,9 +336,9 @@ export class ResearchSession implements MethodResearchSession {
               ...(supportingContent ? { excerpt: supportingContent } : {}),
               support: 'cited-provenance',
             };
-        this.handles.set(sourceHandle, { claim: parsed.data.fact, source });
+        this.handles.set(sourceHandle, { claim: parsed.data.fact, field: canonicalField, source });
         sources.push(source);
-        candidates.push({ fact: parsed.data.fact, sourceHandle, support: source.support });
+        candidates.push({ fact: parsed.data.fact, canonicalField, sourceHandle, support: source.support });
       }
 
       const status = candidates.length > 0 ? 'succeeded' as const : 'insufficient' as const;
@@ -268,7 +372,9 @@ export class ResearchSession implements MethodResearchSession {
     }
     return references.map((reference) => {
       const resolved = this.handles.get(reference.handle);
-      if (!resolved || resolved.claim !== reference.claim) throw new ResearchHandleError();
+      if (!resolved || resolved.claim !== reference.claim || resolved.field !== reference.field) {
+        throw new ResearchHandleError();
+      }
       return resolved.source;
     });
   }

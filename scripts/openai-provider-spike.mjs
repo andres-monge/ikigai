@@ -918,7 +918,7 @@ async function runIsolatedResearch({ modelInstance, observedOpenai, requests, ra
       },
     },
     include: { responseBody: true },
-    maxOutputTokens: 128,
+    maxOutputTokens: 512,
   });
   const researchRequests = requests.slice(requestStart);
   const searchCall = result.toolCalls.find((call) => call.toolName === 'web_search');
@@ -926,8 +926,11 @@ async function runIsolatedResearch({ modelInstance, observedOpenai, requests, ra
   const urlSources = result.sources.filter(
     (source) => source.sourceType === 'url' && /^https:\/\//i.test(source.url),
   );
-  const source = urlSources[0];
   const citation = citationEvidence.find((entry) => /^https:\/\//i.test(entry.url));
+  // AI SDK sources are convenient display projections, but they are not the
+  // provider result identity. The exact provider citation annotation is also
+  // valid cited provenance when the SDK omits a matching source projection.
+  const source = urlSources[0] ?? citation;
   const resultContentAvailable = result.steps.some((step) =>
     hasRawSearchResultContent(step.response?.body));
 
@@ -1138,6 +1141,139 @@ async function runAbortContract({
   };
 }
 
+async function runMixedHostedCustomCompaction({
+  modelInstance,
+  observedOpenai,
+  requests,
+  conversationId,
+  focusedBriefingMarker,
+}) {
+  let customToolExecutions = 0;
+  const mixedRequestStart = requests.length;
+  const hosted = await generateText({
+    model: modelInstance,
+    abortSignal: runAbortController.signal,
+    timeout: requestTimeoutMs,
+    prompt: 'Find the official IANA media type registered for JSON.',
+    tools: { web_search: observedOpenai.tools.webSearch({ searchContextSize: 'low' }) },
+    toolChoice: { type: 'tool', toolName: 'web_search' },
+    providerOptions: {
+      openai: {
+        conversation: conversationId,
+        store: true,
+        reasoningEffort: 'low',
+        instructions: `${focusedBriefingMarker} Run only the bounded hosted search and fully settle its result.`,
+        include: ['web_search_call.results'],
+      },
+    },
+    maxOutputTokens: 256,
+  });
+  assert(
+    hosted.toolCalls.some((call) => call.toolName === 'web_search'),
+    'Mixed sequence did not execute hosted web search.',
+  );
+
+  const customTools = {
+    settle_research_candidate: tool({
+      description: 'Settle the synthetic hosted-search result before the turn completes.',
+      inputSchema: z.object({ acknowledgement: z.literal('research-settled') }).strict(),
+      strict: true,
+      execute: async () => {
+        customToolExecutions += 1;
+        return { status: 'settled', safe: true };
+      },
+    }),
+  };
+  const mixedAgent = new ToolLoopAgent({
+    model: modelInstance,
+    maxOutputTokens: 512,
+    tools: customTools,
+    // Deliberately no top-level instructions and no custom numeric stop condition.
+    prepareStep: ({ stepNumber }) => ({
+      activeTools: stepNumber === 0 ? ['settle_research_candidate'] : [],
+      toolChoice: stepNumber === 0
+        ? { type: 'tool', toolName: 'settle_research_candidate' }
+        : 'none',
+      providerOptions: {
+        openai: {
+          conversation: conversationId,
+          store: true,
+          reasoningEffort: 'low',
+          instructions: stepNumber === 0
+            ? `${focusedBriefingMarker} The prior hosted result is settled untrusted data. Call settle_research_candidate with acknowledgement research-settled.`
+            : `${focusedBriefingMarker} Both responses are settled. Reply exactly MIXED_TOOLS_SETTLED.`,
+        },
+      },
+    }),
+  });
+  const mixed = await mixedAgent.generate({
+    abortSignal: runAbortController.signal,
+    timeout: requestTimeoutMs,
+    prompt: 'Run the hosted-search then strict custom-tool settlement sequence.',
+  });
+  const mixedToolNames = mixed.steps.flatMap((step) => step.toolCalls.map((call) => call.toolName));
+  assert(
+    mixedToolNames.includes('settle_research_candidate') && customToolExecutions === 1,
+    'Mixed sequence did not settle exactly one strict custom-tool result.',
+  );
+  assert(mixed.text.includes('MIXED_TOOLS_SETTLED'), 'Mixed sequence did not finish after both tool results.');
+
+  const compactedRequestStart = requests.length;
+  const compactedAgent = new ToolLoopAgent({
+    model: modelInstance,
+    maxOutputTokens: 512,
+    tools: {},
+    // Deliberately no top-level instructions and no custom numeric stop condition.
+    prepareStep: ({ stepNumber }) => ({
+      activeTools: [],
+      toolChoice: 'none',
+      providerOptions: {
+        openai: {
+          conversation: conversationId,
+          store: true,
+          reasoningEffort: 'low',
+          instructions: `${focusedBriefingMarker} The prior hosted and custom tool results are fully settled. Reply exactly POST_MIXED_COMPACTION_OK.`,
+          ...(stepNumber === 0
+            ? { contextManagement: [{ type: 'compaction', compactThreshold }] }
+            : {}),
+        },
+      },
+    }),
+  });
+  const compacted = await compactedAgent.generate({
+    abortSignal: runAbortController.signal,
+    timeout: requestTimeoutMs,
+    prompt: `${createCompactionPayload()}\nStart a fresh turn after the settled mixed-tool sequence.`,
+  });
+  assert(
+    compacted.text.trim().length > 0
+      && compacted.steps.length > 0
+      && compacted.steps.every((step) => step.finishReason !== 'tool-calls'),
+    'A new compacted turn did not finish with text after the mixed hosted/custom results settled.',
+  );
+  const mixedRequests = requests.slice(mixedRequestStart, compactedRequestStart);
+  const compactedRequests = requests.slice(compactedRequestStart);
+  assert(
+    mixedRequests.length >= 3
+      && mixedRequests.every((entry) => entry.conversationPresent && entry.instructionsPresent),
+    'Mixed hosted/custom steps did not preserve request-scoped Conversation instructions.',
+  );
+  assert(
+    compactedRequests.length >= 1
+      && compactedRequests[0].contextManagementPresent
+      && compactedRequests.every((entry) => entry.conversationPresent && entry.instructionsPresent),
+    'The post-mixed turn did not request Conversation compaction at step zero.',
+  );
+
+  return {
+    customToolSettledExactlyOnce: true,
+    hostedWebSearchSettled: true,
+    noPendingToolCompaction400: true,
+    postMixedCompactionStepZero: true,
+    sameConversation: true,
+  };
+}
+
 async function runCandidate(modelId) {
   const startedAt = performance.now();
   const rawMapSentinel = `PRIVATE_RAW_MAP_${randomUUID()}`;
@@ -1164,6 +1300,14 @@ async function runCandidate(modelId) {
       requests: provider.requests,
       rawResearchState,
     });
+    const mixedConversationId = await createConversation(`${modelId}-mixed-compaction`);
+    const mixedCompaction = await runMixedHostedCustomCompaction({
+      modelInstance: provider.model,
+      observedOpenai: provider.openai,
+      requests: provider.requests,
+      conversationId: mixedConversationId,
+      focusedBriefingMarker,
+    });
     const abortConversationId = await createConversation(`${modelId}-abort`);
     const abort = await runAbortContract({
       modelInstance: provider.model,
@@ -1176,6 +1320,7 @@ async function runCandidate(modelId) {
       abort,
       durationMs: Math.round(performance.now() - startedAt),
       model: modelId,
+      mixedCompaction,
       native,
       research,
       status: 'passed',
@@ -1339,7 +1484,13 @@ async function runFallbackRoute(modelId) {
     instructions: 'Both results committed. Reply exactly with FALLBACK_TRANSITION_OK.',
     tools: {},
     toolChoice: 'none',
-    messages: secondToolMessages,
+    messages: [
+      ...secondToolMessages,
+      {
+        role: 'user',
+        content: 'Both authoritative results are committed. Reply exactly FALLBACK_TRANSITION_OK.',
+      },
+    ],
   });
   const routeRequests = requests.slice(requestStart);
   const items = await listConversationItems(conversationId);

@@ -121,6 +121,7 @@ function createStorage(overrides: Record<string, unknown> = {}) {
     cancelAgentTurn: vi.fn(async () => turn('agent-turn', 'cancelled')),
     failAgentTurn: vi.fn(async () => turn('agent-turn', 'failed')),
     releaseTurnLease: vi.fn(async () => true),
+    listAgentTurns: vi.fn(async () => []),
     getConversationMapping: vi.fn(async () => undefined as string | undefined),
     setConversationMapping: vi.fn(async () => undefined),
     recordResearchAttempt: vi.fn(async () => undefined),
@@ -208,6 +209,41 @@ describe('protected Method routes', () => {
     expect(transcribeAudio).not.toHaveBeenCalled();
   });
 
+  it('fails closed when AGENT_ENABLED is missing while authenticated read paths stay available', async () => {
+    const storage = createStorage();
+    const transcribeAudio = vi.fn();
+    const conversationClient = { listItems: vi.fn() };
+    const app = testApp({
+      storage,
+      requireAuth: authenticated,
+      transcribeAudio,
+      conversationClient,
+      operationalLog: vi.fn(),
+    });
+
+    const workspace = await request(app).get('/api/agent/workspace');
+    const history = await request(app).get('/api/agent/history');
+    const agent = await request(app).post('/api/agent').send({ id: 'message', message: 'hello' });
+    const operation = await request(app).post('/api/agent/workspace/operations').send({
+      operationId: 'operation-missing-flag', clientMessageId: 'message-missing-flag',
+      operation: { type: 'confirm-why', input: {} },
+    });
+    const audio = await request(app).post('/api/agent/audio/transcribe')
+      .set('content-type', 'audio/webm').send(Buffer.from('audio'));
+
+    expect(workspace.status).toBe(200);
+    expect(history.body).toEqual({ status: 'empty', messages: [] });
+    expect([agent.status, operation.status, audio.status]).toEqual([503, 503, 503]);
+    expect(storage.getOrCreateCareerMap).not.toHaveBeenCalled();
+    expect(storage.beginAgentTurn).not.toHaveBeenCalled();
+    expect(storage.beginWorkspaceActionTurn).not.toHaveBeenCalled();
+    expect(storage.persistCareerMapOperation).not.toHaveBeenCalled();
+    expect(storage.recordResearchAttempt).not.toHaveBeenCalled();
+    expect(storage.setConversationMapping).not.toHaveBeenCalled();
+    expect(conversationClient.listItems).not.toHaveBeenCalled();
+    expect(transcribeAudio).not.toHaveBeenCalled();
+  });
+
   it('returns an empty workspace bootstrap and enforces the bounded agent message schema before storage', async () => {
     const storage = createStorage({ loadCareerMap: vi.fn(async () => ({ status: 'not-found' as const })) });
     const app = testApp({ storage, requireAuth: authenticated, agentEnabled: true, operationalLog: vi.fn() });
@@ -267,8 +303,34 @@ describe('protected Method routes', () => {
     expect(logs.at(-1)).toMatchObject({
       route: '/workspace/operations',
       status: 200,
-      operationId: 'operation-1',
+      operationId: expect.stringMatching(/^op_[a-f0-9]{16}$/),
       revision: 2,
+    });
+  });
+
+  it('returns the durable failed turn when completion loses its lease instead of claiming workspace success', async () => {
+    const failedTurn = {
+      ...turn('workspace-action', 'failed'),
+      terminalResult: { kind: 'failed', refetch: true, errorClass: 'TurnLeaseLostError' },
+    };
+    const storage = createStorage({ completeAgentTurn: vi.fn(async () => failedTurn) });
+    const response = await request(testApp({
+      storage, requireAuth: authenticated, agentEnabled: true,
+      now: () => new Date(timestamp(3)), operationalLog: vi.fn(),
+    })).post('/api/agent/workspace/operations').send({
+      operationId: 'operation-completion-race', clientMessageId: 'client-message-1',
+      operation: {
+        type: 'confirm-why', input: {
+          whyId: 'why-1', whyRevision: 1,
+          presentedInTurnId: 'prior-assistant-turn', sourceMessageId: 'client-message-1',
+        },
+      },
+    });
+
+    expect(response.status).toBe(409);
+    expect(response.body).toMatchObject({
+      status: 'failed-replay', terminal: 'failed',
+      result: { kind: 'failed', refetch: true, errorClass: 'TurnLeaseLostError' },
     });
   });
 
@@ -295,8 +357,119 @@ describe('protected Method routes', () => {
     expect(storage.getConversationMapping).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['completed', 200, { kind: 'completed', refetch: true, revision: 2 }],
+    ['cancelled', 409, { kind: 'cancelled', refetch: true, revision: 2 }],
+    ['failed', 409, { kind: 'failed', refetch: true, errorClass: 'ExternalProviderError' }],
+  ] as const)('preserves the real %s terminal status and safe replay marker', async (status, expectedStatus, terminalResult) => {
+    const terminalTurn = { ...turn('agent-turn', status), terminalResult };
+    const storage = createStorage({
+      beginAgentTurn: vi.fn(async (): Promise<BeginAgentTurnResult> => ({
+        status: 'terminal', shouldInvokeModel: false, turn: terminalTurn,
+      })),
+    });
+    const response = await request(testApp({
+      storage, requireAuth: authenticated, agentEnabled: true, operationalLog: vi.fn(),
+    })).post('/api/agent').send({ id: 'client-message-1', message: 'retry' });
+
+    expect(response.status).toBe(expectedStatus);
+    expect(response.body).toEqual({
+      status: `${status}-replay`, terminal: status, result: terminalResult,
+      ...(status === 'completed' ? {} : { retryable: false }),
+    });
+    expect(storage.getConversationMapping).not.toHaveBeenCalled();
+  });
+
+  it('replays the stored workspace operation envelope without converting it to a generic completion', async () => {
+    const operationEnvelope = {
+      status: 'committed', operation: 'confirm-why', authoritativeRevision: 2,
+      derivedModule: 'create-purpose-paths', pendingDecision: null,
+    };
+    const storage = createStorage({
+      beginWorkspaceActionTurn: vi.fn(async (): Promise<BeginAgentTurnResult> => ({
+        status: 'terminal', shouldInvokeModel: false,
+        turn: { ...turn('workspace-action', 'completed'), terminalResult: { kind: 'workspace-result', refetch: true, operationEnvelope } },
+      })),
+    });
+    const response = await request(testApp({
+      storage, requireAuth: authenticated, agentEnabled: true, operationalLog: vi.fn(),
+    })).post('/api/agent/workspace/operations').send({
+      operationId: 'operation-replay', clientMessageId: 'client-message-1',
+      operation: { type: 'confirm-why', input: {} },
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ ...operationEnvelope, turnStatus: 'completed', replay: true });
+    expect(storage.persistCareerMapOperation).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['conflict', 409, 'revision-conflict', true],
+    ['rejected', 422, 'operation-unavailable', false],
+  ] as const)('preserves stored workspace %s HTTP semantics', async (status, httpStatus, errorClass, retryable) => {
+    const operationEnvelope = {
+      status, operation: 'confirm-why', authoritativeRevision: 2,
+      derivedModule: 'create-purpose-paths', pendingDecision: null,
+      errorClass, ...(retryable ? { retryable: true } : {}),
+    };
+    const storage = createStorage({
+      beginWorkspaceActionTurn: vi.fn(async (): Promise<BeginAgentTurnResult> => ({
+        status: 'terminal', shouldInvokeModel: false,
+        turn: {
+          ...turn('workspace-action', 'completed'),
+          terminalResult: { kind: 'workspace-result', refetch: true, operationEnvelope },
+        },
+      })),
+    });
+    const response = await request(testApp({
+      storage, requireAuth: authenticated, agentEnabled: true, operationalLog: vi.fn(),
+    })).post('/api/agent/workspace/operations').send({
+      operationId: 'operation-replay', clientMessageId: 'client-message-1',
+      operation: { type: 'confirm-why', input: {} },
+    });
+
+    expect(response.status).toBe(httpStatus);
+    expect(response.body).toEqual({ ...operationEnvelope, turnStatus: 'completed', replay: true });
+    expect(storage.persistCareerMapOperation).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when a stored workspace replay envelope is malformed instead of spreading its payload', async () => {
+    const terminalSentinel = 'PRIVATE-STORED-TERMINAL-PAYLOAD';
+    const storage = createStorage({
+      beginWorkspaceActionTurn: vi.fn(async (): Promise<BeginAgentTurnResult> => ({
+        status: 'terminal', shouldInvokeModel: false,
+        turn: {
+          ...turn('workspace-action', 'completed'),
+          terminalResult: {
+            kind: 'workspace-result',
+            operationEnvelope: { status: 'committed', leaked: terminalSentinel },
+          },
+        },
+      })),
+    });
+    const response = await request(testApp({
+      storage, requireAuth: authenticated, agentEnabled: true, operationalLog: vi.fn(),
+    })).post('/api/agent/workspace/operations').send({
+      operationId: 'operation-replay', clientMessageId: 'client-message-1',
+      operation: { type: 'confirm-why', input: {} },
+    });
+
+    expect(response.status).toBe(409);
+    expect(response.body).toMatchObject({ status: 'failed-replay', terminal: 'failed' });
+    expect(JSON.stringify(response.body)).not.toContain(terminalSentinel);
+  });
+
   it('uses only the server-owned Conversation mapping and completes a natural no-write turn', async () => {
     const storage = createStorage({ getConversationMapping: vi.fn(async () => 'conversation-for-authenticated-owner') });
+    const conversationClient = {
+      listItems: vi.fn(async () => ({
+        data: [
+          { id: 'provider-user-item', type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Help me think this through.' }] },
+          { id: 'provider-assistant-item', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'A normal reflective response without a write.' }] },
+        ],
+        hasMore: false,
+      })),
+    };
     const model = new MockLanguageModelV4({
       doStream: textStream('A normal reflective response without a write.') as never,
     });
@@ -305,6 +478,7 @@ describe('protected Method routes', () => {
       requireAuth: authenticated,
       agentEnabled: true,
       model,
+      conversationClient,
       researchProvider: { search: vi.fn(async () => ({ candidates: [] })) },
       operationalLog: vi.fn(),
     })).post('/api/agent').send({ id: 'client-message-1', message: 'Help me think this through.' });
@@ -319,6 +493,77 @@ describe('protected Method routes', () => {
     expect(storage.cancelAgentTurn).not.toHaveBeenCalled();
     expect(storage.failAgentTurn).not.toHaveBeenCalled();
     expect(storage.releaseTurnLease).toHaveBeenCalledOnce();
+    expect(storage.completeAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
+      result: expect.objectContaining({
+        kind: 'completed',
+        displayProjection: {
+          userItemId: 'provider-user-item',
+          assistantItemIds: ['provider-assistant-item'],
+        },
+      }),
+    }));
+  });
+
+  it('binds a newly created Conversation before honoring post-create abort and deletes it if binding fails', async () => {
+    const storage = createStorage({
+      setConversationMapping: vi.fn(async () => { throw new Error('binding-failed-sentinel'); }),
+    });
+    const cleanupSignals: Array<Record<string, unknown>> = [];
+    const conversationClient = {
+      createConversation: vi.fn(async () => 'conversation-created-before-bind'),
+      deleteConversation: vi.fn(async () => undefined),
+      listItems: vi.fn(),
+    };
+    const response = await request(testApp({
+      storage, requireAuth: authenticated, agentEnabled: true, conversationClient,
+      conversationCleanupSignal: (entry) => cleanupSignals.push(entry),
+      operationalLog: vi.fn(),
+    } as never)).post('/api/agent').send({ id: 'client-message-1', message: 'hello' });
+
+    expect(response.status).toBe(502);
+    expect(conversationClient.createConversation).toHaveBeenCalledOnce();
+    expect(storage.setConversationMapping).toHaveBeenCalledWith(
+      USER_ID, 'agent-turn-lease', 'conversation-created-before-bind',
+    );
+    expect(conversationClient.deleteConversation).toHaveBeenCalledWith(
+      'conversation-created-before-bind', expect.any(AbortSignal),
+    );
+    expect(cleanupSignals).toEqual([expect.objectContaining({
+      type: 'conversation_provisioning_compensated', cleanupRequired: false,
+    })]);
+    expect(JSON.stringify(cleanupSignals)).not.toContain('conversation-created-before-bind');
+  });
+
+  it('persists a newly created Conversation before honoring post-create abort without deleting the bound mapping', async () => {
+    let resolveCreate!: (id: string) => void;
+    const createGate = new Promise<string>((resolve) => { resolveCreate = resolve; });
+    const storage = createStorage();
+    const conversationClient = {
+      createConversation: vi.fn(async () => createGate),
+      deleteConversation: vi.fn(async () => undefined),
+      listItems: vi.fn(),
+    };
+    const model = new MockLanguageModelV4({ doStream: textStream('must not run') as never });
+    const outbound = request(testApp({
+      storage, requireAuth: authenticated, agentEnabled: true, model, conversationClient,
+      researchProvider: { search: vi.fn(async () => ({ candidates: [] })) },
+      operationalLog: vi.fn(),
+    })).post('/api/agent').send({ id: 'client-message-1', message: 'hello' });
+    const settled = Promise.resolve(outbound).catch(() => undefined);
+    await vi.waitFor(() => expect(conversationClient.createConversation).toHaveBeenCalledOnce());
+    outbound.abort();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    resolveCreate('conversation-bound-before-abort');
+    await settled;
+
+    await vi.waitFor(() => expect(storage.setConversationMapping).toHaveBeenCalledWith(
+      USER_ID, 'agent-turn-lease', 'conversation-bound-before-abort',
+    ));
+    expect(conversationClient.deleteConversation).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(storage.cancelAgentTurn).toHaveBeenCalledOnce());
+    expect(storage.failAgentTurn).not.toHaveBeenCalled();
+    expect(storage.completeAgentTurn).not.toHaveBeenCalled();
+    expect(model.doStreamCalls).toHaveLength(0);
   });
 
   it('keeps protected audio bounded and returns payload-free provider failures', async () => {
@@ -432,18 +677,30 @@ describe('protected Method routes', () => {
 
     const successLogs: Array<Record<string, unknown>> = [];
     const ready = await request(testApp({
-      storage: createStorage({ getConversationMapping: vi.fn(async () => 'server-conversation') }),
+      storage: createStorage({
+        getConversationMapping: vi.fn(async () => 'server-conversation'),
+        listAgentTurns: vi.fn(async () => [{
+          ...turn('agent-turn', 'completed'),
+          terminalResult: {
+            kind: 'completed', refetch: true,
+            displayProjection: { userItemId: 'user-message-1', assistantItemIds: ['message-1'] },
+          },
+        }]),
+      }),
       requireAuth: authenticated,
       agentEnabled: true,
       conversationClient: {
         listItems: vi.fn(async () => ({
-          data: [{ id: 'message-1', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: SENTINEL }] }],
+          data: [
+            { id: 'user-message-1', type: 'message', role: 'user', content: [{ type: 'input_text', text: 'safe user text' }] },
+            { id: 'message-1', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: SENTINEL }] },
+          ],
           hasMore: false,
         })),
       },
       operationalLog: (entry) => successLogs.push(entry),
     })).get('/api/agent/history');
-    expect(ready.body.messages[0].parts[0].text).toBe(SENTINEL);
+    expect(ready.body.messages[1].parts[0].text).toBe(SENTINEL);
     expect(JSON.stringify(successLogs)).not.toContain(SENTINEL);
 
     const failed = await request(testApp({
@@ -469,6 +726,27 @@ describe('protected Method routes', () => {
     expect(response.status).toBe(409);
     expect(response.body).toMatchObject({ errorClass: 'MethodOwnerBusyError', retryable: true });
     expect(logs.at(-1)).toMatchObject({ errorClass: 'MethodOwnerBusyError', status: 409 });
+  });
+
+  it('hashes client operation ids in operational logs', async () => {
+    const rawOperationId = 'operation-PRIVATE-IDENTIFIER-sentinel';
+    const logs: Array<Record<string, unknown>> = [];
+    const response = await request(testApp({
+      storage: createStorage(), requireAuth: authenticated, agentEnabled: true,
+      now: () => new Date(timestamp(3)), operationalLog: (entry) => logs.push(entry),
+    })).post('/api/agent/workspace/operations').send({
+      operationId: rawOperationId, clientMessageId: 'client-message-1',
+      operation: {
+        type: 'confirm-why',
+        input: {
+          whyId: 'why-1', whyRevision: 1,
+          presentedInTurnId: 'prior-assistant-turn', sourceMessageId: 'client-message-1',
+        },
+      },
+    });
+    expect(response.status).toBe(200);
+    expect(JSON.stringify(logs)).not.toContain(rawOperationId);
+    expect(logs.at(-1)?.operationId).toMatch(/^op_[a-f0-9]{16}$/);
   });
 
   it('does not acquire a turn or dispatch a provider after request abort wins the pre-begin race', async () => {
@@ -521,5 +799,63 @@ describe('protected Method routes', () => {
     expect(storage.completeAgentTurn).not.toHaveBeenCalled();
     expect(storage.releaseTurnLease).toHaveBeenCalledOnce();
     expect(model.doStreamCalls).toHaveLength(0);
+  });
+
+  it('records abort-after-commit recovery markers and replays cancellation without invoking the workspace operation twice', async () => {
+    const storage = createStorage();
+    const persist = storage.persistCareerMapOperation;
+    let releasePersist!: () => void;
+    const persistGate = new Promise<void>((resolve) => { releasePersist = resolve; });
+    let committed!: () => void;
+    const committedSignal = new Promise<void>((resolve) => { committed = resolve; });
+    persist.mockImplementationOnce(async (input) => {
+      const result = await createStorage().persistCareerMapOperation(input);
+      // Reflect the durable commit in the canonical load used by recovery.
+      if ('map' in result) {
+        storage.loadCareerMap.mockResolvedValue({ status: 'ready', map: result.map });
+      }
+      committed();
+      await persistGate;
+      return result;
+    });
+    const app = testApp({
+      storage, requireAuth: authenticated, agentEnabled: true,
+      now: () => new Date(timestamp(3)), operationalLog: vi.fn(),
+    });
+    const body = {
+      operationId: 'operation-abort-after-commit', clientMessageId: 'client-message-1',
+      operation: {
+        type: 'confirm-why',
+        input: {
+          whyId: 'why-1', whyRevision: 1,
+          presentedInTurnId: 'prior-assistant-turn', sourceMessageId: 'client-message-1',
+        },
+      },
+    };
+    const outbound = request(app).post('/api/agent/workspace/operations').send(body);
+    const settled = Promise.resolve(outbound).catch(() => undefined);
+    await committedSignal;
+    outbound.abort();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    releasePersist();
+    await settled;
+    await vi.waitFor(() => expect(storage.cancelAgentTurn).toHaveBeenCalledOnce());
+
+    const cancellation = storage.cancelAgentTurn.mock.calls[0]?.[0]?.result;
+    expect(cancellation).toMatchObject({
+      kind: 'cancelled', stopped: true, refetch: true, revision: 2, operationCommitted: true,
+    });
+    storage.beginWorkspaceActionTurn.mockResolvedValueOnce({
+      status: 'terminal', shouldInvokeModel: false,
+      turn: { ...turn('workspace-action', 'cancelled'), terminalResult: cancellation },
+    });
+    const replay = await request(app).post('/api/agent/workspace/operations').send(body);
+
+    expect(replay.status).toBe(409);
+    expect(replay.body).toMatchObject({
+      status: 'cancelled-replay', terminal: 'cancelled',
+      result: { kind: 'cancelled', stopped: true, refetch: true, revision: 2, operationCommitted: true },
+    });
+    expect(persist).toHaveBeenCalledOnce();
   });
 });

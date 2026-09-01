@@ -19,6 +19,10 @@ import {
   type StorageFaultStage,
 } from './storage.js';
 import { compileCareerMapBriefing } from './ai/briefing.js';
+import { loadConversationHistory } from './ai/history.js';
+import { createMethodModuleLoader } from './ai/method/loader.js';
+import { ResearchSession } from './ai/research.js';
+import { executeWorkspaceTool } from './ai/tools.js';
 import {
   agentConversationMappings,
   agentTurnLeases,
@@ -932,6 +936,131 @@ describe('PostgresStorage Method map, history, and ownership', () => {
 });
 
 describe('PostgresStorage lease and client-message turns', () => {
+  it('composes the U5 coordinator, map operation, research, durable projection, replay, cancellation, and lease release', async () => {
+    const userId = owner('u5-production-composition');
+    const workspaceTurn = await beginTurn(userId, 'u5-workspace', 'workspace-action');
+    const conversationId = id('u5-conversation');
+    await storage.setConversationMapping(userId, workspaceTurn.leaseId, conversationId);
+
+    const envelope = await executeWorkspaceTool({
+      runtime: {
+        storage,
+        loader: await createMethodModuleLoader(),
+        userId,
+        turn: workspaceTurn,
+        timing: { turnSequence: 1, occurredAt: at(1) },
+      },
+      operationType: 'append-foundation-evidence',
+      operationId: id('u5-operation'),
+      rawInput: {
+        id: id('u5-evidence'), revision: 1, category: 'fascination',
+        content: 'I keep returning to public decision-support patterns.',
+      },
+    });
+    expect(envelope).toMatchObject({
+      status: 'committed', operation: 'append-foundation-evidence',
+      authoritativeRevision: 1, derivedModule: 'form-foundation',
+    });
+    expect(await storage.listCareerMapHistory(userId)).toHaveLength(1);
+    const completedWorkspace = await storage.completeAgentTurn({
+      userId, turnId: workspaceTurn.turnId, leaseId: workspaceTurn.leaseId,
+      result: { kind: 'workspace-result', refetch: true, operationEnvelope: envelope },
+    });
+    expect(completedWorkspace?.status).toBe('completed');
+    expect(await storage.getTurnLease(userId)).toBeUndefined();
+    const workspaceReplay = await storage.beginWorkspaceActionTurn({
+      userId,
+      clientMessageId: workspaceTurn.clientMessageId,
+      requestFingerprint: workspaceTurn.requestFingerprint,
+      turnId: id('u5-workspace-retry-turn'),
+      leaseId: id('u5-workspace-retry-lease'),
+    });
+    expect(workspaceReplay).toMatchObject({
+      status: 'terminal', shouldInvokeModel: false,
+      turn: { status: 'completed', terminalResult: { kind: 'workspace-result', operationEnvelope: envelope } },
+    });
+
+    const agentTurn = await beginTurn(userId, 'u5-agent', 'agent-turn');
+    const fact = 'Public teams test decision aids through small bounded artifacts.';
+    const research = new ResearchSession({
+      storage,
+      provider: {
+        search: async () => ({ candidates: [{
+          fact, providerResultId: id('u5-provider-call'),
+          url: 'https://example.com/public-pattern', supportingContent: fact,
+          supportingContentExact: true,
+        }] }),
+      },
+      userId,
+      leaseId: agentTurn.leaseId,
+      turnId: agentTurn.turnId,
+      now: () => now,
+    });
+    const researchResult = await research.research({
+      category: 'path-reality',
+      target: { kind: 'purpose-path-set', id: id('u5-suggested-paths'), revision: 1 },
+      dimension: 'day-to-day-work',
+    });
+    expect(researchResult).toMatchObject({
+      status: 'succeeded', candidates: [{ canonicalField: 'practicalFit', support: 'server-validated' }],
+    });
+    expect(await storage.listResearchAttempts(userId)).toHaveLength(1);
+
+    const userItemId = id('u5-user-item');
+    const assistantItemId = id('u5-assistant-item');
+    const completedAgent = await storage.completeAgentTurn({
+      userId, turnId: agentTurn.turnId, leaseId: agentTurn.leaseId,
+      result: {
+        kind: 'completed', refetch: true, revision: 1,
+        displayProjection: { userItemId, assistantItemIds: [assistantItemId] },
+      },
+    });
+    expect(completedAgent?.status).toBe('completed');
+    const history = await loadConversationHistory({
+      storage,
+      userId,
+      client: {
+        listItems: async () => ({
+          data: [
+            { id: userItemId, type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Safe prompt' }] },
+            { id: id('u5-pre-result-item'), type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Premature mutation claim' }] },
+            { id: assistantItemId, type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Safe authoritative answer' }] },
+          ],
+          hasMore: false,
+        }),
+      },
+    });
+    expect(history.messages.map((message) => message.id)).toEqual([userItemId, assistantItemId]);
+    const agentReplay = await storage.beginAgentTurn({
+      userId,
+      clientMessageId: agentTurn.clientMessageId,
+      requestFingerprint: agentTurn.requestFingerprint,
+      turnId: id('u5-agent-retry-turn'),
+      leaseId: id('u5-agent-retry-lease'),
+    });
+    expect(agentReplay).toMatchObject({ status: 'terminal', shouldInvokeModel: false, turn: { status: 'completed' } });
+
+    const cancelledTurn = await beginTurn(userId, 'u5-cancelled', 'agent-turn');
+    const cancelled = await storage.cancelAgentTurn({
+      userId, turnId: cancelledTurn.turnId, leaseId: cancelledTurn.leaseId,
+      result: { kind: 'cancelled', stopped: true, refetch: true, revision: 1, operationCommitted: false },
+    });
+    expect(cancelled).toMatchObject({ status: 'cancelled', terminalResult: { stopped: true, operationCommitted: false } });
+    expect(await storage.getTurnLease(userId)).toBeUndefined();
+    expect(await storage.releaseTurnLease(userId, cancelledTurn.turnId, cancelledTurn.leaseId)).toBe(false);
+    const cancelledReplay = await storage.beginAgentTurn({
+      userId,
+      clientMessageId: cancelledTurn.clientMessageId,
+      requestFingerprint: cancelledTurn.requestFingerprint,
+      turnId: id('u5-cancelled-retry-turn'),
+      leaseId: id('u5-cancelled-retry-lease'),
+    });
+    expect(cancelledReplay).toMatchObject({ status: 'terminal', shouldInvokeModel: false, turn: { status: 'cancelled' } });
+    expect((await storage.listAgentTurns(userId)).map((turn) => turn.status).sort()).toEqual([
+      'cancelled', 'completed', 'completed',
+    ]);
+  });
+
   it('starts one model invocation when identical client messages race and rejects changed reuse', async () => {
     const userId = owner('message-race');
     await storage.getOrCreateCareerMap(userId);

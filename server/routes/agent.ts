@@ -18,11 +18,14 @@ import {
   REVELIO_AGENT_PROVIDER,
   createMethodAgent,
   createResultBarrierTransform,
+  isMutationCapableMessage,
 } from '../ai/agent.js';
 import { createMethodModuleLoader, type MethodModuleLoader } from '../ai/method/loader.js';
 import {
   OpenAIConversationClient,
+  listConversationItems,
   loadConversationHistory,
+  resolveDisplayProjection,
   type ConversationItemsClient,
 } from '../ai/history.js';
 import {
@@ -32,6 +35,7 @@ import {
 } from '../ai/research.js';
 import {
   executeWorkspaceTool,
+  OPERATION_TO_TOOL_NAME,
   workspaceOperationRequestSchema,
   type MethodOperationEnvelope,
 } from '../ai/tools.js';
@@ -56,6 +60,7 @@ export interface AgentRouterOptions {
   now?: () => Date;
   id?: () => string;
   operationalLog?: (entry: Record<string, unknown>) => void;
+  conversationCleanupSignal?: (entry: Record<string, unknown>) => void;
 }
 
 function safeErrorClass(error: unknown): string {
@@ -80,6 +85,10 @@ function safeErrorClass(error: unknown): string {
 
 function requestFingerprint(clientMessageId: string, message: string): string {
   return createHash('sha256').update(`${clientMessageId}\u0000${message}`).digest('hex');
+}
+
+function opaqueOperationId(operationId: string): string {
+  return `op_${createHash('sha256').update(operationId).digest('hex').slice(0, 16)}`;
 }
 
 function canonicalRequestValue(value: unknown): string {
@@ -122,6 +131,37 @@ function statusForEnvelope(envelope: MethodOperationEnvelope): number {
   return 200;
 }
 
+const storedOperationEnvelopeSchema = z.object({
+  status: z.enum(['committed', 'idempotent-replay', 'conflict', 'rejected']),
+  operation: z.enum(Object.keys(OPERATION_TO_TOOL_NAME) as [
+    keyof typeof OPERATION_TO_TOOL_NAME,
+    ...(keyof typeof OPERATION_TO_TOOL_NAME)[],
+  ]),
+  authoritativeRevision: z.number().int().nonnegative(),
+  derivedModule: z.enum(['form-foundation', 'create-purpose-paths', 'design-path-project']),
+  pendingDecision: z.object({
+    kind: z.enum(['why-confirmation', 'path-selection', 'path-revision-confirmation', 'first-project-confirmation']),
+    targetId: z.string().min(1).max(160),
+    targetRevision: z.number().int().positive(),
+  }).strict().nullable(),
+  errorClass: z.string().min(1).max(160).optional(),
+  retryable: z.boolean().optional(),
+}).strict();
+
+function safeTerminalResult(turn: AgentTurnRecord): Record<string, unknown> {
+  const terminal = turn.terminalResult;
+  if (!terminal || typeof terminal !== 'object') return { kind: turn.status, refetch: true };
+  return {
+    kind: turn.status,
+    refetch: terminal.refetch === true,
+    ...(typeof terminal.revision === 'number' ? { revision: terminal.revision } : {}),
+    ...(typeof terminal.errorClass === 'string' ? { errorClass: terminal.errorClass } : {}),
+    ...(typeof terminal.stopped === 'boolean' ? { stopped: terminal.stopped } : {}),
+    ...(typeof terminal.operationCommitted === 'boolean' ? { operationCommitted: terminal.operationCommitted } : {}),
+    ...(terminal.displayProjection ? { displayReady: true } : {}),
+  };
+}
+
 function turnResponse(result: BeginAgentTurnResult, response: express.Response): boolean {
   switch (result.status) {
     case 'started': return false;
@@ -129,7 +169,25 @@ function turnResponse(result: BeginAgentTurnResult, response: express.Response):
       response.status(409).json({ status: 'in-flight', turnId: result.turn.turnId, retryable: true });
       return true;
     case 'terminal':
-      response.status(200).json({ status: 'completed-replay', terminal: result.turn.status, refetch: true });
+      if (result.turn.status === 'completed'
+        && result.turn.terminalResult?.kind === 'workspace-result'
+      ) {
+        const parsedEnvelope = storedOperationEnvelopeSchema.safeParse(result.turn.terminalResult.operationEnvelope);
+        if (!parsedEnvelope.success) {
+          response.status(409).json({ status: 'failed-replay', terminal: 'failed', retryable: false, result: { kind: 'failed', refetch: true } });
+          return true;
+        }
+        response.status(statusForEnvelope(parsedEnvelope.data)).json({
+          ...parsedEnvelope.data,
+          turnStatus: 'completed', replay: true,
+        });
+        return true;
+      }
+      response.status(result.turn.status === 'completed' ? 200 : 409).json({
+        status: `${result.turn.status}-replay`, terminal: result.turn.status,
+        result: safeTerminalResult(result.turn),
+        ...(result.turn.status === 'completed' ? {} : { retryable: false }),
+      });
       return true;
     case 'conflict':
       response.status(409).json({ status: 'conflict', retryable: true, retryAfter: result.retryAfter.toISOString() });
@@ -284,6 +342,24 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
     const leaseId = nextId();
     const occurredAt = now().toISOString();
     let turn: AgentTurnRecord | undefined;
+    let startingRevision: number | undefined;
+    const cancelWithCanonicalRecovery = async () => {
+      if (!turn) return undefined;
+      const authoritative = await storage.loadCareerMap(identity.userId).catch(() => undefined);
+      const revision = authoritative?.status === 'ready' ? authoritative.map.revision : undefined;
+      return storage.cancelAgentTurn({
+        userId: identity.userId,
+        turnId: turn.turnId,
+        leaseId: turn.leaseId,
+        result: {
+          kind: 'cancelled', stopped: true, refetch: true,
+          ...(revision !== undefined ? {
+            revision,
+            operationCommitted: startingRevision !== undefined && revision > startingRevision,
+          } : {}),
+        },
+      });
+    };
     try {
       throwIfRouteAborted(abort.signal);
       const map = await storage.getOrCreateCareerMap(identity.userId);
@@ -291,6 +367,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
         response.status(409).json({ status: map.status });
         return;
       }
+      startingRevision = map.map.revision;
       throwIfRouteAborted(abort.signal);
       const begun = await storage.beginWorkspaceActionTurn({
         userId: identity.userId,
@@ -317,19 +394,34 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
         operationId: parsed.data.operationId,
         rawInput: parsed.data.operation.input,
       });
-      await storage.completeAgentTurn({ userId: identity.userId, turnId: turn.turnId, leaseId: turn.leaseId, result: envelope as unknown as Record<string, unknown> });
-      response.locals.methodLog = { operationId: parsed.data.operationId, revision: envelope.authoritativeRevision, errorClass: envelope.errorClass };
+      throwIfRouteAborted(abort.signal);
+      const completed = await storage.completeAgentTurn({
+        userId: identity.userId,
+        turnId: turn.turnId,
+        leaseId: turn.leaseId,
+        result: { kind: 'workspace-result', refetch: true, operationEnvelope: envelope },
+      });
+      if (!completed || completed.status !== 'completed') {
+        response.status(409).json({
+          status: `${completed?.status ?? 'failed'}-replay`,
+          terminal: completed?.status ?? 'failed',
+          result: completed ? safeTerminalResult(completed) : { kind: 'failed', refetch: true },
+          retryable: false,
+        });
+        return;
+      }
+      response.locals.methodLog = { operationId: opaqueOperationId(parsed.data.operationId), revision: envelope.authoritativeRevision, errorClass: envelope.errorClass };
       response.status(statusForEnvelope(envelope)).json(envelope);
     } catch (error) {
       if (turn) {
         if (abort.signal.aborted) {
-          await storage.cancelAgentTurn({ userId: identity.userId, turnId: turn.turnId, leaseId: turn.leaseId }).catch(() => undefined);
+          await cancelWithCanonicalRecovery().catch(() => undefined);
         } else {
           await storage.failAgentTurn({ userId: identity.userId, turnId: turn.turnId, leaseId: turn.leaseId, errorClass: safeErrorClass(error) }).catch(() => undefined);
         }
       }
       if (abort.signal.aborted) return;
-      response.locals.methodLog = { operationId: parsed.data.operationId, errorClass: safeErrorClass(error) };
+      response.locals.methodLog = { operationId: opaqueOperationId(parsed.data.operationId), errorClass: safeErrorClass(error) };
       response.status(error instanceof MethodOwnerBusyError ? 409 : 500).json({
         error: 'Workspace operation failed',
         errorClass: safeErrorClass(error),
@@ -393,6 +485,24 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
       return;
     }
     let turn: AgentTurnRecord | undefined;
+    let startingRevision: number | undefined;
+    const cancelWithCanonicalRecovery = async () => {
+      if (!turn) return undefined;
+      const authoritative = await storage.loadCareerMap(identity.userId).catch(() => undefined);
+      const revision = authoritative?.status === 'ready' ? authoritative.map.revision : undefined;
+      return storage.cancelAgentTurn({
+        userId: identity.userId,
+        turnId: turn.turnId,
+        leaseId: turn.leaseId,
+        result: {
+          kind: 'cancelled', stopped: true, refetch: true,
+          ...(revision !== undefined ? {
+            revision,
+            operationCommitted: startingRevision !== undefined && revision > startingRevision,
+          } : {}),
+        },
+      });
+    };
     try {
       throwIfRouteAborted(abort.signal);
       const map = await storage.getOrCreateCareerMap(identity.userId);
@@ -400,6 +510,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
         response.status(409).json({ status: map.status });
         return;
       }
+      startingRevision = map.map.revision;
       throwIfRouteAborted(abort.signal);
       const begun = await storage.beginAgentTurn({
         userId: identity.userId,
@@ -418,9 +529,28 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
       if (!conversationId) {
         if (!conversationClient().createConversation) throw new Error('ConversationProvisioningUnavailable');
         throwIfRouteAborted(abort.signal);
-        conversationId = await conversationClient().createConversation!(abort.signal);
+        const createdConversationId = await conversationClient().createConversation!();
+        try {
+          await storage.setConversationMapping(identity.userId, turn.leaseId, createdConversationId);
+          conversationId = createdConversationId;
+        } catch (bindingError) {
+          let cleanupRequired = true;
+          try {
+            if (!conversationClient().deleteConversation) throw new Error('ConversationCleanupUnavailable');
+            await conversationClient().deleteConversation!(createdConversationId, AbortSignal.timeout(5_000));
+            cleanupRequired = false;
+          } catch {
+            cleanupRequired = true;
+          }
+          options.conversationCleanupSignal?.({
+            type: 'conversation_provisioning_compensated',
+            conversationToken: `conv_${createHash('sha256').update(createdConversationId).digest('hex').slice(0, 16)}`,
+            cleanupRequired,
+            errorClass: safeErrorClass(bindingError),
+          });
+          throw bindingError;
+        }
         throwIfRouteAborted(abort.signal);
-        await storage.setConversationMapping(identity.userId, turn.leaseId, conversationId);
       }
       const research = new ResearchSession({
         storage,
@@ -431,6 +561,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
         now,
       });
       let streamError: unknown;
+      let safeAssistantText = '';
       const agent = createMethodAgent({
         model: model(),
         storage,
@@ -441,6 +572,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
         turnSequence: now().getTime(),
         occurredAt: now().toISOString(),
         research,
+        currentMessage: parsed.data.message,
         abortSignal: abort.signal,
         onError: (error) => {
           streamError = error;
@@ -455,7 +587,10 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
       const result = await agent.stream({
         prompt: parsed.data.message,
         abortSignal: abort.signal,
-        experimental_transform: createResultBarrierTransform(),
+        experimental_transform: createResultBarrierTransform({
+          streamNaturalText: !isMutationCapableMessage(parsed.data.message),
+          onTextDelta: (text) => { safeAssistantText += text; },
+        }),
       });
       await result.pipeUIMessageStreamToResponse(response, {
         sendReasoning: false,
@@ -468,22 +603,40 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
       });
       if (streamError) throw streamError;
       if (abort.signal.aborted) {
-        await storage.cancelAgentTurn({ userId: identity.userId, turnId: turn.turnId, leaseId: turn.leaseId });
+        await cancelWithCanonicalRecovery();
       } else {
         const authoritative = await storage.loadCareerMap(identity.userId);
         const revision = authoritative.status === 'ready' ? authoritative.map.revision : undefined;
         if (revision !== undefined) response.locals.methodLog = { ...response.locals.methodLog, revision };
-        await storage.completeAgentTurn({
+        const displayProjection = await listConversationItems({
+          client: conversationClient(),
+          conversationId,
+          abortSignal: AbortSignal.timeout(5_000),
+        }).then((items) => resolveDisplayProjection(items, parsed.data.message, safeAssistantText))
+          .catch(() => undefined);
+        const completed = await storage.completeAgentTurn({
           userId: identity.userId,
           turnId: turn.turnId,
           leaseId: turn.leaseId,
-          result: { completed: true, refetch: true, ...(revision !== undefined ? { revision } : {}) },
+          result: {
+            kind: 'completed', refetch: true,
+            ...(revision !== undefined ? { revision } : {}),
+            ...(displayProjection ? { displayProjection } : {}),
+          },
         });
+        if (!completed || completed.status !== 'completed') {
+          response.locals.methodLog = {
+            ...response.locals.methodLog,
+            errorClass: completed?.status === 'failed' && typeof completed.terminalResult?.errorClass === 'string'
+              ? completed.terminalResult.errorClass
+              : 'TurnLeaseLostError',
+          };
+        }
       }
     } catch (error) {
       if (turn) {
         if (abort.signal.aborted) {
-          await storage.cancelAgentTurn({ userId: identity.userId, turnId: turn.turnId, leaseId: turn.leaseId }).catch(() => undefined);
+          await cancelWithCanonicalRecovery().catch(() => undefined);
         } else {
           await storage.failAgentTurn({ userId: identity.userId, turnId: turn.turnId, leaseId: turn.leaseId, errorClass: safeErrorClass(error) }).catch(() => undefined);
         }

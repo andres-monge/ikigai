@@ -388,6 +388,7 @@ export interface IStorage {
     leaseDurationMs?: number;
   }): Promise<BeginAgentTurnResult>;
   getAgentTurn(userId: string, clientMessageId: string): Promise<AgentTurnRecord | undefined>;
+  listAgentTurns(userId: string): Promise<AgentTurnRecord[]>;
   getTurnLease(userId: string): Promise<AgentTurnLeaseRecord | undefined>;
   completeAgentTurn(input: {
     userId: string;
@@ -1213,6 +1214,15 @@ export class PostgresStorage implements IStorage {
         eq(agentTurns.clientMessageId, clientMessageId),
       ));
     return row ? asAgentTurnRecord(row) : undefined;
+  }
+
+  async listAgentTurns(userId: string): Promise<AgentTurnRecord[]> {
+    const rows = await this.database
+      .select()
+      .from(agentTurns)
+      .where(eq(agentTurns.userId, userId))
+      .orderBy(asc(agentTurns.createdAt), asc(agentTurns.turnId));
+    return rows.map(asAgentTurnRecord);
   }
 
   async getTurnLease(userId: string) {
