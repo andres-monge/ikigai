@@ -2,6 +2,14 @@ import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 
+const storageDatabaseTests = [
+  '**/server/storage.test.ts',
+  '**/server/storage.career-map.test.ts',
+  '**/server/storage.migration.test.ts',
+  '**/server/storage.performance.test.ts',
+];
+const storageDatabaseTestsEnabled = process.env.U4_STORAGE_TEST_DATABASE === '1';
+
 export default defineConfig({
   plugins: [react()],
   test: {
@@ -18,6 +26,7 @@ export default defineConfig({
       '**/dist/**',
       '**/.claude/worktrees/**',
       '**/tests/**', // E2E tests handled by Playwright
+      ...(storageDatabaseTestsEnabled ? [] : storageDatabaseTests),
     ],
     // Force sequential execution for database tests to avoid conflicts
     pool: 'threads',

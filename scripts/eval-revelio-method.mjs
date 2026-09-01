@@ -599,6 +599,10 @@ function createSyntheticHarness(scenario, loader, model) {
     }),
   };
 
+  for (const [operation, toolName] of Object.entries(operationToTool)) {
+    assert(tools[toolName], `${scenario.id}: evaluation operation ${operation} maps to missing tool ${toolName}.`);
+  }
+
   const agent = new ToolLoopAgent({
     model,
     maxOutputTokens: 1_500,
@@ -608,10 +612,12 @@ function createSyntheticHarness(scenario, loader, model) {
     prepareStep: ({ stepNumber }) => {
       const checkpoint = deriveMethodCheckpoint(map);
       const bundle = loader.load(checkpoint);
-      const activeTools = checkpoint.availableOperations.map((operation) => {
+      // U3 evaluates the operations owned by its first three modules. The U2
+      // selector also exposes later correction/focus operations that this
+      // bounded harness deliberately does not register as model tools yet.
+      const activeTools = checkpoint.availableOperations.flatMap((operation) => {
         const toolName = operationToTool[operation];
-        assert(toolName, `${scenario.id}: no evaluation tool is registered for available operation ${operation}.`);
-        return toolName;
+        return toolName ? [toolName] : [];
       });
       const instructions = [
         BASE_METHOD_INSTRUCTIONS,
@@ -864,6 +870,16 @@ async function main() {
   }
 
   assert(sampleReports.every((sample) => sample.hardInvariantsPassed), 'Not every Method sample passed its hard invariants.');
+  if (sampleReports.filter((sample) => sample.qualitativePassed).length < 2) {
+    console.error(JSON.stringify({
+      status: 'qualitative-gate-failed',
+      samples: sampleReports.map((sample) => ({
+        id: sample.id,
+        qualitative: sample.qualitative,
+        turnShapes: sample.turns.map((turn) => turn.replyShape),
+      })),
+    }));
+  }
   assert(sampleReports.filter((sample) => sample.qualitativePassed).length >= 2, 'Fewer than two Method samples passed the qualitative rubric without retries.');
 
   const report = {

@@ -263,7 +263,7 @@ describe('PostgresStorage Method map, history, and ownership', () => {
     expect(loaded).toEqual(created);
     if (loaded.status === 'ready') {
       expect(loaded.map.explorerId).toBe(userId);
-      expect(loaded.map.schemaVersion).toBe(1);
+      expect(loaded.map.schemaVersion).toBe(2);
       expect(loaded.map.revision).toBe(0);
     }
     const missingOwner = owner('other');
@@ -1267,8 +1267,8 @@ describe('PostgresStorage repair, erasure, and integrity', () => {
 
   it.each([
     ['unsupported-schema', (document: Record<string, unknown>) => ({ rowVersion: 999, document: { ...document, schemaVersion: 999 } })],
-    ['invalid-document', (document: Record<string, unknown>) => ({ rowVersion: 1, document: { ...document, pathSets: [{ id: 'broken' }] } })],
-    ['owner-mismatch', (document: Record<string, unknown>) => ({ rowVersion: 1, document: { ...document, explorerId: id('someone-else') } })],
+    ['invalid-document', (document: Record<string, unknown>) => ({ rowVersion: 2, document: { ...document, pathSets: [{ id: 'broken' }] } })],
+    ['owner-mismatch', (document: Record<string, unknown>) => ({ rowVersion: 2, document: { ...document, explorerId: id('someone-else') } })],
   ] as const)('fails invalid persisted rows closed as repair-required: %s', async (reason, corrupt) => {
     const userId = owner(`repair-${reason}`);
     const created = await storage.getOrCreateCareerMap(userId);
@@ -1340,6 +1340,79 @@ describe('PostgresStorage repair, erasure, and integrity', () => {
       .where(eq(careerMapHistory.userId, userId));
     const loaded = await storage.loadCareerMap(userId);
     expect(loaded).toMatchObject({ status: 'repair-required', reason: 'history-mismatch' });
+    await eraseOwner(userId);
+  });
+
+  it('fails closed when valid history provenance differs from the map receipt', async () => {
+    const userId = owner('repair-provenance');
+    await storage.getOrCreateCareerMap(userId);
+    const turn = await beginTurn(userId, 'repair-provenance');
+    expect((await persist(userId, turn.leaseId, {
+      type: 'propose-why',
+      sourceId: id('repair-provenance-propose'),
+      expectedRevision: 0,
+      occurredAt: at(1),
+      payload: {
+        why: {
+          id: id('repair-provenance-why'),
+          revision: 1,
+          statement: 'Make useful choices easier.',
+          serves: 'People facing consequential choices',
+          pointOfView: 'Evidence should create agency.',
+        },
+        presentation: presentation(1),
+      },
+    })).status).toBe('committed');
+    expect((await persist(userId, turn.leaseId, {
+      type: 'confirm-why',
+      sourceId: id('repair-provenance-confirm'),
+      expectedRevision: 1,
+      occurredAt: at(2),
+      payload: {
+        whyId: id('repair-provenance-why'),
+        whyRevision: 1,
+        action: action(2),
+      },
+    })).status).toBe('committed');
+    await db.update(careerMapHistory)
+      .set({
+        confirmationProvenance: {
+          kind: 'ui-action',
+          actionId: id('different-valid-action'),
+          turnId: turn.turnId,
+          turnSequence: 2,
+          occurredAt: at(2),
+        },
+      })
+      .where(and(
+        eq(careerMapHistory.userId, userId),
+        eq(careerMapHistory.resultRevision, 2),
+      ));
+
+    expect(await storage.loadCareerMap(userId)).toMatchObject({
+      status: 'repair-required',
+      reason: 'history-mismatch',
+    });
+    await eraseOwner(userId);
+  });
+
+  it('fails closed when history module attribution differs from the map receipt', async () => {
+    const userId = owner('repair-module-version');
+    await storage.getOrCreateCareerMap(userId);
+    const turn = await beginTurn(userId, 'repair-module-version');
+    expect((await persist(
+      userId,
+      turn.leaseId,
+      evidenceOperation(0, id('repair-module-version-source')),
+    )).status).toBe('committed');
+    await db.update(careerMapHistory)
+      .set({ moduleVersion: 'forged-module@9' })
+      .where(eq(careerMapHistory.userId, userId));
+
+    expect(await storage.loadCareerMap(userId)).toMatchObject({
+      status: 'repair-required',
+      reason: 'history-mismatch',
+    });
     await eraseOwner(userId);
   });
 

@@ -1,4 +1,4 @@
-import { cp, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -20,7 +20,6 @@ const sourceSkillsRoot = fileURLToPath(new URL('./skills', import.meta.url));
 const temporaryRoots: string[] = [];
 
 afterEach(async () => {
-  const { rm } = await import('node:fs/promises');
   await Promise.all(temporaryRoots.splice(0).map((root) => rm(root, { force: true, recursive: true })));
 });
 
@@ -70,6 +69,31 @@ describe('repository-owned Method module loader', () => {
   it('rejects malformed, mismatched, duplicate, and extra frontmatter at initialization', async () => {
     const cases = [
       {
+        name: 'missing opening delimiter',
+        mutate: (content: string) => content.replace(/^---\n/, ''),
+        expected: /must start with YAML frontmatter/i,
+      },
+      {
+        name: 'missing closing delimiter',
+        mutate: (content: string) => content.replace('\n---\n', '\n'),
+        expected: /missing its frontmatter terminator/i,
+      },
+      {
+        name: 'invalid frontmatter line',
+        mutate: (content: string) => content.replace(/description:.*\n/, 'description without separator\n'),
+        expected: /invalid frontmatter/i,
+      },
+      {
+        name: 'empty required value',
+        mutate: (content: string) => content.replace(/description:.*\n/, 'description:\n'),
+        expected: /frontmatter key "description" is empty/i,
+      },
+      {
+        name: 'missing required key',
+        mutate: (content: string) => content.replace(/version:.*\n/, ''),
+        expected: /missing frontmatter key "version"/i,
+      },
+      {
         name: 'mismatched name',
         mutate: (content: string) => content.replace('name: form-foundation', 'name: wrong-module'),
         expected: /does not match registry/i,
@@ -85,9 +109,19 @@ describe('repository-owned Method module loader', () => {
         expected: /unsupported frontmatter key/i,
       },
       {
+        name: 'mismatched version',
+        mutate: (content: string) => content.replace(/version:.*\n/, 'version: 9.9.9\n'),
+        expected: /content version does not match registry/i,
+      },
+      {
         name: 'missing body',
         mutate: (content: string) => `${content.slice(0, content.indexOf('\n---\n', 4) + 5)}\n`,
         expected: /instruction body/i,
+      },
+      {
+        name: 'non-H1 body',
+        mutate: (content: string) => content.replace('\n# Form the Foundation', '\n## Form the Foundation'),
+        expected: /level-one heading/i,
       },
     ];
 
@@ -98,6 +132,14 @@ describe('repository-owned Method module loader', () => {
       await writeFile(file, testCase.mutate(content), 'utf8');
       await expect(createMethodModuleLoader({ skillsRoot: root }), testCase.name).rejects.toThrow(testCase.expected);
     }
+  });
+
+  it('fails initialization when a registered bundle is missing', async () => {
+    const root = await copySkillsFixture();
+    await rm(path.join(root, 'form-foundation', 'SKILL.md'));
+    await expect(createMethodModuleLoader({ skillsRoot: root })).rejects.toMatchObject({
+      code: 'missing-bundle',
+    });
   });
 
   it('keeps global voice, trust, state-order, brevity, and language rules in the small base instructions', () => {

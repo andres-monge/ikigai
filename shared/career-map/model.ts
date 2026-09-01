@@ -13,7 +13,7 @@ import { continueChoiceSchema, nextMoveSchema, reflectionSessionSchema } from '.
 import { commitmentIntentSchema, peerExposureSchema, provisionalCommitmentSchema } from './peers';
 import { proofInventorySchema, routeOutcomeSchema, sideDoorSetSchema } from './side-doors';
 
-export const CAREER_MAP_SCHEMA_VERSION = 1;
+export const CAREER_MAP_SCHEMA_VERSION = 2;
 
 export const focusSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('reflection'), reflectionId: entityIdSchema, reason: z.string().min(1), openedBy: userActionProvenanceSchema }).strict(),

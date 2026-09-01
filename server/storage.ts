@@ -432,18 +432,6 @@ function asAgentTurnRecord(row: AgentTurnRow): AgentTurnRecord {
   };
 }
 
-function operationConfirmation(
-  operation: CareerMapOperation,
-): UserActionProvenance | undefined {
-  const payload = operation.payload as Record<string, unknown>;
-  const action = payload.action;
-  if (!action || typeof action !== 'object') return undefined;
-  const candidate = action as Partial<UserActionProvenance>;
-  return candidate.kind === 'user-message' || candidate.kind === 'ui-action'
-    ? (action as UserActionProvenance)
-    : undefined;
-}
-
 function confirmationPresentationTurnId(
   map: CareerMap,
   operation: CareerMapOperation,
@@ -621,11 +609,9 @@ function historyMatchesMap(
       && row.baseRevision === index
       && row.resultRevision === receipt.resultRevision
       && row.baseRevision + 1 === row.resultRevision
-      && persistedResult.data.sourceId === receipt.sourceId
-      && persistedResult.data.operationType === receipt.operationType
-      && persistedResult.data.payloadFingerprint === receipt.payloadFingerprint
-      && persistedResult.data.resultRevision === receipt.resultRevision
-      && persistedResult.data.committedAt === receipt.committedAt
+      && sameProvenance(persistedResult.data, receipt)
+      && sameProvenance(row.confirmationProvenance, receipt.confirmationProvenance)
+      && row.moduleVersion === receipt.moduleVersion
       && row.committedAt.getTime() === new Date(receipt.committedAt).getTime();
   });
 }
@@ -1045,8 +1031,26 @@ export class PostgresStorage implements IStorage {
 
       const reduced = reduceCareerMapOperation(loaded.map, input.operation);
       if (reduced.status !== 'committed') return reduced;
+      const persistedMap = careerMapSchema.safeParse({
+        ...reduced.map,
+        operationHistory: [
+          ...reduced.map.operationHistory.slice(0, -1),
+          { ...reduced.receipt, moduleVersion: input.moduleVersion },
+        ],
+      });
+      if (!persistedMap.success) {
+        return {
+          status: 'rejected',
+          map: loaded.map,
+          error: {
+            code: 'invalid-operation',
+            message: 'A non-empty Method module version is required for durable operations.',
+          },
+        };
+      }
+      const persistedReceipt = persistedMap.data.operationHistory.at(-1)!;
 
-      const presentedInTurnId = confirmationPresentationTurnId(reduced.map, input.operation);
+      const presentedInTurnId = confirmationPresentationTurnId(persistedMap.data, input.operation);
       if (context.origin === 'agent-turn' && presentedInTurnId) {
         const [completedPresentationTurn] = await tx
           .select({ turnId: agentTurns.turnId })
@@ -1122,9 +1126,9 @@ export class PostgresStorage implements IStorage {
       const [updated] = await tx
         .update(careerMaps)
         .set({
-          document: reduced.map,
-          revision: reduced.map.revision,
-          schemaVersion: reduced.map.schemaVersion,
+          document: persistedMap.data,
+          revision: persistedMap.data.revision,
+          schemaVersion: persistedMap.data.schemaVersion,
           repairRequired: false,
           updatedAt: now,
         })
@@ -1157,18 +1161,18 @@ export class PostgresStorage implements IStorage {
       await this.faultInjector?.('after-map-update-before-history');
       await tx.insert(careerMapHistory).values({
         userId: input.userId,
-        operationSourceId: reduced.receipt.sourceId,
-        operationType: reduced.receipt.operationType,
-        payloadFingerprint: reduced.receipt.payloadFingerprint,
+        operationSourceId: persistedReceipt.sourceId,
+        operationType: persistedReceipt.operationType,
+        payloadFingerprint: persistedReceipt.payloadFingerprint,
         baseRevision: input.operation.expectedRevision,
-        resultRevision: reduced.receipt.resultRevision,
-        result: reduced.receipt,
-        confirmationProvenance: operationConfirmation(input.operation),
-        moduleVersion: input.moduleVersion,
-        committedAt: new Date(reduced.receipt.committedAt),
+        resultRevision: persistedReceipt.resultRevision,
+        result: persistedReceipt,
+        confirmationProvenance: persistedReceipt.confirmationProvenance,
+        moduleVersion: persistedReceipt.moduleVersion!,
+        committedAt: new Date(persistedReceipt.committedAt),
       });
       await this.faultInjector?.('before-commit');
-      return reduced;
+      return { status: 'committed', map: persistedMap.data, receipt: persistedReceipt };
     });
   }
 

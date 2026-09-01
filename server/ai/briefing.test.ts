@@ -515,6 +515,31 @@ describe('compileCareerMapBriefing', () => {
     expect(briefing.markdown).not.toContain('Parked facilitation');
   });
 
+  it('omits an outcome from an older revision of a Side Door in the current set', () => {
+    const map = withCompletedSideDoors();
+    const previousSet = map.sideDoorSets.at(-1)!;
+    const revised: CareerMap = {
+      ...map,
+      sideDoorSets: [
+        ...map.sideDoorSets.slice(0, -1),
+        { ...previousSet, status: 'superseded' },
+        {
+          ...previousSet,
+          revision: previousSet.revision + 1,
+          status: 'active',
+          doors: previousSet.doors.map((door) => ({
+            ...door,
+            revision: door.revision + 1,
+          })) as typeof previousSet.doors,
+        },
+      ],
+    };
+
+    const briefing = compileCareerMapBriefing(revised);
+    expect(briefing.markdown).toContain('briefing-door-1@2');
+    expect(briefing.markdown).not.toContain('Route outcome: positive-response');
+  });
+
   it('keeps accepted project and learning evidence from every completed cycle while drafting proof', () => {
     const briefing = compileCareerMapBriefing(withMultiProjectSideDoorEntry());
     expect(briefing.module).toBe('enter-side-doors');

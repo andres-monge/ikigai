@@ -405,8 +405,10 @@ function appendSideDoors(lines: string[], map: CareerMap): void {
     lines.push(`- ${door.name} (${door.id}@${door.revision}; ${door.selection}) — ${door.firstMove}`);
     appendSources(lines, door.sources);
   }
-  const doorIds = new Set(set.doors.map((door) => door.id));
-  for (const outcome of map.routeOutcomes.filter((item) => doorIds.has(item.doorBasis.id))) {
+  const doorRevisions = new Set(set.doors.map((door) => `${door.id}@${door.revision}`));
+  for (const outcome of map.routeOutcomes.filter(
+    (item) => doorRevisions.has(`${item.doorBasis.id}@${item.doorBasis.revision}`),
+  )) {
     lines.push(`Route outcome: ${outcome.result} for ${outcome.doorBasis.id}@${outcome.doorBasis.revision} — ${outcome.learning}`);
   }
 }

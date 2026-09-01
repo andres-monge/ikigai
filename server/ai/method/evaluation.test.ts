@@ -69,6 +69,7 @@ describe('Method evaluation assertions', () => {
     const replacement = {
       turnIndex: 2,
       type: 'replace-purpose-path',
+      status: 'committed',
       pathIdsBefore: ['path-1', 'path-2', 'path-3'],
       pathIdsAfter: ['path-1', 'replacement', 'path-3'],
       targetPathId: 'path-2',
@@ -88,10 +89,24 @@ describe('Method evaluation assertions', () => {
       turnIndex: 2,
       targetIndex: 1,
     })).toBe(false);
+    expect(matchesPathOperationExpectation([{ ...replacement, status: 'rejected' }], {
+      kind: 'replacement',
+      turnIndex: 2,
+      targetIndex: 1,
+    })).toBe(false);
+    expect(matchesPathOperationExpectation([{
+      ...replacement,
+      pathIdsAfter: replacement.pathIdsBefore,
+    }], {
+      kind: 'replacement',
+      turnIndex: 2,
+      targetIndex: 1,
+    })).toBe(false);
 
     const combination = {
       turnIndex: 3,
       type: 'combine-purpose-paths',
+      status: 'replayed',
       pathIdsBefore: ['path-1', 'path-2', 'path-3'],
       pathIdsAfter: ['path-3', 'merged', 'new-third'],
       combinedPathIds: ['path-1', 'path-2'],
@@ -103,6 +118,15 @@ describe('Method evaluation assertions', () => {
       preservedIndex: 2,
     })).toBe(true);
     expect(matchesPathOperationExpectation([{ ...combination, combinedPathIds: ['path-2', 'path-3'] }], {
+      kind: 'combination',
+      turnIndex: 3,
+      combinedIndexes: [0, 1],
+      preservedIndex: 2,
+    })).toBe(false);
+    expect(matchesPathOperationExpectation([{
+      ...combination,
+      pathIdsAfter: combination.pathIdsBefore,
+    }], {
       kind: 'combination',
       turnIndex: 3,
       combinedIndexes: [0, 1],

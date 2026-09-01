@@ -183,26 +183,38 @@ export function matchesPathOperationExpectation(
   if (matches.length !== 1) return false;
 
   const operation = matches[0];
+  if (operation.status !== 'committed' && operation.status !== 'replayed') return false;
   const before = operation.pathIdsBefore ?? [];
   const after = operation.pathIdsAfter ?? [];
-  if (before.length !== 3 || after.length !== 3) return false;
+  if (
+    before.length !== 3
+    || after.length !== 3
+    || new Set(before).size !== 3
+    || new Set(after).size !== 3
+  ) return false;
 
   if (expectation.kind === 'replacement') {
     const targetId = before[expectation.targetIndex];
     if (!targetId || operation.targetPathId !== targetId) return false;
-    return before.every((pathId, index) => (
-      index === expectation.targetIndex || after.includes(pathId)
-    ));
+    const siblings = before.filter((_, index) => index !== expectation.targetIndex);
+    const newIds = after.filter((pathId) => !before.includes(pathId));
+    return !after.includes(targetId)
+      && siblings.every((pathId) => after.includes(pathId))
+      && newIds.length === 1;
   }
 
   const expectedCombined = expectation.combinedIndexes.map((index) => before[index]);
   const actualCombined = operation.combinedPathIds ?? [];
   const preservedId = before[expectation.preservedIndex];
   if (expectedCombined.some((id) => !id) || !preservedId) return false;
+  const newIds = after.filter((pathId) => !before.includes(pathId));
   return actualCombined.length === 2
+    && new Set(actualCombined).size === 2
     && expectedCombined.every((id) => actualCombined.includes(id))
     && !actualCombined.includes(preservedId)
-    && after.includes(preservedId);
+    && expectedCombined.every((id) => !after.includes(id!))
+    && after.includes(preservedId)
+    && newIds.length === 2;
 }
 
 export function summarizeFirstProjectReplacement(

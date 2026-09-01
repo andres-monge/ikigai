@@ -25,6 +25,7 @@ import { Pool as NodePostgresPool } from 'pg';
 import ws from 'ws';
 import { env } from './env.js';
 import * as schema from '../shared/schema.js';
+import { assertDisposableStorageTestUrl } from './storage.test-database-safety.js';
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /* Neon Serverless Database Configuration                                     */
@@ -43,11 +44,14 @@ neonConfig.webSocketConstructor = ws;
  */
 const useDisposableTestDatabase = process.env.NODE_ENV === 'test'
   && process.env.U4_STORAGE_TEST_DATABASE === '1';
-const disposableTestConnectionString = process.env.U4_STORAGE_TEST_DATABASE_URL;
+const rawDisposableTestConnectionString = process.env.U4_STORAGE_TEST_DATABASE_URL;
 
-if (useDisposableTestDatabase && !disposableTestConnectionString) {
+if (useDisposableTestDatabase && !rawDisposableTestConnectionString) {
   throw new Error('U4_STORAGE_TEST_DATABASE_URL is required for disposable database tests.');
 }
+const disposableTestConnectionString = useDisposableTestDatabase
+  ? assertDisposableStorageTestUrl(rawDisposableTestConnectionString!).connectionString
+  : undefined;
 
 /**
  * Configured Drizzle ORM database client using Neon's serverless driver.

@@ -94,6 +94,8 @@ export const operationReceiptSchema = z.object({
   payloadFingerprint: z.string().min(1),
   resultRevision: revisionSchema,
   committedAt: timestampSchema,
+  confirmationProvenance: userActionProvenanceSchema.nullable(),
+  moduleVersion: z.string().min(1).nullable(),
 }).strict();
 
 export const invalidationTargetKindSchema = z.enum([

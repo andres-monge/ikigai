@@ -1,6 +1,7 @@
 import type { z } from 'zod';
 import {
   invalidationTargetOrder,
+  userActionProvenanceSchema,
   type Confirmation,
   type InvalidationTargetKind,
   type ModelPresentation,
@@ -858,6 +859,12 @@ function reject(map: CareerMap, code: RejectionCode, message: string, details?: 
   return { status: 'rejected', map, error: { code, message, ...(details === undefined ? {} : { details }) } };
 }
 
+function operationConfirmation(operation: CareerMapOperation): UserActionProvenance | null {
+  const action = (operation.payload as Record<string, unknown>).action;
+  const parsed = userActionProvenanceSchema.safeParse(action);
+  return parsed.success ? parsed.data : null;
+}
+
 export function applyCareerMapOperation(mapInput: CareerMap, operationInput: unknown): ApplyCareerMapResult {
   const parsedMap = careerMapSchema.safeParse(mapInput);
   if (!parsedMap.success) return reject(mapInput, 'invalid-map', 'Career map failed full-document validation.', parsedMap.error.flatten());
@@ -892,6 +899,8 @@ export function applyCareerMapOperation(mapInput: CareerMap, operationInput: unk
       payloadFingerprint,
       resultRevision: candidate.revision,
       committedAt: operation.occurredAt,
+      confirmationProvenance: operationConfirmation(operation),
+      moduleVersion: null,
     };
     candidate.operationHistory.push(receipt);
     const validated = careerMapSchema.safeParse(candidate);
