@@ -1240,6 +1240,17 @@ describe('PostgresStorage lease and client-message turns', () => {
       if (!apiKey) throw new Error('U5_LIVE_PROOF requires OPENAI_API_KEY.');
       const userId = owner('u5-live-production-composition');
       const providerTrace: Array<Record<string, unknown>> = [];
+      const diagnosticDigest = (value: unknown) => typeof value === 'string'
+        ? createHash('sha256').update(value).digest('hex').slice(0, 12)
+        : null;
+      const diagnosticErrorClass = (value: unknown) => {
+        const candidate = value instanceof Error
+          ? value.name
+          : value && typeof value === 'object' && typeof (value as Record<string, unknown>).errorClass === 'string'
+            ? (value as Record<string, unknown>).errorClass as string
+            : undefined;
+        return candidate && /^[A-Za-z][A-Za-z0-9_.-]{0,79}$/.test(candidate) ? candidate : null;
+      };
       const strictSchemaMismatches = (schema: unknown, path = '$'): string[] => {
         if (Array.isArray(schema)) {
           return schema.flatMap((item, index) => strictSchemaMismatches(item, `${path}[${index}]`));
@@ -1279,6 +1290,9 @@ describe('PostgresStorage lease and client-message turns', () => {
         if (url.endsWith('/responses') && typeof init?.body === 'string') {
           const body = JSON.parse(init.body) as Record<string, unknown>;
           const input = Array.isArray(body.input) ? body.input as Array<Record<string, unknown>> : [];
+          const toolChoice = body.tool_choice && typeof body.tool_choice === 'object'
+            ? body.tool_choice as Record<string, unknown>
+            : undefined;
           trace = {
             conversationPresent: typeof body.conversation === 'string',
             store: body.store === true,
@@ -1287,10 +1301,10 @@ describe('PostgresStorage lease and client-message turns', () => {
             inputTypes: input.map((item) => item.type ?? item.role ?? 'unknown'),
             functionOutputCount: input.filter((item) => item.type === 'function_call_output').length,
             functionOutputTokens: input.filter((item) => item.type === 'function_call_output').map((item) => (
-              typeof item.call_id === 'string'
-                ? createHash('sha256').update(item.call_id).digest('hex').slice(0, 12)
-                : 'missing'
+              diagnosticDigest(item.call_id) ?? 'missing'
             )),
+            toolChoiceTypeIsFunction: toolChoice?.type === 'function',
+            toolChoiceTargetsConfirmWhy: toolChoice?.name === 'confirm_why',
             toolNames: Array.isArray(body.tools)
               ? (body.tools as Array<Record<string, unknown>>).map((item) => item.name).filter(Boolean)
               : [],
@@ -1395,6 +1409,25 @@ describe('PostgresStorage lease and client-message turns', () => {
       };
       const traces: Array<{ activeTools: string[]; compaction: boolean }> = [];
       const mainErrors: Array<{ name: string; statusCode?: number }> = [];
+      const mainOperationTrace: {
+        toolStarts: number;
+        firstTool?: {
+          nameIsConfirmWhy: boolean;
+          callToken: string | null;
+          inputKeysExact: boolean;
+          whyIdMatches: boolean;
+          whyRevisionMatches: boolean;
+          presentedTurnMatches: boolean;
+          sourceMessageMatches: boolean;
+        };
+        firstToolOutcome?: {
+          kind: 'tool-result' | 'tool-error';
+          callTokenMatches: boolean;
+          status: string | null;
+          errorClass: string | null;
+          authoritativeRevision: number | null;
+        };
+      } = { toolStarts: 0 };
       const mainPrompt = [
         `Confirm Why ${whyId} revision 1, presented in ${proposedWhyTurn.turnId}.`,
         `Use confirm_why now with source message ${mainTurn.clientMessageId}; this is my explicit final confirmation.`,
@@ -1416,7 +1449,59 @@ describe('PostgresStorage lease and client-message turns', () => {
         }),
       });
       const mainTraceStart = providerTrace.length;
-      const mainResult = await mainAgent.stream({ prompt: mainPrompt });
+      const mainResult = await mainAgent.stream({
+        prompt: mainPrompt,
+        onToolExecutionStart: ({ toolCall }) => {
+          mainOperationTrace.toolStarts += 1;
+          if (mainOperationTrace.firstTool) return;
+          const input = toolCall.input && typeof toolCall.input === 'object'
+            ? toolCall.input as Record<string, unknown>
+            : {};
+          const inputKeys = Object.keys(input).sort();
+          mainOperationTrace.firstTool = {
+            nameIsConfirmWhy: toolCall.toolName === 'confirm_why',
+            callToken: diagnosticDigest(toolCall.toolCallId),
+            inputKeysExact: JSON.stringify(inputKeys) === JSON.stringify([
+              'presentedInTurnId', 'sourceMessageId', 'whyId', 'whyRevision',
+            ]),
+            whyIdMatches: input.whyId === whyId,
+            whyRevisionMatches: input.whyRevision === 1,
+            presentedTurnMatches: input.presentedInTurnId === proposedWhyTurn.turnId,
+            sourceMessageMatches: input.sourceMessageId === mainTurn.clientMessageId,
+          };
+        },
+        onToolExecutionEnd: ({ toolCall, toolOutput }) => {
+          if (mainOperationTrace.firstToolOutcome) return;
+          const callToken = diagnosticDigest(toolCall.toolCallId);
+          if (toolOutput.type === 'tool-error') {
+            mainOperationTrace.firstToolOutcome = {
+              kind: 'tool-error',
+              callTokenMatches: callToken !== null && callToken === mainOperationTrace.firstTool?.callToken,
+              status: null,
+              errorClass: diagnosticErrorClass(toolOutput.error),
+              authoritativeRevision: null,
+            };
+            return;
+          }
+          const output = toolOutput.output && typeof toolOutput.output === 'object'
+            ? toolOutput.output as Record<string, unknown>
+            : {};
+          const status = typeof output.status === 'string' && [
+            'committed', 'idempotent-replay', 'conflict', 'rejected',
+          ].includes(output.status)
+            ? output.status
+            : null;
+          mainOperationTrace.firstToolOutcome = {
+            kind: 'tool-result',
+            callTokenMatches: callToken !== null && callToken === mainOperationTrace.firstTool?.callToken,
+            status,
+            errorClass: diagnosticErrorClass(output),
+            authoritativeRevision: Number.isSafeInteger(output.authoritativeRevision)
+              ? output.authoritativeRevision as number
+              : null,
+          };
+        },
+      });
       const mainDisplayStream = projectMethodStreamForDisplay(mainResult.stream, {
         onTextDelta: (text) => { mainSafeText += text; },
       });
@@ -1424,15 +1509,98 @@ describe('PostgresStorage lease and client-message turns', () => {
       const afterMain = await storage.loadCareerMap(userId);
       expect(afterMain.status).toBe('ready');
       if (afterMain.status !== 'ready') throw new Error('Live main turn lost its map.');
+      const mainProviderTrace = providerTrace.slice(mainTraceStart);
+      const firstCallToken = mainOperationTrace.firstTool?.callToken;
+      const secondRequestFunctionTokens = Array.isArray(mainProviderTrace[1]?.functionOutputTokens)
+        ? mainProviderTrace[1].functionOutputTokens as unknown[]
+        : [];
+      const [revisionTwoHistory] = await db
+        .select()
+        .from(careerMapHistory)
+        .where(and(
+          eq(careerMapHistory.userId, userId),
+          eq(careerMapHistory.resultRevision, 2),
+        ));
+      const mainDiagnostic = {
+        toolStarts: mainOperationTrace.toolStarts,
+        firstTool: mainOperationTrace.firstTool ?? null,
+        firstToolOutcome: mainOperationTrace.firstToolOutcome ?? null,
+        provider: {
+          requestCountAtLeastTwo: mainProviderTrace.length >= 2,
+          firstToolChoiceTargetsConfirmWhy: mainProviderTrace[0]?.toolChoiceTypeIsFunction === true
+            && mainProviderTrace[0]?.toolChoiceTargetsConfirmWhy === true,
+          secondRequestHasOneFunctionOutput: mainProviderTrace[1]?.functionOutputCount === 1,
+          secondRequestMatchesFirstCall: firstCallToken !== null
+            && firstCallToken !== undefined
+            && secondRequestFunctionTokens.includes(firstCallToken),
+        },
+        history: {
+          revisionTwoExists: revisionTwoHistory !== undefined,
+          operationSourceMatchesFirstCall: firstCallToken !== null
+            && firstCallToken !== undefined
+            && diagnosticDigest(revisionTwoHistory?.operationSourceId) === firstCallToken,
+          operationTypeIsConfirmWhy: revisionTwoHistory?.operationType === 'confirm-why',
+          baseRevisionIsOne: revisionTwoHistory?.baseRevision === 1,
+          resultRevisionIsTwo: revisionTwoHistory?.resultRevision === 2,
+          receiptSourceMatchesFirstCall: firstCallToken !== null
+            && firstCallToken !== undefined
+            && diagnosticDigest(revisionTwoHistory?.result.sourceId) === firstCallToken,
+          receiptOperationTypeIsConfirmWhy: revisionTwoHistory?.result.operationType === 'confirm-why',
+          receiptRevisionIsTwo: revisionTwoHistory?.result.resultRevision === 2,
+          confirmationActionMatchesMessage:
+            typeof revisionTwoHistory?.confirmationProvenance?.actionId === 'string'
+            && diagnosticDigest(revisionTwoHistory.confirmationProvenance.actionId)
+              === diagnosticDigest(mainTurn.clientMessageId),
+          confirmationTurnMatches: typeof revisionTwoHistory?.confirmationProvenance?.turnId === 'string'
+            && diagnosticDigest(revisionTwoHistory.confirmationProvenance.turnId)
+              === diagnosticDigest(mainTurn.turnId),
+        },
+        mainSafeTextPresent: mainSafeText.length > 0,
+        preparedStepCount: traces.length,
+        safeErrors: mainErrors,
+      };
+      expect(mainDiagnostic, JSON.stringify(mainDiagnostic)).toMatchObject({
+        toolStarts: 1,
+        firstTool: {
+          nameIsConfirmWhy: true,
+          inputKeysExact: true,
+          whyIdMatches: true,
+          whyRevisionMatches: true,
+          presentedTurnMatches: true,
+          sourceMessageMatches: true,
+        },
+        firstToolOutcome: {
+          kind: 'tool-result',
+          callTokenMatches: true,
+          status: 'committed',
+          errorClass: null,
+          authoritativeRevision: 2,
+        },
+        provider: {
+          requestCountAtLeastTwo: true,
+          firstToolChoiceTargetsConfirmWhy: true,
+          secondRequestHasOneFunctionOutput: true,
+          secondRequestMatchesFirstCall: true,
+        },
+        history: {
+          revisionTwoExists: true,
+          operationSourceMatchesFirstCall: true,
+          operationTypeIsConfirmWhy: true,
+          baseRevisionIsOne: true,
+          resultRevisionIsTwo: true,
+          receiptSourceMatchesFirstCall: true,
+          receiptOperationTypeIsConfirmWhy: true,
+          receiptRevisionIsTwo: true,
+          confirmationActionMatchesMessage: true,
+          confirmationTurnMatches: true,
+        },
+      });
       expect(mainSafeText.length).toBeGreaterThan(0);
-      expect(afterMain.map.revision, JSON.stringify({
-        traces, mainSafeLength: mainSafeText.length, mainErrors, providerTrace,
-      })).toBe(2);
+      expect(afterMain.map.revision, JSON.stringify(mainDiagnostic)).toBe(2);
       expect(traces[0]).toMatchObject({ compaction: true });
       expect(traces[0].activeTools).toContain('confirm_why');
       expect(traces.some((trace) => trace.activeTools.includes('propose_purpose_paths'))).toBe(true);
       expect(traces.at(-1)?.activeTools).not.toContain('confirm_why');
-      const mainProviderTrace = providerTrace.slice(mainTraceStart);
       expect(mainProviderTrace[0]?.contextManagementPresent).toBe(true);
       expect(mainProviderTrace.slice(1).every((trace) => trace.contextManagementPresent === false)).toBe(true);
       expect(mainProviderTrace.every((trace) => trace.instructionsPresent === true)).toBe(true);
