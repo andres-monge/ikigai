@@ -62,6 +62,7 @@ const agentRequestSchema = z.object({
 
 const audioLanguageSchema = z.enum(['en', 'es']);
 const METHOD_AUDIO_LIMIT = '2mb';
+const GUARDED_METHOD_PATHS = ['/', '/workspace/operations'];
 const PROVISIONING_HANDOFF_WAIT_MS = 12_000;
 const PROVISIONING_HANDOFF_INITIAL_DELAY_MS = 25;
 const PROVISIONING_HANDOFF_MAX_DELAY_MS = 1_000;
@@ -86,6 +87,11 @@ export interface AgentRouterOptions {
   operationalLog?: (entry: Record<string, unknown>) => void;
   conversationCleanupSignal?: (entry: Record<string, unknown>) => void;
   provisioningHandoffTiming?: ProvisioningHandoffTiming;
+  /**
+   * Exact browser origin allowed to call custom Method POSTs. Production uses
+   * BETTER_AUTH_URL; tests and local harnesses may inject their exact origin.
+   */
+  methodRequestOrigin?: string;
   classifyTurn?: (input: {
     model: LanguageModel;
     message: string;
@@ -97,6 +103,47 @@ export interface AgentRouterOptions {
     state: Awaited<ReturnType<typeof refreshMethodState>>;
     abortSignal?: AbortSignal;
   }) => Promise<ConfirmationAuthorization | undefined>;
+}
+
+function configuredMethodOrigin(value: string): string | undefined {
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return undefined;
+    return parsed.origin;
+  } catch {
+    return undefined;
+  }
+}
+
+function requestHasExactOrigin(request: Request, expectedOrigin: string | undefined): boolean {
+  if (!expectedOrigin) return false;
+  const value = request.get('origin');
+  if (!value) return false;
+  try {
+    const parsed = new URL(value);
+    return value === parsed.origin && parsed.origin === expectedOrigin;
+  } catch {
+    return false;
+  }
+}
+
+function guardCustomMethodPost(expectedOrigin: string | undefined): RequestHandler {
+  return (request, response, next) => {
+    if (request.method === 'OPTIONS') {
+      response.status(405).json({ error: 'Method preflight is not supported' });
+      return;
+    }
+    if (!requestHasExactOrigin(request, expectedOrigin)
+      || request.get('x-revelio-request') !== '1') {
+      response.status(403).json({ error: 'Invalid Method request metadata' });
+      return;
+    }
+    if (!request.is('application/json')) {
+      response.status(415).json({ error: 'Method requests require application/json' });
+      return;
+    }
+    next();
+  };
 }
 
 function gateTerminalUIStream(
@@ -349,6 +396,9 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
   const nextId = options.id ?? randomUUID;
   const loaderPromise = Promise.resolve(options.loader ?? createMethodModuleLoader());
   const log = options.operationalLog ?? ((entry) => console.log(JSON.stringify(entry)));
+  const methodRequestOrigin = configuredMethodOrigin(
+    options.methodRequestOrigin ?? env.BETTER_AUTH_URL,
+  );
   let defaultOpenAI: ReturnType<typeof createOpenAI> | undefined;
   let defaultConversationClient: OpenAIConversationClient | undefined;
 
@@ -380,6 +430,15 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
     }
   };
 
+  // Reject browser-forgeable custom Method writes before authentication,
+  // request logging, lease acquisition, map reads, or provider work. Audio has
+  // its own bounded media contract and intentionally bypasses this JSON guard.
+  const methodPostGuard = guardCustomMethodPost(methodRequestOrigin);
+  // Register against the same Express paths as the eventual handlers so
+  // default case-insensitive and trailing-slash route matching cannot bypass
+  // the guard.
+  router.post(GUARDED_METHOD_PATHS, methodPostGuard);
+  router.options(GUARDED_METHOD_PATHS, methodPostGuard);
   router.use((request, response, next) => {
     const startedAt = Date.now();
     const requestId = nextId();

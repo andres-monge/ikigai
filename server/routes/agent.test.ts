@@ -1,5 +1,5 @@
 import express, { type RequestHandler } from 'express';
-import request from 'supertest';
+import rawRequest from 'supertest';
 import { simulateReadableStream } from 'ai';
 import { MockLanguageModelV4 } from 'ai/test';
 import { describe, expect, it, vi } from 'vitest';
@@ -22,6 +22,12 @@ import { createAgentRouter } from './agent.js';
 
 const USER_ID = 'opaque-user-1';
 const SENTINEL = 'private-prompt-map-history-source-provider-sentinel';
+const METHOD_REQUEST_ORIGIN = 'https://revelio.test';
+const GUARDED_METHOD_POST_PATHS = new Set([
+  '/api/agent',
+  '/api/agent/workspace/operations',
+]);
+type SupertestRequest = ReturnType<ReturnType<typeof rawRequest>['post']>;
 const timestamp = (second: number) => `2030-01-01T00:00:${String(second).padStart(2, '0')}.000Z`;
 
 function usage() {
@@ -161,6 +167,7 @@ function testApp(
   app.use(express.json());
   app.use('/api/agent', routerFactory({
     classifyTurn: async () => 'method',
+    methodRequestOrigin: METHOD_REQUEST_ORIGIN,
     ...input,
   }));
   app.use((error: unknown, _request: express.Request, response: express.Response, _next: express.NextFunction) => {
@@ -169,7 +176,190 @@ function testApp(
   return app;
 }
 
+/**
+ * Successful custom Method POSTs always exercise the browser integrity
+ * contract. Security-negative cases use rawRequest so each missing or invalid
+ * header remains explicit at the call site.
+ */
+function request(app: express.Express) {
+  const client = rawRequest(app);
+  return {
+    get: (path: string) => client.get(path),
+    post: (path: string) => {
+      const pending = client.post(path);
+      return GUARDED_METHOD_POST_PATHS.has(path)
+        ? pending
+            .set('Origin', METHOD_REQUEST_ORIGIN)
+            .set('X-Revelio-Request', '1')
+            .set('Content-Type', 'application/json')
+        : pending;
+    },
+  };
+}
+
 describe('protected Method routes', () => {
+  describe('custom POST request integrity', () => {
+    const agentBody = { id: 'client-message-1', message: 'hello' };
+    const operationBody = {
+      operationId: 'operation-1',
+      clientMessageId: 'client-message-1',
+      expectedRevision: 1,
+      operation: { type: 'confirm-why', input: {} },
+    };
+
+    it.each([
+      ['agent', '/api/agent', agentBody],
+      ['workspace operation', '/api/agent/workspace/operations', operationBody],
+    ] as const)('rejects invalid browser integrity metadata before auth on the %s route', async (_label, path, body) => {
+      const cases = [
+        {
+          label: 'missing origin',
+          apply: (pending: SupertestRequest) => pending,
+        },
+        {
+          label: 'malformed origin',
+          apply: (pending: SupertestRequest) => pending.set('Origin', 'not-an-origin'),
+        },
+        {
+          label: 'origin with a path',
+          apply: (pending: SupertestRequest) => pending.set('Origin', `${METHOD_REQUEST_ORIGIN}/not-an-origin`),
+        },
+        {
+          label: 'cross origin',
+          apply: (pending: SupertestRequest) => pending.set('Origin', 'https://attacker.example'),
+        },
+        {
+          label: 'sibling Vercel origin',
+          apply: (pending: SupertestRequest) => pending.set('Origin', 'https://revelio-me-git-feature.vercel.app'),
+        },
+        {
+          label: 'missing custom header',
+          apply: (pending: SupertestRequest) => pending.set('Origin', METHOD_REQUEST_ORIGIN),
+        },
+        {
+          label: 'invalid custom header',
+          apply: (pending: SupertestRequest) => pending
+            .set('Origin', METHOD_REQUEST_ORIGIN)
+            .set('X-Revelio-Request', 'true'),
+        },
+      ];
+
+      for (const testCase of cases) {
+        const requireAuth = vi.fn((_request: express.Request, response: express.Response) => {
+          response.status(401).json({ error: 'Authentication required' });
+        });
+        const operationalLog = vi.fn();
+        const storage = createStorage();
+        const model = new MockLanguageModelV4({ doStream: textStream('must not run') as never });
+        const app = testApp({
+          storage,
+          requireAuth,
+          agentEnabled: true,
+          model,
+          operationalLog,
+        });
+        const pending = testCase.apply(rawRequest(app)
+          .post(path)
+          .set('Content-Type', 'application/json'));
+        const response = await pending.send(body);
+
+        expect(response.status, testCase.label).toBe(403);
+        expect(requireAuth, testCase.label).not.toHaveBeenCalled();
+        expect(operationalLog, testCase.label).not.toHaveBeenCalled();
+        expect(storage.getOrCreateCareerMap, testCase.label).not.toHaveBeenCalled();
+        expect(storage.beginAgentTurn, testCase.label).not.toHaveBeenCalled();
+        expect(storage.beginWorkspaceActionTurn, testCase.label).not.toHaveBeenCalled();
+        expect(storage.persistCareerMapOperation, testCase.label).not.toHaveBeenCalled();
+        expect(model.doStreamCalls, testCase.label).toHaveLength(0);
+      }
+    });
+
+    it.each([
+      '/api/agent/workspace/operations/',
+      '/api/agent/WORKSPACE/OPERATIONS',
+    ])('does not allow Express path normalization to bypass the POST guard for %s', async (path) => {
+      const requireAuth = vi.fn((_request: express.Request, response: express.Response) => {
+        response.status(401).end();
+      });
+      const storage = createStorage();
+      const response = await rawRequest(testApp({
+        storage,
+        requireAuth,
+        agentEnabled: true,
+        operationalLog: vi.fn(),
+      }))
+        .post(path)
+        .set('Content-Type', 'application/json')
+        .send(operationBody);
+
+      expect(response.status).toBe(403);
+      expect(requireAuth).not.toHaveBeenCalled();
+      expect(storage.beginWorkspaceActionTurn).not.toHaveBeenCalled();
+      expect(storage.persistCareerMapOperation).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['agent', '/api/agent', agentBody],
+      ['workspace operation', '/api/agent/workspace/operations', operationBody],
+    ] as const)('rejects non-JSON bodies before auth on the %s route', async (_label, path, body) => {
+      const requireAuth = vi.fn((_request: express.Request, response: express.Response) => {
+        response.status(401).json({ error: 'Authentication required' });
+      });
+      const operationalLog = vi.fn();
+      const storage = createStorage();
+      const response = await rawRequest(testApp({
+        storage,
+        requireAuth,
+        agentEnabled: true,
+        operationalLog,
+      }))
+        .post(path)
+        .set('Origin', METHOD_REQUEST_ORIGIN)
+        .set('X-Revelio-Request', '1')
+        .type('form')
+        .send(body);
+
+      expect(response.status).toBe(415);
+      expect(requireAuth).not.toHaveBeenCalled();
+      expect(operationalLog).not.toHaveBeenCalled();
+      expect(storage.getOrCreateCareerMap).not.toHaveBeenCalled();
+      expect(storage.beginAgentTurn).not.toHaveBeenCalled();
+      expect(storage.beginWorkspaceActionTurn).not.toHaveBeenCalled();
+      expect(storage.persistCareerMapOperation).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['agent', '/api/agent'],
+      ['workspace operation', '/api/agent/workspace/operations'],
+    ] as const)('exposes no credentialed CORS preflight on the %s route', async (_label, path) => {
+      const requireAuth = vi.fn((_request: express.Request, response: express.Response) => {
+        response.status(401).end();
+      });
+      const operationalLog = vi.fn();
+      const storage = createStorage();
+      const response = await rawRequest(testApp({
+        storage,
+        requireAuth,
+        agentEnabled: true,
+        operationalLog,
+      }))
+        .options(path)
+        .set('Origin', 'https://revelio-me-git-feature.vercel.app')
+        .set('Access-Control-Request-Method', 'POST')
+        .set('Access-Control-Request-Headers', 'content-type,x-revelio-request')
+        .set('Cookie', 'better-auth.session_token=opaque');
+
+      expect(response.status).toBe(405);
+      expect(response.headers['access-control-allow-origin']).toBeUndefined();
+      expect(response.headers['access-control-allow-credentials']).toBeUndefined();
+      expect(requireAuth).not.toHaveBeenCalled();
+      expect(operationalLog).not.toHaveBeenCalled();
+      expect(storage.getOrCreateCareerMap).not.toHaveBeenCalled();
+      expect(storage.beginAgentTurn).not.toHaveBeenCalled();
+      expect(storage.beginWorkspaceActionTurn).not.toHaveBeenCalled();
+    });
+  });
+
   it('requires a server session before reading or mutating Method state', async () => {
     const storage = createStorage();
     const app = testApp({ storage, requireAuth: unauthenticated, agentEnabled: true, operationalLog: vi.fn() });
@@ -925,7 +1115,11 @@ describe('protected Method routes', () => {
       if (!address || typeof address === 'string') throw new Error('Expected a TCP test server.');
       const firstResponse = await fetch(`http://127.0.0.1:${address.port}/api/agent`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: {
+          'content-type': 'application/json',
+          origin: METHOD_REQUEST_ORIGIN,
+          'x-revelio-request': '1',
+        },
         body: JSON.stringify({ id: firstTurn.clientMessageId, message: 'First durable message.' }),
       });
       if (!firstResponse.body) throw new Error('Expected a streamed response body.');
