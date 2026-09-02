@@ -40,7 +40,6 @@ import {
   resolveInternalContextItemIds,
   type ConversationItemsClient,
 } from '../ai/history.js';
-import { createNativeSearchEvidenceLedger } from '../ai/research.js';
 import {
   executeWorkspaceTool,
   OPERATION_TO_TOOL_NAME,
@@ -948,13 +947,6 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
         }).catch(() => undefined);
         throwIfRouteAborted(abort.signal);
       }
-      const evidence = createNativeSearchEvidenceLedger({
-        storage,
-        userId: identity.userId,
-        turnId: turn.turnId,
-        leaseId: turn.leaseId,
-        now,
-      });
       let streamError: unknown;
       const loader = await loaderPromise;
       if (!conversationId) throw new Error('ConversationProvisioningUnavailable');
@@ -973,7 +965,6 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
             turn: turn!,
             turnSequence,
             occurredAt: now().toISOString(),
-            evidence,
             currentMessage: parsed.data.message,
             abortSignal: abort.signal,
             internalContextMarker: (responseIndex) => options.internalContextMarker?.(responseIndex)

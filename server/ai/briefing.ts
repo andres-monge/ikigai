@@ -5,7 +5,6 @@ import {
   selectLatestAcceptedProject,
   type CareerMap,
   type MethodCheckpoint,
-  type SourceProvenance,
 } from '../../shared/career-map/index.js';
 
 export class CareerMapBriefingError extends Error {
@@ -24,36 +23,6 @@ export interface CareerMapBriefing {
   pendingDecision: MethodCheckpoint['pendingDecision'];
   markdown: string;
   modelMarkdown: string;
-}
-
-type BriefingProjection = 'canonical' | 'model';
-
-function sourceLine(source: SourceProvenance, projection: BriefingProjection): string {
-  if (source.kind === 'user-supplied-source') {
-    return `- Explorer-provided source: ${source.label}${source.url ? ` (${source.url})` : ''}`;
-  }
-  if (projection === 'model') {
-    return 'bindingVersion' in source
-      ? `- Research grounding for ${source.canonicalField} is ${source.support}; retrieved title and content omitted from instructions.`
-      : '- Predecessor research provenance recorded server-side; retrieved title and content omitted from instructions.';
-  }
-  const title = source.title ?? source.url;
-  const result = source.providerResultId ? `; result ${source.providerResultId}` : '';
-  const excerpt = source.excerpt ? ` — ${source.excerpt}` : '';
-  const binding = 'bindingVersion' in source
-    ? `; call ${source.providerCallId}; target ${source.targetId}@${source.targetRevision}; field ${source.canonicalField}; exact claim ${JSON.stringify(source.exactClaim)}; citation ${source.citation.start}-${source.citation.end}`
-    : '';
-  return `- Research source: ${title} (${source.url}; ${source.support}${result}${binding}; retrieved ${source.retrievedAt})${excerpt}`;
-}
-
-function appendSources(
-  lines: string[],
-  sources: SourceProvenance[] | undefined,
-  projection: BriefingProjection,
-): void {
-  if (!sources?.length) return;
-  lines.push('Sources:');
-  lines.push(...sources.map((source) => sourceLine(source, projection)));
 }
 
 function appendWhy(lines: string[], map: CareerMap): void {
@@ -91,27 +60,23 @@ function pathByRevision(map: CareerMap, id: string, revision: number) {
 function appendExactPath(
   lines: string[],
   path: ReturnType<typeof pathByRevision>,
-  projection: BriefingProjection,
 ): void {
   if (!path) throw new CareerMapBriefingError();
   lines.push(`Purpose Path: ${path.name} (${path.id}@${path.revision}; ${path.selection})`);
   lines.push(`Serves Why: ${path.servesWhy}`);
   lines.push(`Central unknown: ${path.centralUnknown}`);
   lines.push(`Practical fit: ${path.practicalFit}`);
-  appendSources(lines, path.sources, projection);
 }
 
 function appendExactProject(
   lines: string[],
   project: CareerMap['projects'][number] | undefined,
-  projection: BriefingProjection,
 ): void {
   if (!project) throw new CareerMapBriefingError();
   lines.push(`Project ${project.number}: ${project.title} (${project.id}@${project.revision}; ${project.agreementStatus}; ${project.workStatus})`);
   lines.push(`Outcome: ${project.outcome}`);
   lines.push(`Learning question: ${project.decisionQuestion}`);
   lines.push(`First step: ${project.firstStep}`);
-  appendSources(lines, project.sources, projection);
 }
 
 function appendExactReflection(
@@ -129,7 +94,6 @@ function appendExactReviewContext(
   lines: string[],
   map: CareerMap,
   review: NonNullable<MethodCheckpoint['review']>,
-  projection: BriefingProjection,
 ): void {
   lines.push('## Exact basis-review context');
   lines.push(`Exact review target: ${review.targetKind} ${review.targetId}@${review.targetRevision}`);
@@ -142,7 +106,7 @@ function appendExactReviewContext(
       if (!why) throw new CareerMapBriefingError();
       lines.push(`Direct Why basis: ${why.id}@${why.revision} — ${why.statement}`);
       lines.push(`Purpose Path set: ${set.id}@${set.revision}; ${set.status}`);
-      for (const path of set.paths) appendExactPath(lines, path, projection);
+      for (const path of set.paths) appendExactPath(lines, path);
       return;
     }
     case 'project': {
@@ -151,8 +115,8 @@ function appendExactReviewContext(
       const path = pathByRevision(map, project.basisPath.id, project.basisPath.revision);
       if (!path) throw new CareerMapBriefingError();
       lines.push(`Direct Purpose Path basis: ${path.id}@${path.revision}`);
-      appendExactPath(lines, path, projection);
-      appendExactProject(lines, project, projection);
+      appendExactPath(lines, path);
+      appendExactProject(lines, project);
       return;
     }
     case 'reflection': {
@@ -161,7 +125,7 @@ function appendExactReviewContext(
       const project = exactRevision(map.projects, reflection.projectBasis.id, reflection.projectBasis.revision);
       if (!project) throw new CareerMapBriefingError();
       lines.push(`Direct project basis: ${project.id}@${project.revision}`);
-      appendExactProject(lines, project, projection);
+      appendExactProject(lines, project);
       appendExactReflection(lines, reflection);
       return;
     }
@@ -183,9 +147,8 @@ function appendExactReviewContext(
       const path = pathByRevision(map, peer.basisPath.id, peer.basisPath.revision);
       if (!path) throw new CareerMapBriefingError();
       lines.push(`Direct Purpose Path basis: ${path.id}@${path.revision}`);
-      appendExactPath(lines, path, projection);
+      appendExactPath(lines, path);
       lines.push(`Peer exposure: ${peer.subjectKind}: ${peer.subject} (${peer.id}@${peer.revision}; ${peer.status}) — ${peer.insight}`);
-      appendSources(lines, peer.sources, projection);
       return;
     }
     case 'commitment': {
@@ -229,7 +192,6 @@ function appendExactReviewContext(
       lines.push(`Side Door set: ${set.id}@${set.revision}; ${set.status}`);
       for (const door of set.doors) {
         lines.push(`- ${door.name} (${door.id}@${door.revision}; ${door.selection}) — ${door.firstMove}`);
-        appendSources(lines, door.sources, projection);
       }
       return;
     }
@@ -253,7 +215,6 @@ function appendPath(
   lines: string[],
   map: CareerMap,
   includeAlternatives: boolean,
-  projection: BriefingProjection,
 ): void {
   const set = map.pathSets.findLast((item) => item.status === 'suggested')
     ?? map.pathSets.findLast((item) => item.status === 'active');
@@ -268,14 +229,12 @@ function appendPath(
     lines.push(`Serves Why: ${path.servesWhy}`);
     lines.push(`Central unknown: ${path.centralUnknown}`);
     lines.push(`Practical fit: ${path.practicalFit}`);
-    appendSources(lines, path.sources, projection);
   }
 }
 
 function appendProject(
   lines: string[],
   map: CareerMap,
-  projection: BriefingProjection,
   selectedProject?: CareerMap['projects'][number],
 ): void {
   const suggested = map.projects.findLast((item) => item.agreementStatus === 'suggested');
@@ -287,14 +246,12 @@ function appendProject(
   lines.push(`Outcome: ${project.outcome}`);
   lines.push(`Learning question: ${project.decisionQuestion}`);
   lines.push(`First step: ${project.firstStep}`);
-  appendSources(lines, project.sources, projection);
 
   const options = map.projectOptionSets.findLast((set) => set.status === 'suggested');
   if (options) {
     lines.push('### Pending equal-weight Path Project options');
     for (const option of options.projects) {
       lines.push(`- ${option.title} (${option.id}@${option.revision}; ${option.selection}) — ${option.decisionQuestion}`);
-      appendSources(lines, option.sources, projection);
     }
   }
 }
@@ -367,7 +324,6 @@ function reflectionAndProjectForCheckpoint(
 function appendProjectLearningEvidence(
   lines: string[],
   map: CareerMap,
-  projection: BriefingProjection,
 ): void {
   const projects = map.projects
     .filter((project) => project.agreementStatus === 'accepted')
@@ -386,7 +342,6 @@ function appendProjectLearningEvidence(
     lines.push(`### Project ${project.number}: ${project.title} (${project.id}@${project.revision}; ${project.workStatus})`);
     lines.push(`Outcome: ${project.outcome}`);
     lines.push(`Learning question: ${project.decisionQuestion}`);
-    appendSources(lines, project.sources, projection);
     const projectReflections = reflectionsByProject.get(JSON.stringify([project.id, project.revision])) ?? [];
     for (const reflection of projectReflections) {
       lines.push(`Reflection ${reflection.id}@${reflection.revision} (${reflection.status}):`);
@@ -397,7 +352,7 @@ function appendProjectLearningEvidence(
   }
 }
 
-function appendPeers(lines: string[], map: CareerMap, projection: BriefingProjection): void {
+function appendPeers(lines: string[], map: CareerMap): void {
   const path = selectActivePurposePath(map);
   if (!path) return;
   const peers = map.peerExposures.filter(
@@ -409,14 +364,13 @@ function appendPeers(lines: string[], map: CareerMap, projection: BriefingProjec
   lines.push('## Relevant peer exposure');
   for (const peer of peers) {
     lines.push(`- ${peer.subjectKind}: ${peer.subject} (${peer.id}@${peer.revision}; ${peer.status}) — ${peer.insight}`);
-    appendSources(lines, peer.sources, projection);
   }
   if (map.commitmentIntent) {
     lines.push(`Commitment intent: ${map.commitmentIntent.status} (${map.commitmentIntent.id}@${map.commitmentIntent.revision})`);
   }
 }
 
-function appendSideDoors(lines: string[], map: CareerMap, projection: BriefingProjection): void {
+function appendSideDoors(lines: string[], map: CareerMap): void {
   if (map.provisionalCommitment) {
     lines.push('## Provisional commitment');
     lines.push(`${map.provisionalCommitment.id}@${map.provisionalCommitment.revision}; path ${map.provisionalCommitment.basisPath.id}@${map.provisionalCommitment.basisPath.revision}`);
@@ -434,7 +388,6 @@ function appendSideDoors(lines: string[], map: CareerMap, projection: BriefingPr
   lines.push(`Set: ${set.id}@${set.revision}; proof basis ${set.basisProof.id}@${set.basisProof.revision}`);
   for (const door of set.doors) {
     lines.push(`- ${door.name} (${door.id}@${door.revision}; ${door.selection}) — ${door.firstMove}`);
-    appendSources(lines, door.sources, projection);
   }
   const doorRevisions = new Set(set.doors.map((door) => `${door.id}@${door.revision}`));
   for (const outcome of map.routeOutcomes.filter(
@@ -447,7 +400,6 @@ function appendSideDoors(lines: string[], map: CareerMap, projection: BriefingPr
 function renderCareerMapBriefing(
   map: CareerMap,
   checkpoint: MethodCheckpoint,
-  projection: BriefingProjection,
 ): string {
   const lines = [
     '# Revelio career-map briefing',
@@ -461,7 +413,7 @@ function renderCareerMapBriefing(
       `Review ${checkpoint.review.targetKind} ${checkpoint.review.targetId}@${checkpoint.review.targetRevision}; `
       + `invalidated by ${checkpoint.review.basisKind} ${checkpoint.review.basisId}@${checkpoint.review.basisRevision}.`,
     );
-    appendExactReviewContext(lines, map, checkpoint.review, projection);
+    appendExactReviewContext(lines, map, checkpoint.review);
   }
   if (checkpoint.focus) {
     lines.push('## Explorer-opened focus');
@@ -478,7 +430,7 @@ function renderCareerMapBriefing(
     || checkpoint.pendingDecision?.kind === 'path-revision-confirmation'
     || checkpoint.review?.targetKind === 'path-set';
   if (checkpoint.module !== 'form-foundation') {
-    appendPath(lines, map, includeAlternatives, projection);
+    appendPath(lines, map, includeAlternatives);
   }
 
   switch (checkpoint.module) {
@@ -497,23 +449,23 @@ function renderCareerMapBriefing(
       break;
     case 'design-path-project':
     case 'guide-path-project':
-      appendProject(lines, map, projection);
+      appendProject(lines, map);
       break;
     case 'interpret-path-project':
       {
         const relevant = reflectionAndProjectForCheckpoint(map, checkpoint);
-        appendProject(lines, map, projection, relevant.project);
+        appendProject(lines, map, relevant.project);
         appendReflection(lines, map, relevant.reflection);
       }
       break;
     case 'find-relevant-peers':
-      appendProject(lines, map, projection);
-      appendPeers(lines, map, projection);
+      appendProject(lines, map);
+      appendPeers(lines, map);
       break;
     case 'enter-side-doors':
-      appendProjectLearningEvidence(lines, map, projection);
-      appendPeers(lines, map, projection);
-      appendSideDoors(lines, map, projection);
+      appendProjectLearningEvidence(lines, map);
+      appendPeers(lines, map);
+      appendSideDoors(lines, map);
       break;
   }
 
@@ -531,7 +483,7 @@ export function compileCareerMapBriefing(input: unknown): CareerMapBriefing {
     mapRevision: map.revision,
     module: checkpoint.module,
     pendingDecision: checkpoint.pendingDecision,
-    markdown: renderCareerMapBriefing(map, checkpoint, 'canonical'),
-    modelMarkdown: renderCareerMapBriefing(map, checkpoint, 'model'),
+    markdown: renderCareerMapBriefing(map, checkpoint),
+    modelMarkdown: renderCareerMapBriefing(map, checkpoint),
   };
 }

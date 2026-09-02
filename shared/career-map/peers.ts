@@ -5,7 +5,6 @@ import {
   modelPresentationSchema,
   revisionRefSchema,
   revisionSchema,
-  sourceProvenanceListSchema,
   userActionProvenanceSchema,
 } from './common';
 
@@ -15,7 +14,6 @@ export const peerExposureInputSchema = z.object({
   subjectKind: z.enum(['real-person', 'community', 'first-person-source']),
   subject: z.string().min(1).max(2_000),
   insight: z.string().min(1).max(6_000),
-  sources: sourceProvenanceListSchema.optional(),
 }).strict();
 
 export const peerExposureSchema = peerExposureInputSchema.extend({

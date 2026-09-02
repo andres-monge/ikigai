@@ -15,13 +15,6 @@
       "when": 1788216590551,
       "tag": "0001_typical_boom_boom",
       "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1788360711015,
-      "tag": "0002_smiling_random",
-      "breakpoints": true
     }
   ]
 }

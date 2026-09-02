@@ -12,36 +12,23 @@ import {
   createWorkspaceActionPersistenceContext,
   MethodErasurePendingError,
   PostgresStorage,
-  ResearchAttemptConflictError,
-  ResearchAttemptSourceError,
   TurnLeaseIdentityConflictError,
   TurnLeaseLostError,
   type StorageFaultStage,
 } from './storage.js';
-import { compileCareerMapBriefing } from './ai/briefing.js';
-import {
-  loadConversationHistory,
-} from './ai/history.js';
-import { createMethodModuleLoader } from './ai/method/loader.js';
-import { NativeSearchEvidenceLedger } from './ai/research.js';
-import { createMethodTools, executeWorkspaceTool, refreshMethodState } from './ai/tools.js';
 import {
   agentConversationMappings,
   agentTurnLeases,
   agentTurns,
   careerMapDrafts,
-  careerMapEvidenceAssociations,
   careerMapHistory,
-  careerMapResearchAttempts,
   careerMaps,
   methodErasureJobs,
 } from '../shared/schema.js';
 import {
-  normalizeResearchClaim,
   type CareerMapOperation,
   type PathProjectInput,
   type PurposePathInput,
-  type ResearchAttempt,
   type SideDoorInput,
 } from '../shared/career-map/index.js';
 
@@ -99,10 +86,7 @@ function evidenceOperation(
   };
 }
 
-function paths(
-  sourceUrl = 'https://example.com/path-source',
-  includeValidatedSource = false,
-): [PurposePathInput, PurposePathInput, PurposePathInput] {
+function paths(): [PurposePathInput, PurposePathInput, PurposePathInput] {
   return [1, 2, 3].map((number) => ({
     id: id(`path-${number}`),
     revision: 1,
@@ -113,55 +97,7 @@ function paths(
     centralUnknown: `Unknown ${number}`,
     projectPreview: `Project preview ${number}`,
     practicalFit: `Can start beside current work ${number}`,
-    ...(number === 1 && includeValidatedSource ? {
-      sources: [{
-        kind: 'cited-research' as const,
-        bindingVersion: 2 as const,
-        sourceHandle: id('source-handle'),
-        providerCallId: id('provider-call'),
-        providerResultId: id('provider-result'),
-        targetId: id('path-1'),
-        targetRevision: 2,
-        canonicalField: 'purposePath.practicalFit',
-        exactClaim: 'Can start beside current work 1',
-        url: sourceUrl,
-        retrievedAt: at(3),
-        title: 'Current public source',
-        excerpt: 'Can start beside current work 1',
-        support: 'server-validated' as const,
-        citation: {
-          start: 0,
-          end: 31,
-          exactClaimStart: 0,
-          exactClaimEnd: 31,
-          textHash: 'a'.repeat(64),
-        },
-      }],
-    } : {}),
   })) as [PurposePathInput, PurposePathInput, PurposePathInput];
-}
-
-function amendedAttempt(input: {
-  id: string;
-  status: 'pending' | 'succeeded' | 'insufficient' | 'failed';
-  targetId: string;
-  targetRevision: number;
-  sources?: NonNullable<PurposePathInput['sources']>;
-  checkpoint?: 'form-foundation' | 'create-purpose-paths';
-  errorClass?: string;
-}) {
-  return {
-    schemaVersion: 2 as const,
-    id: input.id,
-    status: input.status,
-    checkpoint: input.checkpoint ?? 'create-purpose-paths' as const,
-    moduleVersion: 'method-test@1',
-    targetId: input.targetId,
-    targetRevision: input.targetRevision,
-    attemptedAt: at(4),
-    sources: input.sources ?? [],
-    ...(input.errorClass ? { errorClass: input.errorClass } : {}),
-  };
 }
 
 function researchablePaths(): [PurposePathInput, PurposePathInput, PurposePathInput] {
@@ -310,7 +246,6 @@ async function eraseOwner(userId: string) {
 beforeEach(() => {
   now = new Date('2030-01-01T00:00:00.000Z');
 });
-
 afterAll(async () => {
   try {
     for (const userId of owners) await eraseOwner(userId);
@@ -379,699 +314,6 @@ describe('PostgresStorage Method map, history, and ownership', () => {
     expect(await storage.listCareerMapHistory(userId)).toHaveLength(1);
   });
 
-  it('round-trips cited map provenance and insufficient research attempts without making a proposal', async () => {
-    const userId = owner('provenance');
-    await storage.getOrCreateCareerMap(userId);
-    const turn = await beginTurn(userId, 'provenance');
-    const basisOperations: CareerMapOperation[] = [
-      {
-        type: 'propose-why', sourceId: id('source-why-propose'), expectedRevision: 0, occurredAt: at(1),
-        payload: { why: { id: id('why'), revision: 1, statement: 'I work to make complex choices humane.', serves: 'People facing important choices', pointOfView: 'Clarity should create agency.' }, presentation: presentation(1) },
-      },
-      {
-        type: 'confirm-why', sourceId: id('source-why-confirm'), expectedRevision: 1, occurredAt: at(2),
-        payload: { whyId: id('why'), whyRevision: 1, action: action(2) },
-      },
-    ];
-    for (const operation of basisOperations) expect((await persist(userId, turn.leaseId, operation)).status).toBe('committed');
-    const attempt = amendedAttempt({
-      id: id('research-attempt'), status: 'succeeded', targetId: id('path-1'), targetRevision: 2,
-      sources: paths(undefined, true)[0].sources,
-    });
-    const [validatedSource] = attempt.sources;
-    if (!validatedSource || validatedSource.kind !== 'cited-research' || !('bindingVersion' in validatedSource)) {
-      throw new Error('Missing amended cited source fixture.');
-    }
-    const insufficientSource = {
-      ...validatedSource,
-      support: 'cited-provenance' as const,
-      sourceHandle: id('insufficient-source-handle'),
-      providerResultId: id('insufficient-provider-result'),
-      url: 'https://example.com/insufficient-source',
-      title: 'An incomplete research result',
-      excerpt: undefined,
-    };
-    const insufficientAttempt = amendedAttempt({
-      id: id('insufficient-research-attempt'), status: 'insufficient', targetId: id('path-1'),
-      targetRevision: 2, sources: [insufficientSource],
-    });
-    await expect(storage.recordResearchAttempt(userId, turn.leaseId, {
-      ...attempt,
-      id: id('unsupported-research-attempt'),
-      sources: [{ ...validatedSource, sourceHandle: id('unsupported-source'), excerpt: undefined }],
-    })).rejects.toThrow();
-    expect(await storage.recordResearchAttempt(userId, turn.leaseId, attempt)).toEqual(attempt);
-    expect(await storage.recordResearchAttempt(userId, turn.leaseId, insufficientAttempt)).toEqual(insufficientAttempt);
-    const proposedPaths: CareerMapOperation = {
-      type: 'propose-purpose-paths', sourceId: id('source-paths'), expectedRevision: 2, occurredAt: at(3),
-      payload: { setId: id('path-set'), setRevision: 1, paths: paths(undefined, true), presentation: presentation(3) },
-    };
-    const insufficientlyGrounded = structuredClone(proposedPaths);
-    if (insufficientlyGrounded.type === 'propose-purpose-paths') {
-      insufficientlyGrounded.payload.paths[0].sources![0] = insufficientSource;
-    }
-    const insufficientlyGroundedResult = await persist(userId, turn.leaseId, insufficientlyGrounded);
-    expect(insufficientlyGroundedResult.status).toBe('rejected');
-    if (insufficientlyGroundedResult.status === 'rejected') {
-      expect(insufficientlyGroundedResult.error.code).toBe('invalid-operation');
-    }
-    const fabricatedProvenance = structuredClone(proposedPaths);
-    if (fabricatedProvenance.type === 'propose-purpose-paths') {
-      fabricatedProvenance.payload.paths[0].sources![0] = {
-        kind: 'cited-research',
-        support: 'cited-provenance',
-        sourceHandle: id('fabricated-provenance-handle'),
-        url: 'https://example.com/fabricated-provenance',
-        retrievedAt: at(3),
-        title: 'Unresolved source',
-      };
-    }
-    const fabricatedProvenanceResult = await persist(userId, turn.leaseId, fabricatedProvenance);
-    expect(fabricatedProvenanceResult.status).toBe('rejected');
-    if (fabricatedProvenanceResult.status === 'rejected') {
-      expect(fabricatedProvenanceResult.error.code).toBe('invalid-operation');
-    }
-    const fabricated = structuredClone(proposedPaths);
-    if (fabricated.type === 'propose-purpose-paths') {
-      fabricated.payload.paths[0].sources![0] = {
-        ...fabricated.payload.paths[0].sources![0],
-        providerResultId: id('fabricated-result'),
-      } as never;
-    }
-    const fabricatedResult = await persist(userId, turn.leaseId, fabricated);
-    expect(fabricatedResult.status).toBe('rejected');
-    if (fabricatedResult.status === 'rejected') expect(fabricatedResult.error.code).toBe('invalid-operation');
-    expect((await persist(userId, turn.leaseId, proposedPaths)).status).toBe('committed');
-    expect(await storage.listResearchSourceAssociations(userId)).toEqual([
-      expect.objectContaining({
-        userId,
-        attemptId: attempt.id,
-        turnId: turn.turnId,
-        leaseId: turn.leaseId,
-        operationSourceId: id('source-paths'),
-        resultRevision: 3,
-        sourceHandle: validatedSource.sourceHandle,
-        association: expect.objectContaining({
-          checkpoint: 'create-purpose-paths',
-          canonicalField: 'purposePath.practicalFit',
-          exactClaim: 'Can start beside current work 1',
-          providerCallId: id('provider-call'),
-          providerResultId: id('provider-result'),
-          support: 'server-validated',
-        }),
-      }),
-    ]);
-    const [storedAssociation] = await db.select()
-      .from(careerMapEvidenceAssociations)
-      .where(eq(careerMapEvidenceAssociations.userId, userId));
-    await db.update(careerMapEvidenceAssociations)
-      .set({ association: { ...storedAssociation.association, checkpoint: 'form-foundation' } })
-      .where(eq(careerMapEvidenceAssociations.id, storedAssociation.id));
-    expect(await storage.auditCareerMapIntegrity()).toMatchObject({
-      invalidRecords: expect.arrayContaining([{
-        userId,
-        reason: 'evidence-association-mismatch',
-      }]),
-      zeroInvalid: false,
-    });
-    await db.update(careerMapEvidenceAssociations)
-      .set({ association: storedAssociation.association })
-      .where(eq(careerMapEvidenceAssociations.id, storedAssociation.id));
-    const [storedAttempt] = await db.select()
-      .from(careerMapResearchAttempts)
-      .where(and(
-        eq(careerMapResearchAttempts.userId, userId),
-        eq(careerMapResearchAttempts.id, attempt.id),
-      ));
-    const forgedModuleVersion = 'forged-method-module@9';
-    await db.update(careerMapResearchAttempts)
-      .set({ attempt: { ...attempt, moduleVersion: forgedModuleVersion } })
-      .where(eq(careerMapResearchAttempts.id, storedAttempt.id));
-    await db.update(careerMapEvidenceAssociations)
-      .set({ association: { ...storedAssociation.association, moduleVersion: forgedModuleVersion } })
-      .where(eq(careerMapEvidenceAssociations.id, storedAssociation.id));
-    expect(await storage.auditCareerMapIntegrity()).toMatchObject({
-      invalidRecords: expect.arrayContaining([{
-        userId,
-        reason: 'evidence-association-mismatch',
-      }]),
-      zeroInvalid: false,
-    });
-    await db.update(careerMapResearchAttempts)
-      .set({ attempt: storedAttempt.attempt })
-      .where(eq(careerMapResearchAttempts.id, storedAttempt.id));
-    await db.update(careerMapEvidenceAssociations)
-      .set({ association: storedAssociation.association })
-      .where(eq(careerMapEvidenceAssociations.id, storedAssociation.id));
-    expect(await storage.recordResearchAttempt(userId, turn.leaseId, attempt)).toEqual(attempt);
-    await expect(storage.recordResearchAttempt(userId, turn.leaseId, {
-      ...attempt,
-      status: 'insufficient',
-    })).rejects.toThrow('Research attempt identity was reused');
-    const otherUserId = owner('provenance-other');
-    await storage.getOrCreateCareerMap(otherUserId);
-    const otherTurn = await beginTurn(otherUserId, 'provenance-other');
-    expect((await persist(otherUserId, otherTurn.leaseId, {
-      ...basisOperations[0], sourceId: id('other-why-propose'), expectedRevision: 0,
-    })).status).toBe('committed');
-    expect((await persist(otherUserId, otherTurn.leaseId, {
-      ...basisOperations[1], sourceId: id('other-why-confirm'), expectedRevision: 1,
-    })).status).toBe('committed');
-    const crossUserSource = await persist(otherUserId, otherTurn.leaseId, {
-      ...proposedPaths,
-      sourceId: id('other-source-paths'),
-    });
-    expect(crossUserSource.status).toBe('rejected');
-    if (crossUserSource.status === 'rejected') expect(crossUserSource.error.code).toBe('invalid-operation');
-    expect(await storage.listResearchAttempts(userId)).toEqual([attempt, insufficientAttempt]);
-    const loaded = await storage.loadCareerMap(userId);
-    expect(loaded.status).toBe('ready');
-    if (loaded.status === 'ready') expect(loaded.map.pathSets[0].paths[0].sources?.[0]).toEqual(attempt.sources[0]);
-    const history = await storage.listCareerMapHistory(userId);
-    expect(history[1].confirmationProvenance).toEqual({
-      kind: 'ui-action',
-      actionId: turn.clientMessageId,
-      turnId: turn.turnId,
-      turnSequence: 2,
-      occurredAt: at(2),
-    });
-    await db.delete(careerMapResearchAttempts).where(eq(careerMapResearchAttempts.userId, userId));
-    expect(await storage.loadCareerMap(userId)).toMatchObject({
-      status: 'repair-required',
-      reason: 'evidence-association-mismatch',
-    });
-    await eraseOwner(userId);
-  });
-
-  it('authorizes only an exact normalized member of the purpose-path evidence field', async () => {
-    const userId = owner('research-evidence-array');
-    await storage.getOrCreateCareerMap(userId);
-    const turn = await beginTurn(userId, 'research-evidence-array');
-    expect((await persist(userId, turn.leaseId, {
-      type: 'propose-why', sourceId: id('evidence-array-why-propose'), expectedRevision: 0, occurredAt: at(1),
-      payload: { why: { id: id('evidence-array-why'), revision: 1, statement: 'Make career evidence usable.', serves: 'People testing a next move', pointOfView: 'Exact evidence should remain attributable.' }, presentation: presentation(1) },
-    })).status).toBe('committed');
-    expect((await persist(userId, turn.leaseId, {
-      type: 'confirm-why', sourceId: id('evidence-array-why-confirm'), expectedRevision: 1, occurredAt: at(2),
-      payload: { whyId: id('evidence-array-why'), whyRevision: 1, action: action(2) },
-    })).status).toBe('committed');
-
-    const exactClaim = 'Café apprenticeship evidence';
-    const source = (suffix: string, canonicalField: string, claim: string) => ({
-      kind: 'cited-research' as const,
-      bindingVersion: 2 as const,
-      sourceHandle: id(`evidence-array-handle-${suffix}`),
-      providerCallId: id(`evidence-array-call-${suffix}`),
-      providerResultId: id(`evidence-array-result-${suffix}`),
-      targetId: id('path-1'),
-      targetRevision: 2,
-      canonicalField,
-      exactClaim: claim,
-      url: `https://example.com/evidence-array/${suffix}`,
-      retrievedAt: at(3),
-      title: `Evidence array source ${suffix}`,
-      excerpt: claim,
-      support: 'server-validated' as const,
-      citation: {
-        start: 0,
-        end: claim.length,
-        exactClaimStart: 0,
-        exactClaimEnd: claim.length,
-        textHash: 'd'.repeat(64),
-      },
-    });
-    const exactEvidenceSource = source('exact', 'purposePath.evidence', exactClaim);
-    const nonmemberSource = source('nonmember', 'purposePath.evidence', 'Absent evidence');
-    const arbitraryArraySource = source('arbitrary-array', 'purposePath.sources', exactClaim);
-    const wrongFieldSource = source('wrong-field', 'purposePath.projectPreview', exactClaim);
-    for (const [suffix, citedSource] of [
-      ['exact', exactEvidenceSource],
-      ['nonmember', nonmemberSource],
-      ['arbitrary-array', arbitraryArraySource],
-      ['wrong-field', wrongFieldSource],
-    ] as const) {
-      await storage.recordResearchAttempt(userId, turn.leaseId, amendedAttempt({
-        id: id(`evidence-array-attempt-${suffix}`),
-        status: 'succeeded',
-        targetId: id('path-1'),
-        targetRevision: 2,
-        sources: [citedSource],
-      }));
-    }
-
-    const operationWith = (suffix: string, citedSource: typeof exactEvidenceSource): CareerMapOperation => {
-      const candidatePaths = paths();
-      candidatePaths[0] = {
-        ...candidatePaths[0],
-        evidence: ['Cafe\u0301 apprenticeship evidence', 'A separate firsthand observation'],
-        sources: [citedSource],
-      };
-      return {
-        type: 'propose-purpose-paths',
-        sourceId: id(`evidence-array-paths-${suffix}`),
-        expectedRevision: 2,
-        occurredAt: at(3),
-        payload: {
-          setId: id(`evidence-array-set-${suffix}`),
-          setRevision: 1,
-          paths: candidatePaths,
-          presentation: presentation(3),
-        },
-      };
-    };
-    for (const [suffix, citedSource] of [
-      ['nonmember', nonmemberSource],
-      ['arbitrary-array', arbitraryArraySource],
-      ['wrong-field', wrongFieldSource],
-    ] as const) {
-      const rejected = await persist(userId, turn.leaseId, operationWith(suffix, citedSource));
-      expect(rejected.status).toBe('rejected');
-      if (rejected.status === 'rejected') expect(rejected.error.code).toBe('invalid-operation');
-    }
-
-    expect((await persist(
-      userId,
-      turn.leaseId,
-      operationWith('exact', exactEvidenceSource),
-    )).status).toBe('committed');
-    expect(await storage.listResearchSourceAssociations(userId)).toEqual([
-      expect.objectContaining({
-        sourceHandle: exactEvidenceSource.sourceHandle,
-        association: expect.objectContaining({
-          canonicalField: 'purposePath.evidence',
-          exactClaim,
-        }),
-      }),
-    ]);
-  });
-
-  it.each(['changed-field', 'wrong-parent', 'wrong-target-revision'] as const)(
-    'fails load and integrity validation when a v2 evidence association has a %s corruption',
-    async (scenario) => {
-      const userId = owner(`research-load-association-${scenario}`);
-      await storage.getOrCreateCareerMap(userId);
-      const turn = await beginTurn(userId, `research-load-association-${scenario}`);
-      expect((await persist(userId, turn.leaseId, {
-        type: 'propose-why',
-        sourceId: id(`research-load-association-${scenario}-why-propose`),
-        expectedRevision: 0,
-        occurredAt: at(1),
-        payload: {
-          why: {
-            id: id(`research-load-association-${scenario}-why`),
-            revision: 1,
-            statement: 'Make exact career evidence usable.',
-            serves: 'People testing a next move',
-            pointOfView: 'Durable provenance must remain bound to canonical truth.',
-          },
-          presentation: presentation(1),
-        },
-      })).status).toBe('committed');
-      expect((await persist(userId, turn.leaseId, {
-        type: 'confirm-why',
-        sourceId: id(`research-load-association-${scenario}-why-confirm`),
-        expectedRevision: 1,
-        occurredAt: at(2),
-        payload: {
-          whyId: id(`research-load-association-${scenario}-why`),
-          whyRevision: 1,
-          action: action(2),
-        },
-      })).status).toBe('committed');
-
-      const candidatePaths = paths();
-      const exactClaim = normalizeResearchClaim(candidatePaths[0].evidence[0]);
-      const source = {
-        kind: 'cited-research' as const,
-        bindingVersion: 2 as const,
-        sourceHandle: id(`research-load-association-${scenario}-handle`),
-        providerCallId: id(`research-load-association-${scenario}-call`),
-        providerResultId: id(`research-load-association-${scenario}-result`),
-        targetId: candidatePaths[0].id,
-        targetRevision: 2,
-        canonicalField: 'purposePath.evidence',
-        exactClaim,
-        url: `https://example.com/research-load-association/${scenario}`,
-        retrievedAt: at(3),
-        title: `Research load association ${scenario}`,
-        excerpt: exactClaim,
-        support: 'server-validated' as const,
-        citation: {
-          start: 0,
-          end: exactClaim.length,
-          exactClaimStart: 0,
-          exactClaimEnd: exactClaim.length,
-          textHash: 'e'.repeat(64),
-        },
-      };
-      candidatePaths[0].sources = [source];
-      const attempt = amendedAttempt({
-        id: id(`research-load-association-${scenario}-attempt`),
-        status: 'succeeded',
-        targetId: candidatePaths[0].id,
-        targetRevision: 2,
-        sources: [source],
-      });
-      await storage.recordResearchAttempt(userId, turn.leaseId, attempt);
-      expect((await persist(userId, turn.leaseId, {
-        type: 'propose-purpose-paths',
-        sourceId: id(`research-load-association-${scenario}-paths`),
-        expectedRevision: 2,
-        occurredAt: at(3),
-        payload: {
-          setId: id(`research-load-association-${scenario}-set`),
-          setRevision: 1,
-          paths: candidatePaths,
-          presentation: presentation(3),
-        },
-      })).status).toBe('committed');
-
-      const loaded = await storage.loadCareerMap(userId);
-      expect(loaded.status).toBe('ready');
-      if (loaded.status !== 'ready') return;
-      const corrupted = structuredClone(loaded.map);
-      const [firstPath, secondPath] = corrupted.pathSets[0].paths;
-      const [persistedSource] = firstPath.sources ?? [];
-      if (!persistedSource || persistedSource.kind !== 'cited-research'
-        || !('bindingVersion' in persistedSource) || persistedSource.bindingVersion !== 2
-      ) throw new Error('Missing v2 cited source fixture.');
-
-      if (scenario === 'changed-field') {
-        firstPath.evidence[0] = 'The cited canonical evidence was changed after commit.';
-      } else if (scenario === 'wrong-parent') {
-        firstPath.sources = [];
-        secondPath.sources = [persistedSource];
-      } else {
-        persistedSource.targetRevision = 1;
-        const revisedAttempt = {
-          ...attempt,
-          targetRevision: 1,
-          sources: [{ ...attempt.sources[0], targetRevision: 1 }],
-        };
-        await db.update(careerMapResearchAttempts)
-          .set({ attempt: revisedAttempt })
-          .where(and(
-            eq(careerMapResearchAttempts.userId, userId),
-            eq(careerMapResearchAttempts.id, attempt.id),
-          ));
-        const [associationRow] = await db.select()
-          .from(careerMapEvidenceAssociations)
-          .where(eq(careerMapEvidenceAssociations.userId, userId));
-        await db.update(careerMapEvidenceAssociations)
-          .set({
-            association: {
-              ...associationRow.association,
-              targetRevision: 1,
-            },
-          })
-          .where(eq(careerMapEvidenceAssociations.id, associationRow.id));
-      }
-      await db.update(careerMaps)
-        .set({ document: corrupted })
-        .where(eq(careerMaps.userId, userId));
-
-      expect(await storage.loadCareerMap(userId)).toMatchObject({
-        status: 'repair-required',
-        reason: 'evidence-association-mismatch',
-      });
-      expect(await storage.auditCareerMapIntegrity()).toMatchObject({
-        invalidRecords: expect.arrayContaining([{
-          userId,
-          reason: 'evidence-association-mismatch',
-        }]),
-        zeroInvalid: false,
-      });
-      await eraseOwner(userId);
-    },
-  );
-
-  it('dual-reads and temporarily accepts predecessor attempts during expand-contract rollout', async () => {
-    const userId = owner('research-expand-contract');
-    await storage.getOrCreateCareerMap(userId);
-    const turn = await beginTurn(userId, 'research-expand-contract');
-    const legacyAttempt = {
-      id: id('legacy-research-attempt'),
-      status: 'failed' as const,
-      queryCategory: 'purpose-path-practical-fit',
-      attemptedAt: at(),
-      sources: [],
-      errorClass: 'ProviderFailure',
-    };
-    await db.insert(careerMapResearchAttempts).values({
-      id: legacyAttempt.id,
-      userId,
-      turnId: turn.turnId,
-      leaseId: turn.leaseId,
-      attempt: legacyAttempt,
-    });
-
-    expect(await storage.listResearchAttempts(userId)).toEqual([legacyAttempt]);
-    expect((await storage.loadCareerMap(userId)).status).toBe('ready');
-    await expect(storage.recordResearchAttempt(userId, turn.leaseId, legacyAttempt)).resolves.toEqual(legacyAttempt);
-
-    const newLegacyAttempt = {
-      ...legacyAttempt,
-      id: id('new-legacy-research-attempt'),
-      queryCategory: 'current-predecessor-writer',
-    };
-    await expect(storage.recordResearchAttempt(userId, turn.leaseId, newLegacyAttempt)).resolves.toEqual(newLegacyAttempt);
-    await expect(storage.recordResearchAttempt(userId, turn.leaseId, {
-      ...newLegacyAttempt,
-      errorClass: 'ChangedPayload',
-    })).rejects.toBeInstanceOf(ResearchAttemptConflictError);
-    expect(await storage.listResearchSourceAssociations(userId)).toEqual([]);
-  });
-
-  it('keeps predecessor source authorization isolated from v2 exact associations', async () => {
-    const userId = owner('research-expand-contract-source');
-    await storage.getOrCreateCareerMap(userId);
-    const turn = await beginTurn(userId, 'research-expand-contract-source');
-    expect((await persist(userId, turn.leaseId, {
-      type: 'propose-why', sourceId: id('legacy-source-why-propose'), expectedRevision: 0, occurredAt: at(1),
-      payload: { why: { id: id('legacy-source-why'), revision: 1, statement: 'Keep rollout evidence usable.', serves: 'Returning explorers', pointOfView: 'Compatibility must not weaken new proof.' }, presentation: presentation(1) },
-    })).status).toBe('committed');
-    expect((await persist(userId, turn.leaseId, {
-      type: 'confirm-why', sourceId: id('legacy-source-why-confirm'), expectedRevision: 1, occurredAt: at(2),
-      payload: { whyId: id('legacy-source-why'), whyRevision: 1, action: action(2) },
-    })).status).toBe('committed');
-
-    const legacySource = {
-      kind: 'cited-research' as const,
-      sourceHandle: id('legacy-source-handle'),
-      providerResultId: id('legacy-provider-result'),
-      url: 'https://example.com/legacy-source',
-      retrievedAt: at(3),
-      title: 'Predecessor source',
-      excerpt: 'Current predecessor writer evidence.',
-      support: 'server-validated' as const,
-    };
-    await storage.recordResearchAttempt(userId, turn.leaseId, {
-      id: id('legacy-source-attempt'),
-      status: 'succeeded',
-      queryCategory: 'purpose-path-practical-fit',
-      attemptedAt: at(3),
-      sources: [legacySource],
-    });
-
-    const v2Paths = paths(undefined, true);
-    const legacyAttemptCannotAuthorizeV2 = await persist(userId, turn.leaseId, {
-      type: 'propose-purpose-paths', sourceId: id('legacy-attempt-v2-source'), expectedRevision: 2, occurredAt: at(3),
-      payload: { setId: id('legacy-attempt-v2-set'), setRevision: 1, paths: v2Paths, presentation: presentation(3) },
-    });
-    expect(legacyAttemptCannotAuthorizeV2.status).toBe('rejected');
-
-    const v2Attempt = amendedAttempt({
-      id: id('v2-attempt-for-cross-format-negative'),
-      status: 'succeeded',
-      targetId: id('path-1'),
-      targetRevision: 2,
-      sources: v2Paths[0].sources,
-    });
-    await storage.recordResearchAttempt(userId, turn.leaseId, v2Attempt);
-    const v2Source = v2Attempt.sources[0];
-    const legacyCounterpart = {
-      kind: 'cited-research' as const,
-      sourceHandle: v2Source.sourceHandle,
-      providerResultId: v2Source.providerResultId,
-      url: v2Source.url,
-      retrievedAt: v2Source.retrievedAt,
-      ...(v2Source.title ? { title: v2Source.title } : {}),
-      ...(v2Source.excerpt ? { excerpt: v2Source.excerpt } : {}),
-      support: v2Source.support,
-    };
-    const counterpartPaths = paths();
-    counterpartPaths[0].sources = [legacyCounterpart];
-    const v2AttemptCannotAuthorizeLegacy = await persist(userId, turn.leaseId, {
-      type: 'propose-purpose-paths', sourceId: id('v2-attempt-legacy-source'), expectedRevision: 2, occurredAt: at(3),
-      payload: { setId: id('v2-attempt-legacy-set'), setRevision: 1, paths: counterpartPaths, presentation: presentation(3) },
-    });
-    expect(v2AttemptCannotAuthorizeLegacy.status).toBe('rejected');
-
-    const legacyPaths = paths();
-    legacyPaths[0].sources = [legacySource];
-    expect((await persist(userId, turn.leaseId, {
-      type: 'propose-purpose-paths', sourceId: id('legacy-source-paths'), expectedRevision: 2, occurredAt: at(3),
-      payload: { setId: id('legacy-source-set'), setRevision: 1, paths: legacyPaths, presentation: presentation(3) },
-    })).status).toBe('committed');
-    expect(await storage.listResearchSourceAssociations(userId)).toEqual([]);
-    expect(await storage.loadCareerMap(userId)).toMatchObject({ status: 'ready', map: { revision: 3 } });
-  });
-
-  it('loads predecessor maps with the source volume and title lengths accepted before U4', async () => {
-    const userId = owner('legacy-source-volume');
-    await storage.getOrCreateCareerMap(userId);
-    const turn = await beginTurn(userId, 'legacy-source-volume');
-    expect((await persist(userId, turn.leaseId, {
-      type: 'propose-why', sourceId: id('legacy-volume-why-propose'), expectedRevision: 0, occurredAt: at(1),
-      payload: { why: { id: id('legacy-volume-why'), revision: 1, statement: 'Preserve trusted history.', serves: 'Returning explorers', pointOfView: 'Rollouts must read predecessor data.' }, presentation: presentation(1) },
-    })).status).toBe('committed');
-    expect((await persist(userId, turn.leaseId, {
-      type: 'confirm-why', sourceId: id('legacy-volume-why-confirm'), expectedRevision: 1, occurredAt: at(2),
-      payload: { whyId: id('legacy-volume-why'), whyRevision: 1, action: action(2) },
-    })).status).toBe('committed');
-    expect((await persist(userId, turn.leaseId, {
-      type: 'propose-purpose-paths', sourceId: id('legacy-volume-paths'), expectedRevision: 2, occurredAt: at(3),
-      payload: { setId: id('legacy-volume-set'), setRevision: 1, paths: paths(), presentation: presentation(3) },
-    })).status).toBe('committed');
-
-    const legacySources = Array.from({ length: 16 }, (_, index) => ({
-      kind: 'cited-research' as const,
-      sourceHandle: id(`legacy-volume-source-${index}`),
-      providerResultId: id(`legacy-volume-result-${index}`),
-      url: `https://example.com/legacy-volume/${index}`,
-      retrievedAt: at(3),
-      title: index === 0 ? 't'.repeat(600) : `Legacy title ${index}`,
-      excerpt: `Legacy support ${index}`,
-      support: 'server-validated' as const,
-    }));
-    const loaded = await storage.loadCareerMap(userId);
-    expect(loaded.status).toBe('ready');
-    if (loaded.status !== 'ready') throw new Error('Legacy source fixture map did not load.');
-    const predecessorMap = structuredClone(loaded.map);
-    predecessorMap.pathSets[0].paths[0].sources = legacySources;
-    await db.update(careerMaps)
-      .set({ document: predecessorMap })
-      .where(eq(careerMaps.userId, userId));
-    await db.insert(careerMapResearchAttempts).values({
-      id: id('legacy-volume-attempt'),
-      userId,
-      turnId: turn.turnId,
-      leaseId: turn.leaseId,
-      attempt: {
-        id: id('legacy-volume-attempt'),
-        status: 'succeeded',
-        queryCategory: 'purpose-path-practical-fit',
-        attemptedAt: at(3),
-        sources: legacySources,
-      },
-    });
-
-    const predecessorLoad = await storage.loadCareerMap(userId);
-    expect(predecessorLoad.status).toBe('ready');
-    if (predecessorLoad.status === 'ready') {
-      expect(predecessorLoad.map.pathSets[0].paths[0].sources).toEqual(legacySources);
-    }
-    expect(await storage.auditCareerMapIntegrity()).toMatchObject({ zeroInvalid: true });
-  });
-
-  it('rolls back map, history, and exact association together on a sourced-write fault', async () => {
-    const userId = owner('sourced-atomic-fault');
-    const faultingStorage = new PostgresStorage({
-      database: db,
-      now: () => now,
-      faultInjector: (stage) => {
-        if (stage === 'after-evidence-association-before-history') throw new Error('injected association fault');
-      },
-    });
-    await faultingStorage.getOrCreateCareerMap(userId);
-    const turn = await beginTurn(userId, 'sourced-atomic-fault');
-    expect((await persist(userId, turn.leaseId, {
-      type: 'propose-why', sourceId: id('atomic-why-propose'), expectedRevision: 0, occurredAt: at(1),
-      payload: { why: { id: id('atomic-why'), revision: 1, statement: 'Make choices humane.', serves: 'People choosing', pointOfView: 'Evidence should help.' }, presentation: presentation(1) },
-    })).status).toBe('committed');
-    expect((await persist(userId, turn.leaseId, {
-      type: 'confirm-why', sourceId: id('atomic-why-confirm'), expectedRevision: 1, occurredAt: at(2),
-      payload: { whyId: id('atomic-why'), whyRevision: 1, action: action(2) },
-    })).status).toBe('committed');
-    const sourcedPaths = paths(undefined, true);
-    await storage.recordResearchAttempt(userId, turn.leaseId, amendedAttempt({
-      id: id('atomic-research'), status: 'succeeded', targetId: id('path-1'),
-      targetRevision: 2, sources: sourcedPaths[0].sources,
-    }));
-    const operation: CareerMapOperation = {
-      type: 'propose-purpose-paths', sourceId: id('atomic-paths'), expectedRevision: 2, occurredAt: at(3),
-      payload: { setId: id('atomic-path-set'), setRevision: 1, paths: sourcedPaths, presentation: presentation(3) },
-    };
-
-    await expect(faultingStorage.persistCareerMapOperation(await boundPersistenceInput({
-      userId, leaseId: turn.leaseId, operation, moduleVersion: 'method-test@1',
-    }))).rejects.toThrow('injected association fault');
-    expect(await storage.listCareerMapHistory(userId)).toHaveLength(2);
-    expect(await storage.listResearchSourceAssociations(userId)).toEqual([]);
-    expect(await storage.loadCareerMap(userId)).toMatchObject({ status: 'ready', map: { revision: 2 } });
-  });
-
-  it('rolls back attempts and sourced writes when the request aborts at the final local fence', async () => {
-    const userId = owner('abort-fence');
-    await storage.getOrCreateCareerMap(userId);
-    const turn = await beginTurn(userId, 'abort-fence');
-    expect((await persist(userId, turn.leaseId, {
-      type: 'propose-why', sourceId: id('abort-why-propose'), expectedRevision: 0, occurredAt: at(1),
-      payload: { why: { id: id('abort-why'), revision: 1, statement: 'Keep cancellation truthful.', serves: 'People waiting for a result', pointOfView: 'Aborted work must not become canonical.' }, presentation: presentation(1) },
-    })).status).toBe('committed');
-    expect((await persist(userId, turn.leaseId, {
-      type: 'confirm-why', sourceId: id('abort-why-confirm'), expectedRevision: 1, occurredAt: at(2),
-      payload: { whyId: id('abort-why'), whyRevision: 1, action: action(2) },
-    })).status).toBe('committed');
-
-    const sourcedPaths = paths(undefined, true);
-    const durableAttempt = amendedAttempt({
-      id: id('abort-durable-attempt'), status: 'succeeded', targetId: id('path-1'),
-      targetRevision: 2, sources: sourcedPaths[0].sources,
-    });
-    await storage.recordResearchAttempt(userId, turn.leaseId, durableAttempt);
-    const writeAbort = new AbortController();
-    const abortingWriteStorage = new PostgresStorage({
-      database: db,
-      now: () => now,
-      faultInjector: (stage) => {
-        if (stage === 'before-commit') writeAbort.abort();
-      },
-    });
-    const sourcedOperation: CareerMapOperation = {
-      type: 'propose-purpose-paths', sourceId: id('abort-paths'), expectedRevision: 2, occurredAt: at(3),
-      payload: { setId: id('abort-path-set'), setRevision: 1, paths: sourcedPaths, presentation: presentation(3) },
-    };
-    await expect(abortingWriteStorage.persistCareerMapOperation({
-      ...await boundPersistenceInput({
-        userId, leaseId: turn.leaseId, operation: sourcedOperation, moduleVersion: 'method-test@1',
-      }),
-      abortSignal: writeAbort.signal,
-    })).rejects.toMatchObject({ name: 'AbortError' });
-
-    const attemptAbort = new AbortController();
-    const abortingAttemptStorage = new PostgresStorage({
-      database: db,
-      now: () => now,
-      faultInjector: (stage) => {
-        if (stage === 'before-research-attempt-insert') attemptAbort.abort();
-      },
-    });
-    await expect(abortingAttemptStorage.recordResearchAttempt(userId, turn.leaseId, amendedAttempt({
-      id: id('abort-withheld-attempt'),
-      status: 'failed',
-      targetId: id('abort-withheld-target'),
-      targetRevision: 2,
-      errorClass: 'ProviderCancelled',
-    }), attemptAbort.signal)).rejects.toMatchObject({ name: 'AbortError' });
-
-    expect(await storage.listResearchAttempts(userId)).toEqual([durableAttempt]);
-    expect(await storage.listResearchSourceAssociations(userId)).toEqual([]);
-    expect(await storage.listCareerMapHistory(userId)).toHaveLength(2);
-    expect(await storage.loadCareerMap(userId)).toMatchObject({ status: 'ready', map: { revision: 2 } });
-    expect(await storage.getAgentTurn(userId, turn.clientMessageId)).toMatchObject({ status: 'pending' });
-  });
-
   it('observes request cancellation without acquiring the owner advisory lock', async () => {
     const userId = owner('abort-lock-wait');
     await storage.getOrCreateCareerMap(userId);
@@ -1104,22 +346,22 @@ describe('PostgresStorage Method map, history, and ownership', () => {
     await fenceReached;
 
     const waitingAbort = new AbortController();
-    const waitingAttempt = storage.recordResearchAttempt(userId, turn.leaseId, amendedAttempt({
-      id: id('abort-lock-waiting-attempt'),
-      status: 'failed',
-      targetId: id('abort-lock-target'),
-      targetRevision: 0,
-      checkpoint: 'form-foundation',
-      errorClass: 'ProviderCancelled',
-    }), waitingAbort.signal);
+    const waitingInput = await boundPersistenceInput({
+      userId,
+      leaseId: turn.leaseId,
+      operation: evidenceOperation(0, id('abort-lock-waiting-operation')),
+      moduleVersion: 'method-test@1',
+    });
+    const waitingWrite = storage.persistCareerMapOperation({
+      ...waitingInput,
+      abortSignal: waitingAbort.signal,
+    });
     waitingAbort.abort();
-    await expect(waitingAttempt).rejects.toMatchObject({ name: 'AbortError' });
+    await expect(waitingWrite).rejects.toMatchObject({ name: 'AbortError' });
 
     blockingAbort.abort();
     releaseFence();
     await expect(blockingWrite).rejects.toMatchObject({ name: 'AbortError' });
-    expect(await storage.listResearchAttempts(userId)).toEqual([]);
-    expect(await storage.listResearchSourceAssociations(userId)).toEqual([]);
     expect(await storage.listCareerMapHistory(userId)).toEqual([]);
     expect(await storage.loadCareerMap(userId)).toMatchObject({ status: 'ready', map: { revision: 0 } });
   });
@@ -1349,169 +591,6 @@ describe('PostgresStorage Method map, history, and ownership', () => {
       });
       expect(result.status).toBe(expectedStatus);
       if (result.status === 'rejected') expect(result.error.code).toBe('confirmation-not-auditable');
-    }
-  });
-
-  it('binds user-supplied sources to server provenance and keeps them out of research attempts', async () => {
-    const userId = owner('user-source-boundary');
-    await storage.getOrCreateCareerMap(userId);
-    const turn = await beginTurn(userId, 'user-source-boundary', 'agent-turn');
-    const proposalContext = createAgentTurnPersistenceContext(turn, {
-      turnSequence: 1,
-      occurredAt: at(1),
-    });
-    expect((await storage.persistCareerMapOperation({
-      userId, leaseId: turn.leaseId, context: proposalContext,
-      operation: {
-        type: 'propose-why', sourceId: id('user-source-why-propose'), expectedRevision: 0, occurredAt: at(1),
-        payload: {
-          why: {
-            id: id('user-source-why'), revision: 1, statement: 'Make useful inquiry possible.',
-            serves: 'People facing unclear choices', pointOfView: 'Firsthand evidence should guide action.',
-          },
-          presentation: proposalContext.presentation,
-        },
-      },
-      moduleVersion: 'method-test@1',
-    })).status).toBe('committed');
-    await storage.completeAgentTurn({ userId, turnId: turn.turnId, leaseId: turn.leaseId });
-    const confirmationTurn = await beginTurn(userId, 'user-source-confirm', 'workspace-action');
-    const confirmationContext = createWorkspaceActionPersistenceContext(confirmationTurn, {
-      turnSequence: 2,
-      occurredAt: at(2),
-    });
-    expect((await storage.persistCareerMapOperation({
-      userId, leaseId: confirmationTurn.leaseId, context: confirmationContext,
-      operation: {
-        type: 'confirm-why', sourceId: id('user-source-why-confirm'), expectedRevision: 1, occurredAt: at(2),
-        payload: { whyId: id('user-source-why'), whyRevision: 1, action: confirmationContext.action },
-      },
-      moduleVersion: 'method-test@1',
-    })).status).toBe('committed');
-
-    await storage.completeAgentTurn({
-      userId, turnId: confirmationTurn.turnId, leaseId: confirmationTurn.leaseId,
-    });
-    const sourceTurn = await beginTurn(userId, 'user-source-paths', 'agent-turn');
-    const sourceContext = createAgentTurnPersistenceContext(sourceTurn, {
-      turnSequence: 3,
-      occurredAt: at(3),
-    });
-    const safeUserSource = {
-      kind: 'user-supplied-source' as const,
-      label: 'Explorer-provided professional association page',
-      url: 'https://example.com/explorer-source',
-      recordedBy: sourceContext.action,
-    };
-    await expect(storage.recordResearchAttempt(userId, sourceTurn.leaseId, {
-      id: id('user-source-smuggled-research'), status: 'succeeded', queryCategory: 'purpose-path',
-      attemptedAt: at(3), sources: [safeUserSource],
-    })).rejects.toBeInstanceOf(ResearchAttemptSourceError);
-
-    const sourcedPaths = paths();
-    sourcedPaths[0].sources = [safeUserSource];
-    const sourceOperation: CareerMapOperation = {
-      type: 'propose-purpose-paths', sourceId: id('user-source-paths'), expectedRevision: 2, occurredAt: at(3),
-      payload: {
-        setId: id('user-source-path-set'), setRevision: 1,
-        paths: sourcedPaths, presentation: sourceContext.presentation,
-      },
-    };
-
-    const forgedRecordedBy = structuredClone(sourceOperation);
-    if (forgedRecordedBy.type !== 'propose-purpose-paths') throw new Error('Unexpected fixture operation.');
-    const forgedSource = forgedRecordedBy.payload.paths[0].sources?.[0];
-    if (!forgedSource || forgedSource.kind !== 'user-supplied-source') throw new Error('Missing user source fixture.');
-    forgedSource.recordedBy = { ...sourceContext.action, actionId: id('forged-user-source-action') };
-    const forgedResult = await storage.persistCareerMapOperation({
-      userId, leaseId: sourceTurn.leaseId, context: sourceContext,
-      operation: forgedRecordedBy, moduleVersion: 'method-test@1',
-    });
-    expect(forgedResult.status).toBe('rejected');
-
-    for (const [scheme, url] of [
-      ['javascript', 'javascript:alert(1)'],
-      ['http', 'http://example.com/insecure'],
-      ['file', 'file:///tmp/private-source'],
-      ['ftp', 'ftp://example.com/source'],
-    ]) {
-      const unsafeUrl = structuredClone(sourceOperation);
-      if (unsafeUrl.type !== 'propose-purpose-paths') throw new Error('Unexpected fixture operation.');
-      const unsafeSource = unsafeUrl.payload.paths[0].sources?.[0];
-      if (!unsafeSource || unsafeSource.kind !== 'user-supplied-source') throw new Error('Missing user source fixture.');
-      unsafeSource.url = url;
-      unsafeUrl.sourceId = id(`user-source-unsafe-${scheme}`);
-      const unsafeResult = await storage.persistCareerMapOperation({
-        userId, leaseId: sourceTurn.leaseId, context: sourceContext,
-        operation: unsafeUrl, moduleVersion: 'method-test@1',
-      });
-      expect(unsafeResult.status).toBe('rejected');
-    }
-
-    expect((await storage.persistCareerMapOperation({
-      userId, leaseId: sourceTurn.leaseId, context: sourceContext,
-      operation: sourceOperation, moduleVersion: 'method-test@1',
-    })).status).toBe('committed');
-    const loaded = await storage.loadCareerMap(userId);
-    expect(loaded.status).toBe('ready');
-    if (loaded.status === 'ready') {
-      expect(loaded.map.pathSets[0].paths[0].sources).toEqual([safeUserSource]);
-      expect(compileCareerMapBriefing(loaded.map).markdown)
-        .toContain('Explorer-provided source: Explorer-provided professional association page');
-    }
-    expect(await storage.listResearchAttempts(userId)).toEqual([]);
-    expect(await storage.listCareerMapHistory(userId)).toHaveLength(3);
-  });
-
-  it('preserves an exact sourced canonical sibling across a later-turn path combination', async () => {
-    const userId = owner('cross-turn-combination-source');
-    await storage.getOrCreateCareerMap(userId);
-    const firstTurn = await beginTurn(userId, 'cross-turn-combination-first');
-    expect((await persist(userId, firstTurn.leaseId, {
-      type: 'propose-why', sourceId: id('combination-why-propose'), expectedRevision: 0, occurredAt: at(1),
-      payload: { why: { id: id('combination-why'), revision: 1, statement: 'I work to make complex choices humane.', serves: 'People facing important choices', pointOfView: 'Clarity should create agency.' }, presentation: presentation(1) },
-    })).status).toBe('committed');
-    expect((await persist(userId, firstTurn.leaseId, {
-      type: 'confirm-why', sourceId: id('combination-why-confirm'), expectedRevision: 1, occurredAt: at(2),
-      payload: { whyId: id('combination-why'), whyRevision: 1, action: action(2) },
-    })).status).toBe('committed');
-    const originalPaths = paths(undefined, true);
-    await storage.recordResearchAttempt(userId, firstTurn.leaseId, {
-      ...amendedAttempt({
-        id: id('combination-research'), status: 'succeeded', targetId: id('path-1'),
-        targetRevision: 2, sources: originalPaths[0].sources,
-      }),
-      attemptedAt: at(3),
-    });
-    expect((await persist(userId, firstTurn.leaseId, {
-      type: 'propose-purpose-paths', sourceId: id('combination-paths-propose'), expectedRevision: 2, occurredAt: at(3),
-      payload: { setId: id('combination-set-1'), setRevision: 1, paths: originalPaths, presentation: presentation(3) },
-    })).status).toBe('committed');
-    expect(await storage.completeAgentTurn({
-      userId, turnId: firstTurn.turnId, leaseId: firstTurn.leaseId, result: { revision: 3 },
-    })).toMatchObject({ status: 'completed' });
-
-    const secondTurn = await beginTurn(userId, 'cross-turn-combination-second');
-    const unsourced = paths();
-    const combined = await persist(userId, secondTurn.leaseId, {
-      type: 'combine-purpose-paths', sourceId: id('combination-paths-combine'), expectedRevision: 3, occurredAt: at(4),
-      payload: {
-        sourceSetId: id('combination-set-1'), sourceSetRevision: 1,
-        combinedPathIds: [originalPaths[1].id, originalPaths[2].id],
-        replacementSetId: id('combination-set-2'), replacementSetRevision: 1,
-        paths: [
-          originalPaths[0],
-          { ...unsourced[1], id: id('combination-merged'), name: 'Combined humane practice' },
-          { ...unsourced[2], id: id('combination-new-third'), name: 'New third direction' },
-        ],
-        presentation: presentation(4),
-      },
-    });
-    expect(combined.status).toBe('committed');
-    const loaded = await storage.loadCareerMap(userId);
-    expect(loaded.status).toBe('ready');
-    if (loaded.status === 'ready') {
-      expect(loaded.map.pathSets.at(-1)?.paths[0].sources).toEqual(originalPaths[0].sources);
     }
   });
 
@@ -1788,225 +867,6 @@ describe('PostgresStorage lease and client-message turns', () => {
     expect(await storage.getMethodErasureJob(userId)).toBeUndefined();
   });
 
-  it('composes the U5 coordinator, map operation, research, durable projection, replay, cancellation, and lease release', async () => {
-    const userId = owner('u5-production-composition');
-    const workspaceTurn = await beginTurn(userId, 'u5-workspace', 'workspace-action');
-    const conversationId = id('u5-conversation');
-    await storage.setConversationMapping(userId, workspaceTurn.leaseId, conversationId);
-
-    const envelope = await executeWorkspaceTool({
-      runtime: {
-        storage,
-        loader: await createMethodModuleLoader(),
-        userId,
-        turn: workspaceTurn,
-        timing: { turnSequence: 1, occurredAt: at(1) },
-      },
-      expectedRevision: 0,
-      operationType: 'append-foundation-evidence',
-      operationId: id('u5-operation'),
-      rawInput: {
-        id: id('u5-evidence'), revision: 1, category: 'fascination',
-        content: 'I keep returning to public decision-support patterns.',
-      },
-    });
-    expect(envelope).toMatchObject({
-      status: 'committed', operation: 'append-foundation-evidence',
-      authoritativeRevision: 1, derivedModule: 'form-foundation',
-    });
-    expect(await storage.listCareerMapHistory(userId)).toHaveLength(1);
-    const completedWorkspace = await storage.completeAgentTurn({
-      userId, turnId: workspaceTurn.turnId, leaseId: workspaceTurn.leaseId,
-      result: { kind: 'workspace-result', refetch: true, operationEnvelope: envelope },
-    });
-    expect(completedWorkspace?.status).toBe('completed');
-    expect(await storage.getTurnLease(userId)).toBeUndefined();
-    const workspaceReplay = await storage.beginWorkspaceActionTurn({
-      userId,
-      clientMessageId: workspaceTurn.clientMessageId,
-      requestFingerprint: workspaceTurn.requestFingerprint,
-      turnId: id('u5-workspace-retry-turn'),
-      leaseId: id('u5-workspace-retry-lease'),
-    });
-    expect(workspaceReplay).toMatchObject({
-      status: 'terminal', shouldInvokeModel: false,
-      turn: { status: 'completed', terminalResult: { kind: 'workspace-result', operationEnvelope: envelope } },
-    });
-
-    const runSeedOperation = async (
-      suffix: string,
-      operationType: Parameters<typeof executeWorkspaceTool>[0]['operationType'],
-      rawInput: unknown,
-    ) => {
-      const seedTurn = await beginTurn(userId, suffix, 'workspace-action');
-      const current = await storage.loadCareerMap(userId);
-      if (current.status !== 'ready') throw new Error('Expected a ready Career Map before the seed operation.');
-      const result = await executeWorkspaceTool({
-        runtime: {
-          storage, loader: await createMethodModuleLoader(), userId, turn: seedTurn,
-          timing: { turnSequence: now.getTime(), occurredAt: at() },
-        },
-        expectedRevision: current.map.revision,
-        operationType,
-        operationId: id(`${suffix}-operation`),
-        rawInput,
-      });
-      expect(result.status).toBe('committed');
-      expect((await storage.completeAgentTurn({
-        userId, turnId: seedTurn.turnId, leaseId: seedTurn.leaseId,
-        result: { kind: 'workspace-result', refetch: true, operationEnvelope: result },
-      }))?.status).toBe('completed');
-      return seedTurn;
-    };
-    const whyId = id('u5-why');
-    const proposedWhyTurn = await runSeedOperation('u5-propose-why', 'propose-why', {
-      id: whyId, revision: 1,
-      statement: 'Help public teams make consequential choices with less friction.',
-      serves: 'Public-interest teams facing consequential choices',
-      pointOfView: 'Small decision aids can turn ambiguity into useful evidence.',
-    });
-    const confirmedWhyTurn = await beginTurn(userId, 'u5-confirm-why', 'workspace-action');
-    const beforeWhyConfirmation = await storage.loadCareerMap(userId);
-    if (beforeWhyConfirmation.status !== 'ready') throw new Error('Expected a ready Career Map before confirming the Why.');
-    const confirmedWhy = await executeWorkspaceTool({
-      runtime: {
-        storage, loader: await createMethodModuleLoader(), userId, turn: confirmedWhyTurn,
-        timing: { turnSequence: now.getTime() + 1, occurredAt: at(1) },
-      },
-      expectedRevision: beforeWhyConfirmation.map.revision,
-      operationType: 'confirm-why',
-      operationId: id('u5-confirm-why-operation'),
-      rawInput: {
-        whyId, whyRevision: 1,
-        presentedInTurnId: proposedWhyTurn.turnId,
-        sourceMessageId: confirmedWhyTurn.clientMessageId,
-      },
-    });
-    expect(confirmedWhy.status).toBe('committed');
-    expect((await storage.completeAgentTurn({
-      userId, turnId: confirmedWhyTurn.turnId, leaseId: confirmedWhyTurn.leaseId,
-      result: { kind: 'workspace-result', refetch: true, operationEnvelope: confirmedWhy },
-    }))?.status).toBe('completed');
-    const suggestedSetId = id('u5-suggested-paths');
-    await runSeedOperation('u5-propose-paths', 'propose-purpose-paths', {
-      setId: suggestedSetId,
-      setRevision: 1,
-      paths: researchablePaths(),
-    });
-    expect(await storage.listCareerMapHistory(userId)).toHaveLength(4);
-
-    const agentTurn = await beginTurn(userId, 'u5-agent', 'agent-turn');
-    const fact = 'Public teams test decision aids through small bounded artifacts.';
-    const research = new NativeSearchEvidenceLedger({
-      storage,
-      userId,
-      turnId: agentTurn.turnId,
-      leaseId: agentTurn.leaseId,
-      now: () => now,
-      handleSecret: new Uint8Array(32).fill(7),
-    });
-    const providerCallId = id('u5-provider-call');
-    const providerResultId = id('u5-provider-result');
-    const url = 'https://example.com/public-pattern';
-    const searchCall = {
-      type: 'tool-call', toolName: 'web_search', toolCallId: providerCallId,
-      providerExecuted: true, input: { action: { type: 'search', query: 'current public decision aids' } },
-    };
-    const searchResult = {
-      type: 'tool-result', toolName: 'web_search', toolCallId: providerCallId,
-      providerExecuted: true,
-      output: { action: { type: 'search', sources: [{ id: providerResultId, url, snippet: fact }] } },
-    };
-    const researchResult = await research.captureSettledStep({
-      content: [
-        searchCall,
-        searchResult,
-        {
-          type: 'text', text: fact,
-          providerMetadata: {
-            openai: { annotations: [{ type: 'url_citation', url, start_index: 0, end_index: fact.length }] },
-          },
-        },
-      ],
-      toolCalls: [searchCall],
-      toolResults: [searchResult],
-      response: {
-        body: {
-          output: [{
-            type: 'web_search_call', id: providerCallId,
-            action: { type: 'search', sources: [{ id: providerResultId, url, text: fact }] },
-            results: [{ id: providerResultId, url, text: fact }],
-          }],
-        },
-      },
-    }, [{
-      targetId: id('path-1'), targetRevision: 4,
-      canonicalField: 'purposePath.practicalFit', exactClaim: fact,
-    }], {
-      checkpoint: 'create-purpose-paths', moduleVersion: 'create-purpose-paths@test',
-    });
-    expect(researchResult).toMatchObject({
-      status: 'succeeded',
-      minted: [{ canonicalField: 'purposePath.practicalFit', support: 'server-validated' }],
-    });
-    expect(await storage.listResearchAttempts(userId)).toHaveLength(1);
-
-    const userItemId = id('u5-user-item');
-    const assistantItemId = id('u5-assistant-item');
-    const completedAgent = await storage.completeAgentTurn({
-      userId, turnId: agentTurn.turnId, leaseId: agentTurn.leaseId,
-      result: {
-        kind: 'completed', refetch: true, revision: 4,
-        displayProjection: { userItemId, assistantItemIds: [assistantItemId] },
-      },
-    });
-    expect(completedAgent?.status).toBe('completed');
-    const history = await loadConversationHistory({
-      storage,
-      userId,
-      client: {
-        listItems: async () => ({
-          data: [
-            { id: assistantItemId, type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Safe authoritative answer' }] },
-            { id: id('u5-pre-result-item'), type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Premature mutation claim' }] },
-            { id: userItemId, type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Safe prompt' }] },
-          ],
-          hasMore: false,
-        }),
-      },
-    });
-    expect(history.messages.map((message) => message.id)).toEqual([userItemId, assistantItemId]);
-    const agentReplay = await storage.beginAgentTurn({
-      userId,
-      clientMessageId: agentTurn.clientMessageId,
-      requestFingerprint: agentTurn.requestFingerprint,
-      turnId: id('u5-agent-retry-turn'),
-      leaseId: id('u5-agent-retry-lease'),
-    });
-    expect(agentReplay).toMatchObject({ status: 'terminal', shouldInvokeModel: false, turn: { status: 'completed' } });
-
-    const cancelledTurn = await beginTurn(userId, 'u5-cancelled', 'agent-turn');
-    const cancelled = await storage.cancelAgentTurn({
-      userId, turnId: cancelledTurn.turnId, leaseId: cancelledTurn.leaseId,
-      result: { kind: 'cancelled', stopped: true, refetch: true, revision: 4, operationCommitted: false },
-    });
-    expect(cancelled).toMatchObject({ status: 'cancelled', terminalResult: { stopped: true, operationCommitted: false } });
-    expect(await storage.getTurnLease(userId)).toBeUndefined();
-    expect(await storage.releaseTurnLease(userId, cancelledTurn.turnId, cancelledTurn.leaseId)).toBe(false);
-    const cancelledReplay = await storage.beginAgentTurn({
-      userId,
-      clientMessageId: cancelledTurn.clientMessageId,
-      requestFingerprint: cancelledTurn.requestFingerprint,
-      turnId: id('u5-cancelled-retry-turn'),
-      leaseId: id('u5-cancelled-retry-lease'),
-    });
-    expect(cancelledReplay).toMatchObject({ status: 'terminal', shouldInvokeModel: false, turn: { status: 'cancelled' } });
-    expect((await storage.listAgentTurns(userId)).map((turn) => turn.status).sort()).toEqual([
-      'cancelled', 'completed', 'completed', 'completed', 'completed', 'completed',
-    ]);
-  });
-
-
   it('starts one model invocation when identical client messages race and rejects changed reuse', async () => {
     const userId = owner('message-race');
     await storage.getOrCreateCareerMap(userId);
@@ -2109,14 +969,6 @@ describe('PostgresStorage lease and client-message turns', () => {
   it('rejects lease-token ABA reuse after expiry', async () => {
     const userId = owner('lease-token-aba');
     const first = await beginTurn(userId, 'lease-token-aba-first');
-    const attempt = {
-      ...amendedAttempt({
-        id: id('lease-token-aba-research'), status: 'failed', targetId: id('lease-token-aba-target'),
-        targetRevision: 0, checkpoint: 'form-foundation', errorClass: 'NoResults',
-      }),
-      attemptedAt: at(),
-    };
-    await storage.recordResearchAttempt(userId, first.leaseId, attempt);
     now = new Date(now.getTime() + 400_000);
     await expect(storage.beginAgentTurn({
       userId,
@@ -2127,9 +979,7 @@ describe('PostgresStorage lease and client-message turns', () => {
     })).rejects.toBeInstanceOf(TurnLeaseIdentityConflictError);
     expect((await storage.getAgentTurn(userId, first.clientMessageId))?.status).toBe('pending');
     expect((await storage.getTurnLease(userId))?.turnId).toBe(first.turnId);
-    const second = await beginTurn(userId, 'lease-token-aba-valid-second');
-    await expect(storage.recordResearchAttempt(userId, second.leaseId, attempt))
-      .rejects.toBeInstanceOf(ResearchAttemptConflictError);
+    await beginTurn(userId, 'lease-token-aba-valid-second');
   });
 
   it('fences terminal completion after lease expiry and releases the stale lease', async () => {
@@ -2313,13 +1163,6 @@ describe('PostgresStorage lease and client-message turns', () => {
     const second = await beginTurn(userId, 'expiry-race-second');
     expect(second.leaseId).toBe(id('lease-expiry-race-second'));
     await storage.setConversationMapping(userId, second.leaseId, id('expiry-race-conversation'));
-    await expect(storage.recordResearchAttempt(userId, first.leaseId, {
-      ...amendedAttempt({
-        id: id('expiry-race-stale-research'), status: 'failed', targetId: id('expiry-race-target'),
-        targetRevision: 0, checkpoint: 'form-foundation', errorClass: 'StaleWorker',
-      }),
-      attemptedAt: at(),
-    })).rejects.toBeInstanceOf(TurnLeaseLostError);
     await expect(storage.saveCareerMapDraft({
       userId, leaseId: first.leaseId, id: id('expiry-race-stale-draft'), kind: 'outreach', content: { text: 'stale' },
     })).rejects.toBeInstanceOf(TurnLeaseLostError);
@@ -2398,15 +1241,6 @@ describe('PostgresStorage repair, erasure, and integrity', () => {
           .where(eq(careerMaps.userId, userId));
       }
 
-      await expect(storage.recordResearchAttempt(userId, turn.leaseId, {
-        ...amendedAttempt({
-          id: id(`repair-aux-gate-${scenario}-research`), status: 'failed',
-          targetId: id(`repair-aux-gate-${scenario}-target`), targetRevision: 0,
-          checkpoint: 'form-foundation',
-        }),
-        attemptedAt: at(),
-        errorClass: 'RepairGateFixture',
-      })).rejects.toBeInstanceOf(CareerMapRepairRequiredError);
       await expect(storage.saveCareerMapDraft({
         userId, leaseId: turn.leaseId, id: id(`repair-aux-gate-${scenario}-draft`),
         kind: 'outreach', content: { text: 'must not persist' },
@@ -2417,8 +1251,6 @@ describe('PostgresStorage repair, erasure, and integrity', () => {
         id(`repair-aux-gate-${scenario}-conversation`),
       )).rejects.toBeInstanceOf(CareerMapRepairRequiredError);
 
-      expect(await db.select().from(careerMapResearchAttempts)
-        .where(eq(careerMapResearchAttempts.userId, userId))).toHaveLength(0);
       expect(await db.select().from(careerMapDrafts)
         .where(eq(careerMapDrafts.userId, userId))).toHaveLength(0);
       expect(await db.select().from(agentConversationMappings)
@@ -2597,16 +1429,6 @@ describe('PostgresStorage repair, erasure, and integrity', () => {
       type: 'confirm-why', sourceId: id('erasure-why-confirm'), expectedRevision: 1, occurredAt: at(2),
       payload: { whyId: id('erasure-why'), whyRevision: 1, action: action(2) },
     })).status).toBe('committed');
-    const erasurePaths = paths(undefined, true);
-    await storage.recordResearchAttempt(userId, turn.leaseId, amendedAttempt({
-      id: id('erasure-research'), status: 'succeeded', targetId: id('path-1'), targetRevision: 2,
-      sources: erasurePaths[0].sources,
-    }));
-    expect((await persist(userId, turn.leaseId, {
-      type: 'propose-purpose-paths', sourceId: id('erasure-paths'), expectedRevision: 2, occurredAt: at(3),
-      payload: { setId: id('erasure-path-set'), setRevision: 1, paths: erasurePaths, presentation: presentation(3) },
-    })).status).toBe('committed');
-    expect(await storage.listResearchSourceAssociations(userId)).toHaveLength(1);
     await storage.saveCareerMapDraft({ userId, leaseId: turn.leaseId, id: id('draft'), kind: 'outreach', content: { text: 'private draft' } });
     await storage.setConversationMapping(userId, turn.leaseId, id('conversation'));
     await storage.setConversationMapping(userId, turn.leaseId, id('conversation'));
@@ -2644,13 +1466,6 @@ describe('PostgresStorage repair, erasure, and integrity', () => {
       operation: evidenceOperation(0, id('erasure-blocked-operation')),
       moduleVersion: 'method-test@1',
     })).status).toBe('erasure-pending');
-    await expect(storage.recordResearchAttempt(userId, id('erasure-blocked-lease'), {
-      ...amendedAttempt({
-        id: id('erasure-blocked-research'), status: 'failed', targetId: id('erasure-blocked-target'),
-        targetRevision: 0, checkpoint: 'form-foundation', errorClass: 'Blocked',
-      }),
-      attemptedAt: at(),
-    })).rejects.toBeInstanceOf(MethodErasurePendingError);
     await expect(storage.saveCareerMapDraft({
       userId, leaseId: id('erasure-blocked-lease'), id: id('erasure-blocked-draft'), kind: 'outreach', content: { text: 'blocked' },
     })).rejects.toBeInstanceOf(MethodErasurePendingError);
@@ -2660,17 +1475,15 @@ describe('PostgresStorage repair, erasure, and integrity', () => {
     expect(await storage.getMethodErasureJob(userId)).toBeUndefined();
     expect(attempts).toBe(2);
     expect(providerTargets).toEqual([id('conversation'), id('conversation')]);
-    const [history, research, associations, drafts, turns, leases, mappings, jobs] = await Promise.all([
+    const [history, drafts, turns, leases, mappings, jobs] = await Promise.all([
       db.select().from(careerMapHistory).where(eq(careerMapHistory.userId, userId)),
-      db.select().from(careerMapResearchAttempts).where(eq(careerMapResearchAttempts.userId, userId)),
-      db.select().from(careerMapEvidenceAssociations).where(eq(careerMapEvidenceAssociations.userId, userId)),
       db.select().from(careerMapDrafts).where(eq(careerMapDrafts.userId, userId)),
       db.select().from(agentTurns).where(eq(agentTurns.userId, userId)),
       db.select().from(agentTurnLeases).where(eq(agentTurnLeases.userId, userId)),
       db.select().from(agentConversationMappings).where(eq(agentConversationMappings.userId, userId)),
       db.select().from(methodErasureJobs).where(eq(methodErasureJobs.userId, userId)),
     ]);
-    expect([history, research, associations, drafts, turns, leases, mappings, jobs]
+    expect([history, drafts, turns, leases, mappings, jobs]
       .every((rows) => rows.length === 0)).toBe(true);
   });
 
@@ -2746,39 +1559,12 @@ describe('PostgresStorage repair, erasure, and integrity', () => {
     })).status).toBe('complete');
   });
 
-  it('fails the integrity audit for malformed or identity-mismatched research rows', async () => {
-    const userId = owner('invalid-research-audit');
-    await storage.getOrCreateCareerMap(userId);
-    const turn = await beginTurn(userId, 'invalid-research-audit');
-    await db.insert(careerMapResearchAttempts).values([
-      {
-        id: id('malformed-research-row'), userId, turnId: turn.turnId, leaseId: turn.leaseId,
-        attempt: { id: id('malformed-research-row') } as never,
-      },
-      {
-        id: id('mismatched-research-row'), userId, turnId: turn.turnId, leaseId: turn.leaseId,
-        attempt: {
-          id: id('different-attempt-id'), status: 'failed', queryCategory: 'audit',
-          attemptedAt: at(), sources: [], errorClass: 'AuditFixture',
-        },
-      },
-    ]);
-    expect(await storage.auditCareerMapIntegrity()).toMatchObject({
-      orphanResearchAttempts: 0,
-      invalidResearchAttempts: 2,
-      zeroInvalid: false,
-    });
-    await eraseOwner(userId);
-  });
-
   it('reports a zero-invalid pre-pilot fixture audit', async () => {
     const userId = owner('integrity');
     await storage.getOrCreateCareerMap(userId);
     const audit = await storage.auditCareerMapIntegrity();
     expect(audit.invalidRecords).toEqual([]);
     expect(audit.orphanHistory).toBe(0);
-    expect(audit.orphanResearchAttempts).toBe(0);
-    expect(audit.invalidResearchAttempts).toBe(0);
     expect(audit.orphanDrafts).toBe(0);
     expect(audit.orphanTurns).toBe(0);
     expect(audit.orphanLeases).toBe(0);

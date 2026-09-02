@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import express, { type RequestHandler } from 'express';
 import rawRequest from 'supertest';
 import { simulateReadableStream } from 'ai';
@@ -246,7 +247,6 @@ function createStorage(overrides: Record<string, unknown> = {}) {
     claimConversationProvisioningCleanup: vi.fn(async () => undefined),
     completeConversationProvisioningCleanup: vi.fn(async () => undefined),
     releaseConversationProvisioningCleanup: vi.fn(async () => undefined),
-    recordResearchAttempt: vi.fn(async () => undefined),
     ...overrides,
   };
   return storage as typeof storage & IStorage;
@@ -326,6 +326,11 @@ function request(app: express.Express) {
 }
 
 describe('protected Method routes', () => {
+  it('does not construct or persist a research ledger for ordinary cited conversation', () => {
+    const source = readFileSync(new URL('./agent.ts', import.meta.url), 'utf8');
+    expect(source).not.toMatch(/createNativeSearchEvidenceLedger|recordResearchAttempt/);
+  });
+
   describe('custom POST request integrity', () => {
     const agentBody = { id: 'client-message-1', message: 'hello' };
     const operationBody = {
@@ -555,7 +560,6 @@ describe('protected Method routes', () => {
       expect(storage.beginAgentTurn).not.toHaveBeenCalled();
       expect(storage.beginWorkspaceActionTurn).not.toHaveBeenCalled();
       expect(storage.persistCareerMapOperation).not.toHaveBeenCalled();
-      expect(storage.recordResearchAttempt).not.toHaveBeenCalled();
       expect(storage.setConversationMapping).not.toHaveBeenCalled();
       expect(storage.recordConversationProvisioning).not.toHaveBeenCalled();
       expect(storage.listPendingConversationProvisioning).not.toHaveBeenCalled();
@@ -1548,7 +1552,7 @@ describe('protected Method routes', () => {
       exactClaim: claim,
       url,
       title: 'Official registry',
-      support: 'server-validated',
+      support: 'cited-provenance',
     });
     expect(chunks).toContainEqual(expect.objectContaining({
       type: 'source-url',
@@ -1557,20 +1561,6 @@ describe('protected Method routes', () => {
     expect(response.text).toContain(claim);
     expect(response.text).not.toMatch(/provider-search-(?:call|result)-private|provider-source-private/);
     expect(storage.persistCareerMapOperation).not.toHaveBeenCalled();
-    expect(storage.recordResearchAttempt).toHaveBeenCalledWith(
-      USER_ID,
-      'agent-turn-lease',
-      expect.objectContaining({
-        status: 'succeeded',
-        sources: [],
-        consultedSources: [expect.objectContaining({
-          providerCallId: 'provider-search-call-private',
-          providerResultId: 'provider-search-result-private',
-          url,
-        })],
-      }),
-      expect.any(AbortSignal),
-    );
     expect(storage.completeAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
       result: expect.objectContaining({
         internalContextItemIds: ['search-internal-context'],
@@ -1582,7 +1572,7 @@ describe('protected Method routes', () => {
     }));
   });
 
-  it('fails a hosted-search outage safely and persists only a source-free bounded attempt', async () => {
+  it('fails a hosted-search outage safely without a retry or durable research record', async () => {
     const privateProviderError = new Error('private search provider payload');
     const model = new MockLanguageModelV4({
       doStream: async () => ({
@@ -1628,24 +1618,14 @@ describe('protected Method routes', () => {
     });
 
     expect(response.status).toBe(200);
-    expect(response.text).toContain('The agent request failed.');
     expect(response.text).not.toContain(privateProviderError.message);
-    expect(uiStreamChunks(response.text).some((chunk) => chunk.type === 'data-operation-status')).toBe(false);
+    const chunks = uiStreamChunks(response.text);
+    expect(chunks.some((chunk) => chunk.type === 'data-operation-status')).toBe(false);
+    expect(chunks).toContainEqual(expect.objectContaining({ type: 'finish', finishReason: 'error' }));
+    expect(model.doStreamCalls).toHaveLength(1);
     expect(storage.persistCareerMapOperation).not.toHaveBeenCalled();
-    expect(storage.recordResearchAttempt).toHaveBeenCalledWith(
-      USER_ID,
-      'agent-turn-lease',
-      expect.objectContaining({
-        status: 'failed',
-        targetId: 'why-1',
-        targetRevision: 1,
-        sources: [],
-      }),
-      expect.any(AbortSignal),
-    );
-    expect(storage.failAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
-      errorClass: 'ExternalProviderError',
-    }));
+    expect(storage.completeAgentTurn).toHaveBeenCalledOnce();
+    expect(storage.failAgentTurn).not.toHaveBeenCalled();
     expect(storage.releaseTurnLease).toHaveBeenCalledOnce();
   });
 

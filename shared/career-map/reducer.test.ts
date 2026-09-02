@@ -502,10 +502,9 @@ describe('Method reducer', () => {
     expect(new Set(revised.map.invalidations.map((item) => item.targetKind))).toEqual(new Set(['reflection', 'next-move']));
   });
 
-  it('retains typed cited provenance without importing provider or server types', () => {
+  it('does not retain provider research metadata in canonical records', () => {
     let map = withConfirmedWhy();
-    const sourced = paths();
-    sourced[0].sources = [{
+    const researchMetadata = [{
       kind: 'cited-research',
       sourceHandle: 'source-1',
       providerResultId: 'result-1',
@@ -515,14 +514,22 @@ describe('Method reducer', () => {
       excerpt: 'A bounded excerpt associated with this claim.',
       support: 'server-validated',
     }];
-    map = commit(map, 'propose-purpose-paths', { setId: 'paths-sourced', setRevision: 1, paths: sourced, presentation: presentation(3) });
-    expect(map.pathSets.at(-1)?.paths[0].sources?.[0]).toMatchObject({ kind: 'cited-research', sourceHandle: 'source-1' });
-
-    const unsafe = operation(withConfirmedWhy(), 'propose-purpose-paths', {
-      setId: 'paths-http', setRevision: 1,
-      paths: paths().map((candidate, index) => index === 0 ? { ...candidate, sources: [{ kind: 'cited-research', sourceHandle: 'source-http', url: 'http://example.com', retrievedAt: at(3), support: 'cited-provenance' }] } : candidate) as never,
-      presentation: presentation(3),
+    const candidates = paths().map((candidate, index) => (
+      index === 0 ? { ...candidate, sources: researchMetadata } : candidate
+    )) as never;
+    const result = applyCareerMapOperation(map, {
+      type: 'propose-purpose-paths',
+      sourceId: 'paths-with-provider-metadata',
+      expectedRevision: map.revision,
+      occurredAt: at(3),
+      payload: {
+        setId: 'paths-with-provider-metadata',
+        setRevision: 1,
+        paths: candidates,
+        presentation: presentation(3),
+      },
     });
-    expect(applyCareerMapOperation(withConfirmedWhy(), unsafe as CareerMapOperation).status).toBe('rejected');
+    expect(result.status).toBe('rejected');
+    expect(result.map).toEqual(map);
   });
 });

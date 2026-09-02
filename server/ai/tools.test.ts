@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import {
@@ -11,7 +12,6 @@ import { createMethodModuleLoader } from './method/loader.js';
 import {
   createMethodTools,
   createMethodResponseOperationGuard,
-  deriveNativeSearchClaimBindings,
   executeMethodOperation,
   executeWorkspaceTool,
   refreshMethodState,
@@ -202,6 +202,12 @@ async function confirmPendingWhy(
 }
 
 describe('strict state-specific Method tools', () => {
+  it('has source-free strict schemas and no research authorization machinery', () => {
+    const source = readFileSync(new URL('./tools.ts', import.meta.url), 'utf8');
+    expect(source).not.toMatch(/ResearchSourceReference|MethodEvidenceResolver|researchSources|userSources/);
+    expect(source).not.toMatch(/nativeSearchObserved|researchResolutionRequired|ResearchHandleError/);
+  });
+
   it('contains no external-action surface and marks every tool strict', async () => {
     const storage = new ReducerStorage(pendingWhy());
     const loader = await createMethodModuleLoader();
@@ -673,14 +679,12 @@ describe('strict state-specific Method tools', () => {
     const execute = async (input: {
       currentMessage: string;
       content: string;
-      nativeSearchObserved?: boolean;
     }) => {
       const storage = new ReducerStorage(createCareerMap('explorer-1'));
       const prepared = await refreshMethodState(storage, loader, 'explorer-1');
       const tools = createMethodTools({
         ...runtime(storage), loader, surface: 'agent-turn', prepared: { current: prepared },
         currentMessage: input.currentMessage,
-        responsePolicy: { nativeSearchObserved: input.nativeSearchObserved ?? false },
       });
       const result = await tools.append_foundation_evidence.execute?.({
         id: 'evidence-exact', revision: 1, category: 'fascination', content: input.content,
@@ -703,60 +707,6 @@ describe('strict state-specific Method tools', () => {
       status: 'rejected', errorClass: 'UserEvidenceAssociationError',
     });
     expect(retrieved.storage.persist).not.toHaveBeenCalled();
-
-    const searched = await execute({
-      currentMessage: 'I learned that community interviews energize me.',
-      content: 'community interviews energize me',
-      nativeSearchObserved: true,
-    });
-    expect(searched.result).toMatchObject({ status: 'rejected', errorClass: 'ResearchHandleError' });
-    expect(searched.storage.persist).not.toHaveBeenCalled();
-  });
-
-  it('accepts only current-message-authored user source labels and URLs', async () => {
-    const loader = await createMethodModuleLoader();
-    const path = (
-      number: number,
-      userSources: Array<{ label: string; url: string | null }> | null,
-    ) => ({
-      id: `path-${number}`, revision: 1, name: `Path ${number}`,
-      servesWhy: `Serve ${number}`, possibility: `Possibility ${number}`,
-      evidence: [`Evidence ${number}`], centralUnknown: `Unknown ${number}`,
-      projectPreview: `Project ${number}`, practicalFit: `Fit ${number}`,
-      researchSources: null, userSources,
-    });
-    const execute = async (currentMessage: string, source: { label: string; url: string | null }) => {
-      const storage = new ReducerStorage(confirmedWhy());
-      const prepared = await refreshMethodState(storage, loader, 'explorer-1');
-      const tools = createMethodTools({
-        ...runtime(storage), loader, surface: 'agent-turn', prepared: { current: prepared }, currentMessage,
-      });
-      const result = await tools.propose_purpose_paths.execute?.({
-        setId: 'user-source-set', setRevision: 1,
-        paths: [path(1, [source]), path(2, null), path(3, null)],
-      }, { toolCallId: 'user-source-proposal', messages: [] } as never);
-      return { result, storage };
-    };
-
-    const authored = await execute(
-      'I used Source Alpha at https://example.com/source-alpha.',
-      { label: 'Source Alpha', url: 'https://example.com/source-alpha' },
-    );
-    expect(authored.result).toMatchObject({ status: 'committed' });
-    expect(authored.storage.map.pathSets[0]?.paths[0]?.sources).toEqual([
-      expect.objectContaining({
-        kind: 'user-supplied-source', label: 'Source Alpha', url: 'https://example.com/source-alpha',
-      }),
-    ]);
-
-    const invented = await execute(
-      'Please propose three paths from what we discussed.',
-      { label: 'Invented Source', url: 'https://example.com/invented' },
-    );
-    expect(invented.result).toMatchObject({
-      status: 'rejected', errorClass: 'UserEvidenceAssociationError',
-    });
-    expect(invented.storage.persist).not.toHaveBeenCalled();
   });
 
   it('accepts at most one canonical operation per provider Response and resets for continuation', async () => {
@@ -857,316 +807,103 @@ describe('strict state-specific Method tools', () => {
     }).success).toBe(false);
   });
 
-  it('resolves a handle against an NFC-normalized exact dotted field claim and current parent target', async () => {
+  it('rejects obsolete source and handle fields at every strict proposal schema boundary', async () => {
     const storage = new ReducerStorage(confirmedWhy());
     const loader = await createMethodModuleLoader();
     const prepared = await refreshMethodState(storage, loader, 'explorer-1');
-    const exactClaim = 'Fit Caf\u00e9 1';
-    const evidenceClaim = 'Registry Caf\u00e9 evidence';
-    const source = {
-      kind: 'cited-research' as const,
-      bindingVersion: 2 as const,
-      sourceHandle: 'ev_current', providerCallId: 'provider-call-1', providerResultId: 'provider-result-1',
-      targetId: 'path-1', targetRevision: prepared.map.revision,
-      canonicalField: 'purposePath.practicalFit', exactClaim,
-      url: 'https://example.com/public', retrievedAt: at(2), excerpt: `Evidence: ${exactClaim}`,
-      support: 'server-validated' as const,
-      citation: {
-        start: 0, end: exactClaim.length, exactClaimStart: 0, exactClaimEnd: exactClaim.length,
-        textHash: 'a'.repeat(64),
-      },
-    };
-    const evidenceSource = {
-      ...source,
-      sourceHandle: 'ev_evidence', providerCallId: 'provider-call-2', providerResultId: 'provider-result-2',
-      canonicalField: 'purposePath.evidence', exactClaim: evidenceClaim,
-      excerpt: `Evidence: ${evidenceClaim}`,
-    };
-    const evidence = { resolveSources: vi.fn(() => [source, evidenceSource]) };
     const tools = createMethodTools({
-      ...runtime(storage), loader, surface: 'agent-turn', prepared: { current: prepared }, evidence,
-    } as never);
-    const path = (number: number, researchSources?: unknown[]) => ({
+      ...runtime(storage), loader, surface: 'agent-turn', prepared: { current: prepared },
+      currentMessage: 'Please suggest three Purpose Paths.',
+    });
+    const path = (number: number) => ({
       id: `path-${number}`, revision: 1, name: `Path ${number}`,
       servesWhy: `Serve ${number}`, possibility: `Possibility ${number}`,
-      evidence: number === 1 ? ['Registry Cafe\u0301 evidence', 'Another exact item'] : [`Evidence ${number}`],
-      centralUnknown: `Unknown ${number}`,
-      projectPreview: `Project ${number}`,
-      practicalFit: number === 1 ? 'Fit Cafe\u0301 1' : `Fit ${number}`,
-      ...(researchSources ? { researchSources } : {}),
+      evidence: [`Evidence ${number}`], centralUnknown: `Unknown ${number}`,
+      projectPreview: `Project ${number}`, practicalFit: `Fit ${number}`,
+    });
+    const schema = tools.propose_purpose_paths.inputSchema as z.ZodTypeAny;
+    const valid = { setId: 'set-source-free', setRevision: 1, paths: [path(1), path(2), path(3)] };
+
+    expect(schema.safeParse(valid).success).toBe(true);
+    for (const obsolete of [
+      { researchSources: null },
+      { userSources: null },
+      { sources: [] },
+      { sourceHandle: 'ev_obsolete' },
+      { evidenceHandle: 'ev_obsolete' },
+    ]) {
+      expect(schema.safeParse({
+        ...valid,
+        paths: [{ ...path(1), ...obsolete }, path(2), path(3)],
+      }).success).toBe(false);
+    }
+  });
+
+  it('commits a source-free Suggested proposal without a search-resolution gate', async () => {
+    const storage = new ReducerStorage(confirmedWhy());
+    const loader = await createMethodModuleLoader();
+    const prepared = await refreshMethodState(storage, loader, 'explorer-1');
+    const tools = createMethodTools({
+      ...runtime(storage), loader, surface: 'agent-turn', prepared: { current: prepared },
+      currentMessage: 'Please suggest three Purpose Paths.',
+    });
+    const path = (number: number) => ({
+      id: `path-${number}`, revision: 1, name: `Path ${number}`,
+      servesWhy: `Serve ${number}`, possibility: `Possibility ${number}`,
+      evidence: [`Evidence ${number}`], centralUnknown: `Unknown ${number}`,
+      projectPreview: `Project ${number}`, practicalFit: `Fit ${number}`,
     });
 
     const result = await tools.propose_purpose_paths.execute?.({
-      setId: 'set-grounded', setRevision: 1,
-      paths: [
-        path(1, [{
-          handle: 'ev_current',
-          canonicalField: 'purposePath.practicalFit',
-          exactClaim: '  Fit Cafe\u0301 1  ',
-        }, {
-          handle: 'ev_evidence',
-          canonicalField: 'purposePath.evidence',
-          exactClaim: ' Registry Cafe\u0301 evidence ',
-        }]),
-        path(2), path(3),
-      ],
-    } as never, { toolCallId: 'grounded-proposal', messages: [] } as never);
+      setId: 'set-source-free', setRevision: 1, paths: [path(1), path(2), path(3)],
+    }, { toolCallId: 'source-free-proposal', messages: [] } as never);
 
     expect(result).toMatchObject({ status: 'committed', authoritativeRevision: 3 });
-    expect(evidence.resolveSources).toHaveBeenCalledWith([
-      { handle: 'ev_current', canonicalField: 'purposePath.practicalFit', exactClaim },
-      { handle: 'ev_evidence', canonicalField: 'purposePath.evidence', exactClaim: evidenceClaim },
-    ], {
-      userId: 'explorer-1', turnId: 'current-turn', leaseId: 'current-lease',
-      targetId: 'path-1', targetRevision: 2,
-    });
-    expect(storage.map.pathSets[0]?.paths[0]?.sources).toEqual([source, evidenceSource]);
+    expect(storage.map.pathSets[0]?.paths).toEqual(
+      expect.arrayContaining([expect.not.objectContaining({ sources: expect.anything() })]),
+    );
   });
-
-  it('requires a server-minted handle only after native search was observed in this Response', async () => {
+  it('takes Suggested proposal and edit authority only from the exact current explorer message', async () => {
+    const loader = await createMethodModuleLoader();
     const path = (number: number) => ({
       id: `path-${number}`, revision: 1, name: `Path ${number}`,
       servesWhy: `Serve ${number}`, possibility: `Possibility ${number}`,
       evidence: [`Evidence ${number}`], centralUnknown: `Unknown ${number}`,
       projectPreview: `Project ${number}`, practicalFit: `Fit ${number}`,
-      researchSources: null, userSources: null,
     });
-    const loader = await createMethodModuleLoader();
-
-    const ordinaryStorage = new ReducerStorage(confirmedWhy());
-    const ordinaryPrepared = await refreshMethodState(ordinaryStorage, loader, 'explorer-1');
-    const ordinaryTools = createMethodTools({
-      ...runtime(ordinaryStorage), loader, surface: 'agent-turn',
-      prepared: { current: ordinaryPrepared }, responsePolicy: { nativeSearchObserved: false },
-    });
-    const ordinary = await ordinaryTools.propose_purpose_paths.execute?.({
-      setId: 'ordinary-set', setRevision: 1, paths: [path(1), path(2), path(3)],
-    }, { toolCallId: 'ordinary-no-source', messages: [] } as never);
-    expect(ordinary).toMatchObject({ status: 'committed', authoritativeRevision: 3 });
-    expect(ordinaryStorage.persist).toHaveBeenCalledOnce();
-
-    const searchedStorage = new ReducerStorage(confirmedWhy());
-    const searchedPrepared = await refreshMethodState(searchedStorage, loader, 'explorer-1');
-    const searchedTools = createMethodTools({
-      ...runtime(searchedStorage), loader, surface: 'agent-turn',
-      prepared: { current: searchedPrepared }, responsePolicy: { nativeSearchObserved: true },
-    });
-    const searched = await searchedTools.propose_purpose_paths.execute?.({
-      setId: 'searched-set', setRevision: 1, paths: [path(1), path(2), path(3)],
-    }, { toolCallId: 'searched-no-handle', messages: [] } as never);
-    expect(searched).toMatchObject({ status: 'rejected', errorClass: 'ResearchHandleError' });
-    expect(searchedStorage.persist).not.toHaveBeenCalled();
-  });
-
-  it('rejects a search-observed exact-three proposal when even one record lacks a handle', async () => {
-    const path = (number: number, researchSources: unknown[] | null) => ({
-      id: `path-${number}`, revision: 1, name: `Path ${number}`,
-      servesWhy: `Serve ${number}`, possibility: `Possibility ${number}`,
-      evidence: [`Evidence ${number}`], centralUnknown: `Unknown ${number}`,
-      projectPreview: `Project ${number}`, practicalFit: `Fit ${number}`,
-      researchSources, userSources: null,
-    });
-    const storage = new ReducerStorage(confirmedWhy());
-    const loader = await createMethodModuleLoader();
-    const prepared = await refreshMethodState(storage, loader, 'explorer-1');
-    const evidence = { resolveSources: vi.fn(() => []) };
-    const tools = createMethodTools({
-      ...runtime(storage), loader, surface: 'agent-turn', prepared: { current: prepared },
-      responsePolicy: { nativeSearchObserved: true }, evidence,
-    } as never);
-
-    const result = await tools.propose_purpose_paths.execute?.({
-      setId: 'partial-set', setRevision: 1,
-      paths: [
-        path(1, [{
-          handle: 'ev_path_1', canonicalField: 'purposePath.practicalFit', exactClaim: 'Fit 1',
-        }]),
-        path(2, null),
-        path(3, null),
-      ],
-    } as never, { toolCallId: 'partial-search-grounding', messages: [] } as never);
-
-    expect(result).toMatchObject({ status: 'rejected', errorClass: 'ResearchHandleError' });
-    expect(evidence.resolveSources).not.toHaveBeenCalled();
-    expect(storage.persist).not.toHaveBeenCalled();
-  });
-
-  it('returns stale native-search handles as a rejected tool result', async () => {
-    const path = (number: number) => ({
-      id: `path-${number}`, revision: 1, name: `Path ${number}`,
-      servesWhy: `Serve ${number}`, possibility: `Possibility ${number}`,
-      evidence: [`Evidence ${number}`], centralUnknown: `Unknown ${number}`,
-      projectPreview: `Project ${number}`, practicalFit: `Fit ${number}`,
-      researchSources: [{
-        handle: `stale-handle-${number}`,
-        canonicalField: 'purposePath.practicalFit',
-        exactClaim: `Fit ${number}`,
-      }],
-      userSources: null,
-    });
-    const storage = new ReducerStorage(confirmedWhy());
-    const loader = await createMethodModuleLoader();
-    const prepared = await refreshMethodState(storage, loader, 'explorer-1');
-    const evidenceError = new Error('No current evidence handle.');
-    evidenceError.name = 'NativeSearchEvidenceError';
-    const statuses: Array<Record<string, unknown>> = [];
-    const tools = createMethodTools({
-      ...runtime(storage),
-      loader,
-      surface: 'agent-turn',
-      prepared: { current: prepared },
-      responsePolicy: {
-        nativeSearchObserved: false,
-        evidenceManifestAvailable: true,
-        researchResolutionRequired: true,
-      },
-      evidence: { resolveSources: vi.fn(() => { throw evidenceError; }) },
-      onOperationStatus: (event) => { statuses.push(event); },
-    } as never);
-
-    const result = await tools.propose_purpose_paths.execute?.({
-      setId: 'stale-set', setRevision: 1, paths: [path(1), path(2), path(3)],
-    } as never, { toolCallId: 'stale-research-retry', messages: [] } as never);
-
-    expect(result).toMatchObject({ status: 'rejected', errorClass: 'NativeSearchEvidenceError' });
-    expect(statuses.at(-1)).toMatchObject({
-      phase: 'terminal', status: 'rejected', errorClass: 'NativeSearchEvidenceError',
-    });
-    expect(storage.persist).not.toHaveBeenCalled();
-  });
-
-  it('rejects a same-Response write even when it carries older exact handles', async () => {
-    const path = (number: number) => ({
-      id: `path-${number}`, revision: 1, name: `Path ${number}`,
-      servesWhy: `Serve ${number}`, possibility: `Possibility ${number}`,
-      evidence: [`Evidence ${number}`], centralUnknown: `Unknown ${number}`,
-      projectPreview: `Project ${number}`, practicalFit: `Fit ${number}`,
-      researchSources: [{
-        handle: `ev_path_${number}`,
-        canonicalField: 'purposePath.practicalFit',
-        exactClaim: `Fit ${number}`,
-      }],
-      userSources: null,
-    });
-    const storage = new ReducerStorage(confirmedWhy());
-    const loader = await createMethodModuleLoader();
-    const prepared = await refreshMethodState(storage, loader, 'explorer-1');
-    const evidence = {
-      resolveSources: vi.fn((references: Array<{
-        handle: string;
-        canonicalField: string;
-        exactClaim: string;
-      }>, context: { targetId: string; targetRevision: number }) => references.map((reference: {
-        handle: string;
-        canonicalField: string;
-        exactClaim: string;
-      }) => ({
-        kind: 'cited-research' as const,
-        bindingVersion: 2 as const,
-        sourceHandle: reference.handle,
-        providerCallId: `call_${reference.handle}`,
-        providerResultId: `result_${reference.handle}`,
-        targetId: context.targetId,
-        targetRevision: context.targetRevision,
-        canonicalField: reference.canonicalField,
-        exactClaim: reference.exactClaim,
-        url: `https://example.com/${reference.handle}`,
-        retrievedAt: at(2),
-        excerpt: reference.exactClaim,
-        support: 'server-validated' as const,
-        citation: {
-          start: 0, end: reference.exactClaim.length,
-          exactClaimStart: 0, exactClaimEnd: reference.exactClaim.length,
-          textHash: 'b'.repeat(64),
-        },
-      }))),
+    const proposalInput = {
+      setId: 'set-explicit', setRevision: 1, paths: [path(1), path(2), path(3)],
     };
-    const tools = createMethodTools({
-      ...runtime(storage), loader, surface: 'agent-turn', prepared: { current: prepared },
-      responsePolicy: { nativeSearchObserved: true }, evidence,
-    } as never);
 
-    const result = await tools.propose_purpose_paths.execute?.({
-      setId: 'fully-sourced-set', setRevision: 1, paths: [path(1), path(2), path(3)],
-    } as never, { toolCallId: 'fully-sourced-search-grounding', messages: [] } as never);
-
-    expect(result).toMatchObject({ status: 'rejected', errorClass: 'ResearchHandleError' });
-    expect(evidence.resolveSources).not.toHaveBeenCalled();
-    expect(storage.persist).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    ['propose-purpose-paths', { paths: [{
-      id: 'path-proposed', practicalFit: 'Caf\u00e9 work',
-      researchSources: [{ handle: 'ev_path', canonicalField: 'purposePath.practicalFit', exactClaim: 'Cafe\u0301 work' }],
-    }] }, 'path-proposed', 'purposePath.practicalFit'],
-    ['replace-purpose-path', { replacement: {
-      id: 'path-replacement', practicalFit: 'Caf\u00e9 work',
-      researchSources: [{ handle: 'ev_path', canonicalField: 'purposePath.practicalFit', exactClaim: 'Cafe\u0301 work' }],
-    } }, 'path-replacement', 'purposePath.practicalFit'],
-    ['combine-purpose-paths', { paths: [{
-      id: 'path-combined', practicalFit: 'Caf\u00e9 work',
-      researchSources: [{ handle: 'ev_path', canonicalField: 'purposePath.practicalFit', exactClaim: 'Cafe\u0301 work' }],
-    }] }, 'path-combined', 'purposePath.practicalFit'],
-    ['propose-first-project', {
-      id: 'project-proposed', firstVersion: 'Caf\u00e9 prototype',
-      researchSources: [{ handle: 'ev_project', canonicalField: 'pathProject.firstVersion', exactClaim: 'Cafe\u0301 prototype' }],
-    }, 'project-proposed', 'pathProject.firstVersion'],
-    ['replace-project-proposal', { replacement: {
-      id: 'project-replacement', firstVersion: 'Caf\u00e9 prototype',
-      researchSources: [{ handle: 'ev_project', canonicalField: 'pathProject.firstVersion', exactClaim: 'Cafe\u0301 prototype' }],
-    } }, 'project-replacement', 'pathProject.firstVersion'],
-  ] as const)('derives future-parent native-search bindings for %s', (operationType, rawInput, targetId, canonicalField) => {
-    expect(deriveNativeSearchClaimBindings({ operationType, rawInput, targetRevision: 9 })).toEqual([{
-      targetId, targetRevision: 9, canonicalField,
-      exactClaim: canonicalField.startsWith('purposePath') ? 'Caf\u00e9 work' : 'Caf\u00e9 prototype',
-    }]);
-  });
-
-  it('derives a prospective binding for an exact normalized purposePath.evidence member', () => {
-    expect(deriveNativeSearchClaimBindings({
-      operationType: 'propose-purpose-paths',
-      targetRevision: 11,
-      rawInput: { paths: [{
-        id: 'path-evidence', evidence: ['Observed Cafe\u0301 pattern', 'A separate observation'],
-        researchSources: [{
-          handle: 'ev_evidence', canonicalField: 'purposePath.evidence', exactClaim: ' Observed Caf\u00e9 pattern ',
-        }],
-      }] },
-    })).toEqual([{
-      targetId: 'path-evidence', targetRevision: 11,
-      canonicalField: 'purposePath.evidence', exactClaim: 'Observed Caf\u00e9 pattern',
-    }]);
-  });
-
-  it.each([
-    ['wrong dotted field', { canonicalField: 'purposePath.possibility', exactClaim: 'Fit 1' }],
-    ['mismatched claim', { canonicalField: 'purposePath.practicalFit', exactClaim: 'Possibility 1' }],
-    ['nonmember array claim', { canonicalField: 'purposePath.evidence', exactClaim: 'Unrelated evidence' }],
-  ])('rejects a handle bound to the %s before resolution', async (_label, reference) => {
-    const storage = new ReducerStorage(confirmedWhy());
-    const loader = await createMethodModuleLoader();
-    const prepared = await refreshMethodState(storage, loader, 'explorer-1');
-    const evidence = { resolveSources: vi.fn(() => []) };
-    const tools = createMethodTools({
-      ...runtime(storage), loader, surface: 'agent-turn', prepared: { current: prepared }, evidence,
-    } as never);
-    const path = (number: number, researchSources?: unknown[]) => ({
-      id: `path-${number}`, revision: 1, name: `Path ${number}`,
-      servesWhy: `Serve ${number}`, possibility: `Possibility ${number}`,
-      evidence: [`Evidence ${number}`], centralUnknown: `Unknown ${number}`,
-      projectPreview: `Project ${number}`, practicalFit: `Fit ${number}`,
-      ...(researchSources ? { researchSources } : {}),
+    const unauthorizedStorage = new ReducerStorage(confirmedWhy());
+    const unauthorizedTools = createMethodTools({
+      ...runtime(unauthorizedStorage), loader, surface: 'agent-turn',
+      prepared: { current: await refreshMethodState(unauthorizedStorage, loader, 'explorer-1') },
+      currentMessage: 'Research the current landscape before I decide.',
     });
+    const unauthorized = await unauthorizedTools.propose_purpose_paths.execute?.(
+      proposalInput,
+      { toolCallId: 'retrieved-only-proposal', messages: [] } as never,
+    );
+    expect(unauthorized).toMatchObject({
+      status: 'rejected', errorClass: 'SuggestedOperationAuthorizationError',
+    });
+    expect(unauthorizedStorage.persist).not.toHaveBeenCalled();
 
-    const result = await tools.propose_purpose_paths.execute?.({
-      setId: 'set-invalid', setRevision: 1,
-      paths: [path(1, [{ handle: 'ev_current', ...reference }]), path(2), path(3)],
-    } as never, { toolCallId: 'invalid-grounding', messages: [] } as never);
-
-    expect(result).toMatchObject({ status: 'rejected', errorClass: 'ResearchGroundingError' });
-    expect(evidence.resolveSources).not.toHaveBeenCalled();
-    expect(storage.persist).not.toHaveBeenCalled();
+    const editStorage = new ReducerStorage(pendingPaths());
+    const editTools = createMethodTools({
+      ...runtime(editStorage), loader, surface: 'agent-turn',
+      prepared: { current: await refreshMethodState(editStorage, loader, 'explorer-1') },
+      currentMessage: 'Please replace Path 2.',
+      timing: { turnSequence: 4, occurredAt: at(4) },
+    });
+    const edited = await editTools.replace_purpose_path.execute?.({
+      sourceSetId: 'set-1', sourceSetRevision: 1, replacedPathId: 'path-2',
+      replacementSetId: 'set-2', replacementSetRevision: 1,
+      replacement: { ...path(2), id: 'path-4', name: 'Replacement Path' },
+    }, { toolCallId: 'explicit-path-edit', messages: [] } as never);
+    expect(edited).toMatchObject({ status: 'committed', authoritativeRevision: 4 });
+    expect(editStorage.persist).toHaveBeenCalledOnce();
   });
 
   it('returns the same reducer envelope for an agent confirmation and a workspace confirmation', async () => {

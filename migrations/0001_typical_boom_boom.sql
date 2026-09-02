@@ -270,15 +270,6 @@ CREATE TABLE "career_map_history" (
 	CONSTRAINT "career_map_history_revision_order" CHECK ("career_map_history"."result_revision" = "career_map_history"."base_revision" + 1)
 );
 --> statement-breakpoint
-CREATE TABLE "career_map_research_attempts" (
-	"id" text NOT NULL,
-	"user_id" text NOT NULL,
-	"turn_id" text NOT NULL,
-	"lease_id" text NOT NULL,
-	"attempt" jsonb NOT NULL,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL
-);
---> statement-breakpoint
 CREATE TABLE "career_maps" (
 	"user_id" text PRIMARY KEY NOT NULL,
 	"schema_version" integer NOT NULL,
@@ -307,7 +298,6 @@ ALTER TABLE "agent_turn_leases" ADD CONSTRAINT "agent_turn_leases_user_id_career
 ALTER TABLE "agent_turns" ADD CONSTRAINT "agent_turns_user_id_career_maps_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."career_maps"("user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "career_map_drafts" ADD CONSTRAINT "career_map_drafts_user_id_career_maps_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."career_maps"("user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "career_map_history" ADD CONSTRAINT "career_map_history_user_id_career_maps_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."career_maps"("user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "career_map_research_attempts" ADD CONSTRAINT "career_map_research_attempts_user_id_career_maps_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."career_maps"("user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "agent_turn_leases_expiry_idx" ON "agent_turn_leases" USING btree ("expires_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "agent_turns_user_message_unique" ON "agent_turns" USING btree ("user_id","client_message_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "agent_turns_user_lease_unique" ON "agent_turns" USING btree ("user_id","lease_id");--> statement-breakpoint
@@ -316,7 +306,4 @@ CREATE UNIQUE INDEX "career_map_drafts_user_id_unique" ON "career_map_drafts" US
 CREATE INDEX "career_map_drafts_user_idx" ON "career_map_drafts" USING btree ("user_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "career_map_history_user_operation_unique" ON "career_map_history" USING btree ("user_id","operation_source_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "career_map_history_user_revision_unique" ON "career_map_history" USING btree ("user_id","result_revision");--> statement-breakpoint
-CREATE INDEX "career_map_history_user_idx" ON "career_map_history" USING btree ("user_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "career_map_research_user_id_unique" ON "career_map_research_attempts" USING btree ("user_id","id");--> statement-breakpoint
-CREATE INDEX "career_map_research_user_idx" ON "career_map_research_attempts" USING btree ("user_id");--> statement-breakpoint
-CREATE INDEX "career_map_research_turn_idx" ON "career_map_research_attempts" USING btree ("user_id","turn_id","lease_id");
+CREATE INDEX "career_map_history_user_idx" ON "career_map_history" USING btree ("user_id");

@@ -34,8 +34,6 @@ import {
   analyticsEvents,
   careerMaps,
   careerMapHistory,
-  careerMapResearchAttempts,
-  careerMapEvidenceAssociations,
   careerMapDrafts,
   agentTurnLeases,
   agentTurns,
@@ -49,24 +47,11 @@ import {
   createCareerMap,
   operationReceiptSchema,
   opaqueClientMessageIdSchema,
-  pathProjectInputSchema,
-  peerExposureInputSchema,
-  purposePathInputSchema,
-  amendedResearchAttemptSchema,
-  amendedCitedResearchSourceSchema,
-  normalizeResearchClaim,
-  persistedResearchAttemptSchema,
-  researchSourceAssociationSchema,
-  sideDoorInputSchema,
   userActionProvenanceSchema,
-  deriveMethodCheckpoint,
   type ApplyCareerMapResult,
   type CareerMap,
   type CareerMapOperation,
-  type ResearchAttempt,
-  type ResearchSourceAssociation,
   type ModelPresentation,
-  type SourceProvenance,
   type UserActionProvenance,
 } from '../shared/career-map/index.js';
 
@@ -79,9 +64,7 @@ export type RepairReason =
   | 'invalid-document'
   | 'owner-mismatch'
   | 'row-document-mismatch'
-  | 'history-mismatch'
-  | 'research-mismatch'
-  | 'evidence-association-mismatch';
+  | 'history-mismatch';
 
 export type CareerMapLoadResult =
   | { status: 'not-found' }
@@ -226,16 +209,11 @@ export function createWorkspaceActionPersistenceContext(
 export type CareerMapHistoryRecord = typeof careerMapHistory.$inferSelect;
 export type AgentTurnLeaseRecord = typeof agentTurnLeases.$inferSelect;
 export type MethodErasureJobRecord = typeof methodErasureJobs.$inferSelect;
-export type ResearchSourceAssociationRecord = typeof careerMapEvidenceAssociations.$inferSelect;
 
 export interface CareerMapIntegrityAudit {
   totalMaps: number;
   invalidRecords: Array<{ userId: string; reason: RepairReason }>;
   orphanHistory: number;
-  orphanResearchAttempts: number;
-  invalidResearchAttempts: number;
-  orphanEvidenceAssociations: number;
-  invalidEvidenceAssociations: number;
   orphanDrafts: number;
   orphanTurns: number;
   orphanLeases: number;
@@ -299,24 +277,6 @@ export class ConversationMappingConflictError extends Error {
   }
 }
 
-export class ResearchAttemptConflictError extends Error {
-  readonly code = 'research-attempt-conflict';
-
-  constructor() {
-    super('Research attempt identity was reused with different content.');
-    this.name = 'ResearchAttemptConflictError';
-  }
-}
-
-export class ResearchAttemptSourceError extends Error {
-  readonly code = 'invalid-research-source';
-
-  constructor() {
-    super('Research attempts may persist only server-resolved cited-research sources.');
-    this.name = 'ResearchAttemptSourceError';
-  }
-}
-
 export class TurnLeaseIdentityConflictError extends Error {
   readonly code = 'turn-lease-identity-conflict';
 
@@ -347,10 +307,8 @@ export interface MethodErasureProvider {
 }
 
 export type StorageFaultStage =
-  | 'before-research-attempt-insert'
   | 'before-turn-completion-update'
   | 'before-map-update'
-  | 'after-evidence-association-before-history'
   | 'after-map-update-before-history'
   | 'before-commit'
   | 'before-erasure-marker-delete';
@@ -476,14 +434,6 @@ export interface IStorage {
     result?: Record<string, unknown>;
   }): Promise<AgentTurnRecord | undefined>;
   releaseTurnLease(userId: string, turnId: string, leaseId: string): Promise<boolean>;
-  recordResearchAttempt(
-    userId: string,
-    leaseId: string,
-    input: unknown,
-    abortSignal?: AbortSignal,
-  ): Promise<ResearchAttempt>;
-  listResearchAttempts(userId: string): Promise<ResearchAttempt[]>;
-  listResearchSourceAssociations(userId: string): Promise<ResearchSourceAssociationRecord[]>;
   saveCareerMapDraft(input: {
     userId: string;
     leaseId: string;
@@ -521,8 +471,6 @@ export interface IStorage {
 
 type CareerMapRow = typeof careerMaps.$inferSelect;
 type CareerMapHistoryRow = CareerMapHistoryRecord;
-type CareerMapResearchRow = typeof careerMapResearchAttempts.$inferSelect;
-type CareerMapEvidenceAssociationRow = typeof careerMapEvidenceAssociations.$inferSelect;
 type AgentTurnRow = typeof agentTurns.$inferSelect;
 type StorageTransaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 
@@ -618,58 +566,13 @@ function exactConfirmationTurn(
     ?.confirmation?.presentedInTurnId;
 }
 
-type CitedResearchSource = Extract<SourceProvenance, { kind: 'cited-research' }>;
-type AmendedCitedResearchSource = Extract<CitedResearchSource, { bindingVersion: 2 }>;
-
-interface SourceClaim {
-  source: SourceProvenance;
-  parent: Record<string, unknown> & { id: string; revision: number };
-}
-
-function collectSourceClaims(value: unknown): SourceClaim[] {
+function collectOperationActions(value: unknown): UserActionProvenance[] {
   if (!value || typeof value !== 'object') return [];
-  if (Array.isArray(value)) return value.flatMap(collectSourceClaims);
+  if (Array.isArray(value)) return value.flatMap(collectOperationActions);
   const record = value as Record<string, unknown>;
-  const direct = typeof record.id === 'string'
-    && typeof record.revision === 'number'
-    && Array.isArray(record.sources)
-    ? record.sources
-      .filter((source): source is SourceProvenance => Boolean(source)
-        && typeof source === 'object'
-        && ['cited-research', 'user-supplied-source'].includes(
-          String((source as Record<string, unknown>).kind),
-        ))
-      .map((source) => ({
-        source,
-        parent: record as Record<string, unknown> & { id: string; revision: number },
-      }))
-    : [];
-  return [
-    ...direct,
-    ...Object.entries(record)
-      .filter(([key]) => key !== 'sources')
-      .flatMap(([, nested]) => collectSourceClaims(nested)),
-  ];
-}
-
-function collectCitedSourceClaims(value: unknown): Array<SourceClaim & { source: CitedResearchSource }> {
-  return collectSourceClaims(value)
-    .filter((claim): claim is SourceClaim & { source: CitedResearchSource } => (
-      claim.source.kind === 'cited-research'
-    ));
-}
-
-function collectOperationActions(value: unknown, insideSources = false): UserActionProvenance[] {
-  if (!value || typeof value !== 'object') return [];
-  if (Array.isArray(value)) return value.flatMap((item) => collectOperationActions(item, insideSources));
-  const record = value as Record<string, unknown>;
-  if (!insideSources) {
-    const parsed = userActionProvenanceSchema.safeParse(record);
-    if (parsed.success) return [parsed.data];
-  }
-  return Object.entries(record).flatMap(([key, nested]) => (
-    collectOperationActions(nested, insideSources || key === 'sources')
-  ));
+  const parsed = userActionProvenanceSchema.safeParse(record);
+  if (parsed.success) return [parsed.data];
+  return Object.values(record).flatMap(collectOperationActions);
 }
 
 function collectOperationPresentations(value: unknown): ModelPresentation[] {
@@ -691,96 +594,6 @@ function sameProvenance(left: unknown, right: unknown): boolean {
     );
   };
   return JSON.stringify(canonicalize(left)) === JSON.stringify(canonicalize(right));
-}
-
-function citedSourceIdentity(source: CitedResearchSource): string {
-  const base = {
-    sourceHandle: source.sourceHandle,
-    support: source.support,
-    providerResultId: source.providerResultId ?? null,
-    url: source.url,
-    retrievedAt: source.retrievedAt,
-    title: source.title ?? null,
-    excerpt: source.excerpt ?? null,
-  };
-  return JSON.stringify(isAmendedCitedSource(source) ? {
-    ...base,
-    bindingVersion: source.bindingVersion,
-    providerCallId: source.providerCallId,
-    targetId: source.targetId,
-    targetRevision: source.targetRevision,
-    canonicalField: source.canonicalField,
-    exactClaim: source.exactClaim,
-    citation: source.citation,
-  } : base);
-}
-
-function isAmendedCitedSource(source: CitedResearchSource): source is AmendedCitedResearchSource {
-  return 'bindingVersion' in source && source.bindingVersion === 2;
-}
-
-const sourceBearingInputSchemas = [
-  purposePathInputSchema.strip(),
-  pathProjectInputSchema.strip(),
-  peerExposureInputSchema.strip(),
-  sideDoorInputSchema.strip(),
-] as const;
-
-const sourceBearingFields = [
-  { prefix: 'purposePath', schema: purposePathInputSchema.strip() },
-  { prefix: 'pathProject', schema: pathProjectInputSchema.strip() },
-  { prefix: 'peerExposure', schema: peerExposureInputSchema.strip() },
-  { prefix: 'sideDoor', schema: sideDoorInputSchema.strip() },
-] as const;
-
-function citedSourceMatchesCanonicalField(
-  claim: SourceClaim & { source: AmendedCitedResearchSource },
-  expectedRevision: number,
-): boolean {
-  if (claim.parent.id !== claim.source.targetId
-    || claim.source.targetRevision !== expectedRevision
-  ) return false;
-  for (const candidate of sourceBearingFields) {
-    const parsed = candidate.schema.safeParse(claim.parent);
-    if (!parsed.success || !claim.source.canonicalField.startsWith(`${candidate.prefix}.`)) continue;
-    const field = claim.source.canonicalField.slice(candidate.prefix.length + 1);
-    if (field.includes('.')) return false;
-    const value = (parsed.data as Record<string, unknown>)[field];
-    if (candidate.prefix === 'purposePath' && field === 'evidence' && Array.isArray(value)) {
-      return value.some((item) => typeof item === 'string'
-        && normalizeResearchClaim(item) === claim.source.exactClaim);
-    }
-    return typeof value === 'string'
-      && normalizeResearchClaim(value).includes(claim.source.exactClaim);
-  }
-  return false;
-}
-
-function sourceBearingInputSnapshot(value: unknown): string | undefined {
-  for (const schema of sourceBearingInputSchemas) {
-    const parsed = schema.safeParse(value);
-    if (parsed.success) return JSON.stringify(parsed.data);
-  }
-  return undefined;
-}
-
-function sourceBearingInputIdentity(value: { id: string; revision: number }): string | undefined {
-  const snapshot = sourceBearingInputSnapshot(value);
-  return snapshot ? JSON.stringify([value.id, value.revision, snapshot]) : undefined;
-}
-
-function canonicalSourceClaimIdentities(map: CareerMap): Set<string> {
-  const candidates = [
-    ...map.pathSets.flatMap((set) => set.paths),
-    ...map.projects,
-    ...map.projectOptionSets.flatMap((set) => set.projects),
-    ...map.peerExposures,
-    ...map.sideDoorSets.flatMap((set) => set.doors),
-  ];
-  return new Set(candidates.flatMap((candidate) => {
-    const identity = sourceBearingInputIdentity(candidate);
-    return identity ? [identity] : [];
-  }));
 }
 
 function historyMatchesMap(
@@ -810,85 +623,9 @@ function historyMatchesMap(
   });
 }
 
-function researchMatchesMap(map: CareerMap, researchRows: CareerMapResearchRow[]): boolean {
-  const persistedSources = new Set<string>();
-  for (const row of researchRows) {
-    const parsed = persistedResearchAttemptSchema.safeParse(row.attempt);
-    if (!parsed.success || parsed.data.id !== row.id) return false;
-    if ('schemaVersion' in parsed.data || parsed.data.status !== 'succeeded') continue;
-    for (const source of parsed.data.sources) {
-      if (source.kind === 'cited-research') persistedSources.add(citedSourceIdentity(source));
-    }
-  }
-  return collectCitedSourceClaims(map)
-    .filter((claim) => !isAmendedCitedSource(claim.source))
-    .every((claim) => persistedSources.has(citedSourceIdentity(claim.source)));
-}
-
-function evidenceAssociationsMatchMap(
-  map: CareerMap,
-  historyRows: CareerMapHistoryRow[],
-  researchRows: CareerMapResearchRow[],
-  associationRows: CareerMapEvidenceAssociationRow[],
-): boolean {
-  const amendedAttempts = new Map(researchRows.flatMap((row) => {
-    const parsed = amendedResearchAttemptSchema.safeParse(row.attempt);
-    return parsed.success && parsed.data.id === row.id
-      ? [[row.id, { row, attempt: parsed.data }] as const]
-      : [];
-  }));
-  const canonicalClaimsBySource = new Map<string, Array<SourceClaim & {
-    source: AmendedCitedResearchSource;
-  }>>();
-  for (const claim of collectCitedSourceClaims(map)) {
-    if (!isAmendedCitedSource(claim.source)) continue;
-    const identity = citedSourceIdentity(claim.source);
-    canonicalClaimsBySource.set(identity, [
-      ...(canonicalClaimsBySource.get(identity) ?? []),
-      { ...claim, source: claim.source },
-    ]);
-  }
-  const associatedSources = new Set<string>();
-
-  for (const row of associationRows) {
-    const parsed = researchSourceAssociationSchema.safeParse(row.association);
-    if (!parsed.success) return false;
-    const association = parsed.data;
-    const attemptRecord = amendedAttempts.get(row.attemptId);
-    const history = historyRows.find((entry) => entry.resultRevision === row.resultRevision);
-    const canonicalClaims = canonicalClaimsBySource.get(citedSourceIdentity(association));
-    if (!attemptRecord
-      || attemptRecord.row.turnId !== row.turnId
-      || attemptRecord.row.leaseId !== row.leaseId
-      || attemptRecord.attempt.status !== 'succeeded'
-      || row.sourceHandle !== association.sourceHandle
-      || row.operationSourceId !== association.operationSourceId
-      || row.resultRevision !== association.resultRevision
-      || row.attemptId !== association.attemptId
-      || history?.operationSourceId !== association.operationSourceId
-      || history.moduleVersion !== association.moduleVersion
-      || attemptRecord.attempt.checkpoint !== association.checkpoint
-      || attemptRecord.attempt.moduleVersion !== association.moduleVersion
-      || !attemptRecord.attempt.sources.some(
-        (source) => citedSourceIdentity(source) === citedSourceIdentity(association),
-      )
-      || !canonicalClaims
-      || canonicalClaims.some((claim) => !citedSourceMatchesCanonicalField(
-        claim,
-        row.resultRevision - 1,
-      ))
-    ) return false;
-    associatedSources.add(citedSourceIdentity(association));
-  }
-
-  return [...canonicalClaimsBySource.keys()].every((identity) => associatedSources.has(identity));
-}
-
 function validateCareerMapRow(
   row: CareerMapRow,
   history: CareerMapHistoryRow[],
-  researchRows: CareerMapResearchRow[],
-  associationRows: CareerMapEvidenceAssociationRow[],
 ): Extract<CareerMapLoadResult, { status: 'ready' | 'repair-required' }> {
   if (row.schemaVersion !== CURRENT_CAREER_MAP_SCHEMA_VERSION) {
     return {
@@ -931,22 +668,6 @@ function validateCareerMapRow(
       revision: row.revision,
     };
   }
-  if (!researchMatchesMap(parsed.data, researchRows)) {
-    return {
-      status: 'repair-required',
-      reason: 'research-mismatch',
-      schemaVersion: row.schemaVersion,
-      revision: row.revision,
-    };
-  }
-  if (!evidenceAssociationsMatchMap(parsed.data, history, researchRows, associationRows)) {
-    return {
-      status: 'repair-required',
-      reason: 'evidence-association-mismatch',
-      schemaVersion: row.schemaVersion,
-      revision: row.revision,
-    };
-  }
   // Repair is intentionally sticky. A reviewed repair must explicitly clear
   // this flag; merely making the JSON parse again must not resume model use.
   if (row.repairRequired) {
@@ -975,15 +696,7 @@ async function validateCareerMapForWrite(
     .from(careerMapHistory)
     .where(eq(careerMapHistory.userId, userId))
     .orderBy(asc(careerMapHistory.resultRevision));
-  const research = await transaction
-    .select()
-    .from(careerMapResearchAttempts)
-    .where(eq(careerMapResearchAttempts.userId, userId));
-  const associations = await transaction
-    .select()
-    .from(careerMapEvidenceAssociations)
-    .where(eq(careerMapEvidenceAssociations.userId, userId));
-  const result = validateCareerMapRow(row, history, research, associations);
+  const result = validateCareerMapRow(row, history);
   if (result.status === 'repair-required' && !row.repairRequired) {
     await transaction
       .update(careerMaps)
@@ -1316,15 +1029,7 @@ export class PostgresStorage implements IStorage {
         .from(careerMapHistory)
         .where(eq(careerMapHistory.userId, input.userId))
         .orderBy(asc(careerMapHistory.resultRevision));
-      const ownerResearchRows = await tx
-        .select()
-        .from(careerMapResearchAttempts)
-        .where(eq(careerMapResearchAttempts.userId, input.userId));
-      const ownerAssociationRows = await tx
-        .select()
-        .from(careerMapEvidenceAssociations)
-        .where(eq(careerMapEvidenceAssociations.userId, input.userId));
-      const loaded = validateCareerMapRow(row, history, ownerResearchRows, ownerAssociationRows);
+      const loaded = validateCareerMapRow(row, history);
       if (loaded.status !== 'ready') {
         if (!row.repairRequired) {
           await tx
@@ -1406,120 +1111,6 @@ export class PostgresStorage implements IStorage {
         }
       }
 
-      const canonicalSourceIdentities = canonicalSourceClaimIdentities(loaded.map);
-      const newSourceClaims = collectSourceClaims(input.operation.payload)
-        .filter((claim) => {
-          const identity = sourceBearingInputIdentity(claim.parent);
-          return !identity || !canonicalSourceIdentities.has(identity);
-        });
-      const invalidUserSource = newSourceClaims.some((claim) => (
-        claim.source.kind === 'user-supplied-source'
-        && (
-          !sameProvenance(claim.source.recordedBy, context.action)
-          || (claim.source.url !== undefined && !claim.source.url.startsWith('https://'))
-        )
-      ));
-      if (invalidUserSource) {
-        return {
-          status: 'rejected',
-          map: loaded.map,
-          error: {
-            code: 'invalid-operation',
-            message: 'User-supplied sources must be HTTPS and bound to the active server-derived user action.',
-          },
-        };
-      }
-      const claimedSourceClaims = newSourceClaims
-        .filter((claim): claim is SourceClaim & { source: CitedResearchSource } => (
-          claim.source.kind === 'cited-research'
-        ));
-      const associations: ResearchSourceAssociation[] = [];
-      if (claimedSourceClaims.length > 0) {
-        const currentModule = deriveMethodCheckpoint(loaded.map).module;
-        const amendedResearchSources = new Map(ownerResearchRows.flatMap((researchRow) => {
-          if (researchRow.turnId !== lease.turnId || researchRow.leaseId !== input.leaseId) return [];
-          const parsed = amendedResearchAttemptSchema.safeParse(researchRow.attempt);
-          if (!parsed.success
-            || parsed.data.status !== 'succeeded'
-            || parsed.data.checkpoint !== currentModule
-            || parsed.data.moduleVersion !== input.moduleVersion
-          ) return [];
-          return parsed.data.sources.map((source) => [
-            citedSourceIdentity(source),
-            { attempt: parsed.data, row: researchRow },
-          ] as const);
-        }));
-        const predecessorResearchSources = new Set(ownerResearchRows.flatMap((researchRow) => {
-          if (researchRow.turnId !== lease.turnId || researchRow.leaseId !== input.leaseId) return [];
-          const parsed = persistedResearchAttemptSchema.safeParse(researchRow.attempt);
-          if (!parsed.success
-            || 'schemaVersion' in parsed.data
-            || parsed.data.status !== 'succeeded'
-          ) return [];
-          return parsed.data.sources.flatMap((source) => (
-            source.kind === 'cited-research' && !isAmendedCitedSource(source)
-              ? [citedSourceIdentity(source)]
-              : []
-          ));
-        }));
-        for (const claim of claimedSourceClaims) {
-          if (!isAmendedCitedSource(claim.source)) {
-            if (!predecessorResearchSources.has(citedSourceIdentity(claim.source))) {
-              return {
-                status: 'rejected',
-                map: loaded.map,
-                error: {
-                  code: 'invalid-operation',
-                  message: 'Predecessor cited research must match a successful attempt from the active turn and lease.',
-                },
-              };
-            }
-            continue;
-          }
-          const parsedSource = amendedCitedResearchSourceSchema.safeParse(claim.source);
-          const matched = parsedSource.success
-            ? amendedResearchSources.get(citedSourceIdentity(parsedSource.data))
-            : undefined;
-          if (!parsedSource.success
-            || !matched
-            || !citedSourceMatchesCanonicalField(
-              { ...claim, source: parsedSource.data },
-              input.operation.expectedRevision,
-            )
-          ) {
-            return {
-              status: 'rejected',
-              map: loaded.map,
-              error: {
-                code: 'invalid-operation',
-                message: 'Cited research must bind the exact current target, field, claim, and provider evidence.',
-              },
-            };
-          }
-          associations.push(researchSourceAssociationSchema.parse({
-            ...parsedSource.data,
-            attemptId: matched.attempt.id,
-            operationSourceId: input.operation.sourceId,
-            resultRevision: persistedReceipt.resultRevision,
-            checkpoint: matched.attempt.checkpoint,
-            moduleVersion: matched.attempt.moduleVersion,
-          }));
-        }
-        const amendedClaimCount = claimedSourceClaims.filter((claim) => (
-          isAmendedCitedSource(claim.source)
-        )).length;
-        if (associations.length !== amendedClaimCount) {
-          return {
-            status: 'rejected',
-            map: loaded.map,
-            error: {
-              code: 'invalid-operation',
-              message: 'Every cited claim requires an immutable evidence association.',
-            },
-          };
-        }
-      }
-
       await this.faultInjector?.('before-map-update');
       throwIfPersistenceAborted(input.abortSignal);
       await assertCurrentWriteFence(
@@ -1555,43 +1146,11 @@ export class PostgresStorage implements IStorage {
           .where(eq(careerMapHistory.userId, input.userId))
           .orderBy(asc(careerMapHistory.resultRevision));
         if (!currentRow) return { status: 'lease-lost', message: 'Career map disappeared during the operation.' };
-        const currentResearch = await tx
-          .select()
-          .from(careerMapResearchAttempts)
-          .where(eq(careerMapResearchAttempts.userId, input.userId));
-        const currentAssociations = await tx
-          .select()
-          .from(careerMapEvidenceAssociations)
-          .where(eq(careerMapEvidenceAssociations.userId, input.userId));
-        const current = validateCareerMapRow(
-          currentRow,
-          currentHistory,
-          currentResearch,
-          currentAssociations,
-        );
+        const current = validateCareerMapRow(currentRow, currentHistory);
         if (current.status !== 'ready') return current;
         return reduceCareerMapOperation(current.map, input.operation);
       }
 
-      if (associations.length > 0) {
-        const researchRowsByAttempt = new Map(ownerResearchRows.map((row) => [row.id, row]));
-        await tx.insert(careerMapEvidenceAssociations).values(associations.map((association) => {
-          const researchRow = researchRowsByAttempt.get(association.attemptId);
-          if (!researchRow) throw new Error('Evidence association lost its research attempt.');
-          return {
-            userId: input.userId,
-            attemptId: association.attemptId,
-            turnId: researchRow.turnId,
-            leaseId: researchRow.leaseId,
-            operationSourceId: association.operationSourceId,
-            resultRevision: association.resultRevision,
-            sourceHandle: association.sourceHandle,
-            association,
-            createdAt: now,
-          };
-        }));
-        await this.faultInjector?.('after-evidence-association-before-history');
-      }
       await this.faultInjector?.('after-map-update-before-history');
       await tx.insert(careerMapHistory).values({
         userId: input.userId,
@@ -2161,105 +1720,7 @@ export class PostgresStorage implements IStorage {
     });
   }
 
-  /* ---------------- Research, drafts, and Conversation mapping ---------------- */
-
-  /** Server-only sink for provider-ledgered contextual research; never expose as a raw client write. */
-  async recordResearchAttempt(
-    userId: string,
-    leaseId: string,
-    input: unknown,
-    abortSignal?: AbortSignal,
-  ): Promise<ResearchAttempt> {
-    throwIfPersistenceAborted(abortSignal);
-    if (input && typeof input === 'object'
-      && Array.isArray((input as { sources?: unknown }).sources)
-      && (input as { sources: unknown[] }).sources.some((source) => (
-        !source || typeof source !== 'object'
-        || (source as { kind?: unknown }).kind !== 'cited-research'
-      ))
-    ) throw new ResearchAttemptSourceError();
-    const attempt = persistedResearchAttemptSchema.parse(input);
-    if (attempt.sources.some((source) => source.kind !== 'cited-research')) {
-      throw new ResearchAttemptSourceError();
-    }
-    const result = await this.database.transaction(async (tx) => {
-      await lockMethodOwner(tx, userId, abortSignal);
-      throwIfPersistenceAborted(abortSignal);
-      const [erasure] = await tx
-        .select({ userId: methodErasureJobs.userId })
-        .from(methodErasureJobs)
-        .where(eq(methodErasureJobs.userId, userId));
-      if (erasure) throw new MethodErasurePendingError();
-      const [lease] = await tx
-        .select({ leaseId: agentTurnLeases.leaseId, turnId: agentTurnLeases.turnId })
-        .from(agentTurnLeases)
-        .where(and(
-          eq(agentTurnLeases.userId, userId),
-          eq(agentTurnLeases.leaseId, leaseId),
-          gt(agentTurnLeases.expiresAt, this.now()),
-      ));
-      if (!lease) throw new TurnLeaseLostError();
-      const mapState = await validateCareerMapForWrite(tx, userId, this.now());
-      if (mapState.status === 'repair-required') return mapState;
-      if (mapState.status !== 'ready') throw new TurnLeaseLostError();
-      const [existing] = await tx
-        .select()
-        .from(careerMapResearchAttempts)
-        .where(and(
-          eq(careerMapResearchAttempts.userId, userId),
-          eq(careerMapResearchAttempts.id, attempt.id),
-        ));
-      if (existing) {
-        if (existing.turnId !== lease.turnId || existing.leaseId !== lease.leaseId) {
-          throw new ResearchAttemptConflictError();
-        }
-        const persisted = persistedResearchAttemptSchema.parse(existing.attempt);
-        if (JSON.stringify(persisted) !== JSON.stringify(attempt)) {
-          throw new ResearchAttemptConflictError();
-        }
-        throwIfPersistenceAborted(abortSignal);
-        await assertCurrentWriteFence(tx, userId, lease.turnId, lease.leaseId, this.now());
-        throwIfPersistenceAborted(abortSignal);
-        return persisted;
-      }
-      if ('schemaVersion' in attempt
-        && (attempt.targetRevision !== mapState.map.revision
-          || attempt.checkpoint !== deriveMethodCheckpoint(mapState.map).module)
-      ) throw new ResearchAttemptSourceError();
-      await this.faultInjector?.('before-research-attempt-insert');
-      throwIfPersistenceAborted(abortSignal);
-      await assertCurrentWriteFence(tx, userId, lease.turnId, lease.leaseId, this.now());
-      throwIfPersistenceAborted(abortSignal);
-      const [created] = await tx
-        .insert(careerMapResearchAttempts)
-        .values({ id: attempt.id, userId, turnId: lease.turnId, leaseId: lease.leaseId, attempt, createdAt: this.now() })
-        .returning();
-      throwIfPersistenceAborted(abortSignal);
-      return persistedResearchAttemptSchema.parse(created.attempt);
-    });
-    if (result.status === 'repair-required') throw new CareerMapRepairRequiredError(result);
-    return result;
-  }
-
-  async listResearchAttempts(userId: string): Promise<ResearchAttempt[]> {
-    const rows = await this.database
-      .select()
-      .from(careerMapResearchAttempts)
-      .where(eq(careerMapResearchAttempts.userId, userId))
-      .orderBy(asc(careerMapResearchAttempts.createdAt));
-    return rows.map((row) => persistedResearchAttemptSchema.parse(row.attempt));
-  }
-
-  async listResearchSourceAssociations(userId: string): Promise<ResearchSourceAssociationRecord[]> {
-    return this.database
-      .select()
-      .from(careerMapEvidenceAssociations)
-      .where(eq(careerMapEvidenceAssociations.userId, userId))
-      .orderBy(
-        asc(careerMapEvidenceAssociations.resultRevision),
-        asc(careerMapEvidenceAssociations.id),
-      );
-  }
+  /* ---------------- Drafts and Conversation mapping ---------------- */
 
   async saveCareerMapDraft(input: {
     userId: string;
@@ -2719,8 +2180,6 @@ export class PostgresStorage implements IStorage {
     return this.database.transaction(async (tx) => {
       const rows = await tx.select().from(careerMaps);
       const historyRows = await tx.select().from(careerMapHistory);
-      const researchRows = await tx.select().from(careerMapResearchAttempts);
-      const associationRows = await tx.select().from(careerMapEvidenceAssociations);
       const draftRows = await tx.select().from(careerMapDrafts);
       const turnRows = await tx.select().from(agentTurns);
       const leaseRows = await tx.select().from(agentTurnLeases);
@@ -2728,11 +2187,6 @@ export class PostgresStorage implements IStorage {
       const erasureRows = await tx.select().from(methodErasureJobs);
       const owners = new Set(rows.map((row) => row.userId));
       const historyByUserId = rowsByUserId(historyRows);
-      const researchByUserId = rowsByUserId(researchRows);
-      const associationsByUserId = rowsByUserId(associationRows);
-      const turnIdentities = new Set(turnRows.map((row) => (
-        turnLeaseIdentity(row.userId, row.turnId, row.leaseId)
-      )));
       const pendingTurnIdentities = new Set(turnRows
         .filter((row) => row.status === 'pending')
         .map((row) => turnLeaseIdentity(row.userId, row.turnId, row.leaseId)));
@@ -2745,43 +2199,12 @@ export class PostgresStorage implements IStorage {
           row,
           [...(historyByUserId.get(row.userId) ?? [])]
             .sort((left, right) => left.resultRevision - right.resultRevision),
-          researchByUserId.get(row.userId) ?? [],
-          associationsByUserId.get(row.userId) ?? [],
         );
         if (result.status === 'repair-required') {
           invalidRecords.push({ userId: row.userId, reason: result.reason });
         }
       }
       const orphanHistory = historyRows.filter((row) => !owners.has(row.userId)).length;
-      const orphanResearchAttempts = researchRows.filter((row) => !owners.has(row.userId)
-        || !turnIdentities.has(turnLeaseIdentity(row.userId, row.turnId, row.leaseId))).length;
-      const invalidResearchAttempts = researchRows.filter((row) => {
-        const parsed = persistedResearchAttemptSchema.safeParse(row.attempt);
-        return !parsed.success || parsed.data.id !== row.id;
-      }).length;
-      const researchIdentities = new Set(researchRows.map((row) => JSON.stringify([row.userId, row.id])));
-      const historyIdentities = new Set(historyRows.map((row) => JSON.stringify([
-        row.userId,
-        row.operationSourceId,
-        row.resultRevision,
-      ])));
-      const orphanEvidenceAssociations = associationRows.filter((row) => (
-        !owners.has(row.userId)
-        || !researchIdentities.has(JSON.stringify([row.userId, row.attemptId]))
-        || !historyIdentities.has(JSON.stringify([
-          row.userId,
-          row.operationSourceId,
-          row.resultRevision,
-        ]))
-      )).length;
-      const invalidEvidenceAssociations = associationRows.filter((row) => {
-        const parsed = researchSourceAssociationSchema.safeParse(row.association);
-        return !parsed.success
-          || parsed.data.attemptId !== row.attemptId
-          || parsed.data.operationSourceId !== row.operationSourceId
-          || parsed.data.resultRevision !== row.resultRevision
-          || parsed.data.sourceHandle !== row.sourceHandle;
-      }).length;
       const orphanDrafts = draftRows.filter((row) => !owners.has(row.userId)).length;
       const orphanTurns = turnRows.filter((row) => !owners.has(row.userId)).length;
       const orphanLeases = leaseRows.filter((row) => !owners.has(row.userId)).length;
@@ -2796,10 +2219,6 @@ export class PostgresStorage implements IStorage {
         totalMaps: rows.length,
         invalidRecords,
         orphanHistory,
-        orphanResearchAttempts,
-        invalidResearchAttempts,
-        orphanEvidenceAssociations,
-        invalidEvidenceAssociations,
         orphanDrafts,
         orphanTurns,
         orphanLeases,
@@ -2809,10 +2228,6 @@ export class PostgresStorage implements IStorage {
         pendingErasureJobs,
         zeroInvalid: invalidRecords.length === 0
           && orphanHistory === 0
-          && orphanResearchAttempts === 0
-          && invalidResearchAttempts === 0
-          && orphanEvidenceAssociations === 0
-          && invalidEvidenceAssociations === 0
           && orphanDrafts === 0
           && orphanTurns === 0
           && orphanLeases === 0

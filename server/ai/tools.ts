@@ -7,16 +7,13 @@ import {
   pathProjectInputSchema,
   opaqueClientMessageIdSchema,
   purposePathInputSchema,
-  RESEARCH_SOURCE_LIMITS,
   realityConstraintSchema,
   revisionSchema,
   whyInputSchema,
-  normalizeResearchClaim,
   type CareerMap,
   type CareerMapOperation,
   type CareerMapOperationType,
   type MethodCheckpoint,
-  type SourceProvenance,
 } from '../../shared/career-map/index.js';
 import { compileCareerMapBriefing, type CareerMapBriefing } from './briefing.js';
 import type { LoadedMethodModule, MethodModuleLoader } from './method/loader.js';
@@ -47,28 +44,6 @@ export interface PreparedMethodState {
   checkpoint: MethodCheckpoint;
   module: LoadedMethodModule;
   briefing: CareerMapBriefing;
-}
-
-export interface ResearchSourceReference {
-  handle: string;
-  canonicalField: string;
-  exactClaim: string;
-}
-
-export interface ResearchSourceResolutionContext {
-  userId: string;
-  turnId: string;
-  leaseId: string;
-  targetId: string;
-  targetRevision: number;
-}
-
-/** Structural seam implemented by the request-scoped native-search ledger. */
-export interface MethodEvidenceResolver {
-  resolveSources(
-    references: readonly ResearchSourceReference[],
-    context: ResearchSourceResolutionContext,
-  ): SourceProvenance[];
 }
 
 export interface MethodResponseOperationGuard {
@@ -128,49 +103,13 @@ export interface MethodOperationExecutorOptions {
 
 export type MethodToolRuntime = Omit<MethodOperationExecutorOptions, 'sourceId' | 'operationType' | 'payload' | 'prepared'> & {
   prepared: { current?: PreparedMethodState };
-  evidence?: MethodEvidenceResolver;
-  responsePolicy?: {
-    nativeSearchObserved: boolean;
-    researchResolutionRequired?: boolean;
-    evidenceManifestAvailable?: boolean;
-  };
   currentMessage?: string;
   operationGuard?: MethodResponseOperationGuard;
   onOperationStatus?: (event: MethodOperationLifecycleEvent) => void | Promise<void>;
 };
 
-const sourceReferenceSchema = z.object({
-  handle: entityIdSchema,
-  canonicalField: z.string().min(1).max(160)
-    .regex(/^[A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z][A-Za-z0-9]*)+$/u),
-  exactClaim: z.string().min(1).max(RESEARCH_SOURCE_LIMITS.claimCharacters),
-}).strict();
-
-const userSourceSchema = z.object({
-  label: z.string().min(1).max(500),
-  // Avoid JSON Schema `format: uri`, which OpenAI strict functions do not
-  // accept consistently. The server still enforces the exact HTTPS contract.
-  url: z.string().min(8).max(2_048)
-    .refine((value) => {
-      try {
-        return new URL(value).protocol === 'https:';
-      } catch {
-        return false;
-      }
-    }, 'Sources must use HTTPS.')
-    .nullable(),
-}).strict();
-
-const sourceReferenceFields = {
-  // OpenAI strict function schemas require every property to appear in the
-  // JSON Schema `required` array. Null represents the deliberate absence of
-  // a source collection without weakening the canonical payload contract.
-  researchSources: z.array(sourceReferenceSchema).min(1).max(RESEARCH_SOURCE_LIMITS.sourcesPerRecord).nullable(),
-  userSources: z.array(userSourceSchema).max(8).nullable(),
-};
-
-const pathToolInputSchema = purposePathInputSchema.omit({ sources: true }).extend(sourceReferenceFields).strict();
-const projectToolInputSchema = pathProjectInputSchema.omit({ sources: true }).extend(sourceReferenceFields).strict();
+const pathToolInputSchema = purposePathInputSchema;
+const projectToolInputSchema = pathProjectInputSchema;
 const evidenceToolInputSchema = foundationEvidenceSchema.omit({ provenance: true, supersedesEvidenceId: true });
 const constraintToolInputSchema = realityConstraintSchema.omit({ provenance: true, supersedesConstraintId: true });
 
@@ -455,6 +394,45 @@ function assertCurrentMessageAuthorization(runtime: MethodToolRuntime, input: {
   }
 }
 
+type SuggestedOperation =
+  | 'propose-why'
+  | 'revise-why'
+  | 'propose-purpose-paths'
+  | 'replace-purpose-path'
+  | 'combine-purpose-paths'
+  | 'propose-first-project'
+  | 'replace-project-proposal';
+
+function assertCurrentMessageSuggestedOperation(
+  runtime: MethodToolRuntime,
+  operation: SuggestedOperation,
+): void {
+  if (runtime.surface === 'workspace-action') return;
+  const message = normalizedMessage(runtime.currentMessage ?? '');
+  const prohibited = [
+    /\b(?:no|not|never|dont|don't|do not|without|wait|hold off|pause|not yet|no quiero|no hagas|sin|espera)\b/u,
+    /\b(?:quoting|quoted|i am quoting|i'm quoting|reported speech|citando|entre comillas)\b/u,
+    /\b(?:if|provided that|assuming|only if|solo si|siempre que)\b/u,
+  ].some((pattern) => pattern.test(message));
+  const action = operation === 'combine-purpose-paths'
+    ? /\b(?:combine|merge|blend|combina|fusiona|mezcla)\b/u
+    : operation === 'replace-purpose-path' || operation === 'replace-project-proposal'
+      ? /\b(?:replace|revise|edit|change|rewrite|refine|reemplaza|revisa|edita|cambia|refina)\b/u
+      : operation === 'revise-why'
+        ? /\b(?:revise|edit|change|rewrite|refine|revisa|edita|cambia|refina)\b/u
+        : /\b(?:suggest|propose|draft|create|design|develop|generate|show|give|sugiere|propone|crea|disena|genera|muestra)\b/u;
+  const subject = operation === 'propose-why' || operation === 'revise-why'
+    ? /\b(?:why|foundation|por que|fundamento)\b/u
+    : operation === 'propose-first-project' || operation === 'replace-project-proposal'
+      ? /\b(?:project|proyecto)\b/u
+      : /\b(?:path|paths|direction|directions|camino|caminos|ruta|rutas|direccion|direcciones)\b/u;
+  if (!message || prohibited || !action.test(message) || !subject.test(message)) {
+    const error = new Error('The current message does not explicitly request this Suggested operation.');
+    error.name = 'SuggestedOperationAuthorizationError';
+    throw error;
+  }
+}
+
 function confirmationPayload(
   runtime: MethodToolRuntime,
   input: z.infer<typeof confirmationTargetSchema>,
@@ -516,219 +494,14 @@ function assertExactPendingTarget(input: {
   }
 }
 
-const PURPOSE_PATH_RESEARCH_FIELDS = [
-  'servesWhy', 'possibility', 'evidence', 'centralUnknown', 'projectPreview', 'practicalFit',
-] as const;
-const PATH_PROJECT_RESEARCH_FIELDS = [
-  'outcome', 'audience', 'whyWanted', 'learningGoal', 'firstVersion', 'firstStep',
-  'decisionQuestion', 'evidenceCue',
-] as const;
-
-export interface NativeSearchClaimBinding {
-  targetId: string;
-  targetRevision: number;
-  canonicalField: string;
-  exactClaim: string;
-}
-
-function researchGroundingError(): Error {
-  const error = new Error('Research handle does not support the referenced canonical claim field.');
-  error.name = 'ResearchGroundingError';
-  return error;
-}
-
-function bindingsForSourceBearingValue(
-  value: unknown,
-  prefix: 'purposePath' | 'pathProject',
-  fields: readonly string[],
-  targetRevision: number,
-): NativeSearchClaimBinding[] {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw researchGroundingError();
-  const record = value as Record<string, unknown>;
-  if (typeof record.id !== 'string') throw researchGroundingError();
-  const rawReferences = record.researchSources;
-  if (rawReferences === null || rawReferences === undefined) return [];
-  const parsed = z.array(sourceReferenceSchema).min(1).max(RESEARCH_SOURCE_LIMITS.sourcesPerRecord).safeParse(rawReferences);
-  if (!parsed.success) throw researchGroundingError();
-  const bindings = parsed.data.map((reference) => {
-    const expectedPrefix = `${prefix}.`;
-    if (!reference.canonicalField.startsWith(expectedPrefix)) throw researchGroundingError();
-    const field = reference.canonicalField.slice(expectedPrefix.length);
-    const candidate = record[field];
-    const exactClaim = normalizeResearchClaim(reference.exactClaim);
-    const normalizedCandidate = typeof candidate === 'string'
-      ? normalizeResearchClaim(candidate)
-      : prefix === 'purposePath' && field === 'evidence' && Array.isArray(candidate)
-        ? candidate.filter((item): item is string => typeof item === 'string').map(normalizeResearchClaim)
-        : undefined;
-    const claimMatches = typeof normalizedCandidate === 'string'
-      ? normalizedCandidate.includes(exactClaim)
-      : normalizedCandidate?.includes(exactClaim) === true;
-    if (
-      field.includes('.')
-      || !fields.includes(field)
-      || !exactClaim
-      || !claimMatches
-    ) throw researchGroundingError();
-    return {
-      targetId: record.id as string,
-      targetRevision,
-      canonicalField: reference.canonicalField,
-      exactClaim,
-    };
-  });
-  const identities = bindings.map((binding) => JSON.stringify(binding));
-  if (new Set(identities).size !== identities.length) throw researchGroundingError();
-  return bindings;
-}
-
-/**
- * Derives ledger bindings from the same strict custom-tool input that may be
- * withheld until a subsequent Response. This never invents a target, field,
- * or claim and can therefore run at the settled provider-step boundary.
- */
-export function deriveNativeSearchClaimBindings(input: {
-  operationType: keyof typeof OPERATION_TO_TOOL_NAME;
-  rawInput: unknown;
-  targetRevision: number;
-}): NativeSearchClaimBinding[] {
-  if (!Number.isInteger(input.targetRevision) || input.targetRevision < 0) {
-    throw researchGroundingError();
-  }
-  if (!input.rawInput || typeof input.rawInput !== 'object' || Array.isArray(input.rawInput)) {
-    throw researchGroundingError();
-  }
-  const record = input.rawInput as Record<string, unknown>;
-  switch (input.operationType) {
-    case 'propose-purpose-paths':
-    case 'combine-purpose-paths':
-      if (!Array.isArray(record.paths)) throw researchGroundingError();
-      return record.paths.flatMap((path) => bindingsForSourceBearingValue(
-        path, 'purposePath', PURPOSE_PATH_RESEARCH_FIELDS, input.targetRevision,
-      ));
-    case 'replace-purpose-path':
-      return bindingsForSourceBearingValue(
-        record.replacement, 'purposePath', PURPOSE_PATH_RESEARCH_FIELDS, input.targetRevision,
-      );
-    case 'propose-first-project':
-      return bindingsForSourceBearingValue(
-        record, 'pathProject', PATH_PROJECT_RESEARCH_FIELDS, input.targetRevision,
-      );
-    case 'replace-project-proposal':
-      return bindingsForSourceBearingValue(
-        record.replacement, 'pathProject', PATH_PROJECT_RESEARCH_FIELDS, input.targetRevision,
-      );
-    default:
-      return [];
-  }
-}
-
-function sourcesFor(
-  runtime: MethodToolRuntime,
-  input: {
-    researchSources?: ResearchSourceReference[] | null;
-    userSources?: Array<{ label: string; url?: string | null }> | null;
-  },
-  targetId: string,
-): SourceProvenance[] | undefined {
-  const context = runtime.surface === 'agent-turn'
-    ? createAgentTurnPersistenceContext(runtime.turn, runtime.timing)
-    : createWorkspaceActionPersistenceContext(runtime.turn, runtime.timing);
-  const normalizedReferences = (input.researchSources ?? []).map((reference) => ({
-    ...reference,
-    exactClaim: normalizeResearchClaim(reference.exactClaim),
-  }));
-  const research = normalizedReferences.length
-    ? runtime.evidence?.resolveSources(normalizedReferences, {
-      userId: runtime.userId,
-      turnId: runtime.turn.turnId,
-      leaseId: runtime.turn.leaseId,
-      targetId,
-      targetRevision: runtime.prepared.current?.map.revision ?? -1,
-    }) ?? (() => {
-      const error = new Error('Research handles are unavailable for this turn.');
-      error.name = 'ResearchHandleError';
-      throw error;
-    })()
-    : [];
-  const user = (input.userSources ?? []).map((source) => {
-    if (runtime.surface === 'agent-turn') {
-      const currentMessage = runtime.currentMessage ?? '';
-      const normalizedMessage = normalizeResearchClaim(currentMessage);
-      const normalizedLabel = normalizeResearchClaim(source.label);
-      const labelIsAuthored = normalizedLabel.length > 0
-        && normalizedMessage.includes(normalizedLabel);
-      const urlIsAuthored = !source.url || currentMessage.includes(source.url);
-      if (!labelIsAuthored || !urlIsAuthored) {
-        const error = new Error('User-supplied sources must be exact values from the current message.');
-        error.name = 'UserEvidenceAssociationError';
-        throw error;
-      }
-    }
-    return {
-      kind: 'user-supplied-source' as const,
-      label: source.label,
-      ...(source.url ? { url: source.url } : {}),
-      recordedBy: context.action,
-    };
-  });
-  const sources = [...research, ...user];
-  return sources.length ? sources : undefined;
-}
-
-type SourceBearingInput = {
-  researchSources?: ResearchSourceReference[] | null;
-};
-
-function assertNativeSearchHasHandle(
-  runtime: MethodToolRuntime,
-  values: readonly SourceBearingInput[],
-): void {
-  if (
-    runtime.surface !== 'agent-turn'
-    || (!runtime.responsePolicy?.evidenceManifestAvailable
-      && !runtime.responsePolicy?.researchResolutionRequired)
-    || values.every((value) => Array.isArray(value.researchSources) && value.researchSources.length > 0)
-  ) return;
-  const error = new Error('A native-search-informed write requires exact server-minted research handles.');
-  error.name = 'ResearchHandleError';
-  throw error;
-}
-
-const RESEARCH_WRITE_OPERATIONS = new Set<CareerMapOperationType>([
-  'propose-purpose-paths',
-  'replace-purpose-path',
-  'combine-purpose-paths',
-  'propose-first-project',
-  'replace-project-proposal',
-]);
-
 function assertUserAuthoredValue(runtime: MethodToolRuntime, value: string): void {
   if (runtime.surface !== 'agent-turn') return;
-  const message = normalizeResearchClaim(runtime.currentMessage ?? '');
-  const exactValue = normalizeResearchClaim(value);
+  const message = normalizedMessage(runtime.currentMessage ?? '');
+  const exactValue = normalizedMessage(value);
   if (message && exactValue && message.includes(exactValue)) return;
   const error = new Error('Explorer-authored evidence must be an exact value from the current message.');
   error.name = 'UserEvidenceAssociationError';
   throw error;
-}
-
-function stripSourceReferences<T extends Record<string, unknown>>(
-  runtime: MethodToolRuntime,
-  input: T & {
-    researchSources?: ResearchSourceReference[] | null;
-    userSources?: Array<{ label: string; url?: string | null }> | null;
-  },
-  prefix: 'purposePath' | 'pathProject',
-  researchableFields: readonly string[],
-): Omit<T, 'researchSources' | 'userSources'> & { sources?: SourceProvenance[] } {
-  const { researchSources: _research, userSources: _user, ...value } = input;
-  const targetRevision = runtime.prepared.current?.map.revision;
-  if (typeof targetRevision !== 'number') throw researchGroundingError();
-  bindingsForSourceBearingValue(input, prefix, researchableFields, targetRevision);
-  if (typeof value.id !== 'string') throw researchGroundingError();
-  const sources = sourcesFor(runtime, input, value.id);
-  return { ...value, ...(sources ? { sources } : {}) };
 }
 
 const SAFE_OPERATION_LIFECYCLE_ERROR_CLASSES = new Set([
@@ -736,10 +509,8 @@ const SAFE_OPERATION_LIFECYCLE_ERROR_CLASSES = new Set([
   'ConfirmationAuthorizationError',
   'ConfirmationTargetMismatchError',
   'MethodOwnerBusyError',
-  'NativeSearchEvidenceError',
-  'ResearchGroundingError',
-  'ResearchHandleError',
   'ResponseOperationLimitError',
+  'SuggestedOperationAuthorizationError',
   'UserEvidenceAssociationError',
   'confirmation-not-auditable',
   'illegal-transition',
@@ -801,20 +572,6 @@ function operationTool<INPUT>(
           error.name = 'ResponseOperationLimitError';
           throw error;
         }
-        if (runtime.surface === 'agent-turn' && runtime.responsePolicy?.nativeSearchObserved) {
-          const error = new Error('Canonical writes must wait for a settled, claim-linked research boundary.');
-          error.name = 'ResearchHandleError';
-          throw error;
-        }
-        if (
-          runtime.surface === 'agent-turn'
-          && runtime.responsePolicy?.researchResolutionRequired
-          && !RESEARCH_WRITE_OPERATIONS.has(operationType)
-        ) {
-          const error = new Error('Unresolved research must be retried through a source-bearing canonical operation.');
-          error.name = 'ResearchHandleError';
-          throw error;
-        }
         const result = await executeMethodOperation({
           ...runtime,
           prepared: runtime.prepared.current,
@@ -847,10 +604,8 @@ function operationTool<INPUT>(
           || (error instanceof Error && new Set([
             'ConfirmationAuthorizationError',
             'ConfirmationTargetMismatchError',
-            'NativeSearchEvidenceError',
-            'ResearchGroundingError',
-            'ResearchHandleError',
             'ResponseOperationLimitError',
+            'SuggestedOperationAuthorizationError',
             'UserEvidenceAssociationError',
           ]).has(error.name));
         if (!knownRejection) {
@@ -926,29 +681,26 @@ export function createMethodTools(runtime: MethodToolRuntime): ToolSet {
       assertUserAuthoredValue(runtime, input.description);
       return { constraint: { ...input, provenance: context().action } };
     }),
-    propose_why: operationTool(runtime, 'propose-why', 'Suggest one provisional Why. It cannot be confirmed in this assistant turn.', whyInputSchema, (why) => ({ why, presentation: context().presentation })),
-    revise_why: operationTool(runtime, 'revise-why', 'Suggest a revision to the current confirmed Why.', z.object({ supersedesWhyId: entityIdSchema, why: whyInputSchema }).strict(), ({ supersedesWhyId, why }) => ({ supersedesWhyId, why, presentation: context().presentation })),
+    propose_why: operationTool(runtime, 'propose-why', 'Suggest one provisional Why. It cannot be confirmed in this assistant turn.', whyInputSchema, (why) => {
+      assertCurrentMessageSuggestedOperation(runtime, 'propose-why');
+      return { why, presentation: context().presentation };
+    }),
+    revise_why: operationTool(runtime, 'revise-why', 'Suggest a revision to the current confirmed Why.', z.object({ supersedesWhyId: entityIdSchema, why: whyInputSchema }).strict(), ({ supersedesWhyId, why }) => {
+      assertCurrentMessageSuggestedOperation(runtime, 'revise-why');
+      return { supersedesWhyId, why, presentation: context().presentation };
+    }),
     confirm_why: operationTool(runtime, 'confirm-why', 'Confirm only the exact pending Why from a completed prior assistant turn and this exact user message.', whyConfirmationSchema, (input) => confirmationPayload(runtime, { ...input, targetId: input.whyId, targetRevision: input.whyRevision }, 'why-confirmation', 'whyId')),
     propose_purpose_paths: operationTool(runtime, 'propose-purpose-paths', 'Suggest exactly three equal-weight Purpose Paths grounded in the confirmed Why.', z.object({ setId: entityIdSchema, setRevision: revisionSchema, paths: z.array(pathToolInputSchema).length(3) }).strict(), ({ setId, setRevision, paths }) => {
-      assertNativeSearchHasHandle(runtime, paths);
-      return { setId, setRevision, paths: paths.map((path) => stripSourceReferences(runtime, path, 'purposePath', PURPOSE_PATH_RESEARCH_FIELDS)), presentation: context().presentation };
+      assertCurrentMessageSuggestedOperation(runtime, 'propose-purpose-paths');
+      return { setId, setRevision, paths, presentation: context().presentation };
     }),
     replace_purpose_path: operationTool(runtime, 'replace-purpose-path', 'Replace exactly one path while preserving the other two.', z.object({ sourceSetId: entityIdSchema, sourceSetRevision: revisionSchema, replacedPathId: entityIdSchema, replacementSetId: entityIdSchema, replacementSetRevision: revisionSchema, replacement: pathToolInputSchema }).strict(), (input) => {
-      assertNativeSearchHasHandle(runtime, [input.replacement]);
-      return {
-        ...input,
-        replacement: stripSourceReferences(
-          runtime,
-          input.replacement,
-          'purposePath',
-          PURPOSE_PATH_RESEARCH_FIELDS,
-        ),
-        presentation: context().presentation,
-      };
+      assertCurrentMessageSuggestedOperation(runtime, 'replace-purpose-path');
+      return { ...input, presentation: context().presentation };
     }),
     combine_purpose_paths: operationTool(runtime, 'combine-purpose-paths', 'Combine exactly two paths and preserve an exact-three equal-weight set.', z.object({ sourceSetId: entityIdSchema, sourceSetRevision: revisionSchema, combinedPathIds: z.array(entityIdSchema).length(2), replacementSetId: entityIdSchema, replacementSetRevision: revisionSchema, paths: z.array(pathToolInputSchema).length(3) }).strict(), (input) => {
-      assertNativeSearchHasHandle(runtime, input.paths);
-      return { ...input, paths: input.paths.map((path) => stripSourceReferences(runtime, path, 'purposePath', PURPOSE_PATH_RESEARCH_FIELDS)), presentation: context().presentation };
+      assertCurrentMessageSuggestedOperation(runtime, 'combine-purpose-paths');
+      return { ...input, presentation: context().presentation };
     }),
     select_purpose_path: operationTool(runtime, 'select-purpose-path', 'Select one exact pending Purpose Path from a completed prior presentation.', targetSelectionSchema, (input) => {
       const set = runtime.prepared.current?.map.pathSets.find((item) => item.id === input.setId && item.revision === input.setRevision);
@@ -973,21 +725,12 @@ export function createMethodTools(runtime: MethodToolRuntime): ToolSet {
       return { setId: input.setId, setRevision: input.setRevision, pathId: input.pathId, pathRevision: input.pathRevision, action: context().action };
     }),
     propose_first_project: operationTool(runtime, 'propose-first-project', 'Suggest one small firsthand Path Project for collaborative refinement.', projectToolInputSchema, (project) => {
-      assertNativeSearchHasHandle(runtime, [project]);
-      return { project: stripSourceReferences(runtime, project, 'pathProject', PATH_PROJECT_RESEARCH_FIELDS), presentation: context().presentation };
+      assertCurrentMessageSuggestedOperation(runtime, 'propose-first-project');
+      return { project, presentation: context().presentation };
     }),
     replace_project_proposal: operationTool(runtime, 'replace-project-proposal', 'Replace the one pending first-project proposal.', z.object({ projectId: entityIdSchema, projectRevision: revisionSchema, replacement: projectToolInputSchema }).strict(), (input) => {
-      assertNativeSearchHasHandle(runtime, [input.replacement]);
-      return {
-        ...input,
-        replacement: stripSourceReferences(
-          runtime,
-          input.replacement,
-          'pathProject',
-          PATH_PROJECT_RESEARCH_FIELDS,
-        ),
-        presentation: context().presentation,
-      };
+      assertCurrentMessageSuggestedOperation(runtime, 'replace-project-proposal');
+      return { ...input, presentation: context().presentation };
     }),
   } satisfies ToolSet;
 }
@@ -1014,44 +757,7 @@ export async function executeWorkspaceTool(input: {
     return envelopeFromState(input.operationType, prepared, 'rejected', 'operation-unavailable');
   }
   const schema = selected.inputSchema as z.ZodTypeAny;
-  const normalizeSources = (value: unknown): unknown => {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
-    const record = value as Record<string, unknown>;
-    return {
-      ...record,
-      researchSources: record.researchSources ?? null,
-      userSources: Array.isArray(record.userSources)
-        ? record.userSources.map((source) => (
-          source && typeof source === 'object' && !Array.isArray(source)
-            ? { ...source as Record<string, unknown>, url: (source as Record<string, unknown>).url ?? null }
-            : source
-        ))
-        : record.userSources ?? null,
-    };
-  };
-  const normalizeWorkspaceInput = (): unknown => {
-    if (!input.rawInput || typeof input.rawInput !== 'object' || Array.isArray(input.rawInput)) {
-      return input.rawInput;
-    }
-    const record = input.rawInput as Record<string, unknown>;
-    switch (input.operationType) {
-      case 'propose-purpose-paths':
-      case 'combine-purpose-paths':
-        return {
-          ...record,
-          paths: Array.isArray(record.paths) ? record.paths.map(normalizeSources) : record.paths,
-        };
-      case 'replace-purpose-path':
-        return { ...record, replacement: normalizeSources(record.replacement) };
-      case 'propose-first-project':
-        return normalizeSources(record);
-      case 'replace-project-proposal':
-        return { ...record, replacement: normalizeSources(record.replacement) };
-      default:
-        return record;
-    }
-  };
-  const parsed = schema.safeParse(normalizeWorkspaceInput());
+  const parsed = schema.safeParse(input.rawInput);
   if (!parsed.success) {
     return envelopeFromState(input.operationType, prepared, 'rejected', 'invalid-operation-input');
   }
