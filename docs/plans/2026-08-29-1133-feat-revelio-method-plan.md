@@ -8,9 +8,12 @@ artifact_readiness: implementation-ready
 product_contract_source: ce-brainstorm
 execution: code
 deepened: 2026-08-29
+amended: 2026-09-02
 ---
 
 # Revelio Method - Plan
+
+> **Implementation amendment (2026-09-02):** `docs/plans/2026-08-14-claude-feat-revelio-revamp-plan.md` remains the single implementation authority and amends this plan in place by reference. Its 2026-09-02 amendment supersedes only KTD10's isolated/de-identified/separate-model research mechanism, extends KTD4 and KTD12 with one-loop authoritative-result continuation and UI-owned operation status, and replaces the dependent G1/U5/U8/U9/provider-proof/privacy/risk/Definition-of-Done mechanics. All Method R1–R48, F1–F5, AE1–AE14, the seven repository-owned `SKILL.md` modules, U3's first-three-module ownership, and non-conflicting safety rules remain unchanged. Do not implement the superseded clauses below without first applying that active amendment; no U-ID is added or renumbered.
 
 ## Goal Capsule
 
