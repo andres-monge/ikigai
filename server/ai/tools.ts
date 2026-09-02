@@ -736,6 +736,7 @@ const SAFE_OPERATION_LIFECYCLE_ERROR_CLASSES = new Set([
   'ConfirmationAuthorizationError',
   'ConfirmationTargetMismatchError',
   'MethodOwnerBusyError',
+  'NativeSearchEvidenceError',
   'ResearchGroundingError',
   'ResearchHandleError',
   'ResponseOperationLimitError',
@@ -846,6 +847,7 @@ function operationTool<INPUT>(
           || (error instanceof Error && new Set([
             'ConfirmationAuthorizationError',
             'ConfirmationTargetMismatchError',
+            'NativeSearchEvidenceError',
             'ResearchGroundingError',
             'ResearchHandleError',
             'ResponseOperationLimitError',

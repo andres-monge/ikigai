@@ -991,6 +991,50 @@ describe('strict state-specific Method tools', () => {
     expect(storage.persist).not.toHaveBeenCalled();
   });
 
+  it('returns stale native-search handles as a rejected tool result', async () => {
+    const path = (number: number) => ({
+      id: `path-${number}`, revision: 1, name: `Path ${number}`,
+      servesWhy: `Serve ${number}`, possibility: `Possibility ${number}`,
+      evidence: [`Evidence ${number}`], centralUnknown: `Unknown ${number}`,
+      projectPreview: `Project ${number}`, practicalFit: `Fit ${number}`,
+      researchSources: [{
+        handle: `stale-handle-${number}`,
+        canonicalField: 'purposePath.practicalFit',
+        exactClaim: `Fit ${number}`,
+      }],
+      userSources: null,
+    });
+    const storage = new ReducerStorage(confirmedWhy());
+    const loader = await createMethodModuleLoader();
+    const prepared = await refreshMethodState(storage, loader, 'explorer-1');
+    const evidenceError = new Error('No current evidence handle.');
+    evidenceError.name = 'NativeSearchEvidenceError';
+    const statuses: Array<Record<string, unknown>> = [];
+    const tools = createMethodTools({
+      ...runtime(storage),
+      loader,
+      surface: 'agent-turn',
+      prepared: { current: prepared },
+      responsePolicy: {
+        nativeSearchObserved: false,
+        evidenceManifestAvailable: true,
+        researchResolutionRequired: true,
+      },
+      evidence: { resolveSources: vi.fn(() => { throw evidenceError; }) },
+      onOperationStatus: (event) => { statuses.push(event); },
+    } as never);
+
+    const result = await tools.propose_purpose_paths.execute?.({
+      setId: 'stale-set', setRevision: 1, paths: [path(1), path(2), path(3)],
+    } as never, { toolCallId: 'stale-research-retry', messages: [] } as never);
+
+    expect(result).toMatchObject({ status: 'rejected', errorClass: 'NativeSearchEvidenceError' });
+    expect(statuses.at(-1)).toMatchObject({
+      phase: 'terminal', status: 'rejected', errorClass: 'NativeSearchEvidenceError',
+    });
+    expect(storage.persist).not.toHaveBeenCalled();
+  });
+
   it('rejects a same-Response write even when it carries older exact handles', async () => {
     const path = (number: number) => ({
       id: `path-${number}`, revision: 1, name: `Path ${number}`,

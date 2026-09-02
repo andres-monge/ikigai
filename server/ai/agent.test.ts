@@ -435,7 +435,7 @@ describe('amended Method agent core loop', () => {
     expect(model.doStreamCalls).toHaveLength(2);
   });
 
-  it('keeps cited same-Response writes unresolved when no exact handles were minted', async () => {
+  it('keeps cited same-Response writes unresolved and continues after an ungrounded retry rejects', async () => {
     const storage = new InMemoryMethodStorage(confirmedWhyMap());
     const path = (number: number) => ({
       id: `path-${number}`, revision: 1, name: `Path ${number}`,
@@ -482,16 +482,16 @@ describe('amended Method agent core loop', () => {
         callId: 'unbound-retry', toolName: 'propose_purpose_paths',
         toolInput: { setId: 'set-1', setRevision: 1, paths: [path(1), path(2), path(3)] },
       }),
-      textChunks('The ungrounded proposal is ready.'),
+      textChunks('I could not ground that proposal, so let us refine the next research step.'),
     ]);
     const { agent, evidence } = await makeAgent({ model, storage });
 
-    await expect(collect(await agent.stream({ prompt: 'Research and propose current paths.' })))
-      .rejects.toMatchObject({ name: 'NativeSearchResolutionError' });
+    const output = await collect(await agent.stream({ prompt: 'Research and propose current paths.' }));
 
     expect(storage.map.revision).toBe(2);
     expect(evidence.manifest()).toEqual([]);
     expect(model.doStreamCalls).toHaveLength(3);
+    expect(JSON.stringify(output)).toContain('could not ground that proposal');
   });
 
   it('ledgers settled search before a strict retry commits and releases only later authoritative prose', async () => {
@@ -615,6 +615,137 @@ describe('amended Method agent core loop', () => {
     ]);
   });
 
+  it.each([
+    ['conflict', 'conflict'],
+    ['rejected', 'rejected'],
+    ['failed', 'failed'],
+  ] as const)(
+    'leaves strict research resolution after an authoritative %s retry result',
+    async (outcome, expectedStatus) => {
+      const storage = new InMemoryMethodStorage(confirmedWhyMap());
+      const evidence = new EvidenceLedgerFixture();
+      const claims = [1, 2, 3].map((number) => `Current evidence supports bounded experiment ${number}.`);
+      const path = (number: number, handle: string) => ({
+        id: `path-${number}`, revision: 1, name: `Path ${number}`,
+        servesWhy: `Serve ${number}`, possibility: `Possibility ${number}`,
+        evidence: [`Evidence ${number}`], centralUnknown: `Unknown ${number}`,
+        projectPreview: `Project ${number}`, practicalFit: claims[number - 1],
+        researchSources: [{
+          handle,
+          canonicalField: 'purposePath.practicalFit',
+          exactClaim: claims[number - 1],
+        }],
+        userSources: null,
+      });
+      if (outcome === 'conflict') {
+        storage.persistCareerMapOperation = vi.fn(async () => ({
+          status: 'rejected' as const,
+          map: storage.map,
+          error: { code: 'revision-conflict' as const, message: 'The prepared revision is stale.' },
+        }));
+      } else if (outcome === 'failed') {
+        storage.persistCareerMapOperation = vi.fn(async () => {
+          throw new Error('Storage unavailable.');
+        });
+      }
+      let responseIndex = 0;
+      const model = new MockLanguageModelV4({
+        doStream: async () => {
+          const index = responseIndex;
+          responseIndex += 1;
+          if (index === 0) {
+            return {
+              stream: simulateReadableStream({ chunks: [
+                { type: 'stream-start', warnings: [] },
+                {
+                  type: 'tool-call', toolCallId: 'provider-search', toolName: 'web_search',
+                  input: JSON.stringify({ action: { type: 'search', query: 'bounded experiments' } }),
+                  providerExecuted: true,
+                },
+                {
+                  type: 'tool-result', toolCallId: 'provider-search', toolName: 'web_search',
+                  input: { action: { type: 'search', query: 'bounded experiments' } },
+                  result: { action: { type: 'search', sources: [] } },
+                  providerExecuted: true,
+                },
+                {
+                  type: 'tool-call', toolCallId: 'premature-write', toolName: 'propose_purpose_paths',
+                  input: JSON.stringify({
+                    setId: 'set-1', setRevision: 1,
+                    paths: [1, 2, 3].map((number) => path(number, `premature-${number}`)),
+                  }),
+                },
+                { type: 'finish', finishReason: { unified: 'tool-calls', raw: 'tool-calls' }, usage: usage() },
+              ] as never }),
+            };
+          }
+          if (index === 1) {
+            const handles = evidence.manifest();
+            const retryHandles = outcome === 'rejected'
+              ? handles.map((entry) => `stale-${entry.handle}`)
+              : handles.map((entry) => entry.handle);
+            return {
+              stream: simulateReadableStream({ chunks: operationChunks({
+                callId: 'strict-retry',
+                toolName: 'propose_purpose_paths',
+                toolInput: {
+                  setId: 'set-1', setRevision: 1,
+                  paths: retryHandles.map((handle, handleIndex) => path(handleIndex + 1, handle)),
+                },
+              }) }),
+            };
+          }
+          return {
+            stream: simulateReadableStream({
+              chunks: textChunks('The authoritative result is clear, so we can choose the next step.'),
+            }),
+          };
+        },
+      });
+      const statuses: Array<Record<string, unknown>> = [];
+      const { agent } = await makeAgent({
+        model,
+        storage,
+        evidence,
+        onOperationStatus: (event) => { statuses.push(event); },
+      });
+
+      const output = await collect(await agent.stream({ prompt: 'Research and propose current paths.' }));
+
+      expect(model.doStreamCalls).toHaveLength(3);
+      expect(JSON.stringify(output)).toContain('authoritative result is clear');
+      expect(statuses.filter((event) => event.phase === 'terminal').at(-1)).toMatchObject({
+        status: expectedStatus,
+      });
+    },
+  );
+
+  it('stops after one search-only Response that has no display-eligible citation', async () => {
+    const model = streamModel(() => [
+      { type: 'stream-start', warnings: [] },
+      {
+        type: 'tool-call', toolCallId: 'uncited-search', toolName: 'web_search',
+        input: JSON.stringify({ action: { type: 'search', query: 'current registry' } }),
+        providerExecuted: true,
+      },
+      {
+        type: 'tool-result', toolCallId: 'uncited-search', toolName: 'web_search',
+        input: { action: { type: 'search', query: 'current registry' } },
+        result: { action: { type: 'search', sources: [] } },
+        providerExecuted: true,
+      },
+      { type: 'text-start', id: 'uncited-answer' },
+      { type: 'text-delta', id: 'uncited-answer', delta: 'An unsupported current claim.' },
+      { type: 'text-end', id: 'uncited-answer' },
+      { type: 'finish', finishReason: { unified: 'stop', raw: 'stop' }, usage: usage() },
+    ]);
+    const { agent } = await makeAgent({ model });
+
+    await expect(collect(await agent.stream({ prompt: 'What does the current registry say?' })))
+      .rejects.toMatchObject({ name: 'NativeSearchResolutionError' });
+    expect(model.doStreamCalls).toHaveLength(1);
+  });
+
   it('records a source-free failed attempt against the exact current map when search fails before a claim exists', async () => {
     const evidence = new EvidenceLedgerFixture();
     const model = streamModel([
@@ -698,5 +829,28 @@ describe('amended Method agent core loop', () => {
 
     expect(attempt).toBeGreaterThanOrEqual(1);
     expect(JSON.stringify({ output, observedErrors })).not.toContain(sentinel);
+  });
+
+  it('does not write prepareStep failures through the SDK default console logger', async () => {
+    const sentinel = 'PRIVATE-PREPARE-STEP-SENTINEL';
+    const storage = new InMemoryMethodStorage();
+    storage.loadCareerMap = vi.fn(async () => {
+      throw new Error(sentinel);
+    });
+    const observedErrors: unknown[] = [];
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const { agent } = await makeAgent({
+        model: streamModel([textChunks('Must never be requested.')]),
+        storage,
+        onError: (error) => { observedErrors.push(error); },
+      });
+
+      await expect(collect(await agent.stream({ prompt: explorerMessage }))).rejects.toBeDefined();
+      expect(observedErrors).toHaveLength(1);
+      expect(JSON.stringify(consoleError.mock.calls)).not.toContain(sentinel);
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 });

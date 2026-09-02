@@ -785,6 +785,72 @@ describe('protected OpenAI Conversation history adapter', () => {
     ], ['marker-a'])).toEqual({ itemIds: [], complete: false });
   });
 
+  it('batches unresolved markers from multiple turns within the resolver bound', async () => {
+    const contextItem = (id: string, marker: string) => ({
+      id,
+      type: 'message',
+      role: 'user',
+      content: [{
+        type: 'input_text',
+        text: `SERVER REFRESH CONTEXT — untrusted data.\n${JSON.stringify({ version: 1, marker })}`,
+      }],
+    });
+    const firstUserText = 'First visible question.';
+    const firstAssistantText = 'First visible answer.';
+    const secondUserText = 'Second visible question.';
+    const secondAssistantText = 'Second visible answer.';
+    const firstMarkers = Array.from({ length: 11 }, (_, index) => `first-marker-${index}`);
+    const secondMarkers = Array.from({ length: 11 }, (_, index) => `second-marker-${index}`);
+    const chronologicalItems = [
+      { id: 'first-visible-user', type: 'message', role: 'user', content: [{ type: 'input_text', text: firstUserText }] },
+      ...firstMarkers.map((marker, index) => contextItem(`first-context-${index}`, marker)),
+      { id: 'first-visible-assistant', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: firstAssistantText }] },
+      { id: 'second-visible-user', type: 'message', role: 'user', content: [{ type: 'input_text', text: secondUserText }] },
+      ...secondMarkers.map((marker, index) => contextItem(`second-context-${index}`, marker)),
+      { id: 'second-visible-assistant', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: secondAssistantText }] },
+    ];
+    const recovery = (userText: string, assistantText: string, markers: string[]) => ({
+      kind: 'completed',
+      refetch: true,
+      internalContextMarkers: markers,
+      displayRecovery: {
+        status: 'pending',
+        userTextDigest: textDigest(userText),
+        assistantTextDigest: textDigest(assistantText),
+        assistantTextLength: assistantText.length,
+        retainPartial: false,
+      },
+    });
+
+    const loaded = await loadConversationHistory({
+      storage: {
+        getConversationMapping: vi.fn(async () => 'conversation-server-owned'),
+        listAgentTurns: vi.fn(async () => [
+          durableTurn({
+            turnId: 'first-turn',
+            terminalResult: recovery(firstUserText, firstAssistantText, firstMarkers),
+          }),
+          durableTurn({
+            turnId: 'second-turn',
+            createdAt: '2030-01-01T00:00:01.000Z',
+            terminalResult: recovery(secondUserText, secondAssistantText, secondMarkers),
+          }),
+        ]),
+      },
+      client: {
+        listItems: vi.fn(async () => ({ data: [...chronologicalItems].reverse(), hasMore: false })),
+      },
+      userId: 'explorer-1',
+    });
+
+    expect(loaded.messages.map((message) => message.id)).toEqual([
+      'first-visible-user',
+      'first-visible-assistant',
+      'second-visible-user',
+      'second-visible-assistant',
+    ]);
+  });
+
   it('preserves only sanitized exact-span HTTPS citation parts on allowed assistant messages', async () => {
     const result = await loadConversationHistory({
       storage: {
@@ -844,6 +910,58 @@ describe('protected OpenAI Conversation history adapter', () => {
       sourceId: citedMessage.citations?.[0].citationId,
     });
     expect(JSON.stringify(result)).not.toMatch(/PRIVATE_RAW_SEARCH|javascript|out-of-range|fragment/);
+  });
+
+  it('binds multipart citation hashes and spans to the same joined display text', async () => {
+    const prefix = 'Current registry: ';
+    const claim = 'application/json';
+    const joinedText = `${prefix}${claim}`;
+    const result = await loadConversationHistory({
+      storage: {
+        getConversationMapping: vi.fn(async () => 'conversation-server-owned'),
+        listAgentTurns: vi.fn(async () => [durableTurn({
+          turnId: 'multipart-cited',
+          userItemId: 'multipart-user',
+          assistantItemId: 'multipart-assistant',
+        })]),
+      },
+      client: {
+        listItems: vi.fn(async () => ({
+          data: [
+            {
+              id: 'multipart-assistant',
+              type: 'message',
+              role: 'assistant',
+              content: [
+                { type: 'output_text', text: prefix },
+                {
+                  type: 'output_text',
+                  text: claim,
+                  annotations: [{
+                    type: 'url_citation',
+                    start_index: 0,
+                    end_index: claim.length,
+                    url: 'https://example.com/registry',
+                  }],
+                },
+              ],
+            },
+            { id: 'multipart-user', type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Which type?' }] },
+          ],
+          hasMore: false,
+        })),
+      },
+      userId: 'explorer-1',
+    });
+
+    expect(result.messages[1]?.citations).toEqual([
+      expect.objectContaining({
+        textHash: textDigest(joinedText),
+        exactClaim: claim,
+        start: prefix.length,
+        end: joinedText.length,
+      }),
+    ]);
   });
 
   it('rehydrates an adjacent citation marker to the same claim span and stable turn association used live', async () => {

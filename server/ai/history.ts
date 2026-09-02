@@ -179,10 +179,15 @@ function displayContent(
     }
     messageOffset += text.length;
   }
+  const joinedTextHash = createHash('sha256').update(texts.join('')).digest('hex');
+  const joinedCitations = citations.map((citation) => ({
+    ...citation,
+    textHash: joinedTextHash,
+  }));
   return {
     parts: texts.map((text) => ({ type: 'text' as const, text })),
-    ...(citations.length > 0 ? { sources: citations.map(citationToBrowserSourceUrlPart) } : {}),
-    ...(citations.length > 0 ? { citations } : {}),
+    ...(joinedCitations.length > 0 ? { sources: joinedCitations.map(citationToBrowserSourceUrlPart) } : {}),
+    ...(joinedCitations.length > 0 ? { citations: joinedCitations } : {}),
   };
 }
 
@@ -460,7 +465,7 @@ function internalContextItemIds(turns: readonly AgentTurnRecord[]): Set<string> 
   return ids;
 }
 
-function pendingInternalContextMarkers(turns: readonly AgentTurnRecord[]): string[] {
+function pendingInternalContextMarkerBatches(turns: readonly AgentTurnRecord[]): string[][] {
   const markers = new Set<string>();
   for (const turn of turns) {
     const terminal = turn.terminalResult;
@@ -471,7 +476,11 @@ function pendingInternalContextMarkers(turns: readonly AgentTurnRecord[]): strin
     if (!parsed.success) continue;
     for (const marker of parsed.data) markers.add(marker);
   }
-  return [...markers];
+  const values = [...markers];
+  return Array.from(
+    { length: Math.ceil(values.length / 20) },
+    (_, index) => values.slice(index * 20, (index + 1) * 20),
+  );
 }
 
 function projectConversationHistory(
@@ -575,7 +584,7 @@ export async function loadConversationHistory(input: {
     .parse(input.pageSize ?? HISTORY_PAGE_SIZE);
   const turns = await input.storage.listAgentTurns(input.userId);
   const excludedItemIds = internalContextItemIds(turns);
-  const unresolvedInternalContextMarkers = pendingInternalContextMarkers(turns);
+  const unresolvedInternalContextMarkerBatches = pendingInternalContextMarkerBatches(turns);
   const newestFirstItems: unknown[] = [];
   const seenCursors = new Set<string>(after ? [after] : []);
   let providerHasMore = false;
@@ -598,11 +607,8 @@ export async function loadConversationHistory(input: {
       throw new ConversationHistoryProviderError('list');
     }
     newestFirstItems.push(...page.data);
-    if (unresolvedInternalContextMarkers.length > 0) {
-      const resolved = resolveInternalContextItemIds(
-        newestFirstItems,
-        unresolvedInternalContextMarkers,
-      );
+    for (const markers of unresolvedInternalContextMarkerBatches) {
+      const resolved = resolveInternalContextItemIds(newestFirstItems, markers);
       for (const itemId of resolved.itemIds) excludedItemIds.add(itemId);
     }
     projection = projectConversationHistory([...newestFirstItems].reverse(), turns, excludedItemIds);

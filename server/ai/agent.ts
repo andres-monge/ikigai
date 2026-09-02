@@ -83,11 +83,10 @@ function sanitizedProviderFailureParts(includeText = true) {
 }
 
 /**
- * ToolLoopAgent currently installs console.error as streamText's internal
- * provider-error callback and does not expose an override. Adapt the V4 model
- * stream before it reaches that callback: retain only a generic display error,
- * report the original value to request-scoped metadata handling, and mark the
- * durable turn failed after the sanitized stream closes.
+ * ToolLoopAgent does not type streamText's onError callback. Adapt the V4 model
+ * stream before provider errors reach that callback: retain only a generic
+ * display error, report the original value to request-scoped metadata handling,
+ * and mark the durable turn failed after the sanitized stream closes.
  */
 function privacySafeStreamingModel(
   model: LanguageModel,
@@ -405,7 +404,7 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
     turnSequence: options.turnSequence,
     occurredAt: options.occurredAt,
   };
-  let researchWriteCommittedThisResponse = false;
+  let researchWriteTerminalThisResponse = false;
   const methodTools = createMethodTools({
     storage: options.storage,
     loader: options.loader,
@@ -421,10 +420,9 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
     onOperationStatus: async (event) => {
       if (
         event.phase === 'terminal'
-        && event.status === 'saved'
         && RESEARCH_WRITE_OPERATIONS.has(event.operation)
       ) {
-        researchWriteCommittedThisResponse = true;
+        researchWriteTerminalThisResponse = true;
       }
       await options.onOperationStatus?.(event);
     },
@@ -439,10 +437,18 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
   let settledStep: StepResult<ToolSet> | undefined;
   const markers: string[] = [];
 
+  // The pinned ToolLoopAgent forwards non-lifecycle settings to streamText at
+  // runtime, but its public settings type omits streamText's onError callback.
+  // Supplying it by spread disables the SDK's raw console.error fallback for
+  // prepareStep and other agent-boundary failures.
+  const streamTextErrorHandler = {
+    onError: ({ error }: { error: unknown }) => { options.onError?.(error); },
+  };
   const toolLoopAgent = new ToolLoopAgent({
     model: privacySafeStreamingModel(options.model, options.onError, (part) => {
       if (isProviderSearchCall(part)) responsePolicy.nativeSearchObserved = true;
     }),
+    ...streamTextErrorHandler,
     maxOutputTokens: 1_500,
     tools,
     toolChoice: 'auto',
@@ -545,7 +551,7 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
               responsePolicy.nativeSearchObserved = false;
               responsePolicy.researchResolutionRequired = researchResolutionPending;
               responsePolicy.evidenceManifestAvailable = options.evidence.manifest().length > 0;
-              researchWriteCommittedThisResponse = false;
+              researchWriteTerminalThisResponse = false;
               operationGuard.reset();
               settledStep = undefined;
               const result = await toolLoopAgent.stream({
@@ -570,7 +576,7 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
                 // bearing write with server-minted handles.
                 researchResolutionPending = true;
               }
-              if (pendingBeforeResponse && researchWriteCommittedThisResponse) {
+              if (pendingBeforeResponse && researchWriteTerminalThisResponse) {
                 researchResolutionPending = false;
               }
               if (!hasClientTool) {
@@ -594,6 +600,11 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
               if (nativeSearchFailed) {
                 const error = new Error('Native search is temporarily unavailable.');
                 error.name = 'NativeSearchUnavailableError';
+                throw error;
+              }
+              if (hasSearch && !hasClientTool && displayCitations.length === 0) {
+                const error = new Error('Native search did not produce display-eligible evidence.');
+                error.name = 'NativeSearchResolutionError';
                 throw error;
               }
               if (researchResolutionPending && pendingBeforeResponse && !hasSearch && !hasClientTool) {
