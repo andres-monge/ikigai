@@ -477,13 +477,14 @@ export function compileCareerMapBriefing(input: unknown): CareerMapBriefing {
   if (!parsed.success) throw new CareerMapBriefingError();
   const map = parsed.data;
   const checkpoint = deriveMethodCheckpoint(map);
+  const markdown = renderCareerMapBriefing(map, checkpoint);
 
   return {
     schemaVersion: map.schemaVersion,
     mapRevision: map.revision,
     module: checkpoint.module,
     pendingDecision: checkpoint.pendingDecision,
-    markdown: renderCareerMapBriefing(map, checkpoint),
-    modelMarkdown: renderCareerMapBriefing(map, checkpoint),
+    markdown,
+    modelMarkdown: markdown,
   };
 }

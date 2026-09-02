@@ -277,11 +277,10 @@ function internalContextMessage(input: {
 
 function displayParts(
   parts: readonly TextStreamPart<ToolSet>[],
-  step: NativeSearchStep,
+  hasClientTool: boolean,
+  citations: readonly NativeSearchDisplayCitation[],
 ): TextStreamPart<ToolSet>[] {
-  const hasClientTool = (step.toolCalls ?? []).some(isClientToolCall);
   if (hasClientTool) return parts.filter((part) => part.type === 'abort');
-  const citations = extractNativeSearchDisplayCitations(step);
   const safe = parts.filter((part) => (
     part.type === 'start'
     || part.type === 'start-step'
@@ -440,12 +439,13 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
               const step = steps[index] as StepResult<ToolSet> | undefined;
               if (!step) continue;
               const hasClientTool = (step.toolCalls ?? []).some(isClientToolCall);
-              if (!hasClientTool) {
-                for (const citation of extractNativeSearchDisplayCitations(step as NativeSearchStep)) {
-                  input.onCitation?.(citation);
-                }
+              const citations = hasClientTool
+                ? []
+                : extractNativeSearchDisplayCitations(step as NativeSearchStep);
+              for (const citation of citations) {
+                input.onCitation?.(citation);
               }
-              for (const part of displayParts(groups[index]!, step as NativeSearchStep)) {
+              for (const part of displayParts(groups[index]!, hasClientTool, citations)) {
                 if (part.type === 'text-delta') input.onTextDelta?.(part.text);
                 controller.enqueue(part);
               }
