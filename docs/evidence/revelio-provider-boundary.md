@@ -1,100 +1,128 @@
 # Revelio Provider Boundary Receipt
 
-- **Gate:** G1 — Prove the provider boundary before the Method kernel
-- **Observed:** 2026-08-30
+- **Gate:** G1 — re-prove the amended provider boundary
+- **Observed:** 2026-09-02
 - **Result:** Pass
-- **Selected route:** AI SDK `ToolLoopAgent` with `prepareStep`
+- **Selected route:** one Response per functional step through one `ToolLoopAgent`
 - **Selected pinned snapshot:** `gpt-5.6-luna`
 - **Provider:** OpenAI Responses through `@ai-sdk/openai`
-- **Conversation storage:** OpenAI Conversations with `store: true`
-- **Supporting commit:** `323a119c1fe1b3bfa984a63bbcb3e3c074bdaffc` (`feat(provider): prove provider boundary (G1)`)
+- **Conversation storage:** one OpenAI Conversation with `store: true`
+- **Supporting change:** the path-limited G1 commit containing this receipt
 
 ## Decision
 
-Use the native AI SDK route. `ToolLoopAgent` keeps its top-level `instructions` unset and reloads request-scoped OpenAI instructions, the active module, and the active tool set in `prepareStep` after every committed result. Compaction is included only on step zero of a new turn and omitted from later tool-result continuation steps.
+Use the explicit one-Response-per-step route inside the same request-scoped
+`ToolLoopAgent` policy, model, stored Conversation, and finite 20-Response turn
+budget. Keep `toolChoice: "auto"`, `parallelToolCalls: false`, native non-preview
+`web_search`, and the state-selected strict Method-tool subset.
 
-The explicit one-Response-per-step route also passed the feasibility probe, including streamed narration and safe tool-result continuation through the same Conversation, but is not selected. No fallback budget governs the selected native route. If the fallback is later selected, configure a finite cap of **20 Responses per turn**. That cap is a recorded contingency constraint, not a claim that the three-Response feasibility probe exercised all 20 Responses.
+The pinned SDK's default multi-step route is not selected for researched writes.
+Live evidence showed that a custom function can execute before `onStepEnd` exposes
+the completed hosted-search result, so that function cannot consume a
+server-minted evidence handle in the same Response. The strict write rejects or
+withholds at that boundary. The server then ledgers the completed search
+Response, refreshes the lower-priority handle manifest and authoritative state,
+and allows the next Response in the same agent loop to retry. This keeps exact
+write authority without a classifier, isolated research context, query rewrite,
+hardcoded taxonomy, or separate research-model call.
 
-## Candidate comparison
+## Versions and selected model
 
-The spike first confirmed the candidate ids against the authenticated `/v1/models` catalog, then ran the same native lease, stream, Conversation, per-step refresh, isolated-research, provenance, abort, idempotency, result-gating, same-turn transition, and safe-compaction assertions for each candidate.
-
-| Candidate | Native result | Final strengthened matrix | Note |
-|---|---:|---:|---|
-| `gpt-5.6-luna` | Pass | 14,829 ms | Passed automatic tool choice and every final assertion; selected. |
-| `gpt-5.6-sol` | Pass | 15,760 ms | Passed every final assertion. |
-| `gpt-5.5-2026-04-23` | Pass | 15,561 ms | Passed every final assertion. |
-| `gpt-5.6-terra` | Fail | 14,847 ms | Narrated before both results committed under automatic tool choice. Its explicit fallback route passed in a focused rerun, so it is excluded from the native passing set rather than treated as provider-incompatible. |
-| `gpt-5.5-pro-2026-04-23` | Fail | 756 ms | Rejects the shared `reasoningEffort: low` request contract. |
-
-**Native passing set available to U3:** `gpt-5.6-luna`, `gpt-5.6-sol`, `gpt-5.5-2026-04-23`.
-
-Durations come from one synthetic final matrix after review hardening, not a latency benchmark. Luna passed every final assertion and was the fastest member of the final native passing set. U3's golden transcripts remain the representative quality/latency comparison; a later model outside the passing set reopens G1 before use.
-
-## Versions
-
-| Surface | Observed version |
+| Surface | Live observed value |
 |---|---|
 | Node.js | `v24.19.0` |
 | Vercel AI SDK | `ai@7.0.66` |
 | OpenAI provider | `@ai-sdk/openai@4.0.42` |
-| OpenAI API | Responses + Conversations, live on 2026-08-30 |
+| Configured model | `gpt-5.6-luna` |
+| Actual response model id | `gpt-5.6-luna` |
+| Native SDK default stop condition | `isStepCount(20)` |
+| Fallback budget | 20 Responses per turn |
 
-The repository's existing `npm run spike:openai` script and `.env` loading were already correct and remain the entry point. `package-lock.json` supplies the exact installed SDK versions above.
+The amended repeated matrix narrowed the passing set to `gpt-5.6-luna`, which
+remains selected. Each reported actual response model id matched its configured
+candidate. A future model outside this passing set must reopen G1.
 
-## Assertion receipt
-
-| Assertion | Native result | Evidence observed |
+| Candidate | Result | Strengthened-matrix evidence |
 |---|---:|---|
-| Natural streamed chat plus typed canonical changes (Method R41) | Pass | Two strict function results committed before a non-empty final narration streamed. |
-| Seven-module architecture remains state-selected (Method R44–R45) | Pass | The synthetic selector moved `form-foundation` → `create-purpose-paths` → `complete`; the active tools changed on each step. The spike proves the refresh seam, not U2 module behavior. |
-| Strict calls do not replace grounding, confirmation, or validation (Method R46) | Pass | Narrow Zod tools returned committed revision/module envelopes; research ran separately and no state claim was narrated before results. |
-| Repository-owned modules remain application-owned (Method KTD3) | Pass | Only request-scoped synthetic module instructions were supplied; no hosted Skill or filesystem authority was exposed. |
-| Request-scoped instructions and OpenAI Conversation ownership (Method KTD4) | Pass | Every native step carried server-resolved Conversation options, fresh OpenAI instructions, and the focused private briefing; the raw private state stayed out of the request and no marker appeared as a stored developer/system item. `ToolLoopAgent.instructions` was unset. A deterministic negative control proved the request-boundary detector recognizes both private marker classes. |
-| Result-gated narration (Method KTD4) | Pass | Under production-relevant automatic tool choice, no non-whitespace text delta was emitted before both operation results; narration streamed only after the authoritative second result. |
-| Isolated, de-identified research (Method KTD10) | Pass | Research requests had no Conversation, used `store: false`, contained neither the raw-state nor focused-briefing marker, and accepted only a synthetic public-fact query. |
-| Opaque source handle and cited provenance (Method KTD10) | Pass | The server derived an opaque handle from the provider web-search result id and HTTPS citation URL. Retrieval time was valid; an optional title was observed; exact citation content and included provider result content were both available. No URL or content is retained in this receipt. |
-| Reload/reselect after every result (Method KTD12) | Pass | `prepareStep` observed the committed state before steps 1 and 2, changed request instructions, and replaced the active tool set before the next model call. |
-| Same-turn confirmation-to-next-module transition | Pass | Confirmation committed in step 0; the next-module tool was selected and committed in step 1; final narration streamed in step 2. |
-| SDK default loop behavior | Pass | Native `ToolLoopAgent` used no custom `stopWhen`; the pinned SDK default remains authoritative. |
-| In-memory lease and message idempotency | Pass | First acquisition succeeded; same-message in-flight retry attached; a different concurrent message conflicted; completion replay returned the terminal result; completion and cancellation released the lease. |
-| Tool-call idempotency | Pass | Each live synthetic operation was applied once, then replayed by tool-call id and payload fingerprint without a second state change. |
-| Conversation ownership | Pass | User-to-Conversation mapping was server-owned; an injected client Conversation value was ignored; an unknown owner failed closed. |
-| Abort propagation | Pass | Native and explicit-fallback client aborts reached the active tool signal and produced an observed abort or abort-shaped rejection; neither route accepted controller state alone as proof. Both emitted no later narration, made no later provider step, marked the turn cancelled, and released the lease for the next turn. |
-| Safe compaction boundary | Pass | A compaction item was observed; request tracing showed compaction on step zero only and no compaction on pending tool-result continuation steps. |
-| Explicit one-Response-per-step fallback | Pass, not selected | Three streamed Responses reused the server-owned Conversation, passed tool-result messages explicitly, refreshed instructions/tools after each committed result, rejected any premature non-whitespace narration, and compacted only on the first Response. Its independent isolated-research/provenance and direct-`streamText` abort/lease probes also passed; the top-level gate fails if this contingency fails even while native remains selected. |
-| Cleanup | Pass | The final live payload reported `cleanupCompleted: true`; Conversation items were paginated and deleted before each Conversation. |
+| `gpt-5.6-luna` | Pass; selected | Fresh, stale-premise, mixed reflective/current, fresh follow-up, multilingual, and hostile-retrieval cases all searched before the exact claim and retained a claim-linked citation. |
+| `gpt-5.6-sol` | Excluded | The mixed reflective/current case did not attach a normalized HTTPS citation to the exact claim. |
+| `gpt-5.5-2026-04-23` | Excluded | The fresh-fact case did not attach a normalized HTTPS citation to the exact claim. |
+
+## Live amended assertion receipt
+
+| Assertion | Result | Evidence observed |
+|---|---:|---|
+| One intelligent loop | Pass | Seventeen fallback Responses reused one `ToolLoopAgent`, model, policy, and stored Conversation. No classifier, routing model, no-write tool, or research model was present. |
+| Automatic native choice | Pass | Every tool-eligible request used `tool_choice: auto`; natural conversation chose no tool, search-only chose hosted search, and strict-operation cases chose the stage tool. |
+| Native search surface | Pass | Observed provider requests contained non-preview `web_search`; no `web_search_preview` tool appeared. |
+| Context ownership and priority | Pass | Every Response used the same server-owned Conversation with `store: true`; the focused Career Map and evidence manifest were lower-priority request input and never developer instructions. |
+| Per-Response Method refresh | Pass | Stable Method policy and the current request-scoped active tool set were supplied for every functional step. |
+| Same-Response provenance timing | Pass, native route rejected | A native Response executed the custom function while the ledger was false; completed hosted-search evidence became visible only at `onStepEnd`. The native run observed two SDK steps under its default stop condition. |
+| False-negative fallback | Pass | A premature researched write returned `EvidenceHandleRejected`; after completed search and claim/citation association, the server minted a handle and the next Response committed exactly one write. |
+| Provider-derived association | Pass | The ledger observed every provider search call/result/action in response order, matched the citation to its actual call/result source, then accepted an HTTPS URL annotation adjacent to the exact canonical claim. It minted a handle bound to user, turn, lease, provider call/result, target, revision, field, exact claim span, and NFC-normalized claim. Seven cross-binding controls plus missing/conflicting-citation controls rejected. Missing exact result content stayed `cited-provenance`. |
+| Visible citation | Pass | The retained search-only answer contained the exact claim and a provider citation/source part. Consulted search events alone did not mint claim support. |
+| Result barrier | Pass | Tool-using Responses released neither pre-result prose nor orphaned sources. Tool-free responses were released only at their settled step boundary. |
+| Result continuation | Pass | Committed, idempotent replay, conflict, rejection, and tool-error results each continued naturally in a later Response after the authoritative boundary. |
+| UI-owned status transport | Pass | Custom attempts emitted exactly one `Saving` followed by one monotonic `Saved`, `Conflict`, `Rejected`, or `Failed`; replay mapped to `Saved`. Search and no-tool turns emitted no save status. The parts crossed an actual AI SDK UI-message stream with operation correlation, transient status data, normalized source parts, and status-free assistant text. |
+| Compaction boundary | Pass | After every hosted-search and custom-tool result settled, a long next-turn request enabled compaction exactly once and produced a real provider compaction item. No pending custom-tool output crossed it. |
+| Conversation de-duplication and display provenance | Pass | All stored Conversation item ids were distinct. Each genuine user utterance and lower-priority internal refresh appeared once; the display projection excluded internal context by the server-recorded item-id set rather than prefix filtering. |
+| Cancellation | Pass | Cancellation before write produced zero writes and no displayed prose. Cancellation after commit-before-narration preserved exactly one write and its Saved state, emitted no prose, and started no later provider Response. |
+| Repeated model matrix | Pass for selected snapshot | Luna searched before claims, preserved exact claim-linked citations, and made no canonical write for fresh, stale-premise, mixed reflective/current, fresh follow-up, multilingual, and hostile-retrieval turns. The hostile case searched for real indirect-injection examples; no private focused-context sentinel entered prose, follow-on search, or tool arguments. Sol and GPT-5.5 were excluded by exact citation failures above. |
+| Search outage | Pass | A synthetic provider outage traversed the selected stored-Conversation route with focused lower-priority context, released no claim, and performed no canonical write. |
+| Cleanup | Pass | Every generated Conversation was exhaustively emptied and deleted; the final receipt reported `cleanup: completed`. |
+
+The unchanged prior G1 live receipt remains supporting evidence for the preserved
+lease, message/tool idempotency, live abort propagation, post-abort lease release,
+and reverse-order exhaustive Conversation deletion primitives. U4/U5 must bind
+the amended ledger and status writes to those durable primitives and repeat their
+focused cancellation, stale-lease, idempotency, and erasure tests. The amended
+provider decision does not rely on the prior receipt's isolated-research or
+internal no-write assertions; those are superseded and are not acceptance
+evidence.
 
 ## Commands and observed results
 
 ```text
-node --check scripts/openai-provider-spike.mjs
+/Users/andresm/.nvm/versions/node/v24.19.0/bin/node --check \
+  scripts/openai-provider-g1-amended.mjs
 PASS
 
-PATH=/Users/andresm/.nvm/versions/node/v24.19.0/bin:$PATH npm run spike:openai
-PASS after review hardening — selected route ai-sdk-tool-loop-agent-prepare-step;
-selected model gpt-5.6-luna; native passing set gpt-5.6-luna, gpt-5.6-sol,
-gpt-5.5-2026-04-23; fallback feasibility pass; cleanup completed.
-
-PATH=/Users/andresm/.nvm/versions/node/v24.19.0/bin:$PATH \
-  OPENAI_SPIKE_MODELS=gpt-5.6-luna npm run spike:openai
-PASS after review hardening — native and fallback routes, isolated research, abort, and cleanup.
-
-PATH=/Users/andresm/.nvm/versions/node/v24.19.0/bin:$PATH \
-  OPENAI_SPIKE_MODEL=gpt-5.6-terra OPENAI_SPIKE_MODELS=gpt-5.6-terra \
-  npm run spike:openai
-PASS through the explicit fallback — Terra's native route failed the stricter automatic-tool-choice
-narration gate; the independent fallback research, abort, lease, and cleanup checks passed.
+/Users/andresm/.nvm/versions/node/v24.19.0/bin/node --no-warnings \
+  --experimental-loader=/tmp/ikigai-primary-node-modules-loader.mjs \
+  --env-file=<authorized-primary-checkout-env> \
+  scripts/openai-provider-g1-amended.mjs
+PASS — selectedRoute one-response-per-step; actual model gpt-5.6-luna;
+native custom-before-ledger observed; fallback reject→ledger→retry committed;
+17 Responses; 2 agent writes plus one simulated concurrent revision advance;
+all five authoritative result continuations, real compaction, both cancellation
+boundaries, the three-candidate comparison, selected-model matrix, safe outage,
+and cleanup passed.
 ```
 
-Before implementation, the existing `npm run spike:openai` passed on `gpt-5.6-luna` but emitted only the I1-era threading, request-instructions, web-search/custom-tool composition, and compaction fields. It did not characterize G1's per-step refresh, isolated provenance, result gate, same-turn transition, lease/idempotency/ownership harness, or live abort; that missing evidence was the pre-change characterization gap.
+The managed worktree intentionally had no dependency installation. The temporary
+read-only loader resolved the exact `package-lock.json` versions from the primary
+checkout without modifying it, and the authorized ignored environment file was
+referenced in place. No credential, Conversation id, user identity, prompt,
+Career Map value, source URL/body, citation excerpt, provider payload, or raw tool
+argument was copied, persisted, logged, or committed.
 
-## Privacy and provider use
+In a provisioned checkout with local dependencies and `.env`, the durable entry
+point is:
 
-All live calls used generated identifiers, repeated synthetic context, and a public time-zone fact. The harness output and this receipt retain no API key, Conversation id, user identity, prompt or briefing, career-map value, tool argument payload, source URL, source body, provider response body, or citation excerpt. Provider REST failures are reduced to an allowlisted operation, HTTP status, and error class; a deterministic fault injection proves Conversation/item identifiers and provider messages are redacted.
+```text
+PATH=/Users/andresm/.nvm/versions/node/v24.19.0/bin:$PATH npm run spike:openai
+```
 
-The G1 implementation session made live Responses and web-search calls during the baseline characterization, selected-model debugging, and the final five-candidate matrix. These calls may be billable. The harness did not calculate or retain a monetary cost total. Every run reached cleanup without a cleanup error; the authoritative final run explicitly reported cleanup completion.
+## Boundaries and residual proof
 
-## Boundary and next proof
+G1 proves the amended provider route with synthetic in-memory state. U4 owns the
+durable evidence schema, atomic map/history/source association, rollout reader,
+lease fence, and local erasure. U5 owns the production loop, transport, bounded
+history, provider-item erasure, cancellation races, and exact application status
+channel. U6 remains out of scope and will consume, not define, that transport.
 
-This receipt proves provider feasibility before U2. It deliberately uses in-memory canonical state and lease/idempotency records; it does not implement Method modules or PostgreSQL durability. U5 must repeat these assertions with the real PostgreSQL lease, turn, mapping, operation-history, research, and Method coordinator composition.
+Automatic choice remains nondeterministic. U5 and later live evaluations must
+repeat the now-passing fresh, stale, mixed, follow-up, multilingual, outage,
+conflicting/missing-citation, and hostile-retrieval cases through the production
+composition. Repetition cannot add a classifier, pre-search gate, second context,
+query transformation, or extra model round trip.

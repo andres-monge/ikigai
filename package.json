@@ -22,7 +22,7 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",
-    "spike:openai": "node --env-file-if-exists=.env scripts/openai-provider-spike.mjs",
+    "spike:openai": "node --env-file-if-exists=.env scripts/openai-provider-g1-amended.mjs",
     "test:method": "npm test -- server/ai/method/loader.test.ts server/ai/method/evaluation.test.ts --run",
     "test:method-bundle": "npm run build && METHOD_PRODUCTION_SMOKE=1 npm run test:method",
     "eval:method": "node --env-file-if-exists=.env --import tsx scripts/eval-revelio-method.mjs"
