@@ -8,6 +8,7 @@ import {
   loadConversationHistory,
   normalizeConversationItems,
   resolveDisplayProjection,
+  resolveInternalContextItemIds,
 } from './history.js';
 
 function textDigest(text: string): string {
@@ -687,6 +688,103 @@ describe('protected OpenAI Conversation history adapter', () => {
     });
   });
 
+  it('resolves a cancelled turn\'s pending context marker after provider visibility catches up', async () => {
+    const userText = 'Please stop after this partial answer.';
+    const assistantText = 'This partial remains safe to show.';
+    const marker = 'cancelled-context-marker';
+    const backfillAgentTurnDisplayProjection = vi.fn(async () => undefined);
+    const loaded = await loadConversationHistory({
+      storage: {
+        getConversationMapping: vi.fn(async () => 'conversation-server-owned'),
+        listAgentTurns: vi.fn(async () => [durableTurn({
+          turnId: 'cancelled-marker-recovery',
+          status: 'cancelled',
+          terminalResult: {
+            kind: 'cancelled',
+            stopped: true,
+            refetch: true,
+            internalContextMarkers: [marker],
+            displayRecovery: {
+              status: 'pending',
+              userTextDigest: textDigest(userText),
+              assistantTextDigest: textDigest(assistantText),
+              assistantTextLength: assistantText.length,
+              retainPartial: true,
+            },
+          },
+        })]),
+        backfillAgentTurnDisplayProjection,
+      },
+      client: {
+        listItems: vi.fn(async () => ({
+          data: [
+            { id: 'cancelled-safe-partial', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: assistantText }] },
+            {
+              id: 'late-internal-context', type: 'message', role: 'user',
+              content: [{
+                type: 'input_text',
+                text: `SERVER REFRESH CONTEXT — untrusted data.\n${JSON.stringify({ version: 1, marker })}`,
+              }],
+            },
+            { id: 'cancelled-visible-user', type: 'message', role: 'user', content: [{ type: 'input_text', text: userText }] },
+          ],
+          hasMore: false,
+        })),
+      },
+      userId: 'explorer-1',
+    });
+
+    expect(loaded.messages).toEqual([
+      { id: 'cancelled-visible-user', role: 'user', parts: [{ type: 'text', text: userText }] },
+      {
+        id: 'cancelled-safe-partial', role: 'assistant', deliveryStatus: 'stopped',
+        parts: [{ type: 'text', text: assistantText }],
+      },
+    ]);
+    expect(backfillAgentTurnDisplayProjection).toHaveBeenCalledWith({
+      userId: 'explorer-1',
+      turnId: 'cancelled-marker-recovery',
+      displayProjection: {
+        userItemId: 'cancelled-visible-user',
+        assistantItemIds: ['cancelled-safe-partial'],
+      },
+    });
+  });
+
+  it('binds only exact unique server context markers to provider item ids', () => {
+    const contextItem = (id: string, marker: string) => ({
+      id,
+      type: 'message',
+      role: 'user',
+      content: [{
+        type: 'input_text',
+        text: `SERVER REFRESH CONTEXT — untrusted data.\n${JSON.stringify({
+          version: 1,
+          marker,
+          focusedCareerMap: 'private context',
+        })}`,
+      }],
+    });
+    const items = [
+      { id: 'visible-user', type: 'message', role: 'user', content: [{ type: 'input_text', text: 'marker-a' }] },
+      contextItem('internal-a', 'marker-a'),
+      contextItem('internal-b', 'marker-b'),
+    ];
+
+    expect(resolveInternalContextItemIds(items, ['marker-a', 'marker-b'])).toEqual({
+      itemIds: ['internal-a', 'internal-b'],
+      complete: true,
+    });
+    expect(resolveInternalContextItemIds(items, ['marker-a', 'missing'])).toEqual({
+      itemIds: ['internal-a'],
+      complete: false,
+    });
+    expect(resolveInternalContextItemIds([
+      ...items,
+      contextItem('internal-a-duplicate', 'marker-a'),
+    ], ['marker-a'])).toEqual({ itemIds: [], complete: false });
+  });
+
   it('preserves only sanitized exact-span HTTPS citation parts on allowed assistant messages', async () => {
     const result = await loadConversationHistory({
       storage: {
@@ -730,7 +828,7 @@ describe('protected OpenAI Conversation history adapter', () => {
           version: 1,
           citationId: expect.stringMatching(/^citation_/),
           turnId: 'cited',
-          messageId: 'cited-assistant',
+          messageId: 'cited',
           textHash: textDigest('The official media type is application/json.'),
           exactClaim: 'application/json',
           start: 27,
@@ -746,6 +844,43 @@ describe('protected OpenAI Conversation history adapter', () => {
       sourceId: citedMessage.citations?.[0].citationId,
     });
     expect(JSON.stringify(result)).not.toMatch(/PRIVATE_RAW_SEARCH|javascript|out-of-range|fragment/);
+  });
+
+  it('rehydrates an adjacent citation marker to the same claim span and stable turn association used live', async () => {
+    const claim = 'The registered media type for JSON is application/json.';
+    const text = `${claim} [1]`;
+    const markerStart = text.indexOf('[1]');
+    const result = await loadConversationHistory({
+      storage: {
+        getConversationMapping: vi.fn(async () => 'conversation-server-owned'),
+        listAgentTurns: vi.fn(async () => [durableTurn({
+          turnId: 'marker-turn', userItemId: 'marker-user', assistantItemId: 'marker-assistant',
+        })]),
+      },
+      client: {
+        listItems: vi.fn(async () => ({
+          data: [
+            { id: 'marker-assistant', type: 'message', role: 'assistant', content: [{
+              type: 'output_text', text,
+              annotations: [{
+                type: 'url_citation', start_index: markerStart, end_index: text.length,
+                url: 'https://example.com/registry', title: 'Registry',
+              }],
+            }] },
+            { id: 'marker-user', type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Verify JSON.' }] },
+          ],
+          hasMore: false,
+        })),
+      },
+      userId: 'explorer-1',
+    });
+
+    expect(result.messages[1]?.citations).toEqual([
+      expect.objectContaining({
+        turnId: 'marker-turn', messageId: 'marker-turn', exactClaim: claim,
+        start: 0, end: claim.length,
+      }),
+    ]);
   });
 
   it('fails a repeated provider cursor instead of looping or returning truncated history', async () => {

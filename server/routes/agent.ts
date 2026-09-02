@@ -4,9 +4,11 @@ import { createGroq } from '@ai-sdk/groq';
 import { createOpenAI } from '@ai-sdk/openai';
 import {
   experimental_transcribe as transcribe,
+  createUIMessageStream,
   pipeUIMessageStreamToResponse,
   toUIMessageStream,
   type LanguageModel,
+  type ToolSet,
   type UIMessageChunk,
 } from 'ai';
 import { z } from 'zod';
@@ -23,36 +25,33 @@ import {
 import {
   REVELIO_AGENT_MODEL,
   REVELIO_AGENT_PROVIDER,
-  classifyConsequentialAuthorization,
-  classifyMethodTurn,
   createMethodAgent,
-  projectMethodStreamForDisplay,
-  type MethodTurnRoute,
+  type MethodAgentTurnStreamResult,
 } from '../ai/agent.js';
 import { createMethodModuleLoader, type MethodModuleLoader } from '../ai/method/loader.js';
 import {
   OpenAIConversationClient,
+  createConversationHistoryCursorCodec,
   createDisplayRecovery,
   listConversationItems,
   listRecentConversationItems,
   loadConversationHistory,
   resolveDisplayProjection,
+  resolveInternalContextItemIds,
   type ConversationItemsClient,
 } from '../ai/history.js';
-import {
-  ResearchSession,
-  createOpenAIIsolatedResearchProvider,
-  type IsolatedResearchProvider,
-} from '../ai/research.js';
+import { createNativeSearchEvidenceLedger } from '../ai/research.js';
 import {
   executeWorkspaceTool,
   OPERATION_TO_TOOL_NAME,
   workspaceOperationRequestSchema,
-  refreshMethodState,
-  type ConfirmationAuthorization,
   type MethodOperationEnvelope,
 } from '../ai/tools.js';
 import { opaqueClientMessageIdSchema } from '../../shared/career-map/index.js';
+import {
+  claimLinkedCitationStreamPartSchema,
+  operationStatusStreamPartSchema,
+} from '../../shared/streaming-schemas.js';
 import { methodRouteLabel } from './agent-logging.js';
 
 const agentRequestSchema = z.object({
@@ -79,30 +78,21 @@ export interface AgentRouterOptions {
   loader?: MethodModuleLoader | Promise<MethodModuleLoader>;
   agentEnabled?: boolean | (() => boolean);
   model?: LanguageModel;
+  nativeWebSearchTool?: ToolSet[string];
   conversationClient?: ConversationItemsClient;
-  researchProvider?: IsolatedResearchProvider;
   transcribeAudio?: (input: { audio: Buffer; language: 'en' | 'es'; abortSignal?: AbortSignal }) => Promise<string>;
   now?: () => Date;
   id?: () => string;
   operationalLog?: (entry: Record<string, unknown>) => void;
   conversationCleanupSignal?: (entry: Record<string, unknown>) => void;
   provisioningHandoffTiming?: ProvisioningHandoffTiming;
+  /** Deterministic seam for provider-item binding tests. Production uses a random marker. */
+  internalContextMarker?: (responseIndex: number) => string;
   /**
    * Exact browser origin allowed to call custom Method POSTs. Production uses
    * BETTER_AUTH_URL; tests and local harnesses may inject their exact origin.
    */
   methodRequestOrigin?: string;
-  classifyTurn?: (input: {
-    model: LanguageModel;
-    message: string;
-    abortSignal?: AbortSignal;
-  }) => Promise<MethodTurnRoute>;
-  authorizeTurn?: (input: {
-    model: LanguageModel;
-    message: string;
-    state: Awaited<ReturnType<typeof refreshMethodState>>;
-    abortSignal?: AbortSignal;
-  }) => Promise<ConfirmationAuthorization | undefined>;
 }
 
 function configuredMethodOrigin(value: string): string | undefined {
@@ -148,7 +138,9 @@ function guardCustomMethodPost(expectedOrigin: string | undefined): RequestHandl
 
 function gateTerminalUIStream(
   stream: ReadableStream<UIMessageChunk>,
-  beforeTerminal: (terminalType: 'finish' | 'error' | 'abort') => Promise<void>,
+  beforeTerminal: (
+    terminalType: 'finish' | 'error' | 'abort',
+  ) => Promise<UIMessageChunk | undefined>,
 ): ReadableStream<UIMessageChunk> {
   const terminal: UIMessageChunk[] = [];
   let terminalType: 'finish' | 'error' | 'abort' = 'finish';
@@ -162,7 +154,11 @@ function gateTerminalUIStream(
       controller.enqueue(chunk);
     },
     async flush(controller) {
-      await beforeTerminal(terminalType);
+      const replacement = await beforeTerminal(terminalType);
+      if (replacement) {
+        controller.enqueue(replacement);
+        return;
+      }
       if (terminalType === 'finish') {
         for (const chunk of terminal) controller.enqueue(chunk);
       } else {
@@ -182,6 +178,7 @@ function safeErrorClass(error: unknown): string {
     'CareerMapRepairRequiredError',
     'ConversationHistoryProviderError',
     'Error',
+    'InternalContextBindingError',
     'MethodErasurePendingError',
     'MethodOwnerBusyError',
     'NoOutputGeneratedError',
@@ -345,6 +342,22 @@ function abortableDelay(milliseconds: number, signal: AbortSignal): Promise<void
   });
 }
 
+function awaitWithAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(signal.reason);
+  return new Promise<T>((resolve, reject) => {
+    const settle = (callback: () => void) => {
+      signal.removeEventListener('abort', onAbort);
+      callback();
+    };
+    const onAbort = () => settle(() => reject(signal.reason));
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(
+      (value) => settle(() => resolve(value)),
+      (error) => settle(() => reject(error)),
+    );
+  });
+}
+
 async function waitForProvisioningHandoff(input: {
   storage: Pick<IStorage, 'getConversationMapping' | 'getTurnLease'>;
   userId: string;
@@ -399,6 +412,9 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
   const methodRequestOrigin = configuredMethodOrigin(
     options.methodRequestOrigin ?? env.BETTER_AUTH_URL,
   );
+  const historyCursorCodec = createConversationHistoryCursorCodec(
+    createHash('sha256').update(env.BETTER_AUTH_SECRET).digest('hex'),
+  );
   let defaultOpenAI: ReturnType<typeof createOpenAI> | undefined;
   let defaultConversationClient: OpenAIConversationClient | undefined;
 
@@ -410,8 +426,8 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
   const model = () => options.model ?? openAI().responses(REVELIO_AGENT_MODEL);
   const conversationClient = () => options.conversationClient
     ?? (defaultConversationClient ??= new OpenAIConversationClient(env.OPENAI_API_KEY));
-  const researchProvider = () => options.researchProvider
-    ?? createOpenAIIsolatedResearchProvider(model(), openAI().tools.webSearch({ searchContextSize: 'low' }));
+  const nativeWebSearchTool = () => options.nativeWebSearchTool
+    ?? createOpenAI({ apiKey: env.OPENAI_API_KEY }).tools.webSearch({ searchContextSize: 'low' });
   const reconcileConversationProvisioning = async (userId: string) => {
     if (!enabled(options.agentEnabled)) return;
     while (true) {
@@ -446,14 +462,12 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
     response.setHeader('cache-control', 'no-store');
     response.on('finish', () => {
       const metadata = response.locals.methodLog as Record<string, unknown> | undefined;
-      const identity = response.locals.auth as { userId?: string } | undefined;
       log({
         type: 'method_request',
         requestId,
         route: methodRouteLabel(request.method, `${request.baseUrl}${request.path}`),
         status: response.statusCode,
         durationMs: Date.now() - startedAt,
-        ...(identity?.userId ? { userId: identity.userId } : {}),
         ...(metadata ?? {}),
       });
     });
@@ -465,6 +479,12 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
     const abort = attachAbort(request, response);
     try {
       throwIfRouteAborted(abort.signal);
+      const cursor = z.string().min(1).max(4_096).optional().safeParse(request.query.cursor);
+      if (!cursor.success) {
+        response.locals.methodLog = { errorClass: 'ValidationError' };
+        response.status(400).json({ error: 'Invalid history cursor', errorClass: 'ValidationError' });
+        return;
+      }
       const identity = getProtectedIdentity(response);
       await reconcileConversationProvisioning(identity.userId);
       const historyStorage = enabled(options.agentEnabled)
@@ -477,6 +497,8 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
         storage: historyStorage,
         client: conversationClient(),
         userId: identity.userId,
+        cursor: cursor.data,
+        cursorCodec: historyCursorCodec,
         abortSignal: abort.signal,
       });
       throwIfRouteAborted(abort.signal);
@@ -696,10 +718,99 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
     let leaseFinalized = false;
     let startingRevision: number | undefined;
     let safeAssistantText = '';
+    let conversationId: string | undefined;
+    let methodResult: MethodAgentTurnStreamResult | undefined;
+    let operationSaved = false;
+    let latestSavedRevision: number | undefined;
+    let terminalProviderStatePromise: Promise<{
+      items: unknown[];
+      internalContextItemIds: string[];
+      markers: readonly string[];
+      complete: boolean;
+    }> | undefined;
+    const terminalProviderState = (timeoutMs = 5_000, requestSignal?: AbortSignal) => {
+      terminalProviderStatePromise ??= (async () => {
+        if (!methodResult || !conversationId) {
+          return { items: [], internalContextItemIds: [], markers: [], complete: false };
+        }
+        const markerTimeoutSignal = AbortSignal.timeout(timeoutMs);
+        const markerSignal = requestSignal
+          ? AbortSignal.any([requestSignal, markerTimeoutSignal])
+          : markerTimeoutSignal;
+        const markers = await awaitWithAbort(methodResult.internalContextMarkers, markerSignal)
+          .catch(() => methodResult?.observedInternalContextMarkers() ?? []);
+        if (markers.length === 0) {
+          return { items: [], internalContextItemIds: [], markers, complete: false };
+        }
+        const timeoutSignal = AbortSignal.timeout(timeoutMs);
+        const terminalSignal = requestSignal
+          ? AbortSignal.any([requestSignal, timeoutSignal])
+          : timeoutSignal;
+        let latest = {
+          items: [] as unknown[], internalContextItemIds: [] as string[], markers, complete: false,
+        };
+        for (let attempt = 0; attempt < 5; attempt += 1) {
+          const items = await awaitWithAbort(
+            listRecentConversationItems({
+              client: conversationClient(),
+              conversationId,
+              abortSignal: terminalSignal,
+            }),
+            terminalSignal,
+          );
+          const resolved = resolveInternalContextItemIds(items, markers);
+          latest = {
+            items,
+            internalContextItemIds: resolved.itemIds,
+            markers,
+            complete: resolved.complete,
+          };
+          if (resolved.complete) return latest;
+          if (attempt < 4) await abortableDelay(100, terminalSignal);
+        }
+        return latest;
+      })().catch(() => ({
+        items: [],
+        internalContextItemIds: [],
+        markers: methodResult?.observedInternalContextMarkers() ?? [],
+        complete: false,
+      }));
+      return terminalProviderStatePromise;
+    };
+    const canonicalFailureResult = async (): Promise<Record<string, unknown>> => {
+      const [authoritative, providerState] = await Promise.all([
+        storage.loadCareerMap(identity.userId).catch(() => undefined),
+        terminalProviderState(500),
+      ]);
+      const revision = authoritative?.status === 'ready'
+        ? authoritative.map.revision
+        : latestSavedRevision;
+      const operationCommitted = operationSaved
+        || latestSavedRevision !== undefined
+        || (revision !== undefined && startingRevision !== undefined && revision > startingRevision);
+      return {
+        ...(revision !== undefined ? { revision } : {}),
+        ...(operationCommitted ? { operationCommitted: true } : {}),
+        ...(providerState.internalContextItemIds.length > 0
+          ? { internalContextItemIds: providerState.internalContextItemIds }
+          : {}),
+        ...(!providerState.complete && providerState.markers.length > 0
+          ? { internalContextMarkers: providerState.markers }
+          : {}),
+      };
+    };
     const cancelWithCanonicalRecovery = async () => {
       if (!turn) return undefined;
-      const authoritative = await storage.loadCareerMap(identity.userId).catch(() => undefined);
-      const revision = authoritative?.status === 'ready' ? authoritative.map.revision : undefined;
+      const [authoritative, providerState] = await Promise.all([
+        storage.loadCareerMap(identity.userId).catch(() => undefined),
+        terminalProviderState(500),
+      ]);
+      const revision = authoritative?.status === 'ready'
+        ? authoritative.map.revision
+        : latestSavedRevision;
+      const operationCommitted = operationSaved
+        || latestSavedRevision !== undefined
+        || (revision !== undefined && startingRevision !== undefined && revision > startingRevision);
       return storage.cancelAgentTurn({
         userId: identity.userId,
         turnId: turn.turnId,
@@ -711,10 +822,14 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
             safeAssistantText,
             safeAssistantText.length > 0,
           ),
-          ...(revision !== undefined ? {
-            revision,
-            operationCommitted: startingRevision !== undefined && revision > startingRevision,
-          } : {}),
+          ...(providerState.internalContextItemIds.length > 0
+            ? { internalContextItemIds: providerState.internalContextItemIds }
+            : {}),
+          ...(!providerState.complete && providerState.markers.length > 0
+            ? { internalContextMarkers: providerState.markers }
+            : {}),
+          ...(revision !== undefined ? { revision } : {}),
+          ...(revision !== undefined || operationCommitted ? { operationCommitted } : {}),
         },
       });
     };
@@ -755,7 +870,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
       const turnSequence = nextMethodTurnSequence(leasedState.map);
       throwIfRouteAborted(abort.signal);
       await reconcileConversationProvisioning(identity.userId);
-      let conversationId = await storage.getConversationMapping(identity.userId);
+      conversationId = await storage.getConversationMapping(identity.userId);
       if (!conversationId) {
         if (!conversationClient().createConversation) throw new Error('ConversationProvisioningUnavailable');
         throwIfRouteAborted(abort.signal);
@@ -833,71 +948,131 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
         }).catch(() => undefined);
         throwIfRouteAborted(abort.signal);
       }
-      const research = new ResearchSession({
+      const evidence = createNativeSearchEvidenceLedger({
         storage,
-        provider: researchProvider(),
         userId: identity.userId,
+        turnId: turn.turnId,
         leaseId: turn.leaseId,
         now,
       });
       let streamError: unknown;
       const loader = await loaderPromise;
-      const authorizationState = await refreshMethodState(storage, loader, identity.userId);
-      const [classifiedRoute, confirmationAuthorization] = await Promise.all([
-        (options.classifyTurn ?? classifyMethodTurn)({
-          model: model(),
-          message: parsed.data.message,
-          abortSignal: abort.signal,
-        }),
-        (options.authorizeTurn ?? classifyConsequentialAuthorization)({
-          model: model(),
-          message: parsed.data.message,
-          state: authorizationState,
-          abortSignal: abort.signal,
-        }),
-      ]);
-      const turnRoute: MethodTurnRoute = confirmationAuthorization ? 'method' : classifiedRoute;
-      const agent = createMethodAgent({
-        model: model(),
-        storage,
-        loader,
-        userId: identity.userId,
-        conversationId,
-        turn,
-        turnSequence,
-        occurredAt: now().toISOString(),
-        research,
-        currentMessage: parsed.data.message,
-        turnRoute,
-        confirmationAuthorization,
-        abortSignal: abort.signal,
-        onError: (error) => {
-          streamError = error;
-          response.locals.methodLog = {
-            ...response.locals.methodLog,
-            errorClass: safeErrorClass(error),
-          };
-        },
-      });
+      if (!conversationId) throw new Error('ConversationProvisioningUnavailable');
+      const activeConversationId = conversationId;
       response.locals.methodLog = { provider: REVELIO_AGENT_PROVIDER, turnId: turn.turnId };
       throwIfRouteAborted(abort.signal);
-      const result = await agent.stream({
-        prompt: parsed.data.message,
-        abortSignal: abort.signal,
+      const uiStream = createUIMessageStream({
+        execute: async ({ writer }) => {
+          const agent = createMethodAgent({
+            model: model(),
+            nativeWebSearchTool: nativeWebSearchTool(),
+            storage,
+            loader,
+            userId: identity.userId,
+            conversationId: activeConversationId,
+            turn: turn!,
+            turnSequence,
+            occurredAt: now().toISOString(),
+            evidence,
+            currentMessage: parsed.data.message,
+            abortSignal: abort.signal,
+            internalContextMarker: (responseIndex) => options.internalContextMarker?.(responseIndex)
+              ?? `ctx_${createHash('sha256').update([
+                turn!.turnId,
+                String(responseIndex),
+                randomUUID(),
+              ].join('\u0000')).digest('base64url').slice(0, 32)}`,
+            onOperationStatus: async (event) => {
+              if (event.phase === 'terminal' && event.status === 'saved') {
+                operationSaved = true;
+                if (event.authoritativeRevision !== undefined) {
+                  latestSavedRevision = event.authoritativeRevision;
+                }
+              }
+              const operationId = opaqueOperationId(event.operationId);
+              writer.write(operationStatusStreamPartSchema.parse({
+                type: 'data-operation-status',
+                id: operationId,
+                transient: true,
+                data: {
+                  version: 1,
+                  turnId: turn!.turnId,
+                  messageId: turn!.turnId,
+                  operationId,
+                  operation: event.operation,
+                  status: event.phase === 'saving'
+                    ? 'Saving'
+                    : ({ saved: 'Saved', conflict: 'Conflict', rejected: 'Rejected', failed: 'Failed' } as const)[event.status],
+                  sequence: event.phase === 'saving' ? 0 : 1,
+                  authoritativeRevision: event.phase === 'saving'
+                    ? null
+                    : event.authoritativeRevision ?? null,
+                  ...(event.phase === 'terminal' && event.errorClass
+                    ? { errorClass: event.errorClass }
+                    : {}),
+                  ...(event.phase === 'terminal' && event.retryable ? { retryable: true } : {}),
+                },
+              }) as UIMessageChunk);
+            },
+            onError: (error) => {
+              streamError = error;
+              response.locals.methodLog = {
+                ...response.locals.methodLog,
+                errorClass: safeErrorClass(error),
+              };
+            },
+          });
+          methodResult = await agent.stream({
+            prompt: parsed.data.message,
+            abortSignal: abort.signal,
+            onTextDelta: (text) => { safeAssistantText += text; },
+            onCitation: (citation) => {
+              writer.write(claimLinkedCitationStreamPartSchema.parse({
+                type: 'data-claim-citation',
+                id: citation.citationId,
+                data: {
+                  version: 1,
+                  citationId: citation.citationId,
+                  turnId: turn!.turnId,
+                  messageId: turn!.turnId,
+                  textHash: citation.textHash,
+                  exactClaim: citation.exactClaim,
+                  start: citation.start,
+                  end: citation.end,
+                  url: citation.url,
+                  title: citation.title ?? null,
+                  support: citation.support,
+                },
+              }) as UIMessageChunk);
+            },
+          });
+          const display = toUIMessageStream({
+            stream: methodResult.stream,
+            sendReasoning: false,
+            sendSources: true,
+            onError: (error) => {
+              streamError = error;
+              response.locals.methodLog = { ...response.locals.methodLog, errorClass: safeErrorClass(error) };
+              return 'The agent request failed.';
+            },
+          });
+          const reader = display.getReader();
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              writer.write(value);
+            }
+          } finally {
+            reader.releaseLock();
+          }
+        },
+        onError: (error) => {
+          streamError = error;
+          response.locals.methodLog = { ...response.locals.methodLog, errorClass: safeErrorClass(error) };
+          return 'The agent request failed.';
+        },
       });
-      const displayStream = projectMethodStreamForDisplay(result.stream, {
-        onTextDelta: (text) => { safeAssistantText += text; },
-      });
-      const uiStream = toUIMessageStream({
-          stream: displayStream,
-          sendReasoning: false,
-          sendSources: false,
-          onError: (error) => {
-            streamError = error;
-            response.locals.methodLog = { ...response.locals.methodLog, errorClass: safeErrorClass(error) };
-            return 'The agent request failed.';
-          },
-        });
       const terminalGatedStream = gateTerminalUIStream(uiStream, async (terminalType) => {
         let terminalFailure: unknown;
         try {
@@ -914,12 +1089,20 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
             const authoritative = await storage.loadCareerMap(identity.userId);
             const revision = authoritative.status === 'ready' ? authoritative.map.revision : undefined;
             if (revision !== undefined) response.locals.methodLog = { ...response.locals.methodLog, revision };
-            const displayProjection = await listRecentConversationItems({
-              client: conversationClient(),
-              conversationId,
-              abortSignal: AbortSignal.any([abort.signal, AbortSignal.timeout(5_000)]),
-            }).then((items) => resolveDisplayProjection(items, parsed.data.message, safeAssistantText))
-              .catch(() => undefined);
+            const providerState = await terminalProviderState(5_000, abort.signal);
+            if (!providerState.complete) {
+              const bindingError = new Error('Internal context provider items were not durably bound.');
+              bindingError.name = 'InternalContextBindingError';
+              throw bindingError;
+            }
+            const displayProjection = providerState.complete
+              ? resolveDisplayProjection(
+                  providerState.items,
+                  parsed.data.message,
+                  safeAssistantText,
+                  new Set(providerState.internalContextItemIds),
+                )
+              : undefined;
             if (abort.signal.aborted) {
               const cancelled = await cancelWithCanonicalRecovery();
               if (!cancelled || cancelled.status !== 'cancelled') {
@@ -935,6 +1118,9 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
                 result: {
                   kind: 'completed', refetch: true,
                   ...(revision !== undefined ? { revision } : {}),
+                  ...(providerState.internalContextItemIds.length > 0
+                    ? { internalContextItemIds: providerState.internalContextItemIds }
+                    : {}),
                   ...(displayProjection
                     ? { displayProjection }
                     : { displayRecovery: createDisplayRecovery(parsed.data.message, safeAssistantText, false) }),
@@ -978,6 +1164,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
               turnId: turn!.turnId,
               leaseId: turn!.leaseId,
               errorClass,
+              result: await canonicalFailureResult(),
             });
             if (!failed || failed.status === 'pending') terminalFailureClass = 'TurnLeaseLostError';
           }
@@ -985,11 +1172,9 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
           await storage.releaseTurnLease(identity.userId, turn!.turnId, turn!.leaseId).catch(() => false);
           leaseFinalized = true;
         }
-        if (terminalFailureClass) {
-          const sanitized = new Error('The agent turn failed before the terminal response boundary.');
-          sanitized.name = terminalFailureClass;
-          throw sanitized;
-        }
+        return terminalFailureClass
+          ? { type: 'error', errorText: 'The agent request failed.' }
+          : undefined;
       });
       await pipeUIMessageStreamToResponse({
         response,
@@ -1000,7 +1185,13 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
         if (abort.signal.aborted) {
           await cancelWithCanonicalRecovery().catch(() => undefined);
         } else {
-          await storage.failAgentTurn({ userId: identity.userId, turnId: turn.turnId, leaseId: turn.leaseId, errorClass: safeErrorClass(error) }).catch(() => undefined);
+          await storage.failAgentTurn({
+            userId: identity.userId,
+            turnId: turn.turnId,
+            leaseId: turn.leaseId,
+            errorClass: safeErrorClass(error),
+            result: await canonicalFailureResult(),
+          }).catch(() => undefined);
         }
       }
       response.locals.methodLog = { ...response.locals.methodLog, provider: REVELIO_AGENT_PROVIDER, errorClass: safeErrorClass(error) };

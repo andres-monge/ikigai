@@ -17,7 +17,6 @@ import type {
 } from '../storage.js';
 import { MethodOwnerBusyError } from '../storage.js';
 import { createDisplayRecovery } from '../ai/history.js';
-import { NATURAL_CONVERSATION_TOOL_NAME } from '../ai/agent.js';
 import { createAgentRouter } from './agent.js';
 
 const USER_ID = 'opaque-user-1';
@@ -59,6 +58,114 @@ function errorStream(error: unknown) {
         { type: 'error', error },
       ] as never,
     }),
+  };
+}
+
+function confirmWhyThenTextModel(input: {
+  pending: CareerMap['foundation']['whyRevisions'][number];
+  callId: string;
+  sourceMessageId: string;
+  text?: string;
+}) {
+  let providerCall = 0;
+  return new MockLanguageModelV4({
+    doStream: async () => {
+      providerCall += 1;
+      if (providerCall === 1) {
+        return {
+          stream: simulateReadableStream({
+            chunks: [
+              { type: 'stream-start', warnings: [] },
+              {
+                type: 'tool-call', toolCallId: input.callId, toolName: 'confirm_why',
+                input: JSON.stringify({
+                  whyId: input.pending.id,
+                  whyRevision: input.pending.revision,
+                  presentedInTurnId: input.pending.presentation.assistantTurnId,
+                  sourceMessageId: input.sourceMessageId,
+                }),
+              },
+              { type: 'finish', finishReason: { unified: 'tool-calls', raw: 'tool-calls' }, usage: usage() },
+            ] as never,
+          }),
+        };
+      }
+      return textStream(input.text ?? 'Continued from authoritative state.');
+    },
+  });
+}
+
+function searchStream(text: string, url: string, title = 'Provider source') {
+  const callId = 'provider-search-call-private';
+  const resultId = 'provider-search-result-private';
+  const annotation = {
+    type: 'url_citation',
+    url,
+    title,
+    start_index: 0,
+    end_index: text.length,
+  };
+  const providerResult = { id: resultId, url, title, text };
+  return {
+    stream: simulateReadableStream({
+      chunks: [
+        { type: 'stream-start', warnings: [] },
+        {
+          type: 'tool-call', toolCallId: callId, toolName: 'web_search',
+          input: JSON.stringify({ action: { type: 'search', query: 'current official fact' } }),
+          providerExecuted: true,
+        },
+        {
+          type: 'tool-result', toolCallId: callId, toolName: 'web_search',
+          input: { action: { type: 'search', query: 'current official fact' } },
+          result: { action: { type: 'search', sources: [providerResult] } },
+          providerExecuted: true,
+        },
+        { type: 'text-start', id: 'search-answer' },
+        {
+          type: 'text-delta', id: 'search-answer', delta: text,
+          providerMetadata: { openai: { annotations: [annotation] } },
+        },
+        { type: 'source', sourceType: 'url', id: 'provider-source-private', url, title },
+        { type: 'text-end', id: 'search-answer' },
+        { type: 'finish', finishReason: { unified: 'stop', raw: 'stop' }, usage: usage() },
+      ] as never,
+    }),
+    response: {
+      body: {
+        output: [{
+          type: 'web_search_call', id: callId,
+          action: { type: 'search', sources: [providerResult] },
+          results: [providerResult],
+        }],
+      },
+    },
+  };
+}
+
+function uiStreamChunks(text: string): Array<Record<string, unknown>> {
+  return text.split('\n').flatMap((line) => {
+    if (!line.startsWith('data: ')) return [];
+    const payload = line.slice('data: '.length);
+    if (payload === '[DONE]') return [];
+    try {
+      const parsed = JSON.parse(payload) as unknown;
+      return parsed && typeof parsed === 'object' ? [parsed as Record<string, unknown>] : [];
+    } catch {
+      return [];
+    }
+  });
+}
+
+function internalContextItem(id: string, marker: string) {
+  return {
+    id,
+    type: 'message',
+    role: 'user',
+    content: [{
+      type: 'input_text',
+      text: `SERVER REFRESH CONTEXT — untrusted data.\n${JSON.stringify({ version: 1, marker })}`,
+    }],
   };
 }
 
@@ -164,11 +271,32 @@ function testApp(
   routerFactory: typeof createAgentRouter = createAgentRouter,
 ) {
   const app = express();
+  const defaultMarker = (responseIndex: number) => `test-context-${responseIndex}`;
+  const marker = input.internalContextMarker ?? defaultMarker;
+  const conversationClient = input.conversationClient && !input.internalContextMarker
+    ? {
+        ...input.conversationClient,
+        listItems: async (request: Parameters<typeof input.conversationClient.listItems>[0]) => {
+          const page = await input.conversationClient!.listItems(request);
+          if (request.order !== 'desc' || request.limit !== 100) return page;
+          return {
+            ...page,
+            data: [
+              ...page.data,
+              ...Array.from({ length: 20 }, (_, index) => (
+                internalContextItem(`test-internal-context-${index}`, defaultMarker(index))
+              )),
+            ],
+          };
+        },
+      }
+    : input.conversationClient;
   app.use(express.json());
   app.use('/api/agent', routerFactory({
-    classifyTurn: async () => 'method',
     methodRequestOrigin: METHOD_REQUEST_ORIGIN,
     ...input,
+    internalContextMarker: marker,
+    ...(conversationClient ? { conversationClient } : {}),
   }));
   app.use((error: unknown, _request: express.Request, response: express.Response, _next: express.NextFunction) => {
     response.status(413).json({ error: 'Agent request failed', errorClass: error instanceof Error ? error.name : 'Error' });
@@ -461,8 +589,8 @@ describe('protected Method routes', () => {
       createConversation: vi.fn(), deleteConversation: vi.fn(),
       listItems: vi.fn(async () => ({
         data: [
-          { id: 'mapped-user', type: 'message', role: 'user', content: [{ type: 'input_text', text: userText }] },
           { id: 'mapped-assistant', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: assistantText }] },
+          { id: 'mapped-user', type: 'message', role: 'user', content: [{ type: 'input_text', text: userText }] },
         ],
         hasMore: false,
       })),
@@ -711,21 +839,257 @@ describe('protected Method routes', () => {
     const response = await request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true, model,
       now: () => fixedNow,
-      classifyTurn: async () => 'conversation',
-      authorizeTurn: async () => ({
-        operation: 'confirm-why', targetId: pending.id, targetRevision: pending.revision,
-      }),
       conversationClient: { listItems: vi.fn(async () => ({ data: [], hasMore: false })) },
-      researchProvider: { search: vi.fn(async () => ({ candidates: [] })) }, operationalLog: vi.fn(),
+      operationalLog: vi.fn(),
     })).post('/api/agent').send({
       id: 'message-same-time-confirm',
-      message: 'That is exactly right; confirm it.',
+      message: 'That feels exactly right.',
     });
 
     expect(response.status).toBe(200);
     expect(map.foundation.whyRevisions.at(-1)?.status).toBe('confirmed');
     expect(storage.persistCareerMapOperation).toHaveBeenCalledOnce();
+    const statuses = uiStreamChunks(response.text)
+      .filter((chunk) => chunk.type === 'data-operation-status')
+      .map((chunk) => chunk.data);
+    expect(statuses).toEqual([
+      expect.objectContaining({ status: 'Saving', sequence: 0, authoritativeRevision: null }),
+      expect.objectContaining({ status: 'Saved', sequence: 1, authoritativeRevision: 2 }),
+    ]);
+    expect(response.text).not.toContain('same-time-confirm-call');
   });
+
+  it('keeps Saved while a later narration failure persists canonical recovery and internal item ids', async () => {
+    const fixedNow = new Date(timestamp(2));
+    const pending = pendingWhy().foundation.whyRevisions.at(-1)!;
+    let failedTurn: AgentTurnRecord | undefined;
+    let beginCount = 0;
+    const storage = createStorage({
+      getConversationMapping: vi.fn(async () => 'saved-failure-conversation'),
+    });
+    storage.beginAgentTurn.mockImplementation(async () => {
+      beginCount += 1;
+      return beginCount === 1
+        ? { status: 'started', shouldInvokeModel: true, turn: turn('agent-turn') }
+        : { status: 'terminal', shouldInvokeModel: false, turn: failedTurn! };
+    });
+    storage.failAgentTurn.mockImplementation(async (input: {
+      errorClass: string;
+      result?: Record<string, unknown>;
+    }) => {
+      failedTurn = {
+        ...turn('agent-turn', 'failed'),
+        terminalResult: {
+          ...(input.result ?? {}),
+          kind: 'failed',
+          refetch: true,
+          errorClass: input.errorClass,
+        },
+      };
+      return failedTurn;
+    });
+    let providerCall = 0;
+    const providerFailure = new Error('private provider reply failure');
+    providerFailure.name = 'NoOutputGeneratedError';
+    const model = new MockLanguageModelV4({
+      doStream: async () => {
+        providerCall += 1;
+        if (providerCall === 1) {
+          return {
+            stream: simulateReadableStream({
+              chunks: [
+                { type: 'stream-start', warnings: [] },
+                {
+                  type: 'tool-call', toolCallId: 'saved-operation-provider-id', toolName: 'confirm_why',
+                  input: JSON.stringify({
+                    whyId: pending.id,
+                    whyRevision: pending.revision,
+                    presentedInTurnId: pending.presentation.assistantTurnId,
+                    sourceMessageId: 'client-message-1',
+                  }),
+                },
+                { type: 'finish', finishReason: { unified: 'tool-calls', raw: 'tool-calls' }, usage: usage() },
+              ] as never,
+            }),
+          };
+        }
+        return errorStream(providerFailure);
+      },
+    });
+    let listCall = 0;
+    const conversationClient = {
+      listItems: vi.fn(async () => {
+        listCall += 1;
+        return {
+          data: listCall === 1 ? [] : [
+            internalContextItem('internal-context-1', 'saved-failure-context-1'),
+            internalContextItem('internal-context-0', 'saved-failure-context-0'),
+          ],
+          hasMore: false,
+        };
+      }),
+    };
+    const logs: Array<Record<string, unknown>> = [];
+    const app = testApp({
+      storage,
+      requireAuth: authenticated,
+      agentEnabled: true,
+      model,
+      conversationClient,
+      internalContextMarker: (index) => `saved-failure-context-${index}`,
+      now: () => fixedNow,
+      operationalLog: (entry) => logs.push(entry),
+    });
+    const body = { id: 'client-message-1', message: 'That feels exactly right.' };
+    const response = await request(app).post('/api/agent').send(body);
+
+    const statuses = uiStreamChunks(response.text)
+      .filter((chunk) => chunk.type === 'data-operation-status')
+      .map((chunk) => chunk.data as Record<string, unknown>);
+    expect(statuses.map((status) => status.status), JSON.stringify({
+      body: response.body,
+      text: response.text,
+      logs,
+      failCalls: storage.failAgentTurn.mock.calls,
+      persistCalls: storage.persistCareerMapOperation.mock.calls.length,
+      modelCalls: model.doStreamCalls.length,
+    })).toEqual(['Saving', 'Saved']);
+    expect(statuses).not.toContainEqual(expect.objectContaining({ status: 'Failed' }));
+    expect(storage.failAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
+      errorClass: 'NoOutputGeneratedError',
+      result: {
+        revision: 2,
+        operationCommitted: true,
+        internalContextItemIds: ['internal-context-0', 'internal-context-1'],
+      },
+    }));
+    expect(conversationClient.listItems).toHaveBeenCalledTimes(2);
+    expect(response.text).not.toContain('saved-operation-provider-id');
+    expect(response.text).not.toContain('private provider reply failure');
+
+    const replay = await request(app).post('/api/agent').send(body);
+    expect(replay.status).toBe(409);
+    expect(replay.body).toMatchObject({
+      status: 'failed-replay',
+      result: { revision: 2, operationCommitted: true, errorClass: 'NoOutputGeneratedError' },
+    });
+    expect(model.doStreamCalls).toHaveLength(2);
+    expect(storage.persistCareerMapOperation).toHaveBeenCalledOnce();
+  });
+
+  it.each(['committed', 'idempotent-replay'] as const)(
+    'preserves %s Saved truth when durable completion loses its lease',
+    async (outcome) => {
+      let map = pendingWhy();
+      const pending = map.foundation.whyRevisions.at(-1)!;
+      const storage = createStorage({
+        loadCareerMap: vi.fn(async () => ({ status: 'ready' as const, map })),
+        getOrCreateCareerMap: vi.fn(async () => ({ status: 'ready' as const, map })),
+        persistCareerMapOperation: vi.fn(async (input: { operation: CareerMapOperation }) => {
+          if (outcome === 'idempotent-replay') {
+            return { status: 'replayed' as const, map, receipt: map.operationHistory[0]! };
+          }
+          const result = applyCareerMapOperation(map, input.operation);
+          if (result.status === 'committed') map = result.map;
+          return result;
+        }),
+        completeAgentTurn: vi.fn(async () => undefined),
+        getConversationMapping: vi.fn(async () => `completion-race-${outcome}`),
+      });
+      const model = confirmWhyThenTextModel({
+        pending,
+        callId: `completion-race-${outcome}`,
+        sourceMessageId: 'client-message-1',
+      });
+
+      const response = await request(testApp({
+        storage,
+        requireAuth: authenticated,
+        agentEnabled: true,
+        model,
+        conversationClient: { listItems: vi.fn(async () => ({ data: [], hasMore: false })) },
+        operationalLog: vi.fn(),
+      })).post('/api/agent').send({
+        id: 'client-message-1',
+        message: 'That feels exactly right.',
+      });
+
+      const statuses = uiStreamChunks(response.text)
+        .filter((chunk) => chunk.type === 'data-operation-status')
+        .map((chunk) => (chunk.data as Record<string, unknown>).status);
+      expect(statuses).toEqual(['Saving', 'Saved']);
+      expect(response.text).not.toContain('"type":"finish"');
+      expect(storage.failAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
+        errorClass: 'TurnLeaseLostError',
+        result: expect.objectContaining({
+          revision: outcome === 'committed' ? 2 : 1,
+          operationCommitted: true,
+        }),
+      }));
+      expect(storage.cancelAgentTurn).not.toHaveBeenCalled();
+      expect(storage.releaseTurnLease).toHaveBeenCalledOnce();
+    },
+  );
+
+  it.each(['committed', 'idempotent-replay'] as const)(
+    'preserves %s Saved truth when abort races durable completion',
+    async (outcome) => {
+      let map = pendingWhy();
+      const pending = map.foundation.whyRevisions.at(-1)!;
+      let completionStarted!: () => void;
+      const completionStartedGate = new Promise<void>((resolve) => { completionStarted = resolve; });
+      const storage = createStorage({
+        loadCareerMap: vi.fn(async () => ({ status: 'ready' as const, map })),
+        getOrCreateCareerMap: vi.fn(async () => ({ status: 'ready' as const, map })),
+        persistCareerMapOperation: vi.fn(async (input: { operation: CareerMapOperation }) => {
+          if (outcome === 'idempotent-replay') {
+            return { status: 'replayed' as const, map, receipt: map.operationHistory[0]! };
+          }
+          const result = applyCareerMapOperation(map, input.operation);
+          if (result.status === 'committed') map = result.map;
+          return result;
+        }),
+        completeAgentTurn: vi.fn(async (input: { abortSignal?: AbortSignal }) => {
+          completionStarted();
+          return new Promise<never>((_resolve, reject) => {
+            input.abortSignal?.addEventListener('abort', () => reject(input.abortSignal?.reason), { once: true });
+          });
+        }),
+        getConversationMapping: vi.fn(async () => `abort-race-${outcome}`),
+      });
+      const model = confirmWhyThenTextModel({
+        pending,
+        callId: `abort-race-${outcome}`,
+        sourceMessageId: 'client-message-1',
+      });
+      const outbound = request(testApp({
+        storage,
+        requireAuth: authenticated,
+        agentEnabled: true,
+        model,
+        conversationClient: { listItems: vi.fn(async () => ({ data: [], hasMore: false })) },
+        operationalLog: vi.fn(),
+      })).post('/api/agent').send({
+        id: 'client-message-1',
+        message: 'That feels exactly right.',
+      });
+      const settled = Promise.resolve(outbound).catch(() => undefined);
+
+      await completionStartedGate;
+      outbound.abort();
+      await settled;
+
+      await vi.waitFor(() => expect(storage.cancelAgentTurn).toHaveBeenCalledOnce());
+      expect(storage.cancelAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
+        result: expect.objectContaining({
+          revision: outcome === 'committed' ? 2 : 1,
+          operationCommitted: true,
+        }),
+      }));
+      expect(storage.failAgentTurn).not.toHaveBeenCalled();
+      expect(storage.releaseTurnLease).toHaveBeenCalledOnce();
+    },
+  );
 
   it('returns the durable failed turn when completion loses its lease instead of claiming workspace success', async () => {
     const failedTurn = {
@@ -767,7 +1131,6 @@ describe('protected Method routes', () => {
       requireAuth: authenticated,
       agentEnabled: true,
       model,
-      researchProvider: { search: vi.fn(async () => ({ candidates: [] })) },
       operationalLog: vi.fn(),
     })).post('/api/agent').send({ id: 'client-message-1', message: 'hello' });
 
@@ -920,35 +1283,8 @@ describe('protected Method routes', () => {
         hasMore: false,
       })),
     };
-    let providerStep = 0;
     const model = new MockLanguageModelV4({
-      doStream: async (options) => {
-        providerStep += 1;
-        if (providerStep === 1) {
-          return {
-            stream: simulateReadableStream({
-              chunks: [
-                { type: 'stream-start', warnings: [] },
-                {
-                  type: 'tool-call', toolCallId: 'natural-route-call',
-                  toolName: NATURAL_CONVERSATION_TOOL_NAME, input: JSON.stringify({}),
-                },
-                { type: 'finish', finishReason: { unified: 'tool-calls', raw: 'tool-calls' }, usage: usage() },
-              ] as never,
-            }),
-          };
-        }
-        expect(options.prompt).toEqual([{
-          role: 'tool',
-          content: [{
-            type: 'tool-result',
-            toolCallId: 'natural-route-call',
-            toolName: NATURAL_CONVERSATION_TOOL_NAME,
-            output: { type: 'json', value: { status: 'no-write-conversation' } },
-          }],
-        }]);
-        return textStream('A normal reflective response without a write.');
-      },
+      doStream: async () => textStream('A normal reflective response without a write.') as never,
     });
     const response = await request(testApp({
       storage,
@@ -956,8 +1292,6 @@ describe('protected Method routes', () => {
       agentEnabled: true,
       model,
       conversationClient,
-      classifyTurn: async () => 'conversation',
-      researchProvider: { search: vi.fn(async () => ({ candidates: [] })) },
       operationalLog: vi.fn(),
     })).post('/api/agent').send({ id: 'client-message-1', message: 'Help me think this through.' });
 
@@ -967,33 +1301,16 @@ describe('protected Method routes', () => {
       conversation: 'conversation-for-authenticated-owner',
       store: true,
     });
-    expect(model.doStreamCalls).toHaveLength(2);
-    expect(model.doStreamCalls[0]?.toolChoice).toEqual({ type: 'required' });
+    expect(model.doStreamCalls).toHaveLength(1);
+    expect(model.doStreamCalls[0]?.toolChoice).toEqual({ type: 'auto' });
     expect(model.doStreamCalls[0]?.tools?.map((definition) => definition.name))
-      .toContain(NATURAL_CONVERSATION_TOOL_NAME);
-    expect(model.doStreamCalls[1]?.toolChoice).toEqual({ type: 'none' });
-    expect(model.doStreamCalls[1]?.tools).toBeUndefined();
-    expect(model.doStreamCalls[1]?.prompt).toHaveLength(1);
-    expect(model.doStreamCalls[1]?.prompt[0]).toMatchObject({
-      role: 'tool',
-      content: [expect.objectContaining({
-        type: 'tool-result',
-        toolCallId: 'natural-route-call',
-        toolName: NATURAL_CONVERSATION_TOOL_NAME,
-      })],
-    });
-    expect(model.doStreamCalls[1]?.providerOptions?.openai).toMatchObject({
-      conversation: 'conversation-for-authenticated-owner',
-      store: true,
-      instructions: expect.any(String),
-    });
+      .toContain('web_search');
     expect((model.doStreamCalls[0]?.providerOptions?.openai as Record<string, unknown>).contextManagement)
       .toBeDefined();
-    expect((model.doStreamCalls[1]?.providerOptions?.openai as Record<string, unknown>).contextManagement)
-      .toBeUndefined();
     expect(storage.completeAgentTurn).toHaveBeenCalledOnce();
     expect(storage.cancelAgentTurn).not.toHaveBeenCalled();
     expect(storage.failAgentTurn).not.toHaveBeenCalled();
+    expect(uiStreamChunks(response.text).some((chunk) => chunk.type === 'data-operation-status')).toBe(false);
     expect(storage.releaseTurnLease).toHaveBeenCalledOnce();
     expect(conversationClient.listItems).toHaveBeenCalledOnce();
     expect(conversationClient.listItems).toHaveBeenCalledWith({
@@ -1005,12 +1322,331 @@ describe('protected Method routes', () => {
     expect(storage.completeAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
       result: expect.objectContaining({
         kind: 'completed',
+        internalContextItemIds: ['test-internal-context-0'],
         displayProjection: {
           userItemId: 'provider-user-item',
           assistantItemIds: ['provider-assistant-item'],
         },
       }),
     }));
+  });
+
+  it('retries bounded provider projection until delayed internal context becomes visible', async () => {
+    const marker = 'delayed-context-0';
+    let listCall = 0;
+    const conversationClient = {
+      listItems: vi.fn(async () => {
+        listCall += 1;
+        return {
+          data: [
+            {
+              id: 'delayed-assistant', type: 'message', role: 'assistant',
+              content: [{ type: 'output_text', text: 'A safely projected reply.' }],
+            },
+            ...(listCall >= 3 ? [internalContextItem('delayed-internal-context', marker)] : []),
+            {
+              id: 'delayed-user', type: 'message', role: 'user',
+              content: [{ type: 'input_text', text: 'Help me reflect.' }],
+            },
+          ],
+          hasMore: false,
+        };
+      }),
+    };
+    const storage = createStorage({
+      getConversationMapping: vi.fn(async () => 'delayed-context-conversation'),
+    });
+    const response = await request(testApp({
+      storage,
+      requireAuth: authenticated,
+      agentEnabled: true,
+      model: new MockLanguageModelV4({ doStream: textStream('A safely projected reply.') as never }),
+      conversationClient,
+      internalContextMarker: () => marker,
+      operationalLog: vi.fn(),
+    })).post('/api/agent').send({ id: 'client-message-1', message: 'Help me reflect.' });
+
+    expect(response.status).toBe(200);
+    expect(conversationClient.listItems).toHaveBeenCalledTimes(3);
+    expect(storage.completeAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
+      result: expect.objectContaining({
+        kind: 'completed',
+        internalContextItemIds: ['delayed-internal-context'],
+        displayProjection: {
+          userItemId: 'delayed-user',
+          assistantItemIds: ['delayed-assistant'],
+        },
+      }),
+    }));
+    expect(storage.failAgentTurn).not.toHaveBeenCalled();
+  });
+
+  it.each(['missing', 'duplicate'] as const)(
+    'fails closed when internal context remains %s after bounded visibility retries',
+    async (markerFailure) => {
+      const marker = 'never-unambiguous-context-0';
+      const conversationClient = {
+        listItems: vi.fn(async () => ({
+          data: [
+            {
+              id: 'unbound-assistant', type: 'message', role: 'assistant',
+              content: [{ type: 'output_text', text: 'Unbound reply.' }],
+            },
+            {
+              id: 'unbound-user', type: 'message', role: 'user',
+              content: [{ type: 'input_text', text: 'Help me reflect.' }],
+            },
+            ...(markerFailure === 'duplicate' ? [
+              internalContextItem('duplicate-internal-context-1', marker),
+              internalContextItem('duplicate-internal-context-2', marker),
+            ] : []),
+          ],
+          hasMore: false,
+        })),
+      };
+      const storage = createStorage({
+        getConversationMapping: vi.fn(async () => 'incomplete-context-conversation'),
+      });
+      const response = await request(testApp({
+        storage,
+        requireAuth: authenticated,
+        agentEnabled: true,
+        model: new MockLanguageModelV4({ doStream: textStream('Unbound reply.') as never }),
+        conversationClient,
+        internalContextMarker: () => marker,
+        operationalLog: vi.fn(),
+      })).post('/api/agent').send({ id: 'client-message-1', message: 'Help me reflect.' });
+
+      expect(response.status).toBe(200);
+      expect(response.text).not.toContain('"type":"finish"');
+      expect(response.text).toContain('The agent request failed.');
+      expect(conversationClient.listItems).toHaveBeenCalledTimes(5);
+      expect(storage.completeAgentTurn).not.toHaveBeenCalled();
+      expect(storage.failAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
+        errorClass: 'InternalContextBindingError',
+      }));
+      const failureResult = storage.failAgentTurn.mock.calls[0]?.[0]?.result;
+      expect(failureResult).not.toHaveProperty('displayProjection');
+      expect(storage.releaseTurnLease).toHaveBeenCalledOnce();
+    },
+  );
+
+  it('bounds failure recovery even when provider item listing ignores its abort signal', async () => {
+    const providerFailure = new Error('private provider failure');
+    providerFailure.name = 'APICallError';
+    const conversationClient = {
+      listItems: vi.fn(() => new Promise<never>(() => undefined)),
+    };
+    const storage = createStorage({
+      getConversationMapping: vi.fn(async () => 'hanging-failure-conversation'),
+    });
+    const response = await request(testApp({
+      storage,
+      requireAuth: authenticated,
+      agentEnabled: true,
+      model: new MockLanguageModelV4({ doStream: errorStream(providerFailure) as never }),
+      conversationClient,
+      internalContextMarker: () => 'hanging-failure-context-0',
+      operationalLog: vi.fn(),
+    })).post('/api/agent').send({ id: 'client-message-1', message: 'Help me reflect.' });
+
+    expect(response.status).toBe(200);
+    expect(response.text).toContain('The agent request failed.');
+    expect(conversationClient.listItems).toHaveBeenCalledOnce();
+    expect(storage.failAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
+      result: expect.objectContaining({
+        internalContextMarkers: ['hanging-failure-context-0'],
+      }),
+    }));
+    expect(storage.releaseTurnLease).toHaveBeenCalledOnce();
+  }, 2_000);
+
+  it('cancels promptly when provider item listing ignores the request abort signal', async () => {
+    let listingStarted!: () => void;
+    const listingStartedGate = new Promise<void>((resolve) => { listingStarted = resolve; });
+    const conversationClient = {
+      listItems: vi.fn(() => {
+        listingStarted();
+        return new Promise<never>(() => undefined);
+      }),
+    };
+    const storage = createStorage({
+      getConversationMapping: vi.fn(async () => 'hanging-cancel-conversation'),
+    });
+    const outbound = request(testApp({
+      storage,
+      requireAuth: authenticated,
+      agentEnabled: true,
+      model: new MockLanguageModelV4({ doStream: textStream('Safe partial reply.') as never }),
+      conversationClient,
+      internalContextMarker: () => 'hanging-cancel-context-0',
+      operationalLog: vi.fn(),
+    })).post('/api/agent').send({ id: 'client-message-1', message: 'Help me reflect.' });
+    const settled = Promise.resolve(outbound).catch(() => undefined);
+
+    await listingStartedGate;
+    outbound.abort();
+    await settled;
+
+    await vi.waitFor(() => expect(storage.cancelAgentTurn).toHaveBeenCalledOnce());
+    expect(storage.cancelAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
+      result: expect.objectContaining({
+        internalContextMarkers: ['hanging-cancel-context-0'],
+      }),
+    }));
+    expect(storage.completeAgentTurn).not.toHaveBeenCalled();
+    expect(storage.failAgentTurn).not.toHaveBeenCalled();
+    expect(storage.releaseTurnLease).toHaveBeenCalledOnce();
+  }, 2_000);
+
+  it('streams a search-only answer with paired sanitized citation data and no save status', async () => {
+    const userText = 'What does the current official registry say?';
+    const claim = 'The current registry lists application/json.';
+    const url = 'https://example.com/current-registry';
+    const model = new MockLanguageModelV4({
+      doStream: async () => searchStream(claim, url, 'Official registry') as never,
+    });
+    const conversationClient = {
+      listItems: vi.fn(async () => ({
+        data: [
+          {
+            id: 'search-provider-assistant', type: 'message', role: 'assistant',
+            content: [{
+              type: 'output_text', text: claim,
+              annotations: [{
+                type: 'url_citation', start_index: 0, end_index: claim.length,
+                url, title: 'Official registry',
+              }],
+            }],
+          },
+          internalContextItem('search-internal-context', 'search-context-0'),
+          { id: 'search-provider-user', type: 'message', role: 'user', content: [{ type: 'input_text', text: userText }] },
+        ],
+        hasMore: false,
+      })),
+    };
+    const storage = createStorage({
+      getConversationMapping: vi.fn(async () => 'search-conversation'),
+    });
+    const response = await request(testApp({
+      storage,
+      requireAuth: authenticated,
+      agentEnabled: true,
+      model,
+      conversationClient,
+      internalContextMarker: () => 'search-context-0',
+      operationalLog: vi.fn(),
+    })).post('/api/agent').send({ id: 'client-message-1', message: userText });
+
+    expect(response.status).toBe(200);
+    const chunks = uiStreamChunks(response.text);
+    expect(chunks.some((chunk) => chunk.type === 'data-operation-status')).toBe(false);
+    const citation = chunks.find((chunk) => chunk.type === 'data-claim-citation');
+    expect(citation?.data).toMatchObject({
+      turnId: 'agent-turn-turn',
+      messageId: 'agent-turn-turn',
+      exactClaim: claim,
+      url,
+      title: 'Official registry',
+      support: 'server-validated',
+    });
+    expect(chunks).toContainEqual(expect.objectContaining({
+      type: 'source-url',
+      url,
+    }));
+    expect(response.text).toContain(claim);
+    expect(response.text).not.toMatch(/provider-search-(?:call|result)-private|provider-source-private/);
+    expect(storage.persistCareerMapOperation).not.toHaveBeenCalled();
+    expect(storage.recordResearchAttempt).toHaveBeenCalledWith(
+      USER_ID,
+      'agent-turn-lease',
+      expect.objectContaining({
+        status: 'succeeded',
+        sources: [],
+        consultedSources: [expect.objectContaining({
+          providerCallId: 'provider-search-call-private',
+          providerResultId: 'provider-search-result-private',
+          url,
+        })],
+      }),
+      expect.any(AbortSignal),
+    );
+    expect(storage.completeAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
+      result: expect.objectContaining({
+        internalContextItemIds: ['search-internal-context'],
+        displayProjection: {
+          userItemId: 'search-provider-user',
+          assistantItemIds: ['search-provider-assistant'],
+        },
+      }),
+    }));
+  });
+
+  it('fails a hosted-search outage safely and persists only a source-free bounded attempt', async () => {
+    const privateProviderError = new Error('private search provider payload');
+    const model = new MockLanguageModelV4({
+      doStream: async () => ({
+        stream: simulateReadableStream({
+          chunks: [
+            { type: 'stream-start', warnings: [] },
+            {
+              type: 'tool-call', toolCallId: 'outage-search-call', toolName: 'web_search',
+              input: JSON.stringify({ action: { type: 'search', query: 'current official fact' } }),
+              providerExecuted: true,
+            },
+            {
+              type: 'tool-error', toolCallId: 'outage-search-call', toolName: 'web_search',
+              input: { action: { type: 'search', query: 'current official fact' } },
+              error: privateProviderError,
+              providerExecuted: true,
+            },
+            { type: 'finish', finishReason: { unified: 'error', raw: 'error' }, usage: usage() },
+          ] as never,
+        }),
+      }),
+    });
+    const storage = createStorage({
+      getConversationMapping: vi.fn(async () => 'search-outage-conversation'),
+    });
+    const conversationClient = {
+      listItems: vi.fn(async () => ({
+        data: [internalContextItem('outage-internal-context', 'outage-context-0')],
+        hasMore: false,
+      })),
+    };
+    const response = await request(testApp({
+      storage,
+      requireAuth: authenticated,
+      agentEnabled: true,
+      model,
+      conversationClient,
+      internalContextMarker: () => 'outage-context-0',
+      operationalLog: vi.fn(),
+    })).post('/api/agent').send({
+      id: 'client-message-1',
+      message: 'Check the current official fact.',
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.text).toContain('The agent request failed.');
+    expect(response.text).not.toContain(privateProviderError.message);
+    expect(uiStreamChunks(response.text).some((chunk) => chunk.type === 'data-operation-status')).toBe(false);
+    expect(storage.persistCareerMapOperation).not.toHaveBeenCalled();
+    expect(storage.recordResearchAttempt).toHaveBeenCalledWith(
+      USER_ID,
+      'agent-turn-lease',
+      expect.objectContaining({
+        status: 'failed',
+        targetId: 'why-1',
+        targetRevision: 1,
+        sources: [],
+      }),
+      expect.any(AbortSignal),
+    );
+    expect(storage.failAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
+      errorClass: 'ExternalProviderError',
+    }));
+    expect(storage.releaseTurnLease).toHaveBeenCalledOnce();
   });
 
   it('keeps the terminal stream boundary behind durable completion so immediate history and the next turn see committed state', async () => {
@@ -1086,12 +1722,12 @@ describe('protected Method routes', () => {
       listItems: vi.fn(async () => ({
         data: [
           {
-            id: 'durability-provider-user', type: 'message', role: 'user',
-            content: [{ type: 'input_text', text: 'First durable message.' }],
-          },
-          {
             id: 'durability-provider-assistant', type: 'message', role: 'assistant',
             content: [{ type: 'output_text', text: 'Safe progressive reply.' }],
+          },
+          {
+            id: 'durability-provider-user', type: 'message', role: 'user',
+            content: [{ type: 'input_text', text: 'First durable message.' }],
           },
         ],
         hasMore: false,
@@ -1102,8 +1738,6 @@ describe('protected Method routes', () => {
     });
     const app = testApp({
       storage, requireAuth: authenticated, agentEnabled: true, model, conversationClient,
-      classifyTurn: async () => 'conversation',
-      researchProvider: { search: vi.fn(async () => ({ candidates: [] })) },
       operationalLog: vi.fn(),
     });
     const server = await new Promise<ReturnType<typeof app.listen>>((resolve) => {
@@ -1187,7 +1821,7 @@ describe('protected Method routes', () => {
     const response = await request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true, model,
       conversationClient: { listItems: vi.fn(async () => ({ data: [], hasMore: false })) },
-      researchProvider: { search: vi.fn(async () => ({ candidates: [] })) }, operationalLog: vi.fn(),
+      operationalLog: vi.fn(),
     })).post('/api/agent').send({ id: 'client-message-1', message: 'hello' });
 
     expect(response.text).not.toContain('"type":"finish"');
@@ -1217,7 +1851,7 @@ describe('protected Method routes', () => {
     try {
       const response = await request(testApp({
         storage, requireAuth: authenticated, agentEnabled: true, model, conversationClient,
-        researchProvider: { search: vi.fn(async () => ({ candidates: [] })) }, operationalLog: vi.fn(),
+        operationalLog: vi.fn(),
       })).post('/api/agent').send({ id: 'client-message-1', message: 'hello' });
 
       expect(response.status).toBe(502);
@@ -1247,7 +1881,6 @@ describe('protected Method routes', () => {
     const model = new MockLanguageModelV4({ doStream: textStream('Safe reply.') as never });
     const response = await request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true, model, conversationClient,
-      researchProvider: { search: vi.fn(async () => ({ candidates: [] })) },
       operationalLog: (entry) => logs.push(entry),
     })).post('/api/agent').send({ id: 'client-message-1', message: 'hello' });
 
@@ -1294,7 +1927,7 @@ describe('protected Method routes', () => {
 
     const response = await request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true, model, conversationClient,
-      researchProvider: { search: vi.fn(async () => ({ candidates: [] })) }, operationalLog: vi.fn(),
+      operationalLog: vi.fn(),
     })).post('/api/agent').send({ id: 'client-message-1', message: 'hello' });
 
     expect(response.status).toBe(200);
@@ -1385,7 +2018,6 @@ describe('protected Method routes', () => {
     const model = new MockLanguageModelV4({ doStream: textStream('Safe reply.') as never });
     const app = testApp({
       storage, requireAuth: authenticated, agentEnabled: true, model, conversationClient,
-      researchProvider: { search: vi.fn(async () => ({ candidates: [] })) },
       now: () => new Date(timestamp(3)), operationalLog: vi.fn(),
     });
     const activeProvisioning = Promise.resolve(request(app)
@@ -1529,7 +2161,6 @@ describe('protected Method routes', () => {
     const model = new MockLanguageModelV4({ doStream: textStream('must not run') as never });
     const outbound = request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true, model, conversationClient,
-      researchProvider: { search: vi.fn(async () => ({ candidates: [] })) },
       operationalLog: vi.fn(),
     })).post('/api/agent').send({ id: 'client-message-1', message: 'hello' });
     const settled = Promise.resolve(outbound).catch(() => undefined);
@@ -1635,26 +2266,8 @@ describe('protected Method routes', () => {
         expiresAt: retryAfter,
       })),
     });
-    let providerStep = 0;
     const model = new MockLanguageModelV4({
-      doStream: async () => {
-        providerStep += 1;
-        if (providerStep === 1) {
-          return {
-            stream: simulateReadableStream({
-              chunks: [
-                { type: 'stream-start', warnings: [] },
-                {
-                  type: 'tool-call', toolCallId: 'resumed-natural-route-call',
-                  toolName: NATURAL_CONVERSATION_TOOL_NAME, input: JSON.stringify({}),
-                },
-                { type: 'finish', finishReason: { unified: 'tool-calls', raw: 'tool-calls' }, usage: usage() },
-              ] as never,
-            }),
-          };
-        }
-        return textStream('Reply after the provisioning owner settled.');
-      },
+      doStream: async () => textStream('Reply after the provisioning owner settled.') as never,
     });
     const conversationClient = {
       createConversation: vi.fn(async () => 'must-not-create-a-new-conversation'),
@@ -1663,7 +2276,6 @@ describe('protected Method routes', () => {
 
     const response = await request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true, model, conversationClient,
-      classifyTurn: async () => 'conversation',
       provisioningHandoffTiming: {
         now: () => Date.now(),
         delay: async () => {
@@ -1671,7 +2283,6 @@ describe('protected Method routes', () => {
           leaseSettled = true;
         },
       },
-      researchProvider: { search: vi.fn(async () => ({ candidates: [] })) },
       operationalLog: vi.fn(),
     } as never)).post('/api/agent').send({
       id: resumedTurn.clientMessageId,
@@ -1681,7 +2292,7 @@ describe('protected Method routes', () => {
     expect(response.status).toBe(200);
     expect(storage.beginAgentTurn).toHaveBeenCalledTimes(2);
     expect(conversationClient.createConversation).not.toHaveBeenCalled();
-    expect(model.doStreamCalls).toHaveLength(2);
+    expect(model.doStreamCalls).toHaveLength(1);
     expect(model.doStreamCalls[0]?.providerOptions?.openai).toMatchObject({
       conversation: 'already-bound-provider-conversation',
       store: true,
@@ -1796,8 +2407,7 @@ describe('protected Method routes', () => {
     const model = new MockLanguageModelV4({ doStream: textStream('Safe next reply.') as never });
     const app = testApp({
       storage, requireAuth: authenticated, agentEnabled: true, model, conversationClient,
-      classifyTurn: async () => 'method', authorizeTurn: async () => undefined,
-      researchProvider: { search: vi.fn(async () => ({ candidates: [] })) }, operationalLog: vi.fn(),
+      operationalLog: vi.fn(),
     });
 
     const first = request(app).post('/api/agent').send({
@@ -1853,7 +2463,7 @@ describe('protected Method routes', () => {
     const model = new MockLanguageModelV4({ doStream: textStream('must not run') as never });
     const outbound = request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true, model, conversationClient,
-      researchProvider: { search: vi.fn(async () => ({ candidates: [] })) }, operationalLog: vi.fn(),
+      operationalLog: vi.fn(),
     })).post('/api/agent').send({ id: 'client-message-1', message: 'hello' });
     const settled = Promise.resolve(outbound).catch(() => undefined);
     await vi.waitFor(() => expect(conversationClient.createConversation).toHaveBeenCalledOnce());
@@ -2055,7 +2665,6 @@ describe('protected Method routes', () => {
     const model = new MockLanguageModelV4({ doStream: errorStream(providerError) as never });
     const responsePromise = Promise.resolve(request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true, model,
-      researchProvider: { search: vi.fn(async () => ({ candidates: [] })) },
       operationalLog: (entry) => logs.push(entry),
     })).post('/api/agent').send({ id: 'client-message-1', message: 'hello' }));
     let responseSettled = false;
@@ -2151,8 +2760,8 @@ describe('protected Method routes', () => {
       conversationClient: {
         listItems: vi.fn(async () => ({
           data: [
-            { id: 'user-message-1', type: 'message', role: 'user', content: [{ type: 'input_text', text: 'safe user text' }] },
             { id: 'message-1', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: SENTINEL }] },
+            { id: 'user-message-1', type: 'message', role: 'user', content: [{ type: 'input_text', text: 'safe user text' }] },
           ],
           hasMore: false,
         })),
@@ -2221,7 +2830,7 @@ describe('protected Method routes', () => {
     const model = new MockLanguageModelV4({ doStream: textStream('must not run') as never });
     const outbound = request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true, model,
-      researchProvider: { search: vi.fn(async () => ({ candidates: [] })) }, operationalLog: vi.fn(),
+      operationalLog: vi.fn(),
     })).post('/api/agent').send({ id: 'client-message-1', message: 'hello' });
     const settled = Promise.resolve(outbound).catch(() => undefined);
     await vi.waitFor(() => expect(storage.getOrCreateCareerMap).toHaveBeenCalledOnce());
@@ -2246,7 +2855,7 @@ describe('protected Method routes', () => {
     const model = new MockLanguageModelV4({ doStream: textStream('must not run') as never });
     const outbound = request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true, model,
-      researchProvider: { search: vi.fn(async () => ({ candidates: [] })) }, operationalLog: vi.fn(),
+      operationalLog: vi.fn(),
     })).post('/api/agent').send({ id: 'client-message-1', message: 'hello' });
     const settled = Promise.resolve(outbound).catch(() => undefined);
     await vi.waitFor(() => expect(storage.getConversationMapping).toHaveBeenCalledOnce());
@@ -2281,8 +2890,7 @@ describe('protected Method routes', () => {
     const model = new MockLanguageModelV4({ doStream: textStream('Safe partial reflection.') as never });
     const app = testApp({
       storage, requireAuth: authenticated, agentEnabled: true, model, conversationClient,
-      classifyTurn: async () => 'conversation',
-      researchProvider: { search: vi.fn(async () => ({ candidates: [] })) }, operationalLog: vi.fn(),
+      operationalLog: vi.fn(),
     });
     const outbound = request(app)
       .post('/api/agent')
@@ -2324,7 +2932,6 @@ describe('protected Method routes', () => {
       agentEnabled: true,
       model,
       conversationClient: { listItems: vi.fn(async () => ({ data: [], hasMore: false })) },
-      researchProvider: { search: vi.fn(async () => ({ candidates: [] })) },
       operationalLog: vi.fn(),
     })).post('/api/agent').send({ id: 'client-message-1', message: 'Help me reflect.' });
     const settled = Promise.resolve(outbound).catch(() => undefined);

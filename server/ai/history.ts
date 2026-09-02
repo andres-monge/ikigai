@@ -14,6 +14,7 @@ import {
   type ClaimLinkedCitation,
 } from '../../shared/streaming-schemas.js';
 import type { IStorage } from '../storage.js';
+import { resolveNativeSearchCitationClaim } from './research.js';
 
 const conversationIdSchema = z.string().min(1).max(200);
 const providerItemIdSchema = z.string().min(1).max(200);
@@ -146,26 +147,27 @@ function displayContent(
         const end = Number(value.end_index);
         if (start < 0 || end <= start || end > text.length) continue;
         try {
-          const exactClaim = text.slice(start, end).normalize('NFC');
-          if (exactClaim.length === 0 || exactClaim.length > 3_000) continue;
+          const claim = resolveNativeSearchCitationClaim(text, start, end);
+          if (!claim) continue;
+          const exactClaim = claim.exactClaim;
           const sourceKey = `${messageId}\u0000${partIndex}\u0000${start}\u0000${end}\u0000${value.url}`;
           const source = createBrowserSourceUrlPart({
             sourceId: opaqueCitationId('source', sourceKey),
             url: value.url,
             ...(typeof value.title === 'string' ? { title: value.title } : {}),
           });
-          const dedupeKey = `${messageOffset + start}\u0000${messageOffset + end}\u0000${source.url}`;
+          const dedupeKey = `${messageOffset + claim.start}\u0000${messageOffset + claim.end}\u0000${source.url}`;
           if (seenCitations.has(dedupeKey)) continue;
           seenCitations.add(dedupeKey);
           citations.push(claimLinkedCitationSchema.parse({
             version: 1,
             citationId: opaqueCitationId('citation', sourceKey),
             turnId,
-            messageId,
+            messageId: turnId,
             textHash: createHash('sha256').update(text).digest('hex'),
             exactClaim,
-            start: messageOffset + start,
-            end: messageOffset + end,
+            start: messageOffset + claim.start,
+            end: messageOffset + claim.end,
             url: source.url,
             title: source.title ?? null,
             support: 'cited-provenance',
@@ -331,6 +333,64 @@ export function resolveDisplayProjection(
   });
 }
 
+const internalContextMarkerListSchema = z.array(z.string().min(1).max(200)).max(20)
+  .refine((markers) => new Set(markers).size === markers.length);
+const internalContextPayloadSchema = z.object({
+  version: z.literal(1),
+  marker: z.string().min(1).max(200),
+}).passthrough();
+
+function providerInternalContextMarker(item: unknown): { itemId: string; marker: string } | undefined {
+  if (!item || typeof item !== 'object') return undefined;
+  const record = item as Record<string, unknown>;
+  if (record.type !== 'message' || record.role !== 'user') return undefined;
+  const itemId = providerItemIdSchema.safeParse(record.id);
+  if (!itemId.success || !Array.isArray(record.content)) return undefined;
+  const texts = record.content.flatMap((part) => {
+    if (!part || typeof part !== 'object') return [];
+    const value = part as Record<string, unknown>;
+    return (value.type === 'input_text' || value.type === 'text') && typeof value.text === 'string'
+      ? [value.text]
+      : [];
+  });
+  if (texts.length !== 1) return undefined;
+  const separator = texts[0]!.indexOf('\n');
+  if (separator < 0) return undefined;
+  try {
+    const payload = internalContextPayloadSchema.safeParse(JSON.parse(texts[0]!.slice(separator + 1)));
+    return payload.success ? { itemId: itemId.data, marker: payload.data.marker } : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Resolve the request-scoped random markers returned by the agent to durable
+ * provider item ids. History later excludes only these recorded ids; it never
+ * classifies user messages by a textual prefix.
+ */
+export function resolveInternalContextItemIds(
+  items: readonly unknown[],
+  markers: readonly string[],
+): { itemIds: string[]; complete: boolean } {
+  const requested = internalContextMarkerListSchema.safeParse(markers);
+  if (!requested.success) return { itemIds: [], complete: false };
+  const matches = new Map<string, string[]>();
+  for (const item of items) {
+    const candidate = providerInternalContextMarker(item);
+    if (!candidate || !requested.data.includes(candidate.marker)) continue;
+    matches.set(candidate.marker, [...(matches.get(candidate.marker) ?? []), candidate.itemId]);
+  }
+  const itemIds = requested.data.flatMap((marker) => {
+    const ids = matches.get(marker) ?? [];
+    return ids.length === 1 ? ids : [];
+  });
+  return {
+    itemIds,
+    complete: requested.data.every((marker) => (matches.get(marker) ?? []).length === 1),
+  };
+}
+
 export async function listConversationItems(input: {
   client: ConversationItemsClient;
   conversationId: string;
@@ -383,6 +443,8 @@ export async function listRecentConversationItems(input: {
 type AgentTurnRecord = Awaited<ReturnType<IStorage['listAgentTurns']>>[number];
 
 const internalContextItemIdsSchema = z.array(providerItemIdSchema).max(100);
+const persistedInternalContextMarkersSchema = z.array(z.string().min(1).max(200)).max(20)
+  .refine((markers) => new Set(markers).size === markers.length);
 
 function internalContextItemIds(turns: readonly AgentTurnRecord[]): Set<string> {
   const ids = new Set<string>();
@@ -396,6 +458,20 @@ function internalContextItemIds(turns: readonly AgentTurnRecord[]): Set<string> 
     for (const id of parsed.data) ids.add(id);
   }
   return ids;
+}
+
+function pendingInternalContextMarkers(turns: readonly AgentTurnRecord[]): string[] {
+  const markers = new Set<string>();
+  for (const turn of turns) {
+    const terminal = turn.terminalResult;
+    if (!terminal || typeof terminal !== 'object') continue;
+    const parsed = persistedInternalContextMarkersSchema.safeParse(
+      (terminal as Record<string, unknown>).internalContextMarkers,
+    );
+    if (!parsed.success) continue;
+    for (const marker of parsed.data) markers.add(marker);
+  }
+  return [...markers];
 }
 
 function projectConversationHistory(
@@ -499,6 +575,7 @@ export async function loadConversationHistory(input: {
     .parse(input.pageSize ?? HISTORY_PAGE_SIZE);
   const turns = await input.storage.listAgentTurns(input.userId);
   const excludedItemIds = internalContextItemIds(turns);
+  const unresolvedInternalContextMarkers = pendingInternalContextMarkers(turns);
   const newestFirstItems: unknown[] = [];
   const seenCursors = new Set<string>(after ? [after] : []);
   let providerHasMore = false;
@@ -521,6 +598,13 @@ export async function loadConversationHistory(input: {
       throw new ConversationHistoryProviderError('list');
     }
     newestFirstItems.push(...page.data);
+    if (unresolvedInternalContextMarkers.length > 0) {
+      const resolved = resolveInternalContextItemIds(
+        newestFirstItems,
+        unresolvedInternalContextMarkers,
+      );
+      for (const itemId of resolved.itemIds) excludedItemIds.add(itemId);
+    }
     projection = projectConversationHistory([...newestFirstItems].reverse(), turns, excludedItemIds);
     providerHasMore = page.hasMore;
     if (page.hasMore) {
