@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
 import { readMigrationFiles } from 'drizzle-orm/migrator';
 import { PostgresStorage } from './storage.js';
+import { createCareerMap } from '../shared/career-map/index.js';
 import {
   cleanupStorageTestDatabases,
   provisionStorageTestDatabase,
@@ -16,6 +17,7 @@ const methodTables = [
   'agent_turn_leases',
   'agent_turns',
   'career_map_drafts',
+  'career_map_evidence_associations',
   'career_map_history',
   'career_map_research_attempts',
   'career_maps',
@@ -84,6 +86,17 @@ async function assertMigratedShape(harness: Pick<StorageTestDatabaseHarness, 'po
   expect(await harness.pool.query(`
     select pg_get_serial_sequence('public.analytics_events', 'id') as sequence_name
   `)).toMatchObject({ rows: [{ sequence_name: expect.any(String) }] });
+
+  const evidenceColumns = await harness.pool.query<{ column_name: string }>(`
+    select column_name
+    from information_schema.columns
+    where table_schema = 'public' and table_name = 'career_map_evidence_associations'
+    order by ordinal_position
+  `);
+  expect(evidenceColumns.rows.map((row) => row.column_name)).toEqual([
+    'id', 'user_id', 'attempt_id', 'turn_id', 'lease_id', 'operation_source_id',
+    'result_revision', 'source_handle', 'association', 'created_at',
+  ]);
   expect((await harness.pool.query(`
     select
       sequence_data.seqstart::text,
@@ -190,6 +203,49 @@ describe('reviewed U4 migration chain', () => {
       expect((await harness.pool.query(
         "select count(*)::int as count from analytics_events where event_type = 'predecessor-event'",
       )).rows).toEqual([{ count: 1 }]);
+    } finally {
+      await harness.dispose();
+    }
+  });
+
+  it('preserves predecessor queryCategory rows through the dual-reader migration', async () => {
+    const harness = await provisionStorageTestDatabase('research_predecessor', { applyMigrations: false });
+    try {
+      await harness.applyReviewedMigration(0);
+      await createAnalyticsPredecessor(harness, 'serial primary key not null');
+      await harness.applyReviewedMigration(1);
+      const userId = 'migration-research-predecessor';
+      const turnId = 'migration-research-predecessor-turn';
+      const leaseId = 'migration-research-predecessor-lease';
+      const map = createCareerMap(userId);
+      await harness.pool.query(`
+        insert into career_maps (user_id, schema_version, revision, document)
+        values ($1, $2, $3, $4::jsonb)
+      `, [userId, map.schemaVersion, map.revision, JSON.stringify(map)]);
+      await harness.pool.query(`
+        insert into agent_turns (
+          turn_id, user_id, client_message_id, request_fingerprint, origin, lease_id,
+          status, terminal_result, created_at, updated_at, terminal_at
+        ) values ($1, $2, $3, $4, 'agent-turn', $5, 'completed', '{}'::jsonb, now(), now(), now())
+      `, [turnId, userId, 'migration-research-message', 'migration-research-request', leaseId]);
+      const legacyAttempt = {
+        id: 'migration-legacy-attempt',
+        status: 'failed',
+        queryCategory: 'purpose-path-practical-fit',
+        attemptedAt: '2030-01-01T00:00:00.000Z',
+        sources: [],
+        errorClass: 'ProviderFailure',
+      };
+      await harness.pool.query(`
+        insert into career_map_research_attempts (id, user_id, turn_id, lease_id, attempt)
+        values ($1, $2, $3, $4, $5::jsonb)
+      `, [legacyAttempt.id, userId, turnId, leaseId, JSON.stringify(legacyAttempt)]);
+
+      await harness.applyReviewedMigration(2);
+      expect(await new PostgresStorage({ database: harness.database }).listResearchAttempts(userId))
+        .toEqual([legacyAttempt]);
+      expect(await new PostgresStorage({ database: harness.database }).auditCareerMapIntegrity())
+        .toMatchObject({ zeroInvalid: true });
     } finally {
       await harness.dispose();
     }

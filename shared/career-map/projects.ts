@@ -6,7 +6,7 @@ import {
   modelPresentationSchema,
   revisionRefSchema,
   revisionSchema,
-  sourceProvenanceSchema,
+  sourceProvenanceListSchema,
   userActionProvenanceSchema,
 } from './common';
 
@@ -22,7 +22,7 @@ export const pathProjectInputSchema = z.object({
   firstStep: z.string().min(1).max(2_000),
   decisionQuestion: z.string().min(1).max(2_000),
   evidenceCue: z.string().min(1).max(2_000),
-  sources: z.array(sourceProvenanceSchema).optional(),
+  sources: sourceProvenanceListSchema.optional(),
 }).strict();
 
 export const projectWorkStatusSchema = z.enum(['not-started', 'in-progress', 'stopped', 'completed']);

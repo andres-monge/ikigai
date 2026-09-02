@@ -28,7 +28,18 @@ const action = (sequence: number) => ({
 const paths = (): [PurposePathInput, PurposePathInput, PurposePathInput] => [
   {
     id: 'briefing-path-active', revision: 1, name: 'Build humane tools', servesWhy: 'Turn complexity into useful tools', possibility: 'Small teams decide better', evidence: ['Builds tools voluntarily'], centralUnknown: 'Whether iteration remains energizing', projectPreview: 'Build a decision aid', practicalFit: 'Can start beside current work',
-    sources: [{ kind: 'cited-research', sourceHandle: 'briefing-source', providerResultId: 'briefing-result', url: 'https://example.com/current', retrievedAt: at(3), title: 'Current source', excerpt: 'A claim-associated public excerpt.', support: 'server-validated' }],
+    sources: [{
+      kind: 'cited-research', bindingVersion: 2, sourceHandle: 'briefing-source',
+      providerCallId: 'briefing-call', providerResultId: 'briefing-result',
+      targetId: 'briefing-path-active', targetRevision: 2,
+      canonicalField: 'purposePath.practicalFit', exactClaim: 'Can start beside current work',
+      url: 'https://example.com/current', retrievedAt: at(3), title: 'Current source',
+      excerpt: 'Can start beside current work', support: 'server-validated',
+      citation: {
+        start: 0, end: 29, exactClaimStart: 0, exactClaimEnd: 29,
+        textHash: 'b'.repeat(64),
+      },
+    }],
   },
   { id: 'briefing-path-parked-1', revision: 1, name: 'Parked facilitation', servesWhy: 'Help groups directly', possibility: 'Teams gain agency', evidence: ['Explains complexity'], centralUnknown: 'Whether facilitation pulls', projectPreview: 'Run a workshop', practicalFit: 'One workshop is feasible' },
   { id: 'briefing-path-parked-2', revision: 1, name: 'Parked research', servesWhy: 'Publish practical findings', possibility: 'Methods spread', evidence: ['Follows questions'], centralUnknown: 'Whether inquiry sustains', projectPreview: 'Publish a field note', practicalFit: 'One note is feasible' },
@@ -293,7 +304,8 @@ describe('compileCareerMapBriefing', () => {
     expect(briefing.markdown).toContain('Build humane tools');
     expect(briefing.markdown).toContain('Build a real decision aid');
     expect(briefing.markdown).toContain('https://example.com/current');
-    expect(briefing.markdown).toContain('A claim-associated public excerpt.');
+    expect(briefing.markdown).toContain('purposePath.practicalFit');
+    expect(briefing.markdown).toContain('briefing-result');
     expect(briefing.markdown).not.toContain('Parked facilitation');
     expect(briefing.markdown).not.toContain('Parked research');
     expect(briefing.markdown).not.toContain('briefing-source-1');
@@ -307,7 +319,7 @@ describe('compileCareerMapBriefing', () => {
     const source = map.pathSets[0].paths[0].sources?.[0];
     if (!source || source.kind !== 'cited-research') throw new Error('Expected cited research fixture.');
     source.title = `Visible canonical title\n${titleContinuation}`;
-    source.excerpt = `Visible canonical excerpt\n${excerptContinuation}`;
+    source.excerpt = `Can start beside current work\n${excerptContinuation}`;
     source.providerResultId = providerResultId;
 
     const briefing = compileCareerMapBriefing(map) as ReturnType<typeof compileCareerMapBriefing> & {
@@ -319,7 +331,7 @@ describe('compileCareerMapBriefing', () => {
     expect(briefing.markdown).toContain(providerResultId);
     expect(briefing.modelMarkdown).toEqual(expect.any(String));
     expect(briefing.modelMarkdown).toContain(
-      'Research source provenance recorded server-side; retrieved title and content omitted from instructions.',
+      'Research grounding for purposePath.practicalFit is server-validated; retrieved title and content omitted from instructions.',
     );
     expect(briefing.modelMarkdown).not.toContain(titleContinuation);
     expect(briefing.modelMarkdown).not.toContain(excerptContinuation);

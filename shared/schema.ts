@@ -54,6 +54,7 @@ import type {
   CareerMap,
   OperationReceipt,
   ResearchAttempt,
+  ResearchSourceAssociation,
   UserActionProvenance,
 } from './career-map/index.js';
 
@@ -220,7 +221,7 @@ export const careerMapHistory = pgTable('career_map_history', {
   ),
 }));
 
-/** Isolated research bookkeeping that cannot become a canonical proposal. */
+/** Provider-search bookkeeping that cannot become a canonical proposal by itself. */
 export const careerMapResearchAttempts = pgTable('career_map_research_attempts', {
   id: text('id').notNull(),
   userId: text('user_id')
@@ -234,6 +235,33 @@ export const careerMapResearchAttempts = pgTable('career_map_research_attempts',
   identity: uniqueIndex('career_map_research_user_id_unique').on(table.userId, table.id),
   ownerIndex: index('career_map_research_user_idx').on(table.userId),
   turnIndex: index('career_map_research_turn_idx').on(table.userId, table.turnId, table.leaseId),
+}));
+
+/** Exact claim/source bindings committed atomically with their canonical map revision. */
+export const careerMapEvidenceAssociations = pgTable('career_map_evidence_associations', {
+  id: serial('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => careerMaps.userId, { onDelete: 'cascade' }),
+  attemptId: text('attempt_id').notNull(),
+  turnId: text('turn_id').notNull(),
+  leaseId: text('lease_id').notNull(),
+  operationSourceId: text('operation_source_id').notNull(),
+  resultRevision: integer('result_revision').notNull(),
+  sourceHandle: text('source_handle').notNull(),
+  association: jsonb('association').$type<ResearchSourceAssociation>().notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  sourceIdentity: uniqueIndex('career_map_evidence_user_source_unique')
+    .on(table.userId, table.sourceHandle),
+  revisionIndex: index('career_map_evidence_user_revision_idx')
+    .on(table.userId, table.resultRevision),
+  attemptIndex: index('career_map_evidence_user_attempt_idx')
+    .on(table.userId, table.attemptId),
+  resultRevisionPositive: check(
+    'career_map_evidence_result_revision_positive',
+    sql`${table.resultRevision} > 0`,
+  ),
 }));
 
 /** Human-controlled draft material; no operation sends or publishes it. */

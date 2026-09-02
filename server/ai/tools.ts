@@ -233,6 +233,7 @@ export async function executeMethodOperation(
     context,
     operation,
     moduleVersion: `${before.module.key}@${before.module.contentVersion}:${before.module.contentDigest}`,
+    abortSignal: options.abortSignal,
   });
   const normalized = resultStatus(result);
   // The persistence result is authoritative. Never downgrade a durable commit

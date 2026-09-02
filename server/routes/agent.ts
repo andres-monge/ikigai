@@ -548,6 +548,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
         turnId: turn.turnId,
         leaseId: turn.leaseId,
         result: { kind: 'workspace-result', refetch: true, operationEnvelope: envelope },
+        abortSignal: abort.signal,
       });
       if (!completed || completed.status !== 'completed') {
         response.status(409).json({
@@ -879,6 +880,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
                     ? { displayProjection }
                     : { displayRecovery: createDisplayRecovery(parsed.data.message, safeAssistantText, false) }),
                 },
+                abortSignal: abort.signal,
               });
               if (!completed || completed.status !== 'completed') {
                 const terminalError = new Error('The turn could not be durably completed.');
@@ -895,6 +897,19 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
         }
         let terminalFailureClass: string | undefined;
         try {
+          if (terminalFailure && (
+            abort.signal.aborted
+            || (terminalFailure instanceof Error && terminalFailure.name === 'AbortError')
+          )) {
+            const cancelled = await cancelWithCanonicalRecovery();
+            if (cancelled?.status === 'cancelled') {
+              terminalFailure = undefined;
+            } else {
+              const cancellationError = new Error('The turn could not be durably cancelled.');
+              cancellationError.name = 'TurnLeaseLostError';
+              terminalFailure = cancellationError;
+            }
+          }
           if (terminalFailure) {
             const errorClass = safeErrorClass(terminalFailure);
             terminalFailureClass = errorClass;

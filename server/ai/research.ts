@@ -519,7 +519,12 @@ export class ResearchSession implements MethodResearchSession {
         attemptedAt,
         sources,
       };
-      await this.options.storage.recordResearchAttempt(this.options.userId, this.options.leaseId, attempt);
+      await this.options.storage.recordResearchAttempt(
+        this.options.userId,
+        this.options.leaseId,
+        attempt,
+        abortSignal,
+      );
       return { status, category: intent.category, candidates };
     } catch (error) {
       if (abortSignal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error;
@@ -531,7 +536,7 @@ export class ResearchSession implements MethodResearchSession {
         attemptedAt,
         sources: [],
         errorClass: providerErrorClass,
-      });
+      }, abortSignal);
       return { status: 'failed', category: intent.category, candidates: [], errorClass: providerErrorClass };
     }
   }

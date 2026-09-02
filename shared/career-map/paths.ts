@@ -6,7 +6,7 @@ import {
   modelPresentationSchema,
   revisionRefSchema,
   revisionSchema,
-  sourceProvenanceSchema,
+  sourceProvenanceListSchema,
 } from './common';
 
 export const purposePathInputSchema = z.object({
@@ -19,7 +19,7 @@ export const purposePathInputSchema = z.object({
   centralUnknown: z.string().min(1).max(2_000),
   projectPreview: z.string().min(1).max(2_000),
   practicalFit: z.string().min(1).max(2_000),
-  sources: z.array(sourceProvenanceSchema).optional(),
+  sources: sourceProvenanceListSchema.optional(),
 }).strict();
 
 export const purposePathSchema = purposePathInputSchema.extend({

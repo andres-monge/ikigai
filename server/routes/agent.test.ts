@@ -2111,6 +2111,52 @@ describe('protected Method routes', () => {
     expect(storage.releaseTurnLease).toHaveBeenCalledTimes(2);
   });
 
+  it('routes an abort during durable completion through canonical cancellation recovery', async () => {
+    let completionStarted!: () => void;
+    const completionStartedGate = new Promise<void>((resolve) => { completionStarted = resolve; });
+    const storage = createStorage({
+      getConversationMapping: vi.fn(async () => 'server-conversation'),
+      completeAgentTurn: vi.fn(async (input: { abortSignal?: AbortSignal }) => {
+        completionStarted();
+        return new Promise<never>((_resolve, reject) => {
+          input.abortSignal?.addEventListener('abort', () => reject(input.abortSignal?.reason), { once: true });
+        });
+      }),
+    });
+    const model = new MockLanguageModelV4({ doStream: textStream('Safe reply before completion.') as never });
+    const outbound = request(testApp({
+      storage,
+      requireAuth: authenticated,
+      agentEnabled: true,
+      model,
+      conversationClient: { listItems: vi.fn(async () => ({ data: [], hasMore: false })) },
+      researchProvider: { search: vi.fn(async () => ({ candidates: [] })) },
+      operationalLog: vi.fn(),
+    })).post('/api/agent').send({ id: 'client-message-1', message: 'Help me reflect.' });
+    const settled = Promise.resolve(outbound).catch(() => undefined);
+    await completionStartedGate;
+    outbound.abort();
+    await settled;
+
+    await vi.waitFor(() => expect(storage.cancelAgentTurn).toHaveBeenCalledOnce());
+    expect(storage.failAgentTurn).not.toHaveBeenCalled();
+    expect(storage.cancelAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
+      result: expect.objectContaining({
+        kind: 'cancelled',
+        stopped: true,
+        refetch: true,
+        revision: 1,
+        operationCommitted: false,
+        displayRecovery: expect.objectContaining({
+          status: 'pending',
+          retainPartial: true,
+          assistantTextLength: 'Safe reply before completion.'.length,
+        }),
+      }),
+    }));
+    expect(storage.releaseTurnLease).toHaveBeenCalledOnce();
+  });
+
   it('captures the cancellation baseline after lease acquisition so a foreign commit is not attributed to this turn', async () => {
     const beforeLease = pendingWhy();
     const foreign = applyCareerMapOperation(beforeLease, {

@@ -6,7 +6,7 @@ import {
   modelPresentationSchema,
   revisionRefSchema,
   revisionSchema,
-  sourceProvenanceSchema,
+  sourceProvenanceListSchema,
   userActionProvenanceSchema,
 } from './common';
 
@@ -40,7 +40,7 @@ export const sideDoorInputSchema = z.object({
   contribution: z.string().min(1).max(3_000),
   firstMove: z.string().min(1).max(2_000),
   accessConstraints: z.array(z.string().min(1).max(2_000)),
-  sources: z.array(sourceProvenanceSchema).optional(),
+  sources: sourceProvenanceListSchema.optional(),
 }).strict();
 
 export const sideDoorSchema = sideDoorInputSchema.extend({

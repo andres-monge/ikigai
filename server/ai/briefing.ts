@@ -33,12 +33,17 @@ function sourceLine(source: SourceProvenance, projection: BriefingProjection): s
     return `- Explorer-provided source: ${source.label}${source.url ? ` (${source.url})` : ''}`;
   }
   if (projection === 'model') {
-    return '- Research source provenance recorded server-side; retrieved title and content omitted from instructions.';
+    return 'bindingVersion' in source
+      ? `- Research grounding for ${source.canonicalField} is ${source.support}; retrieved title and content omitted from instructions.`
+      : '- Predecessor research provenance recorded server-side; retrieved title and content omitted from instructions.';
   }
   const title = source.title ?? source.url;
   const result = source.providerResultId ? `; result ${source.providerResultId}` : '';
   const excerpt = source.excerpt ? ` — ${source.excerpt}` : '';
-  return `- Research source: ${title} (${source.url}; ${source.support}${result}; retrieved ${source.retrievedAt})${excerpt}`;
+  const binding = 'bindingVersion' in source
+    ? `; call ${source.providerCallId}; target ${source.targetId}@${source.targetRevision}; field ${source.canonicalField}; exact claim ${JSON.stringify(source.exactClaim)}; citation ${source.citation.start}-${source.citation.end}`
+    : '';
+  return `- Research source: ${title} (${source.url}; ${source.support}${result}${binding}; retrieved ${source.retrievedAt})${excerpt}`;
 }
 
 function appendSources(
