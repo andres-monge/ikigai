@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   ConversationHistoryProviderError,
   OpenAIConversationClient,
+  createConversationHistoryCursorCodec,
   listRecentConversationItems,
   loadConversationHistory,
   normalizeConversationItems,
@@ -60,15 +61,15 @@ describe('protected OpenAI Conversation history adapter', () => {
     expect(listItems).not.toHaveBeenCalled();
   });
 
-  it('derives the Conversation from the owner mapping and paginates to exhaustion in order', async () => {
+  it('derives the Conversation from the owner mapping and fills a bounded page newest-first', async () => {
     const listItems = vi.fn()
       .mockResolvedValueOnce({
-        data: [{ id: 'message-1', type: 'message', role: 'user', content: [{ type: 'input_text', text: 'First' }] }],
+        data: [{ id: 'message-2', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Second' }] }],
         hasMore: true,
-        lastId: 'message-1',
+        lastId: 'message-2',
       })
       .mockResolvedValueOnce({
-        data: [{ id: 'message-2', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Second' }] }],
+        data: [{ id: 'message-1', type: 'message', role: 'user', content: [{ type: 'input_text', text: 'First' }] }],
         hasMore: false,
       });
     const result = await loadConversationHistory({
@@ -85,11 +86,108 @@ describe('protected OpenAI Conversation history adapter', () => {
     expect(listItems).toHaveBeenNthCalledWith(1, expect.objectContaining({
       conversationId: 'conversation-server-owned',
       after: undefined,
-      limit: 100,
-      order: 'asc',
+      limit: 40,
+      order: 'desc',
     }));
-    expect(listItems).toHaveBeenNthCalledWith(2, expect.objectContaining({ after: 'message-1' }));
+    expect(listItems).toHaveBeenNthCalledWith(2, expect.objectContaining({ after: 'message-2', limit: 39 }));
     expect(result.messages.map((message) => message.id)).toEqual(['message-1', 'message-2']);
+  });
+
+  it('bounds newest-first display hydration and resumes older pages through an opaque server cursor', async () => {
+    const newest = Array.from({ length: 3 }, (_, index) => ({
+      id: `new-${index}`,
+      type: 'message',
+      role: index % 2 === 0 ? 'assistant' : 'user',
+      content: [{ type: index % 2 === 0 ? 'output_text' : 'input_text', text: `New ${index}` }],
+    }));
+    const older = [{
+      id: 'old-0', type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Old 0' }],
+    }];
+    const turns = [
+      durableTurn({ turnId: 'old', userItemId: 'old-0', assistantItemId: 'absent-old' }),
+      durableTurn({ turnId: 'new-user', userItemId: 'new-1', assistantItemId: 'absent-new' }),
+      durableTurn({ turnId: 'new-assistant-0', userItemId: 'absent-0', assistantItemId: 'new-0' }),
+      durableTurn({ turnId: 'new-assistant-2', userItemId: 'absent-2', assistantItemId: 'new-2' }),
+    ];
+    const listItems = vi.fn()
+      .mockResolvedValueOnce({ data: newest, hasMore: true, lastId: 'provider-page-token' })
+      .mockResolvedValueOnce({ data: older, hasMore: false });
+    const storage = {
+      getConversationMapping: vi.fn(async () => 'conversation-server-owned'),
+      listAgentTurns: vi.fn(async () => turns),
+    };
+    const cursorCodec = createConversationHistoryCursorCodec('cursor-test-secret-at-least-32-characters');
+
+    const first = await loadConversationHistory({
+      storage, client: { listItems }, userId: 'explorer-1', pageSize: 3, cursorCodec,
+    });
+    expect(first.messages.map((message) => message.id)).toEqual(['new-2', 'new-1', 'new-0']);
+    expect(first).toHaveProperty('olderCursor');
+    expect(first.olderCursor).not.toContain('provider-page-token');
+    expect(first.olderCursor).not.toContain('conversation-server-owned');
+    expect(listItems).toHaveBeenCalledTimes(1);
+    expect(listItems).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      after: undefined, limit: 3, order: 'desc',
+    }));
+
+    const second = await loadConversationHistory({
+      storage,
+      client: { listItems },
+      userId: 'explorer-1',
+      pageSize: 3,
+      cursorCodec,
+      cursor: first.olderCursor,
+    });
+    expect(second.messages.map((message) => message.id)).toEqual(['old-0']);
+    expect(second).not.toHaveProperty('olderCursor');
+    expect(listItems).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      after: 'provider-page-token', limit: 3, order: 'desc',
+    }));
+  });
+
+  it('rejects a cursor minted for another Conversation without provider access', async () => {
+    const secret = 'cursor-test-secret-at-least-32-characters';
+    const cursor = createConversationHistoryCursorCodec(secret)
+      .encode({ conversationId: 'conversation-other', after: 'provider-after' });
+    const cursorCodec = createConversationHistoryCursorCodec(secret);
+    expect(cursorCodec.decode(cursor)).toEqual({
+      conversationId: 'conversation-other', after: 'provider-after',
+    });
+    const listItems = vi.fn();
+    await expect(loadConversationHistory({
+      storage: {
+        getConversationMapping: vi.fn(async () => 'conversation-owner'),
+        listAgentTurns: vi.fn(async () => []),
+      },
+      client: { listItems },
+      userId: 'explorer-1',
+      cursor,
+      cursorCodec,
+    })).rejects.toBeInstanceOf(ConversationHistoryProviderError);
+    expect(listItems).not.toHaveBeenCalled();
+  });
+
+  it('fails closed instead of issuing an unstable older cursor when no codec is injected', async () => {
+    await expect(loadConversationHistory({
+      storage: {
+        getConversationMapping: vi.fn(async () => 'conversation-owner'),
+        listAgentTurns: vi.fn(async () => [durableTurn({
+          turnId: 'cursor-required', userItemId: 'missing-user', assistantItemId: 'visible-assistant',
+        })]),
+      },
+      client: {
+        listItems: vi.fn(async () => ({
+          data: [{
+            id: 'visible-assistant', type: 'message', role: 'assistant',
+            content: [{ type: 'output_text', text: 'Visible' }],
+          }],
+          hasMore: true,
+          lastId: 'visible-assistant',
+        })),
+      },
+      userId: 'explorer-1',
+      pageSize: 1,
+    })).rejects.toBeInstanceOf(ConversationHistoryProviderError);
   });
 
   it('reads one newest page for terminal projection and restores chronological order', async () => {
@@ -121,7 +219,7 @@ describe('protected OpenAI Conversation history adapter', () => {
         content: [{ type: 'output_text', text }], raw: { payload: text },
         })),
         { id: 'safe-assistant-item', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Safe authoritative narration' }] },
-      ],
+      ].reverse(),
       hasMore: false,
     }));
     const result = await loadConversationHistory({
@@ -160,7 +258,7 @@ describe('protected OpenAI Conversation history adapter', () => {
           assistantItemId: `${outcome}-final`,
         }))),
       },
-      client: { listItems: vi.fn(async () => ({ data, hasMore: false })) },
+      client: { listItems: vi.fn(async () => ({ data: [...data].reverse(), hasMore: false })) },
       userId: 'explorer-1',
     });
 
@@ -197,16 +295,16 @@ describe('protected OpenAI Conversation history adapter', () => {
       .mockRejectedValueOnce(new ConversationHistoryProviderError('list', 503))
       .mockResolvedValueOnce({
         data: [
-          { id: 'eventual-user', type: 'message', role: 'user', content: [{ type: 'input_text', text: userText }] },
-          { id: 'unsafe-pre-tool', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'UNSAFE_PRE_TOOL_CLAIM' }] },
+          { id: 'eventual-assistant-b', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'test an idea in the real world.' }] },
+          { id: 'eventual-assistant-a', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'It may point to work where you can ' }] },
         ],
         hasMore: true,
-        lastId: 'eventual-page-1',
+        lastId: 'eventual-assistant-a',
       })
       .mockResolvedValueOnce({
         data: [
-          { id: 'eventual-assistant-a', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'It may point to work where you can ' }] },
-          { id: 'eventual-assistant-b', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'test an idea in the real world.' }] },
+          { id: 'unsafe-pre-tool', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'UNSAFE_PRE_TOOL_CLAIM' }] },
+          { id: 'eventual-user', type: 'message', role: 'user', content: [{ type: 'input_text', text: userText }] },
         ],
         hasMore: false,
       });
@@ -228,7 +326,7 @@ describe('protected OpenAI Conversation history adapter', () => {
       { id: 'eventual-assistant-a', role: 'assistant', parts: [{ type: 'text', text: 'It may point to work where you can ' }] },
       { id: 'eventual-assistant-b', role: 'assistant', parts: [{ type: 'text', text: 'test an idea in the real world.' }] },
     ]);
-    expect(listItems).toHaveBeenNthCalledWith(3, expect.objectContaining({ after: 'eventual-page-1' }));
+    expect(listItems).toHaveBeenNthCalledWith(3, expect.objectContaining({ after: 'eventual-assistant-a' }));
     expect(backfillAgentTurnDisplayProjection).toHaveBeenCalledOnce();
     expect(backfillAgentTurnDisplayProjection).toHaveBeenCalledWith({
       userId: 'explorer-1',
@@ -276,7 +374,7 @@ describe('protected OpenAI Conversation history adapter', () => {
             { id: 'cancelled-pre-tool', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'UNSAFE_PRE_TOOL_TEXT' }] },
             { id: 'cancelled-safe-partial', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: safePartial }] },
             { id: 'cancelled-aborted', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'UNSAFE_ABORTED_TEXT' }] },
-          ],
+          ].reverse(),
           hasMore: false,
         })),
       },
@@ -347,7 +445,7 @@ describe('protected OpenAI Conversation history adapter', () => {
             { id: 'first-assistant', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: stoppedPartial }] },
             { id: 'second-user', type: 'message', role: 'user', content: [{ type: 'input_text', text: repeatedUser }] },
             { id: 'second-assistant', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: completedAnswer }] },
-          ],
+          ].reverse(),
           hasMore: false,
         })),
       },
@@ -402,7 +500,7 @@ describe('protected OpenAI Conversation history adapter', () => {
             { id: 'identical-assistant-1', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: repeatedAssistant }] },
             { id: 'identical-user-2', type: 'message', role: 'user', content: [{ type: 'input_text', text: repeatedUser }] },
             { id: 'identical-assistant-2', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: repeatedAssistant }] },
-          ],
+          ].reverse(),
           hasMore: false,
         })),
       },
@@ -484,7 +582,7 @@ describe('protected OpenAI Conversation history adapter', () => {
             { id: 'completed-pre-tool', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'UNSAFE_PRE_TOOL_WITHOUT_FINAL' }] },
             { id: 'cancelled-user-only', type: 'message', role: 'user', content: [{ type: 'input_text', text: cancelledUserText }] },
             { id: 'cancelled-unretained', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'UNSAFE_UNRETAINED_PARTIAL' }] },
-          ],
+          ].reverse(),
           hasMore: false,
         })),
       },
@@ -538,6 +636,116 @@ describe('protected OpenAI Conversation history adapter', () => {
     ]);
     const serialized = JSON.stringify(normalized);
     expect(serialized).not.toMatch(/BRIEFING|PRIVATE|image_url/);
+  });
+
+  it('excludes repository-recorded internal user context by item id without treating it as a turn boundary', async () => {
+    const items = [
+      { id: 'visible-user', type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Please continue.' }] },
+      { id: 'internal-refresh', type: 'message', role: 'user', content: [{ type: 'input_text', text: 'INTERNAL CONTENT THAT MUST NOT BE PREFIX FILTERED' }] },
+      { id: 'visible-answer', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Here is the authoritative continuation.' }] },
+    ];
+    expect(resolveDisplayProjection(
+      items,
+      'Please continue.',
+      'Here is the authoritative continuation.',
+      new Set(['internal-refresh']),
+    )).toEqual({ userItemId: 'visible-user', assistantItemIds: ['visible-answer'] });
+    expect(normalizeConversationItems(items, undefined, new Set(['internal-refresh']))).toEqual([
+      { id: 'visible-user', role: 'user', parts: [{ type: 'text', text: 'Please continue.' }] },
+      { id: 'visible-answer', role: 'assistant', parts: [{ type: 'text', text: 'Here is the authoritative continuation.' }] },
+    ]);
+
+    const backfillAgentTurnDisplayProjection = vi.fn(async () => undefined);
+    const loaded = await loadConversationHistory({
+      storage: {
+        getConversationMapping: vi.fn(async () => 'conversation-server-owned'),
+        listAgentTurns: vi.fn(async () => [durableTurn({
+          turnId: 'internal-aware',
+          terminalResult: {
+            kind: 'completed',
+            refetch: true,
+            internalContextItemIds: ['internal-refresh'],
+            displayRecovery: {
+              status: 'pending',
+              userTextDigest: textDigest('Please continue.'),
+              assistantTextDigest: textDigest('Here is the authoritative continuation.'),
+              assistantTextLength: 'Here is the authoritative continuation.'.length,
+              retainPartial: false,
+            },
+          },
+        })]),
+        backfillAgentTurnDisplayProjection,
+      },
+      client: { listItems: vi.fn(async () => ({ data: [...items].reverse(), hasMore: false })) },
+      userId: 'explorer-1',
+    });
+    expect(loaded.messages.map((message) => message.id)).toEqual(['visible-user', 'visible-answer']);
+    expect(backfillAgentTurnDisplayProjection).toHaveBeenCalledWith({
+      userId: 'explorer-1',
+      turnId: 'internal-aware',
+      displayProjection: { userItemId: 'visible-user', assistantItemIds: ['visible-answer'] },
+    });
+  });
+
+  it('preserves only sanitized exact-span HTTPS citation parts on allowed assistant messages', async () => {
+    const result = await loadConversationHistory({
+      storage: {
+        getConversationMapping: vi.fn(async () => 'conversation-server-owned'),
+        listAgentTurns: vi.fn(async () => [durableTurn({
+          turnId: 'cited', userItemId: 'cited-user', assistantItemId: 'cited-assistant',
+        })]),
+      },
+      client: {
+        listItems: vi.fn(async () => ({
+          data: [
+            { id: 'cited-assistant', type: 'message', role: 'assistant', content: [{
+              type: 'output_text',
+              text: 'The official media type is application/json.',
+              annotations: [
+                { type: 'url_citation', start_index: 27, end_index: 43, url: 'https://example.com/a/../fact#fragment', title: '  Provider\u0000 title ' },
+                { type: 'url_citation', start_index: 27, end_index: 43, url: 'javascript:alert(1)', title: 'Unsafe' },
+                { type: 'url_citation', start_index: 999, end_index: 1000, url: 'https://example.com/out-of-range' },
+              ],
+            }], rawSearch: 'PRIVATE_RAW_SEARCH' },
+            { id: 'cited-user', type: 'message', role: 'user', content: [{ type: 'input_text', text: 'What is the media type?' }] },
+          ],
+          hasMore: false,
+        })),
+      },
+      userId: 'explorer-1',
+    });
+    expect(result.messages).toEqual([
+      { id: 'cited-user', role: 'user', parts: [{ type: 'text', text: 'What is the media type?' }] },
+      {
+        id: 'cited-assistant',
+        role: 'assistant',
+        parts: [{ type: 'text', text: 'The official media type is application/json.' }],
+        sources: [{
+          type: 'source-url',
+          sourceId: expect.stringMatching(/^citation_/),
+          url: 'https://example.com/fact',
+          title: 'Provider title',
+        }],
+        citations: [{
+          version: 1,
+          citationId: expect.stringMatching(/^citation_/),
+          turnId: 'cited',
+          messageId: 'cited-assistant',
+          textHash: textDigest('The official media type is application/json.'),
+          exactClaim: 'application/json',
+          start: 27,
+          end: 43,
+          url: 'https://example.com/fact',
+          title: 'Provider title',
+          support: 'cited-provenance',
+        }],
+      },
+    ]);
+    const citedMessage = result.messages[1];
+    expect(citedMessage.sources?.[0]).toMatchObject({
+      sourceId: citedMessage.citations?.[0].citationId,
+    });
+    expect(JSON.stringify(result)).not.toMatch(/PRIVATE_RAW_SEARCH|javascript|out-of-range|fragment/);
   });
 
   it('fails a repeated provider cursor instead of looping or returning truncated history', async () => {
