@@ -1609,6 +1609,7 @@ async function main() {
       candidates.push({ model: candidateModelId, status: 'failed', reason: safeFailure(error) });
     }
   }
+  candidateDiagnostics = candidates;
   assert(candidates.some((entry) => entry.model === modelId && entry.status === 'passed'),
     'The selected model failed the repeated automatic-choice quality matrix.');
   const searchOutage = await runSearchOutageProof();
@@ -1629,6 +1630,7 @@ async function main() {
   }, null, 2));
 }
 
+let candidateDiagnostics = [];
 try {
   await main();
 } catch (error) {
@@ -1637,6 +1639,7 @@ try {
     status: 'failed',
     errorClass: error?.name || 'Error',
     reason: safeFailure(error),
+    candidates: candidateDiagnostics,
     cleanup: cleanupFailures.length === 0 ? 'completed' : 'failed',
   }));
   process.exitCode = 1;

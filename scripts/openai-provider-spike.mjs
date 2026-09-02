@@ -1,10 +1,12 @@
 /**
- * Development-only OpenAI provider spike for the Revelio revamp.
- *
- * This script intentionally sits outside the production bundle and Vitest glob.
- * It verifies the live Conversations/Responses assumptions that the agent work
- * will rely on, then deletes every conversation it creates.
+ * Historical pre-amendment provider spike. The approved G1 contract is now
+ * executable only through `npm run spike:openai`, which runs
+ * `openai-provider-g1-amended.mjs`. Keeping this source supports commit-history
+ * archaeology; direct execution is deliberately blocked so its rejected
+ * classifier/no-write assumptions cannot be mistaken for current authority.
  */
+
+throw new Error('Superseded proof: run `npm run spike:openai`.');
 
 import { createHash, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
