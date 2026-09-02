@@ -473,6 +473,7 @@ export interface IStorage {
     turnId: string;
     leaseId: string;
     errorClass: string;
+    result?: Record<string, unknown>;
   }): Promise<AgentTurnRecord | undefined>;
   releaseTurnLease(userId: string, turnId: string, leaseId: string): Promise<boolean>;
   recordResearchAttempt(
@@ -745,6 +746,10 @@ function citedSourceMatchesCanonicalField(
     const field = claim.source.canonicalField.slice(candidate.prefix.length + 1);
     if (field.includes('.')) return false;
     const value = (parsed.data as Record<string, unknown>)[field];
+    if (candidate.prefix === 'purposePath' && field === 'evidence' && Array.isArray(value)) {
+      return value.some((item) => typeof item === 'string'
+        && normalizeResearchClaim(item) === claim.source.exactClaim);
+    }
     return typeof value === 'string'
       && normalizeResearchClaim(value).includes(claim.source.exactClaim);
   }
@@ -832,11 +837,17 @@ function evidenceAssociationsMatchMap(
       ? [[row.id, { row, attempt: parsed.data }] as const]
       : [];
   }));
-  const canonicalSources = new Set(
-    collectCitedSourceClaims(map)
-      .filter((claim) => isAmendedCitedSource(claim.source))
-      .map((claim) => citedSourceIdentity(claim.source)),
-  );
+  const canonicalClaimsBySource = new Map<string, Array<SourceClaim & {
+    source: AmendedCitedResearchSource;
+  }>>();
+  for (const claim of collectCitedSourceClaims(map)) {
+    if (!isAmendedCitedSource(claim.source)) continue;
+    const identity = citedSourceIdentity(claim.source);
+    canonicalClaimsBySource.set(identity, [
+      ...(canonicalClaimsBySource.get(identity) ?? []),
+      { ...claim, source: claim.source },
+    ]);
+  }
   const associatedSources = new Set<string>();
 
   for (const row of associationRows) {
@@ -845,6 +856,7 @@ function evidenceAssociationsMatchMap(
     const association = parsed.data;
     const attemptRecord = amendedAttempts.get(row.attemptId);
     const history = historyRows.find((entry) => entry.resultRevision === row.resultRevision);
+    const canonicalClaims = canonicalClaimsBySource.get(citedSourceIdentity(association));
     if (!attemptRecord
       || attemptRecord.row.turnId !== row.turnId
       || attemptRecord.row.leaseId !== row.leaseId
@@ -860,12 +872,16 @@ function evidenceAssociationsMatchMap(
       || !attemptRecord.attempt.sources.some(
         (source) => citedSourceIdentity(source) === citedSourceIdentity(association),
       )
-      || !canonicalSources.has(citedSourceIdentity(association))
+      || !canonicalClaims
+      || canonicalClaims.some((claim) => !citedSourceMatchesCanonicalField(
+        claim,
+        row.resultRevision - 1,
+      ))
     ) return false;
     associatedSources.add(citedSourceIdentity(association));
   }
 
-  return [...canonicalSources].every((identity) => associatedSources.has(identity));
+  return [...canonicalClaimsBySource.keys()].every((identity) => associatedSources.has(identity));
 }
 
 function validateCareerMapRow(
@@ -2081,11 +2097,17 @@ export class PostgresStorage implements IStorage {
     turnId: string;
     leaseId: string;
     errorClass: string;
+    result?: Record<string, unknown>;
   }): Promise<AgentTurnRecord | undefined> {
     return this.finishAgentTurn({
       ...input,
       status: 'failed',
-      result: { errorClass: input.errorClass, refetch: true },
+      result: {
+        ...(input.result ?? {}),
+        kind: 'failed',
+        errorClass: input.errorClass,
+        refetch: true,
+      },
     });
   }
 

@@ -3,6 +3,7 @@ import {
   RESEARCH_SOURCE_LIMITS,
   amendedCitedResearchSourceSchema,
   amendedResearchAttemptSchema,
+  consultedResearchSourceSchema,
   canonicalizeResearchUrl,
   normalizeResearchClaim,
   type AmendedResearchAttempt,
@@ -33,6 +34,11 @@ export interface NativeSearchClaimBinding {
   targetRevision: number;
   canonicalField: string;
   exactClaim: string;
+}
+
+export interface NativeSearchAttemptTarget {
+  targetId: string;
+  targetRevision: number;
 }
 
 export interface ResearchSourceReference {
@@ -432,6 +438,15 @@ function normalizeBinding(binding: NativeSearchClaimBinding): NativeSearchClaimB
   return { ...binding, exactClaim };
 }
 
+function normalizeAttemptTarget(target: NativeSearchAttemptTarget): NativeSearchAttemptTarget | undefined {
+  if (!target.targetId
+    || target.targetId.length > 160
+    || !Number.isSafeInteger(target.targetRevision)
+    || target.targetRevision < 0
+  ) return undefined;
+  return target;
+}
+
 function safeExcerpt(contents: readonly string[], exactClaim: string): string | undefined {
   for (const value of contents) {
     const normalized = normalizeResearchClaim(value);
@@ -522,23 +537,38 @@ function precedingSentenceClaim(
     : undefined;
 }
 
-function displayClaim(
-  citation: TextCitation,
-  match: ResultCandidate,
+export function resolveNativeSearchCitationClaim(
+  text: string,
+  start: number,
+  end: number,
+  supportingContents: readonly string[] = [],
 ): { exactClaim: string; start: number; end: number } | undefined {
-  const sourced = candidateDisplayClaims(citation.text, citation, match.contents)[0];
+  const citation = { text, start, end } as TextCitation;
+  const sourced = candidateDisplayClaims(text, citation, supportingContents)[0];
   if (sourced) return {
     exactClaim: sourced.exactClaim,
     start: sourced.start,
     end: sourced.end,
   };
-  const annotated = normalizeResearchClaim(citation.text.slice(citation.start, citation.end));
+  const annotated = normalizeResearchClaim(text.slice(start, end));
   const citationMarker = annotated.length <= 64
     && /^(?:\[[^\]]+\]|\([^)]*\d[^)]*\)|[\p{P}\p{S}\d\s]+)$/u.test(annotated);
-  if (citationMarker) return precedingSentenceClaim(citation.text, citation.start);
+  if (citationMarker) return precedingSentenceClaim(text, start);
   return annotated && annotated.length <= RESEARCH_SOURCE_LIMITS.claimCharacters
-    ? { exactClaim: annotated, start: citation.start, end: citation.end }
+    ? { exactClaim: annotated, start, end }
     : undefined;
+}
+
+function displayClaim(
+  citation: TextCitation,
+  match: ResultCandidate,
+): { exactClaim: string; start: number; end: number } | undefined {
+  return resolveNativeSearchCitationClaim(
+    citation.text,
+    citation.start,
+    citation.end,
+    match.contents,
+  );
 }
 
 /**
@@ -796,8 +826,29 @@ function captureFingerprint(
   })).digest('hex');
 }
 
-function bindingTargetKey(binding: NativeSearchClaimBinding): string {
+function bindingTargetKey(binding: NativeSearchAttemptTarget): string {
   return JSON.stringify([binding.targetId, binding.targetRevision]);
+}
+
+function consultedSourcesFromEvents(events: readonly NativeSearchEvidenceEvent[]) {
+  const actionByCall = new Map(events.flatMap((event) => (
+    event.kind === 'provider-action' ? [[event.providerCallId, event.action] as const] : []
+  )));
+  const unique = new Map<string, ReturnType<typeof consultedResearchSourceSchema.parse>>();
+  for (const event of events) {
+    if (event.kind !== 'consulted-source') continue;
+    const source = consultedResearchSourceSchema.parse({
+      providerCallId: event.providerCallId,
+      providerResultId: event.providerResultId,
+      ...(actionByCall.get(event.providerCallId)
+        ? { action: actionByCall.get(event.providerCallId) }
+        : {}),
+      url: event.url,
+    });
+    unique.set(JSON.stringify(source), source);
+    if (unique.size >= RESEARCH_SOURCE_LIMITS.sourcesPerAttempt) break;
+  }
+  return [...unique.values()];
 }
 
 export class NativeSearchEvidenceLedger {
@@ -845,6 +896,7 @@ export class NativeSearchEvidenceLedger {
     bindings: readonly NativeSearchClaimBinding[],
     context: NativeSearchEvidenceCaptureContext,
     abortSignal?: AbortSignal,
+    fallbackTargets: readonly NativeSearchAttemptTarget[] = [],
   ): Promise<NativeSearchEvidenceCaptureResult> {
     throwIfAborted(abortSignal);
     const parsed = parseNativeSearchStep(step, bindings);
@@ -872,17 +924,55 @@ export class NativeSearchEvidenceLedger {
       const normalized = normalizeBinding(binding);
       return normalized ? [normalized] : [];
     });
+    const consultedSources = consultedSourcesFromEvents(parsed.events);
     if (normalizedBindings.length === 0) {
+      // A valid provider citation proves that the contextual lookup completed,
+      // even when the agent has not yet proposed an exact canonical claim. Keep
+      // that distinct from a missing/ambiguous citation, but do not manufacture
+      // a v2 cited source (and therefore never expose write-authorizing handles)
+      // until a later Response supplies exact target/field/claim bindings.
+      const unboundSearchStatus = extractNativeSearchDisplayCitations(step).length > 0
+        ? 'succeeded' as const
+        : 'insufficient' as const;
+      const normalizedTargets = fallbackTargets.flatMap((target) => {
+        const normalized = normalizeAttemptTarget(target);
+        return normalized ? [normalized] : [];
+      });
+      const targets = new Map(normalizedTargets.map((target) => [bindingTargetKey(target), target]));
+      const attemptedAt = this.now().toISOString();
+      const attempts = [...targets.entries()].map(([targetKey, target]) => (
+        amendedResearchAttemptSchema.parse({
+          schemaVersion: 2,
+          id: this.attemptId(captureId, targetKey),
+          status: unboundSearchStatus,
+          checkpoint: context.checkpoint,
+          moduleVersion: context.moduleVersion,
+          targetId: target.targetId,
+          targetRevision: target.targetRevision,
+          attemptedAt,
+          consultedSources,
+          sources: [],
+        })
+      ));
+      for (const attempt of attempts) {
+        throwIfAborted(abortSignal);
+        await this.options.storage.recordResearchAttempt(
+          this.options.userId,
+          this.options.leaseId,
+          attempt,
+          abortSignal,
+        );
+      }
       this.completedCaptures.add(captureId);
       this.capturedEvents.push(...parsed.events.slice(
         0,
         Math.max(0, MAX_EVIDENCE_EVENTS - this.capturedEvents.length),
       ));
       return {
-        status: 'ignored',
+        status: attempts.length > 0 ? unboundSearchStatus : 'ignored',
         events: parsed.events,
         rejections: parsed.rejections,
-        attempts: [],
+        attempts,
         minted: [],
       };
     }
@@ -969,6 +1059,7 @@ export class NativeSearchEvidenceLedger {
         targetId: target.targetId,
         targetRevision: target.targetRevision,
         attemptedAt,
+        consultedSources,
         sources,
       });
       attempts.push(attempt);
@@ -1020,19 +1111,19 @@ export class NativeSearchEvidenceLedger {
   }
 
   async recordFailedAttempt(
-    bindings: readonly NativeSearchClaimBinding[],
+    targets: readonly NativeSearchAttemptTarget[],
     context: NativeSearchEvidenceCaptureContext,
     error: unknown,
     abortSignal?: AbortSignal,
   ): Promise<NativeSearchEvidenceCaptureResult> {
     throwIfAborted(abortSignal);
-    const normalizedBindings = bindings.flatMap((binding) => {
-      const normalized = normalizeBinding(binding);
+    const normalizedTargets = targets.flatMap((target) => {
+      const normalized = normalizeAttemptTarget(target);
       return normalized ? [normalized] : [];
     });
-    if (normalizedBindings.length === 0) throw new NativeSearchEvidenceError();
-    const groups = new Map<string, NativeSearchClaimBinding>();
-    for (const binding of normalizedBindings) groups.set(bindingTargetKey(binding), binding);
+    if (normalizedTargets.length === 0) throw new NativeSearchEvidenceError();
+    const groups = new Map<string, NativeSearchAttemptTarget>();
+    for (const target of normalizedTargets) groups.set(bindingTargetKey(target), target);
     const attemptedAt = this.now().toISOString();
     const errorClass = providerErrorClass(error);
     const failureId = createHmac('sha256', this.handleSecret).update(JSON.stringify([
@@ -1054,6 +1145,7 @@ export class NativeSearchEvidenceLedger {
         targetId: target.targetId,
         targetRevision: target.targetRevision,
         attemptedAt,
+        consultedSources: [],
         sources: [],
         errorClass,
       })

@@ -682,6 +682,95 @@ describe('request-scoped native search evidence ledger', () => {
     expect(ledger.manifest()).toEqual([]);
   });
 
+  it('persists a target-only failed attempt when hosted search fails before any claim binding exists', async () => {
+    const { attempts, ledger } = ledgerHarness();
+    const result = await ledger.recordFailedAttempt(
+      [{ targetId: 'explorer-1', targetRevision: 0 }],
+      { checkpoint: 'form-foundation', moduleVersion: 'form-foundation@1' },
+      new Error('provider response body must not escape'),
+    );
+
+    expect(result).toMatchObject({ status: 'failed', minted: [], events: [] });
+    expect(attempts).toEqual([
+      expect.objectContaining({
+        status: 'failed',
+        targetId: 'explorer-1',
+        targetRevision: 0,
+        sources: [],
+        errorClass: 'Error',
+      }),
+    ]);
+    expect(JSON.stringify(attempts)).not.toContain('provider response body');
+    expect(ledger.manifest()).toEqual([]);
+  });
+
+  it('persists cited target-only search success and bounded provenance without minting claim handles', async () => {
+    const { attempts, ledger } = ledgerHarness();
+    const result = await ledger.captureSettledStep(
+      settledStep(),
+      [],
+      { checkpoint: 'form-foundation', moduleVersion: 'form-foundation@1' },
+      undefined,
+      [{ targetId: 'explorer-1', targetRevision: 0 }],
+    );
+
+    expect(result).toMatchObject({
+      status: 'succeeded',
+      minted: [],
+      events: [
+        { sequence: 0, kind: 'search-call', providerCallId: 'search-call-1' },
+        { sequence: 1, kind: 'search-result', providerCallId: 'search-call-1' },
+        { sequence: 2, kind: 'provider-action', providerCallId: 'search-call-1', action: 'search' },
+        {
+          sequence: 3,
+          kind: 'consulted-source',
+          providerCallId: 'search-call-1',
+          providerResultId: 'search-result-1',
+          url: 'https://example.com/registry/json',
+        },
+      ],
+    });
+    expect(attempts).toEqual([
+      expect.objectContaining({
+        status: 'succeeded', targetId: 'explorer-1', targetRevision: 0, sources: [],
+        consultedSources: [{
+          providerCallId: 'search-call-1',
+          providerResultId: 'search-result-1',
+          action: 'search',
+          url: 'https://example.com/registry/json',
+        }],
+      }),
+    ]);
+    expect(ledger.events()).toEqual(result.events);
+    expect(ledger.manifest()).toEqual([]);
+  });
+
+  it('keeps target-only search insufficient when its citation cannot be associated', async () => {
+    const { attempts, ledger } = ledgerHarness();
+    const result = await ledger.captureSettledStep(
+      settledStep({ annotations: [] }),
+      [],
+      { checkpoint: 'form-foundation', moduleVersion: 'form-foundation@1' },
+      undefined,
+      [{ targetId: 'explorer-1', targetRevision: 0 }],
+    );
+
+    expect(result).toMatchObject({ status: 'insufficient', minted: [] });
+    expect(attempts).toEqual([
+      expect.objectContaining({
+        status: 'insufficient', targetId: 'explorer-1', targetRevision: 0, sources: [],
+        consultedSources: [{
+          providerCallId: 'search-call-1',
+          providerResultId: 'search-result-1',
+          action: 'search',
+          url: 'https://example.com/registry/json',
+        }],
+      }),
+    ]);
+    expect(ledger.events()).toEqual(result.events);
+    expect(ledger.manifest()).toEqual([]);
+  });
+
   it('sanitizes unknown provider error classes and fences failed attempts with abort and storage lease checks', async () => {
     const unknown = ledgerHarness();
     const unsafeError = Object.assign(new Error('raw secret'), { name: 'SYSTEM-exfiltrate-private-map' });

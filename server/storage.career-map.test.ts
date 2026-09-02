@@ -1,5 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
-import { createOpenAI } from '@ai-sdk/openai';
+import { randomUUID } from 'node:crypto';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import {
@@ -21,20 +20,10 @@ import {
 } from './storage.js';
 import { compileCareerMapBriefing } from './ai/briefing.js';
 import {
-  OpenAIConversationClient,
-  createDisplayRecovery,
-  listConversationItems,
   loadConversationHistory,
-  normalizeConversationItems,
-  resolveDisplayProjection,
 } from './ai/history.js';
-import {
-  REVELIO_AGENT_MODEL,
-  createMethodAgent,
-  projectMethodStreamForDisplay,
-} from './ai/agent.js';
 import { createMethodModuleLoader } from './ai/method/loader.js';
-import { ResearchSession, createOpenAIIsolatedResearchProvider } from './ai/research.js';
+import { NativeSearchEvidenceLedger } from './ai/research.js';
 import { createMethodTools, executeWorkspaceTool, refreshMethodState } from './ai/tools.js';
 import {
   agentConversationMappings,
@@ -47,12 +36,13 @@ import {
   careerMaps,
   methodErasureJobs,
 } from '../shared/schema.js';
-import type {
-  CareerMapOperation,
-  PathProjectInput,
-  PurposePathInput,
-  ResearchAttempt,
-  SideDoorInput,
+import {
+  normalizeResearchClaim,
+  type CareerMapOperation,
+  type PathProjectInput,
+  type PurposePathInput,
+  type ResearchAttempt,
+  type SideDoorInput,
 } from '../shared/career-map/index.js';
 
 const runId = `u4-${process.pid}-${randomUUID()}`;
@@ -572,6 +562,248 @@ describe('PostgresStorage Method map, history, and ownership', () => {
     });
     await eraseOwner(userId);
   });
+
+  it('authorizes only an exact normalized member of the purpose-path evidence field', async () => {
+    const userId = owner('research-evidence-array');
+    await storage.getOrCreateCareerMap(userId);
+    const turn = await beginTurn(userId, 'research-evidence-array');
+    expect((await persist(userId, turn.leaseId, {
+      type: 'propose-why', sourceId: id('evidence-array-why-propose'), expectedRevision: 0, occurredAt: at(1),
+      payload: { why: { id: id('evidence-array-why'), revision: 1, statement: 'Make career evidence usable.', serves: 'People testing a next move', pointOfView: 'Exact evidence should remain attributable.' }, presentation: presentation(1) },
+    })).status).toBe('committed');
+    expect((await persist(userId, turn.leaseId, {
+      type: 'confirm-why', sourceId: id('evidence-array-why-confirm'), expectedRevision: 1, occurredAt: at(2),
+      payload: { whyId: id('evidence-array-why'), whyRevision: 1, action: action(2) },
+    })).status).toBe('committed');
+
+    const exactClaim = 'Café apprenticeship evidence';
+    const source = (suffix: string, canonicalField: string, claim: string) => ({
+      kind: 'cited-research' as const,
+      bindingVersion: 2 as const,
+      sourceHandle: id(`evidence-array-handle-${suffix}`),
+      providerCallId: id(`evidence-array-call-${suffix}`),
+      providerResultId: id(`evidence-array-result-${suffix}`),
+      targetId: id('path-1'),
+      targetRevision: 2,
+      canonicalField,
+      exactClaim: claim,
+      url: `https://example.com/evidence-array/${suffix}`,
+      retrievedAt: at(3),
+      title: `Evidence array source ${suffix}`,
+      excerpt: claim,
+      support: 'server-validated' as const,
+      citation: {
+        start: 0,
+        end: claim.length,
+        exactClaimStart: 0,
+        exactClaimEnd: claim.length,
+        textHash: 'd'.repeat(64),
+      },
+    });
+    const exactEvidenceSource = source('exact', 'purposePath.evidence', exactClaim);
+    const nonmemberSource = source('nonmember', 'purposePath.evidence', 'Absent evidence');
+    const arbitraryArraySource = source('arbitrary-array', 'purposePath.sources', exactClaim);
+    const wrongFieldSource = source('wrong-field', 'purposePath.projectPreview', exactClaim);
+    for (const [suffix, citedSource] of [
+      ['exact', exactEvidenceSource],
+      ['nonmember', nonmemberSource],
+      ['arbitrary-array', arbitraryArraySource],
+      ['wrong-field', wrongFieldSource],
+    ] as const) {
+      await storage.recordResearchAttempt(userId, turn.leaseId, amendedAttempt({
+        id: id(`evidence-array-attempt-${suffix}`),
+        status: 'succeeded',
+        targetId: id('path-1'),
+        targetRevision: 2,
+        sources: [citedSource],
+      }));
+    }
+
+    const operationWith = (suffix: string, citedSource: typeof exactEvidenceSource): CareerMapOperation => {
+      const candidatePaths = paths();
+      candidatePaths[0] = {
+        ...candidatePaths[0],
+        evidence: ['Cafe\u0301 apprenticeship evidence', 'A separate firsthand observation'],
+        sources: [citedSource],
+      };
+      return {
+        type: 'propose-purpose-paths',
+        sourceId: id(`evidence-array-paths-${suffix}`),
+        expectedRevision: 2,
+        occurredAt: at(3),
+        payload: {
+          setId: id(`evidence-array-set-${suffix}`),
+          setRevision: 1,
+          paths: candidatePaths,
+          presentation: presentation(3),
+        },
+      };
+    };
+    for (const [suffix, citedSource] of [
+      ['nonmember', nonmemberSource],
+      ['arbitrary-array', arbitraryArraySource],
+      ['wrong-field', wrongFieldSource],
+    ] as const) {
+      const rejected = await persist(userId, turn.leaseId, operationWith(suffix, citedSource));
+      expect(rejected.status).toBe('rejected');
+      if (rejected.status === 'rejected') expect(rejected.error.code).toBe('invalid-operation');
+    }
+
+    expect((await persist(
+      userId,
+      turn.leaseId,
+      operationWith('exact', exactEvidenceSource),
+    )).status).toBe('committed');
+    expect(await storage.listResearchSourceAssociations(userId)).toEqual([
+      expect.objectContaining({
+        sourceHandle: exactEvidenceSource.sourceHandle,
+        association: expect.objectContaining({
+          canonicalField: 'purposePath.evidence',
+          exactClaim,
+        }),
+      }),
+    ]);
+  });
+
+  it.each(['changed-field', 'wrong-parent', 'wrong-target-revision'] as const)(
+    'fails load and integrity validation when a v2 evidence association has a %s corruption',
+    async (scenario) => {
+      const userId = owner(`research-load-association-${scenario}`);
+      await storage.getOrCreateCareerMap(userId);
+      const turn = await beginTurn(userId, `research-load-association-${scenario}`);
+      expect((await persist(userId, turn.leaseId, {
+        type: 'propose-why',
+        sourceId: id(`research-load-association-${scenario}-why-propose`),
+        expectedRevision: 0,
+        occurredAt: at(1),
+        payload: {
+          why: {
+            id: id(`research-load-association-${scenario}-why`),
+            revision: 1,
+            statement: 'Make exact career evidence usable.',
+            serves: 'People testing a next move',
+            pointOfView: 'Durable provenance must remain bound to canonical truth.',
+          },
+          presentation: presentation(1),
+        },
+      })).status).toBe('committed');
+      expect((await persist(userId, turn.leaseId, {
+        type: 'confirm-why',
+        sourceId: id(`research-load-association-${scenario}-why-confirm`),
+        expectedRevision: 1,
+        occurredAt: at(2),
+        payload: {
+          whyId: id(`research-load-association-${scenario}-why`),
+          whyRevision: 1,
+          action: action(2),
+        },
+      })).status).toBe('committed');
+
+      const candidatePaths = paths();
+      const exactClaim = normalizeResearchClaim(candidatePaths[0].evidence[0]);
+      const source = {
+        kind: 'cited-research' as const,
+        bindingVersion: 2 as const,
+        sourceHandle: id(`research-load-association-${scenario}-handle`),
+        providerCallId: id(`research-load-association-${scenario}-call`),
+        providerResultId: id(`research-load-association-${scenario}-result`),
+        targetId: candidatePaths[0].id,
+        targetRevision: 2,
+        canonicalField: 'purposePath.evidence',
+        exactClaim,
+        url: `https://example.com/research-load-association/${scenario}`,
+        retrievedAt: at(3),
+        title: `Research load association ${scenario}`,
+        excerpt: exactClaim,
+        support: 'server-validated' as const,
+        citation: {
+          start: 0,
+          end: exactClaim.length,
+          exactClaimStart: 0,
+          exactClaimEnd: exactClaim.length,
+          textHash: 'e'.repeat(64),
+        },
+      };
+      candidatePaths[0].sources = [source];
+      const attempt = amendedAttempt({
+        id: id(`research-load-association-${scenario}-attempt`),
+        status: 'succeeded',
+        targetId: candidatePaths[0].id,
+        targetRevision: 2,
+        sources: [source],
+      });
+      await storage.recordResearchAttempt(userId, turn.leaseId, attempt);
+      expect((await persist(userId, turn.leaseId, {
+        type: 'propose-purpose-paths',
+        sourceId: id(`research-load-association-${scenario}-paths`),
+        expectedRevision: 2,
+        occurredAt: at(3),
+        payload: {
+          setId: id(`research-load-association-${scenario}-set`),
+          setRevision: 1,
+          paths: candidatePaths,
+          presentation: presentation(3),
+        },
+      })).status).toBe('committed');
+
+      const loaded = await storage.loadCareerMap(userId);
+      expect(loaded.status).toBe('ready');
+      if (loaded.status !== 'ready') return;
+      const corrupted = structuredClone(loaded.map);
+      const [firstPath, secondPath] = corrupted.pathSets[0].paths;
+      const [persistedSource] = firstPath.sources ?? [];
+      if (!persistedSource || persistedSource.kind !== 'cited-research'
+        || !('bindingVersion' in persistedSource) || persistedSource.bindingVersion !== 2
+      ) throw new Error('Missing v2 cited source fixture.');
+
+      if (scenario === 'changed-field') {
+        firstPath.evidence[0] = 'The cited canonical evidence was changed after commit.';
+      } else if (scenario === 'wrong-parent') {
+        firstPath.sources = [];
+        secondPath.sources = [persistedSource];
+      } else {
+        persistedSource.targetRevision = 1;
+        const revisedAttempt = {
+          ...attempt,
+          targetRevision: 1,
+          sources: [{ ...attempt.sources[0], targetRevision: 1 }],
+        };
+        await db.update(careerMapResearchAttempts)
+          .set({ attempt: revisedAttempt })
+          .where(and(
+            eq(careerMapResearchAttempts.userId, userId),
+            eq(careerMapResearchAttempts.id, attempt.id),
+          ));
+        const [associationRow] = await db.select()
+          .from(careerMapEvidenceAssociations)
+          .where(eq(careerMapEvidenceAssociations.userId, userId));
+        await db.update(careerMapEvidenceAssociations)
+          .set({
+            association: {
+              ...associationRow.association,
+              targetRevision: 1,
+            },
+          })
+          .where(eq(careerMapEvidenceAssociations.id, associationRow.id));
+      }
+      await db.update(careerMaps)
+        .set({ document: corrupted })
+        .where(eq(careerMaps.userId, userId));
+
+      expect(await storage.loadCareerMap(userId)).toMatchObject({
+        status: 'repair-required',
+        reason: 'evidence-association-mismatch',
+      });
+      expect(await storage.auditCareerMapIntegrity()).toMatchObject({
+        invalidRecords: expect.arrayContaining([{
+          userId,
+          reason: 'evidence-association-mismatch',
+        }]),
+        zeroInvalid: false,
+      });
+      await eraseOwner(userId);
+    },
+  );
 
   it('dual-reads and temporarily accepts predecessor attempts during expand-contract rollout', async () => {
     const userId = owner('research-expand-contract');
@@ -1429,6 +1661,54 @@ describe('PostgresStorage Method map, history, and ownership', () => {
 });
 
 describe('PostgresStorage lease and client-message turns', () => {
+  it('persists and replays canonical commit truth when reply delivery fails after a saved operation', async () => {
+    const userId = owner('u5-saved-reply-failure');
+    await storage.getOrCreateCareerMap(userId);
+    const active = await beginTurn(userId, 'u5-saved-reply-failure', 'agent-turn');
+    const internalContextItemId = id('u5-failed-internal-context');
+
+    const failed = await storage.failAgentTurn({
+      userId,
+      turnId: active.turnId,
+      leaseId: active.leaseId,
+      errorClass: 'NoOutputGeneratedError',
+      result: {
+        revision: 2,
+        operationCommitted: true,
+        internalContextItemIds: [internalContextItemId],
+      },
+    });
+
+    expect(failed).toMatchObject({
+      status: 'failed',
+      terminalResult: {
+        kind: 'failed',
+        refetch: true,
+        errorClass: 'NoOutputGeneratedError',
+        revision: 2,
+        operationCommitted: true,
+        internalContextItemIds: [internalContextItemId],
+      },
+    });
+    expect(await storage.getTurnLease(userId)).toBeUndefined();
+
+    const replay = await storage.beginAgentTurn({
+      userId,
+      clientMessageId: active.clientMessageId,
+      requestFingerprint: active.requestFingerprint,
+      turnId: id('u5-saved-reply-failure-retry-turn'),
+      leaseId: id('u5-saved-reply-failure-retry-lease'),
+    });
+    expect(replay).toMatchObject({
+      status: 'terminal',
+      shouldInvokeModel: false,
+      turn: {
+        status: 'failed',
+        terminalResult: { kind: 'failed', revision: 2, operationCommitted: true },
+      },
+    });
+  });
+
   it('keeps provisioning cleanup and display recovery metadata durable across terminalization', async () => {
     const userId = owner('u5-provisioning-recovery');
     const turn = await beginTurn(userId, 'u5-provisioning-recovery', 'agent-turn');
@@ -1617,29 +1897,57 @@ describe('PostgresStorage lease and client-message turns', () => {
 
     const agentTurn = await beginTurn(userId, 'u5-agent', 'agent-turn');
     const fact = 'Public teams test decision aids through small bounded artifacts.';
-    const research = new ResearchSession({
+    const research = new NativeSearchEvidenceLedger({
       storage,
-      provider: {
-        search: async () => ({ candidates: [{
-          fact, providerResultId: id('u5-provider-call'),
-          url: 'https://example.com/public-pattern', supportingContent: fact,
-          supportingContentExact: true,
-        }] }),
-      },
       userId,
+      turnId: agentTurn.turnId,
       leaseId: agentTurn.leaseId,
       now: () => now,
+      handleSecret: new Uint8Array(32).fill(7),
     });
-    const researchResult = await research.research({
-      category: 'path-reality',
-      target: {
-        kind: 'purpose-path-set', id: suggestedSetId, revision: 1,
-        pathId: id('path-1'), pathRevision: 1,
+    const providerCallId = id('u5-provider-call');
+    const providerResultId = id('u5-provider-result');
+    const url = 'https://example.com/public-pattern';
+    const searchCall = {
+      type: 'tool-call', toolName: 'web_search', toolCallId: providerCallId,
+      providerExecuted: true, input: { action: { type: 'search', query: 'current public decision aids' } },
+    };
+    const searchResult = {
+      type: 'tool-result', toolName: 'web_search', toolCallId: providerCallId,
+      providerExecuted: true,
+      output: { action: { type: 'search', sources: [{ id: providerResultId, url, snippet: fact }] } },
+    };
+    const researchResult = await research.captureSettledStep({
+      content: [
+        searchCall,
+        searchResult,
+        {
+          type: 'text', text: fact,
+          providerMetadata: {
+            openai: { annotations: [{ type: 'url_citation', url, start_index: 0, end_index: fact.length }] },
+          },
+        },
+      ],
+      toolCalls: [searchCall],
+      toolResults: [searchResult],
+      response: {
+        body: {
+          output: [{
+            type: 'web_search_call', id: providerCallId,
+            action: { type: 'search', sources: [{ id: providerResultId, url, text: fact }] },
+            results: [{ id: providerResultId, url, text: fact }],
+          }],
+        },
       },
-      dimension: 'day-to-day-work',
+    }, [{
+      targetId: id('path-1'), targetRevision: 4,
+      canonicalField: 'purposePath.practicalFit', exactClaim: fact,
+    }], {
+      checkpoint: 'create-purpose-paths', moduleVersion: 'create-purpose-paths@test',
     });
     expect(researchResult).toMatchObject({
-      status: 'succeeded', candidates: [{ canonicalField: 'practicalFit', support: 'server-validated' }],
+      status: 'succeeded',
+      minted: [{ canonicalField: 'purposePath.practicalFit', support: 'server-validated' }],
     });
     expect(await storage.listResearchAttempts(userId)).toHaveLength(1);
 
@@ -1659,9 +1967,9 @@ describe('PostgresStorage lease and client-message turns', () => {
       client: {
         listItems: async () => ({
           data: [
-            { id: userItemId, type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Safe prompt' }] },
-            { id: id('u5-pre-result-item'), type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Premature mutation claim' }] },
             { id: assistantItemId, type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Safe authoritative answer' }] },
+            { id: id('u5-pre-result-item'), type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Premature mutation claim' }] },
+            { id: userItemId, type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Safe prompt' }] },
           ],
           hasMore: false,
         }),
@@ -1698,622 +2006,6 @@ describe('PostgresStorage lease and client-message turns', () => {
     ]);
   });
 
-  it.runIf(process.env.U5_LIVE_PROOF === '1')(
-    'drives the selected live provider through the production U5 coordinator and disposable PostgreSQL',
-    async () => {
-      const apiKey = process.env.OPENAI_API_KEY;
-      if (!apiKey) throw new Error('U5_LIVE_PROOF requires OPENAI_API_KEY.');
-      const userId = owner('u5-live-production-composition');
-      const providerTrace: Array<Record<string, unknown>> = [];
-      const diagnosticDigest = (value: unknown) => typeof value === 'string'
-        ? createHash('sha256').update(value).digest('hex').slice(0, 12)
-        : null;
-      const diagnosticErrorClass = (value: unknown) => {
-        const candidate = value instanceof Error
-          ? value.name
-          : value && typeof value === 'object' && typeof (value as Record<string, unknown>).errorClass === 'string'
-            ? (value as Record<string, unknown>).errorClass as string
-            : undefined;
-        return candidate && /^[A-Za-z][A-Za-z0-9_.-]{0,79}$/.test(candidate) ? candidate : null;
-      };
-      const strictSchemaMismatches = (schema: unknown, path = '$'): string[] => {
-        if (Array.isArray(schema)) {
-          return schema.flatMap((item, index) => strictSchemaMismatches(item, `${path}[${index}]`));
-        }
-        if (!schema || typeof schema !== 'object') return [];
-        const value = schema as Record<string, unknown>;
-        const mismatches: string[] = [];
-        if (value.type === 'object' && value.properties && typeof value.properties === 'object') {
-          const properties = Object.keys(value.properties as Record<string, unknown>).sort();
-          const required = Array.isArray(value.required) ? [...value.required].map(String).sort() : [];
-          if (JSON.stringify(properties) !== JSON.stringify(required)) mismatches.push(path);
-        }
-        for (const [key, child] of Object.entries(value)) {
-          mismatches.push(...strictSchemaMismatches(child, `${path}.${key}`));
-        }
-        return mismatches;
-      };
-      const strictSchemaShape = (schema: unknown, path = '$'): string[] => {
-        if (Array.isArray(schema)) {
-          return schema.flatMap((item, index) => strictSchemaShape(item, `${path}[${index}]`));
-        }
-        if (!schema || typeof schema !== 'object') return [];
-        const value = schema as Record<string, unknown>;
-        const shapes: string[] = [];
-        if (value.type === 'array' && value.items === undefined) shapes.push(`${path}:array-without-items`);
-        for (const keyword of ['prefixItems', 'oneOf', 'allOf', 'const']) {
-          if (keyword in value) shapes.push(`${path}:${keyword}`);
-        }
-        for (const [key, child] of Object.entries(value)) {
-          shapes.push(...strictSchemaShape(child, `${path}.${key}`));
-        }
-        return shapes;
-      };
-      const observedFetch: typeof fetch = async (request, init) => {
-        const url = typeof request === 'string' || request instanceof URL ? String(request) : request.url;
-        let trace: Record<string, unknown> | undefined;
-        if (url.endsWith('/responses') && typeof init?.body === 'string') {
-          const body = JSON.parse(init.body) as Record<string, unknown>;
-          const input = Array.isArray(body.input) ? body.input as Array<Record<string, unknown>> : [];
-          const toolChoice = body.tool_choice && typeof body.tool_choice === 'object'
-            ? body.tool_choice as Record<string, unknown>
-            : undefined;
-          trace = {
-            conversationPresent: typeof body.conversation === 'string',
-            store: body.store === true,
-            instructionsPresent: typeof body.instructions === 'string' && body.instructions.length > 0,
-            contextManagementPresent: Array.isArray(body.context_management),
-            inputTypes: input.map((item) => item.type ?? item.role ?? 'unknown'),
-            functionOutputCount: input.filter((item) => item.type === 'function_call_output').length,
-            functionOutputTokens: input.filter((item) => item.type === 'function_call_output').map((item) => (
-              diagnosticDigest(item.call_id) ?? 'missing'
-            )),
-            toolChoiceTypeIsFunction: toolChoice?.type === 'function',
-            toolChoiceTargetsConfirmWhy: toolChoice?.name === 'confirm_why',
-            toolNames: Array.isArray(body.tools)
-              ? (body.tools as Array<Record<string, unknown>>).map((item) => item.name).filter(Boolean)
-              : [],
-            toolTypes: Array.isArray(body.tools)
-              ? (body.tools as Array<Record<string, unknown>>).map((item) => item.type).filter(Boolean)
-              : [],
-            strictSchemaMismatches: Array.isArray(body.tools)
-              ? (body.tools as Array<Record<string, unknown>>).flatMap((item, index) => (
-                strictSchemaMismatches(item.parameters, `tool[${index}]`)
-              ))
-              : [],
-            strictSchemaShape: Array.isArray(body.tools)
-              ? (body.tools as Array<Record<string, unknown>>).flatMap((item, index) => (
-                strictSchemaShape(item.parameters, `tool[${index}]`)
-              ))
-              : [],
-          };
-          providerTrace.push(trace);
-        }
-        const response = await fetch(request, init);
-        if (trace) {
-          trace.status = response.status;
-          if (!response.ok) {
-            const failure = await response.clone().json().catch(() => undefined) as {
-              error?: { message?: string; type?: string; code?: string; param?: string };
-            } | undefined;
-            const message = failure?.error?.message ?? '';
-            trace.error = {
-              noMatchingCall: /no tool call found|no matching tool call/i.test(message),
-              pendingTool: /pending|tool output|function call output/i.test(message),
-              conversation: /conversation/i.test(message),
-            };
-          }
-        }
-        return response;
-      };
-      const openai = createOpenAI({ apiKey, fetch: observedFetch });
-      const model = openai.responses(REVELIO_AGENT_MODEL);
-      const conversationClient = new OpenAIConversationClient(apiKey, observedFetch);
-      const loader = await createMethodModuleLoader();
-      let liveConversationId: string | undefined;
-      try {
-        await storage.getOrCreateCareerMap(userId);
-
-      const proposedWhyTurn = await beginTurn(userId, 'u5-live-propose-why', 'workspace-action');
-      const whyId = id('u5-live-why');
-      const whyEnvelope = await executeWorkspaceTool({
-        runtime: {
-          storage, loader, userId, turn: proposedWhyTurn,
-          timing: { turnSequence: 1, occurredAt: at(1) },
-        },
-        expectedRevision: 0,
-        operationType: 'propose-why',
-        operationId: id('u5-live-propose-why-operation'),
-        rawInput: {
-          id: whyId, revision: 1,
-          statement: 'Help public-interest teams make consequential choices with less avoidable confusion.',
-          serves: 'Public-interest teams facing consequential choices',
-          pointOfView: 'Small firsthand decision aids can turn ambiguity into useful evidence.',
-        },
-      });
-      expect(whyEnvelope.status).toBe('committed');
-      await storage.completeAgentTurn({
-        userId, turnId: proposedWhyTurn.turnId, leaseId: proposedWhyTurn.leaseId,
-        result: { kind: 'workspace-result', refetch: true, operationEnvelope: whyEnvelope },
-      });
-
-      const mainTurn = await beginTurn(userId, 'u5-live-main', 'agent-turn');
-      const conversationId = await conversationClient.createConversation(AbortSignal.timeout(10_000));
-      liveConversationId = conversationId;
-      await storage.recordConversationProvisioning({
-        userId, turnId: mainTurn.turnId, leaseId: mainTurn.leaseId, conversationId,
-      });
-      await storage.setConversationMapping(userId, mainTurn.leaseId, conversationId);
-      await storage.resolveConversationProvisioning({ userId, turnId: mainTurn.turnId, conversationId });
-      let projectionDebug: unknown;
-      const waitForProjection = async (userText: string, assistantText: string) => {
-        for (let attempt = 0; attempt < 5; attempt += 1) {
-          const items = await listConversationItems({ client: conversationClient, conversationId });
-          projectionDebug = {
-            totalItems: items.length,
-            itemShapes: items.map((item) => item && typeof item === 'object' ? {
-              type: (item as Record<string, unknown>).type,
-              role: (item as Record<string, unknown>).role,
-              contentTypes: Array.isArray((item as Record<string, unknown>).content)
-                ? ((item as Record<string, unknown>).content as Array<Record<string, unknown>>).map((part) => part.type)
-                : [],
-              callToken: typeof (item as Record<string, unknown>).call_id === 'string'
-                ? createHash('sha256').update((item as Record<string, unknown>).call_id as string).digest('hex').slice(0, 12)
-                : undefined,
-            } : { type: typeof item }),
-            normalized: normalizeConversationItems(items).map((message) => ({
-              role: message.role,
-              lengths: message.parts.map((part) => part.text.length),
-            })),
-            expected: { userLength: userText.length, assistantLength: assistantText.length },
-          };
-          const projection = resolveDisplayProjection(items, userText, assistantText);
-          if (projection) return projection;
-          await new Promise((resolve) => setTimeout(resolve, 250));
-        }
-        return undefined;
-      };
-      const traces: Array<{ activeTools: string[]; compaction: boolean }> = [];
-      const mainErrors: Array<{ name: string; statusCode?: number }> = [];
-      const mainOperationTrace: {
-        toolStarts: number;
-        firstTool?: {
-          nameIsConfirmWhy: boolean;
-          callToken: string | null;
-          inputKeysExact: boolean;
-          whyIdMatches: boolean;
-          whyRevisionMatches: boolean;
-          presentedTurnMatches: boolean;
-          sourceMessageMatches: boolean;
-        };
-        firstToolOutcome?: {
-          kind: 'tool-result' | 'tool-error';
-          callTokenMatches: boolean;
-          status: string | null;
-          errorClass: string | null;
-          authoritativeRevision: number | null;
-        };
-      } = { toolStarts: 0 };
-      const mainPrompt = [
-        `Confirm Why ${whyId} revision 1, presented in ${proposedWhyTurn.turnId}.`,
-        `Use confirm_why now with source message ${mainTurn.clientMessageId}; this is my explicit final confirmation.`,
-        'After the confirmation result, briefly acknowledge the new authoritative state and stop.',
-      ].join(' ');
-      let mainSafeText = '';
-      const mainAgent = createMethodAgent({
-        model, storage, loader, userId, conversationId, turn: mainTurn,
-        turnSequence: 2, occurredAt: at(2), currentMessage: mainPrompt, turnRoute: 'method',
-        confirmationAuthorization: {
-          operation: 'confirm-why', targetId: whyId, targetRevision: 1,
-        },
-        onPreparedStep: (trace) => traces.push({ activeTools: trace.activeTools, compaction: trace.compaction }),
-        onError: (error) => mainErrors.push({
-          name: error instanceof Error ? error.name : 'UnknownError',
-          ...(error && typeof error === 'object' && typeof (error as Record<string, unknown>).statusCode === 'number'
-            ? { statusCode: (error as Record<string, unknown>).statusCode as number }
-            : {}),
-        }),
-      });
-      const mainTraceStart = providerTrace.length;
-      const mainResult = await mainAgent.stream({
-        prompt: mainPrompt,
-        onToolExecutionStart: ({ toolCall }) => {
-          mainOperationTrace.toolStarts += 1;
-          if (mainOperationTrace.firstTool) return;
-          const input = toolCall.input && typeof toolCall.input === 'object'
-            ? toolCall.input as Record<string, unknown>
-            : {};
-          const inputKeys = Object.keys(input).sort();
-          mainOperationTrace.firstTool = {
-            nameIsConfirmWhy: toolCall.toolName === 'confirm_why',
-            callToken: diagnosticDigest(toolCall.toolCallId),
-            inputKeysExact: JSON.stringify(inputKeys) === JSON.stringify([
-              'presentedInTurnId', 'sourceMessageId', 'whyId', 'whyRevision',
-            ]),
-            whyIdMatches: input.whyId === whyId,
-            whyRevisionMatches: input.whyRevision === 1,
-            presentedTurnMatches: input.presentedInTurnId === proposedWhyTurn.turnId,
-            sourceMessageMatches: input.sourceMessageId === mainTurn.clientMessageId,
-          };
-        },
-        onToolExecutionEnd: ({ toolCall, toolOutput }) => {
-          if (mainOperationTrace.firstToolOutcome) return;
-          const callToken = diagnosticDigest(toolCall.toolCallId);
-          if (toolOutput.type === 'tool-error') {
-            mainOperationTrace.firstToolOutcome = {
-              kind: 'tool-error',
-              callTokenMatches: callToken !== null && callToken === mainOperationTrace.firstTool?.callToken,
-              status: null,
-              errorClass: diagnosticErrorClass(toolOutput.error),
-              authoritativeRevision: null,
-            };
-            return;
-          }
-          const output = toolOutput.output && typeof toolOutput.output === 'object'
-            ? toolOutput.output as Record<string, unknown>
-            : {};
-          const status = typeof output.status === 'string' && [
-            'committed', 'idempotent-replay', 'conflict', 'rejected',
-          ].includes(output.status)
-            ? output.status
-            : null;
-          mainOperationTrace.firstToolOutcome = {
-            kind: 'tool-result',
-            callTokenMatches: callToken !== null && callToken === mainOperationTrace.firstTool?.callToken,
-            status,
-            errorClass: diagnosticErrorClass(output),
-            authoritativeRevision: Number.isSafeInteger(output.authoritativeRevision)
-              ? output.authoritativeRevision as number
-              : null,
-          };
-        },
-      });
-      const mainDisplayStream = projectMethodStreamForDisplay(mainResult.stream, {
-        onTextDelta: (text) => { mainSafeText += text; },
-      });
-      for await (const _part of mainDisplayStream) { /* consume the production display stream */ }
-      const afterMain = await storage.loadCareerMap(userId);
-      expect(afterMain.status).toBe('ready');
-      if (afterMain.status !== 'ready') throw new Error('Live main turn lost its map.');
-      const mainProviderTrace = providerTrace.slice(mainTraceStart);
-      const firstCallToken = mainOperationTrace.firstTool?.callToken;
-      const secondRequestFunctionTokens = Array.isArray(mainProviderTrace[1]?.functionOutputTokens)
-        ? mainProviderTrace[1].functionOutputTokens as unknown[]
-        : [];
-      const [revisionTwoHistory] = await db
-        .select()
-        .from(careerMapHistory)
-        .where(and(
-          eq(careerMapHistory.userId, userId),
-          eq(careerMapHistory.resultRevision, 2),
-        ));
-      const mainDiagnostic = {
-        toolStarts: mainOperationTrace.toolStarts,
-        firstTool: mainOperationTrace.firstTool ?? null,
-        firstToolOutcome: mainOperationTrace.firstToolOutcome ?? null,
-        provider: {
-          requestCountAtLeastTwo: mainProviderTrace.length >= 2,
-          firstToolChoiceTargetsConfirmWhy: mainProviderTrace[0]?.toolChoiceTypeIsFunction === true
-            && mainProviderTrace[0]?.toolChoiceTargetsConfirmWhy === true,
-          secondRequestHasOneFunctionOutput: mainProviderTrace[1]?.functionOutputCount === 1,
-          secondRequestMatchesFirstCall: firstCallToken !== null
-            && firstCallToken !== undefined
-            && secondRequestFunctionTokens.includes(firstCallToken),
-        },
-        history: {
-          revisionTwoExists: revisionTwoHistory !== undefined,
-          operationSourceMatchesFirstCall: firstCallToken !== null
-            && firstCallToken !== undefined
-            && diagnosticDigest(revisionTwoHistory?.operationSourceId) === firstCallToken,
-          operationTypeIsConfirmWhy: revisionTwoHistory?.operationType === 'confirm-why',
-          baseRevisionIsOne: revisionTwoHistory?.baseRevision === 1,
-          resultRevisionIsTwo: revisionTwoHistory?.resultRevision === 2,
-          receiptSourceMatchesFirstCall: firstCallToken !== null
-            && firstCallToken !== undefined
-            && diagnosticDigest(revisionTwoHistory?.result.sourceId) === firstCallToken,
-          receiptOperationTypeIsConfirmWhy: revisionTwoHistory?.result.operationType === 'confirm-why',
-          receiptRevisionIsTwo: revisionTwoHistory?.result.resultRevision === 2,
-          confirmationActionMatchesMessage:
-            typeof revisionTwoHistory?.confirmationProvenance?.actionId === 'string'
-            && diagnosticDigest(revisionTwoHistory.confirmationProvenance.actionId)
-              === diagnosticDigest(mainTurn.clientMessageId),
-          confirmationTurnMatches: typeof revisionTwoHistory?.confirmationProvenance?.turnId === 'string'
-            && diagnosticDigest(revisionTwoHistory.confirmationProvenance.turnId)
-              === diagnosticDigest(mainTurn.turnId),
-        },
-        mainSafeTextPresent: mainSafeText.length > 0,
-        preparedStepCount: traces.length,
-        safeErrors: mainErrors,
-      };
-      expect(mainDiagnostic, JSON.stringify(mainDiagnostic)).toMatchObject({
-        toolStarts: 1,
-        firstTool: {
-          nameIsConfirmWhy: true,
-          inputKeysExact: true,
-          whyIdMatches: true,
-          whyRevisionMatches: true,
-          presentedTurnMatches: true,
-          sourceMessageMatches: true,
-        },
-        firstToolOutcome: {
-          kind: 'tool-result',
-          callTokenMatches: true,
-          status: 'committed',
-          errorClass: null,
-          authoritativeRevision: 2,
-        },
-        provider: {
-          requestCountAtLeastTwo: true,
-          firstToolChoiceTargetsConfirmWhy: true,
-          secondRequestHasOneFunctionOutput: true,
-          secondRequestMatchesFirstCall: true,
-        },
-        history: {
-          revisionTwoExists: true,
-          operationSourceMatchesFirstCall: true,
-          operationTypeIsConfirmWhy: true,
-          baseRevisionIsOne: true,
-          resultRevisionIsTwo: true,
-          receiptSourceMatchesFirstCall: true,
-          receiptOperationTypeIsConfirmWhy: true,
-          receiptRevisionIsTwo: true,
-          confirmationActionMatchesMessage: true,
-          confirmationTurnMatches: true,
-        },
-      });
-      expect(mainSafeText.length).toBeGreaterThan(0);
-      expect(afterMain.map.revision, JSON.stringify(mainDiagnostic)).toBe(2);
-      expect(traces[0]).toMatchObject({ compaction: true });
-      expect(traces[0].activeTools).toContain('confirm_why');
-      expect(traces.some((trace) => trace.activeTools.includes('propose_purpose_paths'))).toBe(true);
-      expect(traces.at(-1)?.activeTools).not.toContain('confirm_why');
-      expect(mainProviderTrace[0]?.contextManagementPresent).toBe(true);
-      expect(mainProviderTrace.slice(1).every((trace) => trace.contextManagementPresent === false)).toBe(true);
-      expect(mainProviderTrace.every((trace) => trace.instructionsPresent === true)).toBe(true);
-      const mainProjection = mainSafeText.length > 0
-        ? await waitForProjection(mainPrompt, mainSafeText)
-        : undefined;
-      expect((await storage.completeAgentTurn({
-        userId, turnId: mainTurn.turnId, leaseId: mainTurn.leaseId,
-        result: {
-          kind: 'completed', refetch: true, revision: afterMain.map.revision,
-          ...(mainProjection
-            ? { displayProjection: mainProjection }
-            : { displayRecovery: createDisplayRecovery(mainPrompt, mainSafeText, false) }),
-        },
-      }))?.status).toBe('completed');
-      expect(await storage.getTurnLease(userId)).toBeUndefined();
-
-      const providerCallsBeforeReplay = providerTrace.length;
-      const replay = await storage.beginAgentTurn({
-        userId,
-        clientMessageId: mainTurn.clientMessageId,
-        requestFingerprint: mainTurn.requestFingerprint,
-        turnId: id('u5-live-replay-turn'),
-        leaseId: id('u5-live-replay-lease'),
-      });
-      expect(replay).toMatchObject({
-        status: 'terminal', shouldInvokeModel: false,
-        turn: { status: 'completed', terminalResult: { kind: 'completed', refetch: true, revision: 2 } },
-      });
-      expect(providerTrace).toHaveLength(providerCallsBeforeReplay);
-      expect((await storage.loadCareerMap(userId))).toMatchObject({ status: 'ready', map: { revision: 2 } });
-
-      const narrationTurn = await beginTurn(userId, 'u5-live-natural-history', 'agent-turn');
-      const narrationPrompt = 'Briefly reflect on the confirmed Why without changing or researching Method state.';
-      let narrationText = '';
-      const narrationAgent = createMethodAgent({
-        model, storage, loader, userId, conversationId, turn: narrationTurn,
-        turnSequence: 3, occurredAt: at(3), currentMessage: narrationPrompt, turnRoute: 'conversation',
-      });
-      const narrationTraceStart = providerTrace.length;
-      const narrationResult = await narrationAgent.stream({ prompt: narrationPrompt });
-      const narrationDisplayStream = projectMethodStreamForDisplay(narrationResult.stream, {
-        onTextDelta: (text) => { narrationText += text; },
-      });
-      for await (const _part of narrationDisplayStream) { /* consume progressive natural text */ }
-      expect(narrationText.length).toBeGreaterThan(0);
-      const narrationProviderTrace = providerTrace.slice(narrationTraceStart);
-      expect(narrationProviderTrace[0]?.contextManagementPresent).toBe(true);
-      expect(narrationProviderTrace.slice(1).every((trace) => trace.contextManagementPresent === false)).toBe(true);
-      expect(narrationProviderTrace.every((trace) => trace.instructionsPresent === true)).toBe(true);
-      const narrationProjection = await waitForProjection(narrationPrompt, narrationText);
-      expect(narrationProjection, JSON.stringify({ projectionDebug, mainErrors, providerTrace })).toBeDefined();
-      await storage.completeAgentTurn({
-        userId, turnId: narrationTurn.turnId, leaseId: narrationTurn.leaseId,
-        result: {
-          kind: 'completed', refetch: true, revision: 2,
-          ...(narrationProjection
-            ? { displayProjection: narrationProjection }
-            : { displayRecovery: createDisplayRecovery(narrationPrompt, narrationText, false) }),
-        },
-      });
-      expect(await storage.getTurnLease(userId)).toBeUndefined();
-
-      const pathsTurn = await beginTurn(userId, 'u5-live-propose-paths', 'workspace-action');
-      const setId = id('u5-live-suggested-paths');
-      const pathsEnvelope = await executeWorkspaceTool({
-        runtime: {
-          storage, loader, userId, turn: pathsTurn,
-          timing: { turnSequence: 3, occurredAt: at(3) },
-        },
-        expectedRevision: 2,
-        operationType: 'propose-purpose-paths',
-        operationId: id('u5-live-propose-paths-operation'),
-        rawInput: { setId, setRevision: 1, paths: researchablePaths() },
-      });
-      expect(pathsEnvelope).toMatchObject({ status: 'committed', authoritativeRevision: 3 });
-      await storage.completeAgentTurn({
-        userId, turnId: pathsTurn.turnId, leaseId: pathsTurn.leaseId,
-        result: { kind: 'workspace-result', refetch: true, operationEnvelope: pathsEnvelope },
-      });
-
-      const researchTurn = await beginTurn(userId, 'u5-live-research', 'agent-turn');
-      const research = new ResearchSession({
-        storage,
-        provider: createOpenAIIsolatedResearchProvider(
-          model,
-          openai.tools.webSearch({ searchContextSize: 'low' }),
-        ),
-        userId,
-        leaseId: researchTurn.leaseId,
-        now: () => now,
-      });
-      const prepared = await refreshMethodState(storage, loader, userId);
-      const turnPolicy = { researchPerformed: false };
-      const researchTools = createMethodTools({
-        storage, loader, userId, turn: researchTurn,
-        timing: { turnSequence: 4, occurredAt: at(4) },
-        surface: 'agent-turn', prepared: { current: prepared }, research, turnPolicy,
-      } as never);
-      const researchResult = await researchTools.research_current_world.execute?.({
-        category: 'path-reality',
-        target: {
-          kind: 'purpose-path-set', id: setId, revision: 1,
-          pathId: id('path-1'), pathRevision: 1,
-        },
-        dimension: 'day-to-day-work',
-      }, { toolCallId: id('u5-live-research-call'), messages: [] } as never) as Record<string, unknown>;
-      const attempts = await storage.listResearchAttempts(userId);
-      expect(['succeeded', 'insufficient'], JSON.stringify({
-        researchStatus: researchResult.status,
-        errorClass: researchResult.errorClass,
-        attemptStatus: attempts[0]?.status,
-        attemptErrorClass: attempts[0]?.errorClass,
-        providerTrace: providerTrace.slice(-2),
-      })).toContain(researchResult.status);
-      expect(turnPolicy.researchPerformed).toBe(true);
-      expect(attempts).toHaveLength(1);
-      await storage.completeAgentTurn({
-        userId, turnId: researchTurn.turnId, leaseId: researchTurn.leaseId,
-        result: {
-          kind: 'completed', refetch: true, revision: 3,
-        },
-      });
-      expect(await storage.getTurnLease(userId)).toBeUndefined();
-
-      const cancelledTurn = await beginTurn(userId, 'u5-live-cancelled', 'agent-turn');
-      const cancelController = new AbortController();
-      let cancelledSafeText = '';
-      const cancelPrompt = 'Talk through one low-stakes reflection without changing or researching my Method state.';
-      const cancellationAgent = createMethodAgent({
-        model, storage, loader, userId, conversationId, turn: cancelledTurn,
-        turnSequence: 4, occurredAt: at(4), currentMessage: cancelPrompt,
-        turnRoute: 'conversation', abortSignal: cancelController.signal,
-      });
-      const cancellationResult = await cancellationAgent.stream({
-        prompt: cancelPrompt,
-        abortSignal: cancelController.signal,
-      });
-      const cancelledDisplayStream = projectMethodStreamForDisplay(cancellationResult.stream, {
-        onTextDelta: (text) => {
-          cancelledSafeText += text;
-          if (!cancelController.signal.aborted) {
-            cancelController.abort(new DOMException('Live U5 cancellation proof.', 'AbortError'));
-          }
-        },
-      });
-      try {
-        for await (const _part of cancelledDisplayStream) { /* abort after first safe delta */ }
-      } catch (error) {
-        if (!(error instanceof Error) || error.name !== 'AbortError') throw error;
-      }
-      expect(cancelController.signal.aborted).toBe(true);
-      const cancelledTerminal = await storage.cancelAgentTurn({
-        userId, turnId: cancelledTurn.turnId, leaseId: cancelledTurn.leaseId,
-        result: {
-          kind: 'cancelled', stopped: true, refetch: true, revision: 3,
-          displayRecovery: createDisplayRecovery(cancelPrompt, cancelledSafeText, cancelledSafeText.length > 0),
-        },
-      });
-      expect(cancelledTerminal?.status).toBe('cancelled');
-      expect(await storage.getTurnLease(userId)).toBeUndefined();
-      const cancelledProviderProjection = cancelledSafeText.length > 0
-        ? await waitForProjection(cancelPrompt, cancelledSafeText)
-        : undefined;
-
-      const history = await loadConversationHistory({ storage, client: conversationClient, userId });
-      expect(history.status).toBe('ready');
-      expect(
-        history.messages.some((message) => message.role === 'assistant'),
-        JSON.stringify({
-          messageRoles: history.messages.map((message) => message.role),
-          mainSafeLength: mainSafeText.length,
-          mainProjectionReady: Boolean(mainProjection),
-          narrationProjectionReady: Boolean(narrationProjection),
-        }),
-      ).toBe(true);
-      expect(history.messages.every((message) => (
-        message.role === 'user' || message.role === 'assistant'
-      ))).toBe(true);
-      const visibleAssistantText = history.messages
-        .filter((message) => message.role === 'assistant')
-        .map((message) => message.parts.map((part) => part.text).join(''));
-      if (mainSafeText.length > 0) expect(visibleAssistantText).toContain(mainSafeText);
-      expect(visibleAssistantText).toContain(narrationText);
-      if (cancelledProviderProjection) {
-        expect(history.messages).toContainEqual(expect.objectContaining({
-          role: 'assistant', deliveryStatus: 'stopped',
-        }));
-      } else if (cancelledSafeText.length > 0) {
-        expect(cancelledTerminal?.terminalResult).toMatchObject({
-          kind: 'cancelled', stopped: true, refetch: true,
-          displayRecovery: {
-            status: 'pending', assistantTextLength: cancelledSafeText.length, retainPartial: true,
-          },
-        });
-        expect(JSON.stringify(cancelledTerminal?.terminalResult)).not.toContain(cancelledSafeText);
-      }
-      expect(mainErrors).toEqual([]);
-      expect(providerTrace.some((trace) => (
-        trace.conversationPresent === true
-        && trace.functionOutputCount === 1
-        && trace.status === 200
-        && Array.isArray(trace.toolNames)
-        && trace.toolNames.includes('propose_purpose_paths')
-      ))).toBe(true);
-      expect(providerTrace.some((trace) => (
-        trace.conversationPresent === false
-        && trace.store === false
-        && trace.status === 200
-        && Array.isArray(trace.toolTypes)
-        && trace.toolTypes.includes('web_search')
-      ))).toBe(true);
-      expect(providerTrace.filter((trace) => (
-        trace.conversationPresent === true
-        && trace.contextManagementPresent === true
-        && trace.status === 200
-      )).length).toBeGreaterThanOrEqual(2);
-      expect(providerTrace.some((trace) => trace.status === 400)).toBe(false);
-      expect(providerTrace.filter((trace) => (
-        Array.isArray(trace.toolNames) && trace.toolNames.length > 0
-      )).every((trace) => (
-        Array.isArray(trace.strictSchemaMismatches)
-        && trace.strictSchemaMismatches.length === 0
-      ))).toBe(true);
-      expect(providerTrace.filter((trace) => (
-        Array.isArray(trace.toolNames) && trace.toolNames.length > 0
-      )).every((trace) => (
-        Array.isArray(trace.strictSchemaShape)
-        && trace.strictSchemaShape.length === 0
-      ))).toBe(true);
-
-      expect(await storage.listPendingConversationProvisioning(userId)).toEqual([]);
-      expect(await storage.eraseMethodData(userId, conversationClient)).toEqual({ status: 'complete' });
-      expect(await storage.getConversationMapping(userId)).toBeUndefined();
-      expect(await storage.loadCareerMap(userId)).toEqual({ status: 'not-found' });
-      expect(await storage.listAgentTurns(userId)).toEqual([]);
-      expect(await storage.listResearchAttempts(userId)).toEqual([]);
-      expect(await storage.listPendingConversationProvisioning(userId)).toEqual([]);
-      expect(await storage.getTurnLease(userId)).toBeUndefined();
-      } finally {
-        if (liveConversationId) {
-          await conversationClient.deleteConversationItemsAndConversation(liveConversationId);
-        }
-      }
-    },
-    300_000,
-  );
 
   it('starts one model invocation when identical client messages race and rejects changed reuse', async () => {
     const userId = owner('message-race');

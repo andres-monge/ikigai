@@ -193,6 +193,18 @@ function validateAmendedCitedSource(
 export const amendedCitedResearchSourceSchema = amendedCitedResearchSourceBaseSchema
   .superRefine(validateAmendedCitedSource);
 
+/**
+ * Bounded provider evidence that a search result was consulted. Unlike a
+ * claim-linked citation, this record grants no canonical-write authority and
+ * deliberately carries no target field, exact claim, excerpt, or handle.
+ */
+export const consultedResearchSourceSchema = z.object({
+  providerCallId: entityIdSchema,
+  providerResultId: entityIdSchema,
+  action: z.enum(['search', 'openPage', 'findInPage']).optional(),
+  url: canonicalHttpsResearchUrlSchema,
+}).strict();
+
 export const sourceProvenanceSchema = z.union([
   z.object({
     kind: z.literal('user-supplied-source'),
@@ -258,6 +270,9 @@ export const amendedResearchAttemptSchema = z.object({
   targetId: entityIdSchema,
   targetRevision: mapRevisionSchema,
   attemptedAt: timestampSchema,
+  consultedSources: z.array(consultedResearchSourceSchema)
+    .max(RESEARCH_SOURCE_LIMITS.sourcesPerAttempt)
+    .optional(),
   sources: z.array(amendedCitedResearchSourceSchema).max(RESEARCH_SOURCE_LIMITS.sourcesPerAttempt),
   errorClass: z.string().min(1).max(160).optional(),
 }).strict().superRefine((attempt, context) => {
@@ -334,6 +349,7 @@ export type UserEvidenceProvenance = z.infer<typeof userEvidenceProvenanceSchema
 export type Confirmation = z.infer<typeof confirmationSchema>;
 export type RevisionRef = z.infer<typeof revisionRefSchema>;
 export type SourceProvenance = z.infer<typeof sourceProvenanceSchema>;
+export type ConsultedResearchSource = z.infer<typeof consultedResearchSourceSchema>;
 export type ResearchAttempt = z.infer<typeof researchAttemptSchema>;
 export type AmendedResearchAttempt = z.infer<typeof amendedResearchAttemptSchema>;
 export type ResearchSourceAssociation = z.infer<typeof researchSourceAssociationSchema>;

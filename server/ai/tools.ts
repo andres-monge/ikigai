@@ -129,7 +129,11 @@ export interface MethodOperationExecutorOptions {
 export type MethodToolRuntime = Omit<MethodOperationExecutorOptions, 'sourceId' | 'operationType' | 'payload' | 'prepared'> & {
   prepared: { current?: PreparedMethodState };
   evidence?: MethodEvidenceResolver;
-  responsePolicy?: { nativeSearchObserved: boolean };
+  responsePolicy?: {
+    nativeSearchObserved: boolean;
+    researchResolutionRequired?: boolean;
+    evidenceManifestAvailable?: boolean;
+  };
   currentMessage?: string;
   operationGuard?: MethodResponseOperationGuard;
   onOperationStatus?: (event: MethodOperationLifecycleEvent) => void | Promise<void>;
@@ -647,12 +651,27 @@ function sourcesFor(
       throw error;
     })()
     : [];
-  const user = (input.userSources ?? []).map((source) => ({
-    kind: 'user-supplied-source' as const,
-    label: source.label,
-    ...(source.url ? { url: source.url } : {}),
-    recordedBy: context.action,
-  }));
+  const user = (input.userSources ?? []).map((source) => {
+    if (runtime.surface === 'agent-turn') {
+      const currentMessage = runtime.currentMessage ?? '';
+      const normalizedMessage = normalizeResearchClaim(currentMessage);
+      const normalizedLabel = normalizeResearchClaim(source.label);
+      const labelIsAuthored = normalizedLabel.length > 0
+        && normalizedMessage.includes(normalizedLabel);
+      const urlIsAuthored = !source.url || currentMessage.includes(source.url);
+      if (!labelIsAuthored || !urlIsAuthored) {
+        const error = new Error('User-supplied sources must be exact values from the current message.');
+        error.name = 'UserEvidenceAssociationError';
+        throw error;
+      }
+    }
+    return {
+      kind: 'user-supplied-source' as const,
+      label: source.label,
+      ...(source.url ? { url: source.url } : {}),
+      recordedBy: context.action,
+    };
+  });
   const sources = [...research, ...user];
   return sources.length ? sources : undefined;
 }
@@ -667,11 +686,30 @@ function assertNativeSearchHasHandle(
 ): void {
   if (
     runtime.surface !== 'agent-turn'
-    || !runtime.responsePolicy?.nativeSearchObserved
+    || (!runtime.responsePolicy?.evidenceManifestAvailable
+      && !runtime.responsePolicy?.researchResolutionRequired)
     || values.every((value) => Array.isArray(value.researchSources) && value.researchSources.length > 0)
   ) return;
-  const error = new Error('A native-search-informed write requires an exact server-minted research handle.');
+  const error = new Error('A native-search-informed write requires exact server-minted research handles.');
   error.name = 'ResearchHandleError';
+  throw error;
+}
+
+const RESEARCH_WRITE_OPERATIONS = new Set<CareerMapOperationType>([
+  'propose-purpose-paths',
+  'replace-purpose-path',
+  'combine-purpose-paths',
+  'propose-first-project',
+  'replace-project-proposal',
+]);
+
+function assertUserAuthoredValue(runtime: MethodToolRuntime, value: string): void {
+  if (runtime.surface !== 'agent-turn') return;
+  const message = normalizeResearchClaim(runtime.currentMessage ?? '');
+  const exactValue = normalizeResearchClaim(value);
+  if (message && exactValue && message.includes(exactValue)) return;
+  const error = new Error('Explorer-authored evidence must be an exact value from the current message.');
+  error.name = 'UserEvidenceAssociationError';
   throw error;
 }
 
@@ -701,6 +739,7 @@ const SAFE_OPERATION_LIFECYCLE_ERROR_CLASSES = new Set([
   'ResearchGroundingError',
   'ResearchHandleError',
   'ResponseOperationLimitError',
+  'UserEvidenceAssociationError',
   'confirmation-not-auditable',
   'illegal-transition',
   'invalid-map',
@@ -761,6 +800,20 @@ function operationTool<INPUT>(
           error.name = 'ResponseOperationLimitError';
           throw error;
         }
+        if (runtime.surface === 'agent-turn' && runtime.responsePolicy?.nativeSearchObserved) {
+          const error = new Error('Canonical writes must wait for a settled, claim-linked research boundary.');
+          error.name = 'ResearchHandleError';
+          throw error;
+        }
+        if (
+          runtime.surface === 'agent-turn'
+          && runtime.responsePolicy?.researchResolutionRequired
+          && !RESEARCH_WRITE_OPERATIONS.has(operationType)
+        ) {
+          const error = new Error('Unresolved research must be retried through a source-bearing canonical operation.');
+          error.name = 'ResearchHandleError';
+          throw error;
+        }
         const result = await executeMethodOperation({
           ...runtime,
           prepared: runtime.prepared.current,
@@ -796,6 +849,7 @@ function operationTool<INPUT>(
             'ResearchGroundingError',
             'ResearchHandleError',
             'ResponseOperationLimitError',
+            'UserEvidenceAssociationError',
           ]).has(error.name));
         if (!knownRejection) {
           terminalEmitted = true;
@@ -858,9 +912,18 @@ export function createMethodTools(runtime: MethodToolRuntime): ToolSet {
     sourceMessageId: entityIdSchema,
   }).strict();
   return {
-    append_foundation_evidence: operationTool(runtime, 'append-foundation-evidence', 'Record one explorer-authored Foundation evidence item from the current message.', evidenceToolInputSchema, (input) => ({ evidence: { ...input, provenance: context().action } })),
-    correct_foundation_evidence: operationTool(runtime, 'correct-foundation-evidence', 'Append a correction to one exact Foundation evidence record.', z.object({ supersedesEvidenceId: entityIdSchema, evidence: evidenceToolInputSchema }).strict(), ({ supersedesEvidenceId, evidence }) => ({ supersedesEvidenceId, evidence: { ...evidence, supersedesEvidenceId, provenance: context().action } })),
-    record_reality_constraint: operationTool(runtime, 'record-reality-constraint', 'Record one practical reality constraint outside the Why.', constraintToolInputSchema, (input) => ({ constraint: { ...input, provenance: context().action } })),
+    append_foundation_evidence: operationTool(runtime, 'append-foundation-evidence', 'Record one explorer-authored Foundation evidence item from the current message.', evidenceToolInputSchema, (input) => {
+      assertUserAuthoredValue(runtime, input.content);
+      return { evidence: { ...input, provenance: context().action } };
+    }),
+    correct_foundation_evidence: operationTool(runtime, 'correct-foundation-evidence', 'Append a correction to one exact Foundation evidence record.', z.object({ supersedesEvidenceId: entityIdSchema, evidence: evidenceToolInputSchema }).strict(), ({ supersedesEvidenceId, evidence }) => {
+      assertUserAuthoredValue(runtime, evidence.content);
+      return { supersedesEvidenceId, evidence: { ...evidence, supersedesEvidenceId, provenance: context().action } };
+    }),
+    record_reality_constraint: operationTool(runtime, 'record-reality-constraint', 'Record one practical reality constraint outside the Why.', constraintToolInputSchema, (input) => {
+      assertUserAuthoredValue(runtime, input.description);
+      return { constraint: { ...input, provenance: context().action } };
+    }),
     propose_why: operationTool(runtime, 'propose-why', 'Suggest one provisional Why. It cannot be confirmed in this assistant turn.', whyInputSchema, (why) => ({ why, presentation: context().presentation })),
     revise_why: operationTool(runtime, 'revise-why', 'Suggest a revision to the current confirmed Why.', z.object({ supersedesWhyId: entityIdSchema, why: whyInputSchema }).strict(), ({ supersedesWhyId, why }) => ({ supersedesWhyId, why, presentation: context().presentation })),
     confirm_why: operationTool(runtime, 'confirm-why', 'Confirm only the exact pending Why from a completed prior assistant turn and this exact user message.', whyConfirmationSchema, (input) => confirmationPayload(runtime, { ...input, targetId: input.whyId, targetRevision: input.whyRevision }, 'why-confirmation', 'whyId')),
