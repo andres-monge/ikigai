@@ -6,6 +6,8 @@
 
 **Verified:** 2026-08-25
 
+**Updated:** 2026-09-01 — follow-up method, product-history, and distribution sources
+
 **Related Revelio context:** [Research synthesis](./2026-08-11-what-to-work-on-research.md) · [Product direction](./2026-08-11-what-to-work-on-product-direction.md) · [Provisional thesis](../thesis.md)
 
 > Research input, not current product authority. Vocation is a live commercial product, so pricing, packaging, copy, and capabilities may change. The current code remains the authority for Revelio's existing behavior. Approved product and implementation decisions are recorded separately; this dossier does not set them.
@@ -20,11 +22,11 @@ This materially weakens three broad claims in Revelio's provisional thesis:
 - Persistent profiles and continuing AI coaching are already part of a competitor's paid offer.
 - “Direction before search” is not, by itself, a distinctive position.
 
-The overlap does not invalidate Revelio's central product hypothesis. Vocation's public materials use “prototype” to mean generating, comparing, and investigating possible roles before applying. No public source reviewed for this dossier shows a user performing representative real-world work, returning with observed evidence, and updating a falsifiable career hypothesis across repeated cycles.
+The overlap does not invalidate Revelio's central product hypothesis, but the distinction is subtler than the original research suggested. Vocation uses structured reflection, retrospective evidence from actual work, role comparison, informational interviews, and—at least in a pre-launch founder description—prototype feedback that informs later guidance. No reviewed public source shows a user performing representative future work, returning with observed behavioral evidence, and preserving explicit hypothesis updates across repeated cycles.
 
 The defensible distinction is therefore narrower:
 
-> **Vocation tests role fit through reflection, comparison, and informational interviews. Revelio aims to test person-practice fit by performing representative work and updating from observed evidence.**
+> **Vocation uses past-work evidence and role investigation to decide what may fit. Revelio aims to create new evidence by having a person perform representative future work, observe what happens, and update the next experiment.**
 
 That is an unvalidated hypothesis, not yet a moat. The planned longitudinal pilots must establish whether the second conversation after a real experiment produces information and decisions that Vocation does not publicly document.
 
@@ -105,11 +107,15 @@ The combined public journey is:
 6. **Action plan.** Turn the selected direction into dated tasks such as informational interviews, resume changes, and interview preparation.
 7. **Persistent coach.** Continue asking questions about tradeoffs, storytelling, interviews, networking, and specific opportunities.
 
+Cliff Maxwell's August 2026 guest article frames the method as six decisions: what progress the person wants, which career quest they are on, which work brings out their best, which moves to explore, which tradeoffs they will make, and whether they can get what they need without leaving. The last question matters strategically: Vocation is not exclusively a job-switching funnel. Its method can also recommend redesigning the current job.
+
 The founders' launch material described each discovery conversation as approximately 15–20 minutes. A later public demo described roughly 10–15 exchanges or 20–30 minutes per stage. These timings are marketing guidance, not independently observed completion data.
 
 ### What “prototype” appears to mean
 
-The *Job Moves* method uses multiple role prototypes to create contrast. Users compare possible jobs, investigate them through informational interviews and market research, understand the tradeoffs, and then converge on a viable role.
+The *Job Moves* method uses multiple role prototypes to create contrast. Users compare possible jobs, investigate them through informational interviews and market research, understand the tradeoffs, and then converge on a viable role. In a February 2025 interview, Bob Moesta described completing roughly 10–15 informational interviews across candidate roles. His neuroscientist example shows the purpose: conversations with people doing the work can falsify an attractive role idea before a job search begins.
+
+This is evidence-producing work, not abstract reflection. The evidence is nevertheless primarily retrospective experience and other people's accounts of a role, rather than the user's behavior while performing representative future work. Moesta also rejects a fixed interview script: the next question should depend on the user's previous answer, making adaptive questioning part of the intended method.
 
 That is a meaningful action beyond a personality label. It is also different from Revelio's proposed representative-work experiment:
 
@@ -122,6 +128,12 @@ That is a meaningful action beyond a personality label. It is also different fro
 | Feeds a job-search action plan | Feeds another experiment or a provisional commitment |
 
 This difference is the strongest current basis for differentiation, but product access is required to confirm whether Vocation has capabilities that its marketing does not describe.
+
+### Pre-launch product evidence
+
+In the same February 2025 interview, Moesta described an early AI product that asked about and summarized a person's context, energy drivers, and drains. He said feedback collected while a person prototyped roles would be carried forward to help them select a prototype or area of focus. He also referred imprecisely to “probably a couple hundred” people in “data testing.”
+
+These are first-party, pre-launch statements. They establish product intent, not the current product's behavior, active-user count, retention, or outcomes. They do mean the competitive test should examine whether Vocation now accepts prototype feedback and adapts subsequent guidance, rather than assuming that it stops at an action plan.
 
 ## Capabilities and Overlap with Revelio
 
@@ -139,8 +151,8 @@ This difference is the strongest current basis for differentiation, but product 
 | Community | Included in the free plan | Possible acquisition and retention layer |
 | Advisor dashboard | Included in institutional licenses | Relevant to a future Revelio school or counselor route |
 | Manager/retention product | Offered through Vocation HQ | Adjacent rather than current Revelio scope |
-| Representative real-work experiment | No public evidence found | Potential Revelio distinction |
-| Post-experiment observation and hypothesis update | No public evidence found | Potential Revelio distinction |
+| Prototype feedback and recommendation adaptation | Described as an intended pre-launch capability; current behavior unverified | Direct overlap in adaptive guidance |
+| Representative future-work observation and explicit hypothesis updates | No public evidence found | Potential Revelio distinction |
 | Transparent evidence history across loops | No public evidence found | Potential Revelio distinction |
 
 ## Pricing and Packaging
@@ -210,6 +222,19 @@ The framework includes:
 - informational interviews and weak ties; and
 - explicit tradeoffs rather than an imaginary perfect job.
 
+### Operational detail from the follow-up sources
+
+The four career quests function as decision policies rather than labels:
+
+- **Get Out:** prioritize immediate relief, sometimes through a restorative “jobcation.”
+- **Regain Control:** change time, workload, or constraints so work fits life again.
+- **Regain Alignment:** return to work the person is good at and energized by.
+- **Take the Next Step:** choose a deliberate half-step that creates a path to a later role.
+
+Energy discovery is also more grounded than a generic strengths assessment. Maxwell recommends auditing actual calendar activities from the previous month, describing tasks in concrete language rather than relying on job descriptions, separating competence from energy, repeating the exercise across prior jobs, and clustering recurring themes. Vocation's public Energy Profile builder supports up to six jobs, clusters up to five themes, and exports the result as text or PDF.
+
+Together with the explicit question “Can I get what I need without leaving?”, this makes the method capable of recommending changes to duties, workload, learning opportunities, or side projects—not only a new employer.
+
 **First-party claim:** The method is based on more than a decade of research and interviews with more than 1,000 professionals or job switchers. The official book and Vocation surfaces alternate between “over 1,000 interviews,” “over 1,000 professionals,” and “thousands of careers studied.” These statements support a substantial qualitative research origin, but the public product pages do not provide the sampling method, interview protocol, analytic procedure, or product-outcome evaluation.
 
 The most defensible interpretation is:
@@ -242,6 +267,8 @@ Bob is the founder of The Re-Wired Group and one of the principal architects of 
 
 **Competitive significance:** Bob provides direct methodological lineage and deep product-development practice. Vocation can credibly say its product comes from the authors and practitioners behind the method rather than from a superficial reading of it.
 
+Maxwell's August 2026 article says he spent the previous year building career-navigation infrastructure with Moesta. This is stronger evidence of active method and product involvement than the title “co-founder” alone, though it does not establish Moesta's operating role or time commitment.
+
 ### Ethan Bernstein — research lineage, not company team
 
 Ethan is the third *Job Moves* co-author and was an organizational-behavior professor at Harvard Business School during the research and publication of the book. He is not listed as a Vocation founder or team member.
@@ -265,12 +292,15 @@ Vocation combines several reinforcing trust and acquisition assets:
 - Michael Horn's education and workforce platform;
 - Bob Moesta's practitioner reputation;
 - a free two-minute quiz and free first stage;
+- a free, functional Energy Profile builder;
 - testimonials from named professionals;
 - a newsletter and career-content library;
+- a founder-authored guest article in Lenny's Newsletter;
+- a standing top-of-page recommendation from Lenny's Jobs;
 - an institutional demo route; and
 - an adjacent employer product.
 
-This is a stronger commercial package than “AI career coach” alone. Its strongest visible commercial advantage is the combination of a named method, credible people, understandable outputs, and multiple routes to users.
+This is a stronger commercial package than “AI career coach” alone. Its strongest visible commercial advantage is the combination of a named method, credible people, understandable outputs, and multiple routes to users. The Lenny surfaces are especially relevant: the guest article teaches the method, links to free tools, and hands readers into a trusted recommendation surface. This is an acquisition and trust channel, not independent evidence of product outcomes.
 
 The public evidence remains weak on outcomes:
 
@@ -278,7 +308,7 @@ The public evidence remains weak on outcomes:
 - no paying-customer count;
 - no conversion or retention data;
 - no comparative product evaluation;
-- no longitudinal career outcomes;
+- no independently verified or product-linked longitudinal outcomes;
 - no institutional case studies; and
 - no named or quantified funding round.
 
@@ -325,12 +355,17 @@ The pilot should determine whether Revelio's proposed difference is real:
 4. Can users explain their decision using evidence from what they did?
 5. Does preserving evidence across loops create value beyond a persistent conversational profile?
 
+The sharpest comparative question is: **Does representative future work reveal materially more than retrospective energy evidence, calendar observation, informational interviews, and prototype feedback?** If it does not, Revelio's more demanding loop may add friction without enough additional decision value.
+
 A later hands-on competitive test should take one consistent persona through both products, with permission and a dedicated test account, and compare:
 
 - time and friction to first useful insight;
 - depth and adaptability of questioning;
 - diversity and grounding of proposed directions;
 - what “prototype” asks the user to do;
+- whether prototype feedback changes later recommendations;
+- whether day-to-day observations are captured after the initial energy audit;
+- whether the product preserves a visible evidence and hypothesis history;
 - how uncertainty and tradeoffs are represented;
 - whether any output claims unsupported precision;
 - what happens after the action plan;
@@ -339,11 +374,11 @@ A later hands-on competitive test should take one consistent persona through bot
 
 ## Documentation Consequences
 
-This dossier should remain standalone because it records a different, fast-changing evidence type from the August 11 method synthesis.
+The Vocation research should remain in this standalone dossier because it records a different, fast-changing evidence type from the August 11 method synthesis. New Vocation evidence should be appended here rather than split into source-by-source notes.
 
 The August documents are explicitly historical snapshots. Rewriting their conclusions would erase the fact that Vocation was missed. If backward discoverability becomes necessary, append only a clearly labeled “Later research” link rather than merging this content into their original analysis.
 
-The provisional thesis should be updated where Vocation changes current claims. The active implementation plan should cite this dossier as a research input without expanding scope or moving pricing ahead of pilot evidence.
+The active thesis and implementation plan should not be edited for this source follow-up. The thesis remains the method authority and the plan already names this dossier as research input. Revisit thesis language only after a direct product test or Revelio pilot establishes whether representative future work creates additional decision value.
 
 ## Unknowns Worth Monitoring
 
@@ -351,7 +386,7 @@ The provisional thesis should be updated where Vocation changes current claims. 
 2. Whether the $39 and $179 prices have produced meaningful demand.
 3. The identity and status of institutional customers or pilots.
 4. Whether the advisor dashboard is live and used in practice.
-5. Whether Vocation performs repeated post-action observation and adaptation inside the product.
+5. Whether current Vocation accepts prototype feedback, adapts recommendations, and preserves it across repeated cycles—and whether any feedback comes from representative work.
 6. Whether job matches use current labor-market data and how fit is calculated.
 7. How percentages such as energy-driver scores are produced and validated.
 8. How organization-sponsored data visibility and consent work in product.
@@ -360,7 +395,7 @@ The provisional thesis should be updated where Vocation changes current claims. 
 
 ## Source Ledger
 
-All sources were accessed on 2026-08-25 unless otherwise noted.
+Sources in the original dossier were accessed on 2026-08-25. Follow-up sources were accessed on 2026-09-01 unless otherwise noted.
 
 ### Primary company and product sources
 
@@ -373,6 +408,9 @@ All sources were accessed on 2026-08-25 unless otherwise noted.
 - [Vocation HQ employer product](https://www.vocationhq.com/)
 - [Vocation LinkedIn company profile](https://www.linkedin.com/company/get-vocation)
 - [Michael Horn's Vocation launch interview with Cliff Maxwell](https://michaelbhorn.substack.com/p/launching-vocation-the-ai-coach-to), published 2025-11-10
+- [Cliff Maxwell, “How to figure out your next career move” — Lenny's Newsletter](https://www.lennysnewsletter.com/p/how-to-figure-out-your-next-career), published 2026-08-25 — founder-authored guest article; public portion reviewed
+- [Lenny's Jobs career-advice page](https://www.lennysjobs.com/career-advice) — standing Vocation recommendation
+- [Vocation Energy Profile builder](https://try.joinvocation.com/energy-profile)
 
 ### Method and people
 
@@ -384,7 +422,9 @@ All sources were accessed on 2026-08-25 unless otherwise noted.
 - [Bob Moesta — The Re-Wired Group](https://therewiredgroup.com/about/bob-moesta/)
 - [Ethan Bernstein — Harvard Business School](https://www.library.hbs.edu/working-knowledge/collections/ethan-s-bernstein)
 - [Varun Bachalli — public professional portfolio](https://varunbachalli.com/) — self-reported engineering role and pilot usage; not independently verified
+- [Lenny's Podcast interview with Bob Moesta](https://www.youtube.com/watch?v=2wypVv9wZtI), published 2025-02-23
+- Local extraction: [cleaned interview transcript](../../youtube-transcripts/bob_moesta_job_moves_transcript.txt) · [raw manual captions](<../../youtube-transcripts/How to find work you love ｜ Bob Moesta (Jobs-to-be-Done co-creator, author of ＂Job Moves”).en-US.vtt>)
 
 ## Research Limits
 
-This dossier is based on public pages, public founder statements, institutional biographies, and a public demo. No paid product journey, institution dashboard, customer contract, internal analytics, or founder interview was available. Absence from public marketing is not proof that a capability does not exist.
+This dossier is based on public pages, public founder statements, institutional biographies, a public demo, and a founder podcast interview. The public portion of Maxwell's paid guest article was available through the opening of question four; the remainder was not accessed. No paid product journey, institution dashboard, customer contract, internal analytics, or direct researcher interview was available. Pre-launch product descriptions are not treated as current capability evidence, and absence from public marketing is not proof that a capability does not exist.
