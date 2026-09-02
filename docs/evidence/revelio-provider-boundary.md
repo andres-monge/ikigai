@@ -2,9 +2,11 @@
 
 - **Gate:** G1 — re-prove the amended provider boundary
 - **Observed:** 2026-09-02
-- **Result:** Pass
+- **Result:** Blocked — the selected Sol snapshot passed the latest six-case
+  quality matrix, but its single focused full-G1 requalification stopped at the
+  fallback-order assertion
 - **Selected route:** one Response per functional step through one `ToolLoopAgent`
-- **Selected pinned snapshot:** `gpt-5.6-luna`
+- **Selected pinned snapshot:** `gpt-5.6-sol`
 - **Provider:** OpenAI Responses through `@ai-sdk/openai`
 - **Conversation storage:** one OpenAI Conversation with `store: true`
 - **Supporting change:** the path-limited G1 commit containing this receipt
@@ -33,23 +35,47 @@ hardcoded taxonomy, or separate research-model call.
 | Node.js | `v24.19.0` |
 | Vercel AI SDK | `ai@7.0.66` |
 | OpenAI provider | `@ai-sdk/openai@4.0.42` |
-| Configured model | `gpt-5.6-luna` |
-| Actual response model id | `gpt-5.6-luna` |
+| Configured model | `gpt-5.6-sol` |
+| Actual response model id | `gpt-5.6-sol` in the latest passing six-case repeat; the subsequent focused full-G1 failure did not emit an actual-model success receipt |
 | Native SDK default stop condition | `isStepCount(20)` |
 | Fallback budget | 20 Responses per turn |
 
-The post-integration diagnostic repeat kept `gpt-5.6-luna` selected and also
-observed `gpt-5.6-sol` pass. Each reported actual response model id matched its
-configured candidate. A future model outside this observed passing set must
+An earlier post-integration diagnostic repeat kept `gpt-5.6-luna` selected and
+observed both Luna and `gpt-5.6-sol` pass. The latest review repeat then observed
+Luna fail the mixed reflective/current case while Sol passed all six cases. Under
+the founder's MVP stop rule, Sol is now the configured production and proof
+default. Each reported actual response model id in those completed matrices
+matched its configured candidate. A future model outside this observed set must
 reopen G1.
 
 | Candidate | Result | Strengthened-matrix evidence |
 |---|---:|---|
-| `gpt-5.6-luna` | Pass; selected | Fresh, stale-premise, mixed reflective/current, fresh follow-up, multilingual, and hostile-retrieval cases all searched before the exact claim and retained a claim-linked citation. |
-| `gpt-5.6-sol` | Pass; not selected | Fresh, stale-premise, mixed reflective/current, fresh follow-up, multilingual, and hostile-retrieval cases all searched before the exact claim and retained a claim-linked citation. |
+| `gpt-5.6-luna` | Superseded | Passed the earlier matrix, then failed the latest mixed reflective/current repeat because it exposed no normalized HTTPS citation linked to the exact claim. |
+| `gpt-5.6-sol` | Pass in latest six-case matrix; selected | Fresh, stale-premise, mixed reflective/current, fresh follow-up, multilingual, and hostile-retrieval cases all searched before the exact claim and retained a claim-linked citation. Its subsequent focused full-G1 run stopped earlier at the fallback-order assertion, so full selected-model requalification remains open. |
 | `gpt-5.5-2026-04-23` | Excluded | The fresh-fact case did not attach a normalized HTTPS citation to the exact claim. |
 
-## Live amended assertion receipt
+## Latest focused Sol requalification
+
+The one founder-authorized focused run used only Sol for both the selected and
+candidate environment settings. It authenticated, created no candidate-matrix
+receipt because it stopped earlier, and completed provider cleanup.
+
+```text
+OPENAI_SPIKE_MODEL=gpt-5.6-sol \
+OPENAI_SPIKE_MODELS=gpt-5.6-sol \
+/Users/andresm/.nvm/versions/node/v24.19.0/bin/node \
+  --env-file=<authorized-primary-checkout-env> \
+  scripts/openai-provider-g1-amended.mjs
+FAIL — ProofError: Fallback did not preserve reject -> ledger -> refreshed retry
+ordering. Candidate diagnostics were empty. Cleanup completed.
+```
+
+This run does not undo Sol's latest six-case quality pass or authorize a return
+to Luna. It does mean the complete selected-model G1 gate is still blocked. Per
+the bounded founder instruction, the harness was not expanded and the live proof
+was not rerun.
+
+## Earlier passing live amended assertion receipt
 
 | Assertion | Result | Evidence observed |
 |---|---:|---|
@@ -81,7 +107,7 @@ provider decision does not rely on the prior receipt's isolated-research or
 internal no-write assertions; those are superseded and are not acceptance
 evidence.
 
-## Commands and observed results
+## Earlier passing commands and observed results
 
 ```text
 /Users/andresm/.nvm/versions/node/v24.19.0/bin/node --check \
@@ -92,7 +118,7 @@ PASS
   --experimental-loader=/tmp/ikigai-primary-node-modules-loader.mjs \
   --env-file=<authorized-primary-checkout-env> \
   scripts/openai-provider-g1-amended.mjs
-PASS — selectedRoute one-response-per-step; actual model gpt-5.6-luna;
+PASS — historical selectedRoute one-response-per-step; actual model gpt-5.6-luna;
 native custom-before-ledger observed; fallback reject→ledger→retry committed;
 17 Responses; 2 agent writes plus one simulated concurrent revision advance;
 all five authoritative result continuations, real compaction, both cancellation
@@ -101,12 +127,13 @@ and cleanup passed. Candidate classes were Luna pass, Sol pass, and GPT-5.5 fail
 for a fresh-fact response without an exact claim-linked HTTPS citation.
 ```
 
-An immediately preceding repeat stopped at the selected-model aggregate quality
+An immediately preceding historical repeat stopped at the selected-model aggregate quality
 assertion before the harness reported candidate-level diagnostics. The bounded
 diagnostic amendment made no proof-policy change; its next full run produced the
 per-candidate results above. Automatic choice remains nondeterministic, so the
 selected model's matrix remains a repeatable release gate rather than a timeless
-capability claim.
+capability claim. The later selection evidence and focused Sol failure are the
+current release authority recorded above.
 
 The managed worktree intentionally had no dependency installation. The temporary
 read-only loader resolved the exact `package-lock.json` versions from the primary
@@ -131,7 +158,8 @@ history, provider-item erasure, cancellation races, and exact application status
 channel. U6 remains out of scope and will consume, not define, that transport.
 
 Automatic choice remains nondeterministic. U5 and later live evaluations must
-repeat the now-passing fresh, stale, mixed, follow-up, multilingual, outage,
+repeat the fresh, stale, mixed, follow-up, multilingual, outage,
 conflicting/missing-citation, and hostile-retrieval cases through the production
-composition. Repetition cannot add a classifier, pre-search gate, second context,
-query transformation, or extra model round trip.
+composition, including the reject -> ledger -> refreshed retry ordering that was
+red in the latest focused Sol run. Repetition cannot add a classifier, pre-search
+gate, second context, query transformation, or extra model round trip.

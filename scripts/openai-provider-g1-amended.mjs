@@ -12,9 +12,9 @@ import { createUIMessageStream, ToolLoopAgent, stepCountIs, tool } from 'ai';
 import { z } from 'zod';
 
 const apiKey = process.env.OPENAI_API_KEY;
-const modelId = process.env.OPENAI_SPIKE_MODEL || 'gpt-5.6-luna';
+const modelId = process.env.OPENAI_SPIKE_MODEL || 'gpt-5.6-sol';
 const candidateModelIds = (process.env.OPENAI_SPIKE_MODELS
-  || 'gpt-5.6-luna,gpt-5.6-sol,gpt-5.5-2026-04-23')
+  || 'gpt-5.6-sol')
   .split(',')
   .map((value) => value.trim())
   .filter(Boolean);

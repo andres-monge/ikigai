@@ -32,7 +32,7 @@ import {
   type NativeSearchStep,
 } from './research.js';
 
-export const REVELIO_AGENT_MODEL = 'gpt-5.6-luna';
+export const REVELIO_AGENT_MODEL = 'gpt-5.6-sol';
 export const REVELIO_AGENT_PROVIDER = 'openai-responses';
 export const REVELIO_COMPACT_THRESHOLD = 1_000;
 export const METHOD_AGENT_RESPONSE_BUDGET = 20;
