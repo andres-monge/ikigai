@@ -62,6 +62,60 @@ describe('canonical auth and legacy route split', () => {
     expect(window.location.pathname).toBe('/login');
   });
 
+  it.each([
+    ['no user', {}],
+    ['an email-only user', { user: { email: 'explorer@example.com' } }],
+    ['a blank user ID', { user: { id: '  ', email: 'explorer@example.com' } }],
+  ])('fails closed when the root session response has %s', async (_case, data) => {
+    window.history.replaceState({}, '', '/');
+    useSession.mockReturnValue({ data, isPending: false });
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText('Google login')).toBeTruthy());
+    expect(window.location.pathname).toBe('/login');
+  });
+
+  it('does not flash login while the login-route session is loading', () => {
+    window.history.replaceState({}, '', '/login');
+    useSession.mockReturnValue({ data: null, isPending: true });
+
+    render(<App />);
+
+    expect(screen.getByRole('status').textContent).toContain('Checking your session');
+    expect(screen.queryByText('Google login')).toBeNull();
+  });
+
+  it('redirects a valid login-route session to the authenticated root', async () => {
+    window.history.replaceState({}, '', '/login');
+    useSession.mockReturnValue({
+      data: {
+        user: { id: 'server-user', name: 'Explorer', email: 'explorer@example.com' },
+        session: { id: 'session-id' },
+      },
+      isPending: false,
+    });
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Welcome to Revelio' })).toBeTruthy());
+    expect(window.location.pathname).toBe('/');
+  });
+
+  it.each([
+    ['no user', {}],
+    ['an email-only user', { user: { email: 'explorer@example.com' } }],
+    ['a blank email', { user: { id: 'server-user', email: '  ' } }],
+  ])('keeps a malformed login-route session with %s on login', (_case, data) => {
+    window.history.replaceState({}, '', '/login');
+    useSession.mockReturnValue({ data, isPending: false });
+
+    render(<App />);
+
+    expect(screen.getByText('Google login')).toBeTruthy();
+    expect(window.location.pathname).toBe('/login');
+  });
+
   it('replaces the document after sign-out so stale client session state cannot bounce', async () => {
     window.history.replaceState({}, '', '/');
     useSession.mockReturnValue({

@@ -123,4 +123,17 @@ Focused component tests cover exact-three/equal-weight rendering, no preselectio
 
 Native elements provide keyboard buttons, textarea, links, `details/summary`, and labeled regions. The phone switcher implements the ARIA tab pattern with roving focus and Left/Right/Home/End keys. Operation and microphone messages use polite live regions; failures use alerts. Reduced-motion suppresses the selected contract’s staggered path entrance.
 
-An actual assistive-technology reading pass and rendered desktop/phone visual inspection require a browser/screen-reader session. They must be reported as manual evidence only when performed; automated semantics are not a substitute for claiming that manual pass.
+### Rendered browser evidence — 2026-09-03
+
+Chrome rendered the production client source through Vite at `127.0.0.1:4173` with temporary same-origin middleware returning schema-valid auth, bounded-history, and workspace fixtures. The checks exercised the connected client boundaries and validated canonical rendering, but did not exercise Express, Postgres, or provider integration.
+
+- At a viewport wider than the `lg` breakpoint, the conversation and map rendered side by side. The checkpoint led the map, followed by the confirmed Why and three equal-weight Purpose Path cards. Labels, controls, and cited assistant text remained visible without horizontal overflow or overlap.
+- At an approximately 515 px content width, Chat and Your Map became exclusive tab panels. The map linearized to a single readable column. Switching Chat → Your Map → Chat preserved the exact draft `Responsive draft stays here`.
+- Right Arrow on the focused Chat tab selected and focused Your Map. Clicking a conversation-owned **Rewrite** action appended its deterministic prompt after the existing draft and returned focus to the labeled composer without selecting a path.
+- The hydrated citation appeared as a distinct `Source: Example report` link adjacent to its exact claim. No assistant-authored markup, embeds, images, or automatic outbound content appeared.
+- A deliberately invalid operation response failed closed to the application-owned `Failed` status and preserved the existing draft. The exhaustive automated state tests remain the authoritative proof for valid Saved, Conflict, Rejected, cancellation, and independently correlated monotonic transitions.
+- The first rendered attempt exposed a crash when the session endpoint returned a truthy non-session payload. The fix in `client/src/App.tsx` now fails closed before reading user fields, and `client/src/App.auth.test.tsx` covers malformed root and login-route payloads. The rendered checks above were rerun on the fixed tree.
+
+### Founder-authorized MVP acceptance exception — 2026-09-03
+
+The founder explicitly removed the manual screen-reader pass from this MVP's U6 acceptance scope after the rendered checks above, as recorded by the plan's 2026-09-03 U6 MVP accessibility amendment. VoiceOver was enabled only long enough to confirm that the application exposed its headings, labeled composer, citation link name, buttons, disclosure, and Method hierarchy to the macOS accessibility tree, then was turned off. No complete spoken-navigation pass is claimed. Automated accessibility semantics and the rendered keyboard/focus checks remain recorded evidence, but they are not represented as a substitute for the waived manual screen-reader pass. This waiver applies only to U6 acceptance; U10's manual screen-reader release check remains required and outstanding.

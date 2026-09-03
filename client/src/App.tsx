@@ -35,6 +35,26 @@ function SessionLoading() {
   );
 }
 
+function hasAuthenticatedUser(
+  session: unknown,
+): session is { user: { id: string; email: string } } {
+  if (!session || typeof session !== 'object' || !('user' in session)) {
+    return false;
+  }
+
+  const { user } = session;
+  return Boolean(
+    user
+      && typeof user === 'object'
+      && 'id' in user
+      && typeof user.id === 'string'
+      && user.id.trim()
+      && 'email' in user
+      && typeof user.email === 'string'
+      && user.email.trim(),
+  );
+}
+
 function AuthenticatedRoot() {
   const { data: session, isPending } = authClient.useSession();
   const [, navigate] = useLocation();
@@ -42,12 +62,12 @@ function AuthenticatedRoot() {
   const [signOutError, setSignOutError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isPending && !session) {
+    if (!isPending && !hasAuthenticatedUser(session)) {
       navigate('/login', { replace: true });
     }
   }, [isPending, navigate, session]);
 
-  if (isPending || !session) {
+  if (isPending || !hasAuthenticatedUser(session)) {
     return <SessionLoading />;
   }
 
@@ -81,12 +101,12 @@ function LoginEntry() {
   const [, navigate] = useLocation();
 
   useEffect(() => {
-    if (!isPending && session) {
+    if (!isPending && hasAuthenticatedUser(session)) {
       navigate('/', { replace: true });
     }
   }, [isPending, navigate, session]);
 
-  if (isPending || session) {
+  if (isPending || hasAuthenticatedUser(session)) {
     return <SessionLoading />;
   }
 
