@@ -8,8 +8,13 @@ import {
 import { z } from 'zod';
 import {
   claimLinkedCitationSchema,
+  conversationHistoryPageSchema,
   citationToBrowserSourceUrlPart,
   createBrowserSourceUrlPart,
+  NORMALIZED_HISTORY_MAX_CITATIONS,
+  NORMALIZED_HISTORY_MAX_PARTS,
+  NORMALIZED_HISTORY_MAX_TEXT_LENGTH,
+  streamCorrelationIdSchema,
   type BrowserSourceUrlPart,
   type ClaimLinkedCitation,
 } from '../../shared/streaming-schemas.js';
@@ -110,6 +115,20 @@ function opaqueCitationId(prefix: 'citation' | 'source', value: string): string 
   return `${prefix}_${createHash('sha256').update(value).digest('base64url').slice(0, 32)}`;
 }
 
+function browserSafeMessageId(providerItemId: string): string {
+  const parsed = streamCorrelationIdSchema.safeParse(providerItemId);
+  return parsed.success
+    ? parsed.data
+    : `message_${createHash('sha256').update(providerItemId).digest('base64url').slice(0, 32)}`;
+}
+
+function toBrowserSafeHistoryMessage(message: NormalizedHistoryMessage): NormalizedHistoryMessage {
+  return {
+    ...message,
+    id: browserSafeMessageId(message.id),
+  };
+}
+
 function displayContent(
   content: unknown,
   role: 'user' | 'assistant',
@@ -131,10 +150,12 @@ function displayContent(
     if (!allowedTypes.has(String(record.type)) || typeof record.text !== 'string' || record.text.length === 0) {
       continue;
     }
-    const text = record.text;
+    if (texts.length >= NORMALIZED_HISTORY_MAX_PARTS) break;
+    const text = record.text.slice(0, NORMALIZED_HISTORY_MAX_TEXT_LENGTH);
     texts.push(text);
     if (role === 'assistant' && turnId && Array.isArray(record.annotations)) {
       for (let annotationIndex = 0; annotationIndex < record.annotations.length; annotationIndex += 1) {
+        if (citations.length >= NORMALIZED_HISTORY_MAX_CITATIONS) break;
         const annotation = record.annotations[annotationIndex];
         if (!annotation || typeof annotation !== 'object') continue;
         const value = annotation as Record<string, unknown>;
@@ -636,11 +657,11 @@ export async function loadConversationHistory(input: {
     olderCursor = cursorCodec.encode({ conversationId, after: nextAfter });
   }
 
-  return {
+  return conversationHistoryPageSchema.parse({
     status: 'ready',
-    messages: projection.messages,
+    messages: projection.messages.map(toBrowserSafeHistoryMessage),
     ...(olderCursor ? { olderCursor } : {}),
-  };
+  });
 }
 
 export class OpenAIConversationClient implements ConversationItemsClient {

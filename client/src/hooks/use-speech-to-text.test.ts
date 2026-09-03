@@ -140,6 +140,25 @@ describe('useSpeechToText', () => {
   });
 
   describe('recording lifecycle', () => {
+    it('can target the authenticated bounded-audio endpoint without changing the legacy default', async () => {
+      const { result } = renderHook(() => useSpeechToText(defaultOptions({
+        endpoint: '/api/agent/audio/transcribe',
+      })));
+
+      await act(async () => {
+        result.current.startRecording('chat-draft');
+      });
+      await act(async () => {
+        result.current.stopRecording();
+      });
+
+      await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/agent/audio/transcribe?language=en',
+        expect.objectContaining({ method: 'POST', credentials: 'include' }),
+      );
+    });
+
     it('transitions from idle to recording when startRecording is called', async () => {
       const { result } = renderHook(() => useSpeechToText(defaultOptions()));
       expect(result.current.recordingState).toBe('idle');

@@ -79,6 +79,28 @@
 }
 
 @layer utilities {
+  .method-map-label {
+    @apply mb-1 text-[0.7rem] font-extrabold uppercase tracking-[0.09em] text-slate-600;
+    font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+
+  .method-path-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+  }
+
+  .method-path-card {
+    display: grid;
+    grid-template-rows: subgrid;
+    grid-row: span 7;
+    row-gap: 0;
+  }
+
+  .method-path-band {
+    @apply border-t border-[#e2ded2] p-4;
+  }
+
   .gradient-primary {
     background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)));
   }
@@ -224,5 +246,19 @@
       opacity: 1;
       transform: translateY(0);
     }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .method-path-card {
+      animation: fadeInUp 0.55s ease-out both;
+    }
+    .method-path-card:nth-child(1) { animation-delay: 60ms; }
+    .method-path-card:nth-child(2) { animation-delay: 180ms; }
+    .method-path-card:nth-child(3) { animation-delay: 300ms; }
+  }
+
+  @media (max-width: 1000px) {
+    .method-path-grid { grid-template-columns: 1fr; }
+    .method-path-card { grid-row: auto; grid-template-rows: none; }
   }
 }

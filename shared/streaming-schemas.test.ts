@@ -4,7 +4,13 @@ import {
   citationToBrowserSourceUrlPart,
   claimLinkedCitationSchema,
   createBrowserSourceUrlPart,
+  conversationHistoryPageSchema,
+  NORMALIZED_HISTORY_MAX_CITATIONS,
+  NORMALIZED_HISTORY_MAX_PARTS,
+  NORMALIZED_HISTORY_MAX_TEXT_LENGTH,
   isOperationStatusTransition,
+  methodOperationEnvelopeSchema,
+  methodWorkspaceResponseSchema,
   operationStatusDataSchema,
   operationStatusStreamPartSchema,
 } from './streaming-schemas.js';
@@ -106,5 +112,60 @@ describe('browser-safe Method stream contracts', () => {
     expect(claimLinkedCitationSchema.safeParse({
       ...citation, providerResult: { raw: true },
     }).success).toBe(false);
+  });
+
+  it('fails closed on malformed history and unvalidated workspace state', () => {
+    expect(conversationHistoryPageSchema.safeParse({
+      status: 'empty', messages: [], olderCursor: 'must-not-exist',
+    }).success).toBe(false);
+    expect(conversationHistoryPageSchema.safeParse({
+      status: 'ready', messages: [{
+        id: 'message_1', role: 'assistant', parts: [{ type: 'html', text: '<img>' }],
+      }],
+    }).success).toBe(false);
+    expect(methodWorkspaceResponseSchema.safeParse({
+      status: 'ready', map: { schemaVersion: 2, revision: 0 },
+    }).success).toBe(false);
+  });
+
+  it('keeps browser history bounds explicit in the shared transport contract', () => {
+    const base = {
+      status: 'ready' as const,
+      messages: [{
+        id: 'message_1',
+        role: 'assistant' as const,
+        parts: Array.from({ length: NORMALIZED_HISTORY_MAX_PARTS }, () => ({
+          type: 'text' as const,
+          text: 'x'.repeat(NORMALIZED_HISTORY_MAX_TEXT_LENGTH),
+        })),
+      }],
+    };
+    expect(conversationHistoryPageSchema.safeParse(base).success).toBe(true);
+    expect(conversationHistoryPageSchema.safeParse({
+      ...base,
+      messages: [{
+        ...base.messages[0],
+        parts: [...base.messages[0].parts, { type: 'text', text: 'overflow' }],
+      }],
+    }).success).toBe(false);
+    expect(conversationHistoryPageSchema.safeParse({
+      ...base,
+      messages: [{
+        ...base.messages[0],
+        parts: [{ type: 'text', text: 'x'.repeat(NORMALIZED_HISTORY_MAX_TEXT_LENGTH + 1) }],
+      }],
+    }).success).toBe(false);
+    expect(NORMALIZED_HISTORY_MAX_CITATIONS).toBe(100);
+  });
+
+  it('accepts operation envelopes from every canonical Method checkpoint', () => {
+    expect(methodOperationEnvelopeSchema.safeParse({
+      status: 'rejected',
+      operation: 'confirm-why',
+      authoritativeRevision: 12,
+      derivedModule: 'enter-side-doors',
+      pendingDecision: { kind: 'side-door-selection', targetId: 'doors-1', targetRevision: 1 },
+      errorClass: 'operation-unavailable',
+    }).success).toBe(true);
   });
 });

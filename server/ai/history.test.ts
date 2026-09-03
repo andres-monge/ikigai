@@ -1,6 +1,12 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import {
+  conversationHistoryPageSchema,
+  NORMALIZED_HISTORY_MAX_CITATIONS,
+  NORMALIZED_HISTORY_MAX_PARTS,
+  NORMALIZED_HISTORY_MAX_TEXT_LENGTH,
+} from '../../shared/streaming-schemas.js';
+import {
   ConversationHistoryProviderError,
   OpenAIConversationClient,
   createConversationHistoryCursorCodec,
@@ -962,6 +968,90 @@ describe('protected OpenAI Conversation history adapter', () => {
         end: joinedText.length,
       }),
     ]);
+  });
+
+  it('bounds oversized provider history before returning the browser contract', async () => {
+    const claim = 'application/json';
+    const prefix = 'The official media type is ';
+    const claimStart = prefix.length;
+    const visiblePrefix = `${prefix}${claim}.`;
+    const oversizedText = visiblePrefix.padEnd(NORMALIZED_HISTORY_MAX_TEXT_LENGTH + 1, 'x');
+    const invalidProviderId = `assistant id with spaces ${'z'.repeat(150)}`;
+    const retainedTailParts = Array.from(
+      { length: NORMALIZED_HISTORY_MAX_PARTS - 1 },
+      (_, index) => ({ type: 'output_text', text: `part-${index}` }),
+    );
+    const discardedTailParts = Array.from({ length: 4 }, (_, index) => ({
+      type: 'output_text',
+      text: `discarded-${index}`,
+    }));
+    const annotations = [
+      {
+        type: 'url_citation',
+        start_index: NORMALIZED_HISTORY_MAX_TEXT_LENGTH,
+        end_index: NORMALIZED_HISTORY_MAX_TEXT_LENGTH + 1,
+        url: 'https://example.com/truncated-claim',
+      },
+      ...Array.from({ length: NORMALIZED_HISTORY_MAX_CITATIONS + 5 }, (_, index) => ({
+        type: 'url_citation',
+        start_index: claimStart,
+        end_index: claimStart + claim.length,
+        url: `https://example.com/source-${index}`,
+      })),
+    ];
+    const result = await loadConversationHistory({
+      storage: {
+        getConversationMapping: vi.fn(async () => 'conversation-server-owned'),
+        listAgentTurns: vi.fn(async () => [durableTurn({
+          turnId: 'oversized-provider-history',
+          userItemId: 'oversized-user',
+          assistantItemId: invalidProviderId,
+        })]),
+      },
+      client: {
+        listItems: vi.fn(async () => ({
+          data: [
+            {
+              id: invalidProviderId,
+              type: 'message',
+              role: 'assistant',
+              content: [
+                { type: 'output_text', text: oversizedText, annotations },
+                ...retainedTailParts,
+                ...discardedTailParts,
+              ],
+            },
+            {
+              id: 'oversized-user',
+              type: 'message',
+              role: 'user',
+              content: [{ type: 'input_text', text: 'What is the media type?' }],
+            },
+          ],
+          hasMore: false,
+        })),
+      },
+      userId: 'explorer-1',
+    });
+
+    expect(conversationHistoryPageSchema.safeParse(result).success).toBe(true);
+    const assistant = result.messages[1];
+    expect(assistant?.id).toMatch(/^message_[A-Za-z0-9_-]{32}$/u);
+    expect(assistant?.parts).toHaveLength(NORMALIZED_HISTORY_MAX_PARTS);
+    expect(assistant?.parts[0]?.text).toHaveLength(NORMALIZED_HISTORY_MAX_TEXT_LENGTH);
+    expect(assistant?.parts.at(-1)?.text).toBe(`part-${NORMALIZED_HISTORY_MAX_PARTS - 2}`);
+    expect(assistant?.citations).toHaveLength(NORMALIZED_HISTORY_MAX_CITATIONS);
+    expect(assistant?.sources).toHaveLength(NORMALIZED_HISTORY_MAX_CITATIONS);
+    expect(assistant?.citations?.some((citation) => citation.url.endsWith('/truncated-claim'))).toBe(false);
+    const joinedText = assistant?.parts.map((part) => part.text).join('') ?? '';
+    expect(assistant?.citations).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        textHash: textDigest(joinedText),
+        exactClaim: claim,
+        start: claimStart,
+        end: claimStart + claim.length,
+      }),
+    ]));
   });
 
   it('rehydrates an adjacent citation marker to the same claim span and stable turn association used live', async () => {

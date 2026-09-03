@@ -19,6 +19,8 @@ import {
   careerMapOperationSchemas,
   type CareerMapOperationType,
 } from './career-map/operations';
+import { methodModuleSchema } from './career-map/common';
+import { careerMapSchema } from './career-map/model';
 
 /* -------------------------------------------------------------------------- */
 /* METHOD UI TRANSPORT                                                        */
@@ -234,6 +236,81 @@ export type RevelioUIDataTypes = {
   operationStatus: OperationStatusData;
   claimCitation: ClaimLinkedCitation;
 };
+
+/** Browser-safe response contracts for the connected Method workspace. */
+export const NORMALIZED_HISTORY_MAX_TEXT_LENGTH = 100_000;
+export const NORMALIZED_HISTORY_MAX_PARTS = 32;
+export const NORMALIZED_HISTORY_MAX_CITATIONS = 100;
+
+export const normalizedHistoryMessageSchema = z.object({
+  id: streamCorrelationIdSchema,
+  role: z.enum(['user', 'assistant']),
+  parts: z.array(z.object({
+    type: z.literal('text'),
+    text: z.string().max(NORMALIZED_HISTORY_MAX_TEXT_LENGTH),
+  }).strict()).max(NORMALIZED_HISTORY_MAX_PARTS),
+  sources: z.array(browserSourceUrlPartSchema).max(NORMALIZED_HISTORY_MAX_CITATIONS).optional(),
+  citations: z.array(claimLinkedCitationSchema).max(NORMALIZED_HISTORY_MAX_CITATIONS).optional(),
+  deliveryStatus: z.literal('stopped').optional(),
+}).strict();
+
+export type NormalizedHistoryMessageData = z.infer<typeof normalizedHistoryMessageSchema>;
+
+export const conversationHistoryPageSchema = z.object({
+  status: z.enum(['empty', 'ready']),
+  messages: z.array(normalizedHistoryMessageSchema).max(100),
+  olderCursor: z.string().min(1).max(4_096).optional(),
+}).strict().superRefine((page, context) => {
+  if (page.status === 'empty' && (page.messages.length > 0 || page.olderCursor)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Empty history cannot include messages or an older cursor.',
+    });
+  }
+});
+
+export type ConversationHistoryPageData = z.infer<typeof conversationHistoryPageSchema>;
+
+export const methodWorkspaceResponseSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('empty'), map: z.null() }).strict(),
+  z.object({ status: z.literal('ready'), map: careerMapSchema }).strict(),
+  z.object({ status: z.literal('repair-required') }).strict(),
+]);
+
+export type MethodWorkspaceResponseData = z.infer<typeof methodWorkspaceResponseSchema>;
+
+export const methodOperationEnvelopeSchema = z.object({
+  status: z.enum(['committed', 'idempotent-replay', 'conflict', 'rejected']),
+  operation: z.custom<CareerMapOperationType>((value) => (
+    typeof value === 'string' && Object.hasOwn(careerMapOperationSchemas, value)
+  ), 'Unknown Career Map operation.'),
+  authoritativeRevision: z.number().int().nonnegative(),
+  derivedModule: methodModuleSchema,
+  pendingDecision: z.object({
+    kind: z.enum([
+      'why-confirmation',
+      'path-selection',
+      'path-revision-confirmation',
+      'first-project-confirmation',
+      'project-revision-confirmation',
+      'follow-on-project-selection',
+      'continue-choice',
+      'next-move',
+      'peer-insight-confirmation',
+      'commitment-completion',
+      'proof-confirmation',
+      'side-door-selection',
+    ]),
+    targetId: z.string().min(1).max(160),
+    targetRevision: z.number().int().positive(),
+  }).strict().nullable(),
+  errorClass: z.string().min(1).max(160).optional(),
+  retryable: z.boolean().optional(),
+  turnStatus: z.literal('completed').optional(),
+  replay: z.literal(true).optional(),
+}).strict();
+
+export type MethodOperationEnvelopeData = z.infer<typeof methodOperationEnvelopeSchema>;
 
 /* -------------------------------------------------------------------------- */
 /* PURPOSE DISCOVERY STREAMING SCHEMA                                        */

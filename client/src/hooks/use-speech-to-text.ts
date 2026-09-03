@@ -18,6 +18,8 @@ export interface UseSpeechToTextOptions {
   onEmptyTranscription?: () => void;
   /** Called when an error occurs (permission denied, network failure, etc.) */
   onError?: (message: string) => void;
+  /** Override for the authenticated Method workspace. Legacy callers keep `/api/transcribe`. */
+  endpoint?: string;
 }
 
 export interface UseSpeechToTextReturn {
@@ -105,7 +107,13 @@ export function _resetBrowserSupportCache(): void {
  * ```
  */
 export function useSpeechToText(options: UseSpeechToTextOptions): UseSpeechToTextReturn {
-  const { language, onTranscription, onEmptyTranscription, onError } = options;
+  const {
+    language,
+    onTranscription,
+    onEmptyTranscription,
+    onError,
+    endpoint = '/api/transcribe',
+  } = options;
 
   const [recordingState, setRecordingState] = useState<RecordingState>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -154,11 +162,12 @@ export function useSpeechToText(options: UseSpeechToTextOptions): UseSpeechToTex
       const timeoutId = setTimeout(() => abortController.abort(), TRANSCRIBE_TIMEOUT_MS);
 
       try {
-        const res = await fetch(`/api/transcribe?language=${encodeURIComponent(language)}`, {
+        const res = await fetch(`${endpoint}?language=${encodeURIComponent(language)}`, {
           method: 'POST',
           headers: { 'Content-Type': audioBlob.type },
           body: audioBlob,
           signal: abortController.signal,
+          credentials: 'include',
         });
 
         if (!res.ok) {
@@ -188,7 +197,7 @@ export function useSpeechToText(options: UseSpeechToTextOptions): UseSpeechToTex
         setActiveTextareaId(null);
       }
     },
-    [language],
+    [endpoint, language],
   );
 
   /**
