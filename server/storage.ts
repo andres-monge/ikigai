@@ -723,7 +723,13 @@ async function transitionPendingFirstProjectFraming(
     .where(eq(careerMapHistory.userId, input.userId))
     .orderBy(asc(careerMapHistory.resultRevision));
   const loaded = validateCareerMapRow(row, history);
-  if (loaded.status !== 'ready') throw new CareerMapRepairRequiredError(loaded);
+  if (loaded.status !== 'ready') {
+    // A completed framing turn must not claim delivery without its atomic map
+    // transition. Failure and cancellation cleanup still terminalize the turn
+    // while canonical Method writes remain disabled for an untrusted map.
+    if (input.status === 'completed') throw new CareerMapRepairRequiredError(loaded);
+    return undefined;
+  }
   const project = loaded.map.projects.find((candidate) => (
     candidate.acceptanceFraming?.status === 'pending'
     && candidate.acceptanceFraming.assistantTurnId === input.turnId

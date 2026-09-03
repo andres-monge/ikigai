@@ -815,6 +815,62 @@ describe('PostgresStorage Method map, history, and ownership', () => {
     }
   });
 
+  it('fails closed instead of completing first-project framing on a repair-required map', async () => {
+    const userId = owner('framing-repair-completion');
+    await storage.getOrCreateCareerMap(userId);
+    const setupTurn = await beginTurn(userId, 'framing-repair-completion-setup');
+    const projectId = await seedPendingFirstProject(userId, setupTurn.leaseId, 'framing-repair-completion');
+    await storage.completeAgentTurn({ userId, turnId: setupTurn.turnId, leaseId: setupTurn.leaseId });
+    const framingTurn = await beginTurn(userId, 'framing-repair-completion-turn', 'agent-turn');
+    await persistPendingFraming(userId, framingTurn, projectId, 'framing-repair-completion');
+    await db.update(careerMaps).set({ repairRequired: true }).where(eq(careerMaps.userId, userId));
+    const [beforeCleanup] = await db.select().from(careerMaps).where(eq(careerMaps.userId, userId));
+
+    await expect(storage.completeAgentTurn({
+      userId,
+      turnId: framingTurn.turnId,
+      leaseId: framingTurn.leaseId,
+      assistantText: `${framingText}\n\n${acceptanceQuestion}`,
+    })).rejects.toBeInstanceOf(CareerMapRepairRequiredError);
+    expect((await storage.getAgentTurn(userId, framingTurn.clientMessageId))?.status).toBe('pending');
+
+    expect(await storage.failAgentTurn({
+      userId,
+      turnId: framingTurn.turnId,
+      leaseId: framingTurn.leaseId,
+      errorClass: 'CareerMapRepairRequiredError',
+    })).toMatchObject({ status: 'failed' });
+    expect(await storage.getTurnLease(userId)).toBeUndefined();
+    expect((await db.select().from(careerMaps).where(eq(careerMaps.userId, userId)))[0])
+      .toEqual(beforeCleanup);
+    expect((await storage.loadCareerMap(userId)).status).toBe('repair-required');
+    await eraseOwner(userId);
+  });
+
+  it('cancels a pending framing turn without mutating a repair-required map', async () => {
+    const userId = owner('framing-repair-cancellation');
+    await storage.getOrCreateCareerMap(userId);
+    const setupTurn = await beginTurn(userId, 'framing-repair-cancellation-setup');
+    const projectId = await seedPendingFirstProject(userId, setupTurn.leaseId, 'framing-repair-cancellation');
+    await storage.completeAgentTurn({ userId, turnId: setupTurn.turnId, leaseId: setupTurn.leaseId });
+    const framingTurn = await beginTurn(userId, 'framing-repair-cancellation-turn', 'agent-turn');
+    await persistPendingFraming(userId, framingTurn, projectId, 'framing-repair-cancellation');
+    await db.update(careerMaps).set({ repairRequired: true }).where(eq(careerMaps.userId, userId));
+    const [beforeCleanup] = await db.select().from(careerMaps).where(eq(careerMaps.userId, userId));
+
+    expect(await storage.cancelAgentTurn({
+      userId,
+      turnId: framingTurn.turnId,
+      leaseId: framingTurn.leaseId,
+    })).toMatchObject({ status: 'cancelled' });
+
+    expect(await storage.getTurnLease(userId)).toBeUndefined();
+    expect((await db.select().from(careerMaps).where(eq(careerMaps.userId, userId)))[0])
+      .toEqual(beforeCleanup);
+    expect((await storage.loadCareerMap(userId)).status).toBe('repair-required');
+    await eraseOwner(userId);
+  });
+
   it('loads a pre-U7 schema-version-2 accepted first project without acceptance framing', async () => {
     const userId = owner('legacy-accepted-project');
     await storage.getOrCreateCareerMap(userId);
@@ -1180,7 +1236,7 @@ describe('PostgresStorage lease and client-message turns', () => {
 
     const replacement = await beginTurn(userId, 'framing-expired-reclaim-replacement', 'agent-turn');
 
-    expect(replacement.turn.turnId).not.toBe(framingTurn.turnId);
+    expect(replacement.turnId).not.toBe(framingTurn.turnId);
     expect((await storage.getAgentTurn(userId, framingTurn.clientMessageId))?.status).toBe('failed');
     const loaded = await storage.loadCareerMap(userId);
     expect(loaded).toMatchObject({ status: 'ready', map: { revision: 7 } });
@@ -1483,11 +1539,15 @@ describe('PostgresStorage repair, erasure, and integrity', () => {
         .where(eq(agentConversationMappings.userId, userId))).toHaveLength(0);
       expect(await db.select().from(agentTurns).where(eq(agentTurns.userId, userId))).toHaveLength(1);
       expect(await db.select().from(agentTurnLeases).where(eq(agentTurnLeases.userId, userId))).toHaveLength(1);
+      const [beforeCleanup] = await db.select().from(careerMaps).where(eq(careerMaps.userId, userId));
 
       expect(await storage.failAgentTurn({
         userId, turnId: turn.turnId, leaseId: turn.leaseId, errorClass: 'RepairRequired',
       })).toMatchObject({ status: 'failed' });
       expect(await storage.getTurnLease(userId)).toBeUndefined();
+      expect((await db.select().from(careerMaps).where(eq(careerMaps.userId, userId)))[0])
+        .toEqual(beforeCleanup);
+      expect((await storage.loadCareerMap(userId)).status).toBe('repair-required');
       await eraseOwner(userId);
     },
   );
