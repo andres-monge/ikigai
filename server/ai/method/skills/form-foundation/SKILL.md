@@ -1,7 +1,7 @@
 ---
 name: form-foundation
 description: Form a provisional Why I Work through an adaptive minimum-sufficient Foundation interview.
-version: 1.0.2
+version: 1.0.3
 ---
 # Form the Foundation
 
@@ -25,7 +25,7 @@ Help the explorer form a concise, provisional Why I Work that says whom or what 
 7. Record practical constraints without putting detailed economics into the Why itself. “No current constraint” is a valid reality boundary.
 8. If status, praise, attention, or identity is visibly distorting an answer, you may ask what they would choose if those needs were already satisfied. Do not ask this routinely.
 
-The quoted questions above are canonical English wording for an English conversation. In every other language, translate them faithfully and keep every user-facing word in the language of the explorer's latest message; never switch to English merely because an example is written in English.
+The quoted questions above are canonical English wording for an English conversation. Before every reply, identify the language of the explorer's latest message again. In every other language, translate the question faithfully and keep every user-facing word in that language, including narration after tool results; never switch to English merely because an example is written in English or because module and tool-result text is English.
 
 ## State operations
 

@@ -13,6 +13,9 @@ import {
 const iso = (n: number) => `2026-08-31T12:${String(n % 60).padStart(2, '0')}:00.000Z`;
 const present = (n: number) => ({ kind: 'model-presentation' as const, assistantTurnId: `assistant-${n}`, turnSequence: n, completed: true as const, presentedAt: iso(n) });
 const act = (n: number) => ({ kind: 'user-message' as const, actionId: `action-${n}`, turnId: `user-${n}`, turnSequence: n, occurredAt: iso(n) });
+const framingText = "The point of a project is not to succeed, it's to learn if it's something you'd want to pursue. Think of projects like dating: you start with something chill and low commitment, then invest more only if each date makes you want another.";
+const acceptancePhrase = 'I explicitly accept this Path Project.';
+const acceptanceQuestion = `Will you explicitly accept this Path Project by replying “${acceptancePhrase}”?`;
 const pathInputs = (seed: number): [PurposePathInput, PurposePathInput, PurposePathInput] => [0, 1, 2].map((offset) => ({
   id: `path-${seed}-${offset}`, revision: 1, name: `Path ${seed}.${offset}`,
   servesWhy: `Serve the Why with method ${offset}`, possibility: `Possibility ${offset}`,
@@ -60,6 +63,9 @@ describe('model-based Method state machine', () => {
       map = committed(map, make(map, 'select-purpose-path', { setId: `set-${seed}`, setRevision: 1, pathId: `path-${seed}-${selectedIndex}`, pathRevision: 1, action: act(sequence) }));
       sequence += 1;
       map = committed(map, make(map, 'propose-first-project', { project: { id: `project-${seed}`, revision: 1, title: `Real project ${seed}`, outcome: 'A real person uses the result', audience: 'A firsthand beneficiary', whyWanted: 'The result matters now', learningGoal: 'Learn from doing the work', firstVersion: 'One useful version', firstStep: 'Talk to the beneficiary', decisionQuestion: 'Do I want to keep going?', evidenceCue: 'Notice energy and resistance' }, presentation: present(sequence) }));
+      sequence += 1;
+      map = committed(map, make(map, 'present-first-project-framing', { projectId: `project-${seed}`, projectRevision: 1, locale: 'en', framingText, acceptancePhrase, acceptanceQuestion, moduleVersion: '1.1.1', presentation: present(sequence) }));
+      map = committed(map, make(map, 'deliver-first-project-framing', { projectId: `project-${seed}`, projectRevision: 1, assistantText: `${framingText}\n\n${acceptanceQuestion}`, presentation: present(sequence) }));
       sequence += 1;
       map = committed(map, make(map, 'accept-first-project', { projectId: `project-${seed}`, projectRevision: 1, action: act(sequence) }));
       sequence += 1;

@@ -4,11 +4,13 @@ import { z } from 'zod';
 import {
   applyCareerMapOperation,
   createCareerMap,
+  deriveMethodCheckpoint,
   type CareerMap,
   type CareerMapOperation,
 } from '../../shared/career-map/index.js';
 import { MethodOwnerBusyError, type IStorage, type PersistCareerMapResult } from '../storage.js';
 import { createMethodModuleLoader } from './method/loader.js';
+import { R22_CANONICAL_ENGLISH } from './method/base-instructions.js';
 import {
   createMethodTools,
   createMethodResponseOperationGuard,
@@ -16,9 +18,12 @@ import {
   executeWorkspaceTool,
   refreshMethodState,
   toolNamesForCheckpoint,
+  workspaceOperationRequestSchema,
 } from './tools.js';
 
 const at = (second: number) => `2030-02-01T00:00:${String(second).padStart(2, '0')}.000Z`;
+const acceptancePhrase = 'I explicitly accept this Path Project.';
+const acceptanceQuestion = `Will you explicitly accept this Path Project by replying “${acceptancePhrase}”?`;
 const userAction = (sequence: number, turnId = `user-turn-${sequence}`) => ({
   kind: 'user-message' as const,
   actionId: `message-${sequence}`,
@@ -48,7 +53,7 @@ function pendingWhy(
   return result.map;
 }
 
-function pendingProject(): CareerMap {
+function pendingProject(framed = true): CareerMap {
   let map = pendingWhy();
   const apply = (operation: CareerMapOperation) => {
     const result = applyCareerMapOperation(map, operation);
@@ -94,6 +99,31 @@ function pendingProject(): CareerMap {
       },
     },
   });
+  if (framed) {
+    apply({
+      type: 'present-first-project-framing', sourceId: 'project-framing-source',
+      expectedRevision: map.revision, occurredAt: at(6), payload: {
+        projectId: 'project-1', projectRevision: 1, locale: 'en',
+        framingText: R22_CANONICAL_ENGLISH, acceptancePhrase, acceptanceQuestion,
+        moduleVersion: '1.1.1',
+        presentation: {
+          kind: 'model-presentation', assistantTurnId: 'project-framing-turn',
+          turnSequence: 6, completed: true, presentedAt: at(6),
+        },
+      },
+    });
+    apply({
+      type: 'deliver-first-project-framing', sourceId: 'project-framing-delivery',
+      expectedRevision: map.revision, occurredAt: at(6), payload: {
+        projectId: 'project-1', projectRevision: 1,
+        assistantText: `${R22_CANONICAL_ENGLISH}\n\n${acceptanceQuestion}`,
+        presentation: {
+          kind: 'model-presentation', assistantTurnId: 'project-framing-turn',
+          turnSequence: 6, completed: true, presentedAt: at(6),
+        },
+      },
+    });
+  }
   return map;
 }
 
@@ -221,8 +251,10 @@ describe('strict state-specific Method tools', () => {
       'send', 'publish', 'apply', 'submit', 'message', 'email', 'post', 'external_action',
     ]));
     expect(Object.values(tools).every((candidate) => candidate.strict === true)).toBe(true);
-    expect(names).not.toEqual(expect.arrayContaining([
+    expect(names).toEqual(expect.arrayContaining([
       'accept_first_project',
+    ]));
+    expect(names).not.toEqual(expect.arrayContaining([
       'propose_project_revision',
       'confirm_project_revision',
       'propose_follow_on_projects',
@@ -863,6 +895,34 @@ describe('strict state-specific Method tools', () => {
       expect.arrayContaining([expect.not.objectContaining({ sources: expect.anything() })]),
     );
   });
+
+  it.each([
+    ['quoted request followed by a sentence-boundary denial', 'Please "suggest three Purpose Paths." But do not suggest them.'],
+    ['quoted request followed by a global authorization denial', 'My coach wrote “replace Path 2.” I do not authorize that change.'],
+    ['direct whole-message veto', "I don't want you to suggest three Purpose Paths."],
+  ])('vetoes a Suggested operation for %s', async (_label, currentMessage) => {
+    const storage = new ReducerStorage(confirmedWhy());
+    const loader = await createMethodModuleLoader();
+    const tools = createMethodTools({
+      ...runtime(storage), loader, surface: 'agent-turn',
+      prepared: { current: await refreshMethodState(storage, loader, 'explorer-1') },
+      currentMessage,
+    });
+    const path = (number: number) => ({
+      id: `veto-path-${number}`, revision: 1, name: `Veto Path ${number}`,
+      servesWhy: `Serve ${number}`, possibility: `Possibility ${number}`,
+      evidence: [`Evidence ${number}`], centralUnknown: `Unknown ${number}`,
+      projectPreview: `Project ${number}`, practicalFit: `Fit ${number}`,
+    });
+
+    const result = await tools.propose_purpose_paths.execute?.({
+      setId: 'veto-set', setRevision: 1, paths: [path(1), path(2), path(3)],
+    }, { toolCallId: `veto-${_label}`, messages: [] } as never);
+
+    expect(result).toMatchObject({ status: 'rejected', errorClass: 'SuggestedOperationAuthorizationError' });
+    expect(storage.persist).not.toHaveBeenCalled();
+  });
+
   it('takes Suggested proposal and edit authority only from the exact current explorer message', async () => {
     const loader = await createMethodModuleLoader();
     const path = (number: number) => ({
@@ -890,6 +950,23 @@ describe('strict state-specific Method tools', () => {
     });
     expect(unauthorizedStorage.persist).not.toHaveBeenCalled();
 
+    const wrongTargetStorage = new ReducerStorage(pendingPaths());
+    const wrongTargetTools = createMethodTools({
+      ...runtime(wrongTargetStorage), loader, surface: 'agent-turn',
+      prepared: { current: await refreshMethodState(wrongTargetStorage, loader, 'explorer-1') },
+      currentMessage: "Please replace Path 2; I don't want a networking-heavy path.",
+      timing: { turnSequence: 4, occurredAt: at(4) },
+    });
+    const wrongTarget = await wrongTargetTools.replace_purpose_path.execute?.({
+      sourceSetId: 'set-1', sourceSetRevision: 1, replacedPathId: 'path-1',
+      replacementSetId: 'set-wrong', replacementSetRevision: 1,
+      replacement: { ...path(1), id: 'path-wrong', name: 'Wrong replacement' },
+    }, { toolCallId: 'wrong-path-edit', messages: [] } as never);
+    expect(wrongTarget).toMatchObject({
+      status: 'rejected', errorClass: 'SuggestedOperationAuthorizationError',
+    });
+    expect(wrongTargetStorage.persist).not.toHaveBeenCalled();
+
     const editStorage = new ReducerStorage(pendingPaths());
     const editTools = createMethodTools({
       ...runtime(editStorage), loader, surface: 'agent-turn',
@@ -904,6 +981,134 @@ describe('strict state-specific Method tools', () => {
     }, { toolCallId: 'explicit-path-edit', messages: [] } as never);
     expect(edited).toMatchObject({ status: 'committed', authoritativeRevision: 4 });
     expect(editStorage.persist).toHaveBeenCalledOnce();
+  });
+
+  it('combines both requested plural numeric aliases while allowing the separately named preserved sibling', async () => {
+    const storage = new ReducerStorage(pendingPaths());
+    const loader = await createMethodModuleLoader();
+    const tools = createMethodTools({
+      ...runtime(storage), loader, surface: 'agent-turn',
+      prepared: { current: await refreshMethodState(storage, loader, 'explorer-1') },
+      currentMessage: 'Combine Paths 1 and 2; keep Path 3 as the preserved sibling.',
+      timing: { turnSequence: 4, occurredAt: at(4) },
+    });
+    const merged = {
+      id: 'path-4', revision: 1, name: 'Merged Path', servesWhy: 'Serve through a synthesis',
+      possibility: 'A merged possibility', evidence: ['Evidence 1', 'Evidence 2'],
+      centralUnknown: 'Merged unknown', projectPreview: 'Merged project', practicalFit: 'Merged fit',
+    };
+    const newThird = {
+      id: 'path-5', revision: 1, name: 'New Third Path', servesWhy: 'Serve another way',
+      possibility: 'A distinct possibility', evidence: ['Evidence 5'], centralUnknown: 'Unknown 5',
+      projectPreview: 'Project 5', practicalFit: 'Fit 5',
+    };
+    const preserved = storage.map.pathSets.at(-1)!.paths[2];
+
+    const result = await tools.combine_purpose_paths.execute?.({
+      sourceSetId: 'set-1', sourceSetRevision: 1, combinedPathIds: ['path-1', 'path-2'],
+      replacementSetId: 'set-combined', replacementSetRevision: 1,
+      paths: [merged, newThird, {
+        id: preserved.id, revision: preserved.revision, name: preserved.name,
+        servesWhy: preserved.servesWhy, possibility: preserved.possibility,
+        evidence: preserved.evidence, centralUnknown: preserved.centralUnknown,
+        projectPreview: preserved.projectPreview, practicalFit: preserved.practicalFit,
+      }],
+    }, { toolCallId: 'combine-plural-targets', messages: [] } as never);
+
+    expect(result).toMatchObject({ status: 'committed', authoritativeRevision: 4 });
+    expect(storage.map.pathSets.at(-1)?.combinedFromPathIds).toEqual(['path-1', 'path-2']);
+  });
+
+  it('allows the three adaptive U7 same-turn Suggested transitions only from canonical current-action evidence', async () => {
+    const loader = await createMethodModuleLoader();
+    const current = {
+      ...userAction(2, 'current-turn'), actionId: 'current-message',
+    };
+    let foundationMap = createCareerMap('explorer-1');
+    const append = (operation: CareerMapOperation) => {
+      const result = applyCareerMapOperation(foundationMap, operation);
+      if (result.status !== 'committed') throw new Error(`${operation.type} fixture failed.`);
+      foundationMap = result.map;
+    };
+    const foundationCategories = [
+      'fascination', 'importance', 'point-of-view', 'starting-asset',
+    ] as const;
+    for (const [index, category] of foundationCategories.entries()) {
+      append({
+        type: 'append-foundation-evidence', sourceId: `current-evidence-${index}`,
+        expectedRevision: foundationMap.revision, occurredAt: at(2), payload: {
+          evidence: {
+            id: `evidence-${index}`, revision: 1, category,
+            content: `Current message evidence ${index}`, provenance: current,
+          },
+        },
+      });
+    }
+    append({
+      type: 'record-reality-constraint', sourceId: 'current-constraint',
+      expectedRevision: foundationMap.revision, occurredAt: at(2), payload: {
+        constraint: {
+          id: 'constraint-1', revision: 1, kind: 'time', description: 'Five hours weekly',
+          provenance: current,
+        },
+      },
+    });
+    const foundationStorage = new ReducerStorage(foundationMap);
+    const foundationTools = createMethodTools({
+      ...runtime(foundationStorage), loader, surface: 'agent-turn',
+      prepared: { current: await refreshMethodState(foundationStorage, loader, 'explorer-1') },
+      currentMessage: 'I lose track of time translating complexity, care about useful choices, bring facilitation experience, and have five hours weekly.',
+    });
+    const why = await foundationTools.propose_why.execute?.({
+      id: 'why-auto', revision: 1, statement: 'Make complexity useful.',
+      serves: 'People making difficult choices', pointOfView: 'Small tests beat speculation.',
+    }, { toolCallId: 'automatic-why', messages: [] } as never);
+    expect(why).toMatchObject({ status: 'committed', authoritativeRevision: 6 });
+
+    const confirmed = applyCareerMapOperation(pendingWhy(), {
+      type: 'confirm-why', sourceId: 'current-confirm-why', expectedRevision: 1,
+      occurredAt: at(2), payload: { whyId: 'why-1', whyRevision: 1, action: current },
+    });
+    if (confirmed.status !== 'committed') throw new Error('Current-turn Why fixture failed.');
+    const pathStorage = new ReducerStorage(confirmed.map);
+    const pathTools = createMethodTools({
+      ...runtime(pathStorage), loader, surface: 'agent-turn',
+      prepared: { current: await refreshMethodState(pathStorage, loader, 'explorer-1') },
+      currentMessage: 'That feels exactly right.',
+    });
+    const path = (number: number) => ({
+      id: `auto-path-${number}`, revision: 1, name: `Auto Path ${number}`,
+      servesWhy: `Serve ${number}`, possibility: `Possibility ${number}`,
+      evidence: [`Evidence ${number}`], centralUnknown: `Unknown ${number}`,
+      projectPreview: `Project ${number}`, practicalFit: `Fit ${number}`,
+    });
+    const paths = await pathTools.propose_purpose_paths.execute?.({
+      setId: 'auto-set', setRevision: 1, paths: [path(1), path(2), path(3)],
+    }, { toolCallId: 'automatic-paths', messages: [] } as never);
+    expect(paths).toMatchObject({ status: 'committed', authoritativeRevision: 3 });
+
+    const selected = applyCareerMapOperation(pendingPaths(), {
+      type: 'select-purpose-path', sourceId: 'current-select-path', expectedRevision: 3,
+      occurredAt: at(4), payload: {
+        setId: 'set-1', setRevision: 1, pathId: 'path-2', pathRevision: 1,
+        action: { ...userAction(4, 'current-turn'), actionId: 'current-message' },
+      },
+    });
+    if (selected.status !== 'committed') throw new Error('Current-turn path fixture failed.');
+    const projectStorage = new ReducerStorage(selected.map);
+    const projectTools = createMethodTools({
+      ...runtime(projectStorage), loader, surface: 'agent-turn',
+      prepared: { current: await refreshMethodState(projectStorage, loader, 'explorer-1') },
+      currentMessage: 'I choose Path 2.', timing: { turnSequence: 4, occurredAt: at(4) },
+    });
+    const project = await projectTools.propose_first_project.execute?.({
+      id: 'auto-project', revision: 1, title: 'Build a useful aid', outcome: 'One colleague uses it',
+      audience: 'A colleague I know', whyWanted: 'Reduce decision waste',
+      learningGoal: 'Learn whether iteration creates pull', firstVersion: 'One-page prototype',
+      firstStep: 'Interview the colleague', decisionQuestion: 'Do I want another iteration?',
+      evidenceCue: 'Notice voluntary pull',
+    }, { toolCallId: 'automatic-project', messages: [] } as never);
+    expect(project).toMatchObject({ status: 'committed', authoritativeRevision: 5 });
   });
 
   it('returns the same reducer envelope for an agent confirmation and a workspace confirmation', async () => {
@@ -930,26 +1135,167 @@ describe('strict state-specific Method tools', () => {
     expect(workspaceStorage.map.foundation.whyRevisions.at(-1)?.status).toBe('confirmed');
   });
 
-  it('does not expose the U7 first-project acceptance boundary on either agent or workspace', async () => {
+  it('exposes U7 first-project acceptance only to the conversation with exact current-message and target authority', async () => {
     const loader = await createMethodModuleLoader();
     const agentStorage = new ReducerStorage(pendingProject());
     const workspaceStorage = new ReducerStorage(pendingProject());
     const agentPrepared = await refreshMethodState(agentStorage, loader, 'explorer-1');
     const agentTools = createMethodTools({
       ...runtime(agentStorage), loader, surface: 'agent-turn', prepared: { current: agentPrepared },
+      currentMessage: acceptancePhrase,
+      timing: { turnSequence: 7, occurredAt: at(7) },
     });
     const exact = {
       projectId: 'project-1', projectRevision: 1,
-      presentedInTurnId: 'project-presentation-turn', sourceMessageId: 'current-message',
+      presentedInTurnId: 'project-framing-turn', sourceMessageId: 'current-message',
     };
-    expect(agentTools).not.toHaveProperty('accept_first_project');
+    const agentResult = await agentTools.accept_first_project.execute?.(
+      exact,
+      { toolCallId: 'accept-project-operation', messages: [] } as never,
+    );
     const workspaceResult = await executeWorkspaceTool({
-      runtime: { ...runtime(workspaceStorage, 'workspace-action'), loader },
+      runtime: { ...runtime(workspaceStorage, 'workspace-action'), loader, timing: { turnSequence: 7, occurredAt: at(7) } },
       expectedRevision: workspaceStorage.map.revision,
       operationType: 'accept-first-project' as never, operationId: 'accept-project-operation', rawInput: exact,
     } as never);
+    expect(agentResult).toMatchObject({
+      status: 'committed', operation: 'accept-first-project', authoritativeRevision: 8,
+      derivedModule: 'guide-path-project', pendingDecision: null,
+    });
     expect(workspaceResult).toMatchObject({ status: 'rejected', errorClass: 'operation-unavailable' });
-    expect(agentStorage.persist).not.toHaveBeenCalled();
-    expect(workspaceStorage.persist).not.toHaveBeenCalled();
+    expect(agentStorage.map.projects.at(-1)?.agreementStatus).toBe('accepted');
+    expect(workspaceStorage.map.projects.at(-1)?.agreementStatus).toBe('suggested');
+    expect(workspaceOperationRequestSchema.safeParse({
+      operationId: 'workspace-action', clientMessageId: 'current-message', expectedRevision: 7,
+      operation: { type: 'accept-first-project', input: exact },
+    }).success).toBe(false);
+  });
+
+  it('accepts the exact persisted localized phrase without using a language allowlist', async () => {
+    const localizedPhrase = 'このパス・プロジェクトを明確に受け入れます。';
+    const map = pendingProject();
+    const project = map.projects.at(-1);
+    const framing = project?.acceptanceFraming;
+    if (!framing) throw new Error('Localized framing fixture is missing.');
+    if (!project) throw new Error('Localized project fixture is missing.');
+    project.id = 'why-1'; // Deliberate cross-collection collision: project presentation still owns acceptance.
+    framing.locale = 'ja';
+    framing.acceptancePhrase = localizedPhrase;
+    framing.acceptanceQuestion = `${localizedPhrase} と返信して、明確に承認しますか？`;
+    const storage = new ReducerStorage(map);
+    const loader = await createMethodModuleLoader();
+    const tools = createMethodTools({
+      ...runtime(storage), loader, surface: 'agent-turn',
+      prepared: { current: await refreshMethodState(storage, loader, 'explorer-1') },
+      currentMessage: localizedPhrase,
+      timing: { turnSequence: 7, occurredAt: at(7) },
+    });
+
+    const result = await tools.accept_first_project.execute?.({
+      projectId: 'why-1', projectRevision: 1,
+      presentedInTurnId: 'project-framing-turn', sourceMessageId: 'current-message',
+    }, { toolCallId: 'accept-localized-project', messages: [] } as never);
+
+    expect(result).toMatchObject({ status: 'committed', operation: 'accept-first-project' });
+    expect(storage.map.projects.at(-1)?.agreementStatus).toBe('accepted');
+  });
+
+  it.each([
+    ['generic assent', 'yes'],
+    ['question', 'Should I accept this Path Project?'],
+    ['conditional', 'I accept this Path Project if the research supports it.'],
+    ['negative', 'I do not accept this Path Project.'],
+  ])('rejects first-project acceptance from %s', async (_label, currentMessage) => {
+    const storage = new ReducerStorage(pendingProject());
+    const loader = await createMethodModuleLoader();
+    const prepared = await refreshMethodState(storage, loader, 'explorer-1');
+    const tools = createMethodTools({
+      ...runtime(storage), loader, surface: 'agent-turn', prepared: { current: prepared },
+      currentMessage, timing: { turnSequence: 7, occurredAt: at(7) },
+    });
+
+    const result = await tools.accept_first_project.execute?.({
+      projectId: 'project-1', projectRevision: 1,
+      presentedInTurnId: 'project-framing-turn', sourceMessageId: 'current-message',
+    }, { toolCallId: `rejected-project-acceptance-${_label}`, messages: [] } as never);
+
+    expect(result).toMatchObject({ status: 'rejected', errorClass: 'ConfirmationAuthorizationError' });
+    expect(storage.map.projects.at(-1)?.agreementStatus).toBe('suggested');
+    expect(storage.persist).not.toHaveBeenCalled();
+  });
+
+  it('durably presents the R22 framing once before acceptance becomes available', async () => {
+    const blockedStorage = new ReducerStorage(pendingProject(false));
+    const blockedLoader = await createMethodModuleLoader();
+    const blockedTools = createMethodTools({
+      ...runtime(blockedStorage), loader: blockedLoader, surface: 'agent-turn',
+      prepared: { current: await refreshMethodState(blockedStorage, blockedLoader, 'explorer-1') },
+      currentMessage: 'Please "present the required framing." But do not present it.',
+      timing: { turnSequence: 6, occurredAt: at(6) },
+    });
+    const blocked = await blockedTools.present_first_project_framing.execute?.({
+      projectId: 'project-1', projectRevision: 1, locale: 'en',
+      framingText: R22_CANONICAL_ENGLISH, acceptancePhrase, acceptanceQuestion,
+    }, { toolCallId: 'blocked-present-framing', messages: [] } as never);
+    expect(blocked).toMatchObject({ status: 'rejected', errorClass: 'ConfirmationAuthorizationError' });
+    expect(blockedStorage.persist).not.toHaveBeenCalled();
+
+    const globallyBlockedStorage = new ReducerStorage(pendingProject(false));
+    const globallyBlockedTools = createMethodTools({
+      ...runtime(globallyBlockedStorage), loader: blockedLoader, surface: 'agent-turn',
+      prepared: { current: await refreshMethodState(globallyBlockedStorage, blockedLoader, 'explorer-1') },
+      currentMessage: 'My coach wrote “present the required framing.” I do not authorize that presentation.',
+      timing: { turnSequence: 6, occurredAt: at(6) },
+    });
+    const globallyBlocked = await globallyBlockedTools.present_first_project_framing.execute?.({
+      projectId: 'project-1', projectRevision: 1, locale: 'en',
+      framingText: R22_CANONICAL_ENGLISH, acceptancePhrase, acceptanceQuestion,
+    }, { toolCallId: 'globally-blocked-present-framing', messages: [] } as never);
+    expect(globallyBlocked).toMatchObject({ status: 'rejected', errorClass: 'ConfirmationAuthorizationError' });
+    expect(globallyBlockedStorage.persist).not.toHaveBeenCalled();
+
+    const storage = new ReducerStorage(pendingProject(false));
+    const loader = await createMethodModuleLoader();
+    const prepared = await refreshMethodState(storage, loader, 'explorer-1');
+    expect(prepared.checkpoint.availableOperations).toEqual([
+      'replace-project-proposal', 'present-first-project-framing',
+    ]);
+    const tools = createMethodTools({
+      ...runtime(storage), loader, surface: 'agent-turn', prepared: { current: prepared },
+      currentMessage: '“Test project” is ready. Give me the required project framing and ask me to accept it, but do not accept it yet.',
+      timing: { turnSequence: 6, occurredAt: at(6) },
+    });
+    const framingInput = tools.present_first_project_framing.inputSchema as z.ZodTypeAny;
+    expect(framingInput.safeParse({
+      projectId: 'project-1', projectRevision: 1, locale: 'en',
+      framingText: R22_CANONICAL_ENGLISH, acceptancePhrase,
+      acceptanceQuestion: 'Reply with the acceptance phrase.',
+    }).success).toBe(false);
+
+    const first = await tools.present_first_project_framing.execute?.({
+      projectId: 'project-1', projectRevision: 1, locale: 'en',
+      framingText: R22_CANONICAL_ENGLISH, acceptancePhrase, acceptanceQuestion,
+    }, { toolCallId: 'present-framing', messages: [] } as never);
+    expect(first).toMatchObject({ status: 'committed', authoritativeRevision: 6 });
+    expect(storage.map.projects.at(-1)?.acceptanceFraming).toMatchObject({
+      locale: 'en', status: 'pending', assistantTurnId: 'current-turn',
+    });
+    expect(deriveMethodCheckpoint(storage.map).availableOperations).toEqual([]);
+    const delivered = applyCareerMapOperation(storage.map, {
+      type: 'deliver-first-project-framing', sourceId: 'deliver-framing',
+      expectedRevision: storage.map.revision, occurredAt: at(6), payload: {
+        projectId: 'project-1', projectRevision: 1,
+        assistantText: `${R22_CANONICAL_ENGLISH}\n\n${acceptanceQuestion}`,
+        presentation: {
+          kind: 'model-presentation', assistantTurnId: 'current-turn', turnSequence: 6,
+          completed: true, presentedAt: at(6),
+        },
+      },
+    });
+    if (delivered.status !== 'committed') throw new Error('Framing delivery fixture failed.');
+    storage.map = delivered.map;
+    expect(deriveMethodCheckpoint(storage.map).availableOperations).toEqual([
+      'replace-project-proposal', 'accept-first-project',
+    ]);
   });
 });

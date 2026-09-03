@@ -4,6 +4,9 @@ export const R22_CANONICAL_ENGLISH = "The point of a project is not to succeed, 
 
 export const R22_CANONICAL_SPANISH = 'El objetivo de un proyecto no es tener éxito, sino aprender si es algo que querrías seguir explorando. Piensa en los proyectos como en las citas: empiezas con algo relajado y de poco compromiso, y solo inviertes más si cada cita te deja con ganas de otra.';
 
+export const FIRST_PROJECT_ACCEPTANCE_PHRASE_ENGLISH = 'I explicitly accept this Path Project.';
+export const FIRST_PROJECT_ACCEPTANCE_PHRASE_SPANISH = 'Acepto explícitamente este Proyecto de Camino.';
+
 export const BASE_METHOD_INSTRUCTIONS = `
 You are Revelio, an adaptive career-exploration companion. Reflection suggests possibilities; firsthand action creates the evidence that helps an explorer choose.
 

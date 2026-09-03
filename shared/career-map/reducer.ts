@@ -15,6 +15,7 @@ import {
 } from './operations';
 import type { PurposePath, PurposePathInput, PurposePathSet } from './paths';
 import type { ProjectOptionSet } from './projects';
+import { isExactFirstProjectFramingDelivery } from './authority';
 import type { SideDoorInput, SideDoorSet } from './side-doors';
 import { selectActivePurposePath } from './selector';
 
@@ -445,10 +446,64 @@ function applyDomainOperation(map: CareerMap, operation: CareerMapOperation): vo
       });
       return;
     }
+    case 'present-first-project-framing': {
+      const target = map.projects.find((project) => sameRevision(project, operation.payload.projectId, operation.payload.projectRevision));
+      assert(target?.agreementStatus === 'suggested' && target.number === 1, 'First project framing target is stale.', 'stale-target');
+      assert(!target.acceptanceFraming, 'The first project framing was already presented.', 'stale-target');
+      assert(
+        operation.payload.presentation.turnSequence > target.presentation.turnSequence,
+        'The first project framing requires a later completed assistant turn.',
+        'confirmation-not-auditable',
+      );
+      target.acceptanceFraming = {
+        locale: operation.payload.locale,
+        framingText: operation.payload.framingText,
+        acceptancePhrase: operation.payload.acceptancePhrase,
+        acceptanceQuestion: operation.payload.acceptanceQuestion,
+        moduleVersion: operation.payload.moduleVersion,
+        status: 'pending',
+        assistantTurnId: operation.payload.presentation.assistantTurnId,
+        turnSequence: operation.payload.presentation.turnSequence,
+        initiatedAt: operation.payload.presentation.presentedAt,
+      };
+      return;
+    }
+    case 'deliver-first-project-framing': {
+      const target = map.projects.find((project) => sameRevision(project, operation.payload.projectId, operation.payload.projectRevision));
+      const framing = target?.acceptanceFraming;
+      assert(target?.agreementStatus === 'suggested' && target.number === 1 && framing?.status === 'pending', 'First project framing delivery target is stale.', 'stale-target');
+      assert(
+        framing.assistantTurnId === operation.payload.presentation.assistantTurnId
+        && framing.turnSequence === operation.payload.presentation.turnSequence,
+        'First project framing must complete in its initiating assistant turn.',
+        'confirmation-not-auditable',
+      );
+      assert(
+        isExactFirstProjectFramingDelivery(operation.payload.assistantText, framing),
+        'First project framing delivery did not match the exact durable two-paragraph response.',
+        'confirmation-not-auditable',
+      );
+      framing.status = 'delivered';
+      framing.presentation = operation.payload.presentation;
+      return;
+    }
+    case 'abandon-first-project-framing': {
+      const target = map.projects.find((project) => sameRevision(project, operation.payload.projectId, operation.payload.projectRevision));
+      const framing = target?.acceptanceFraming;
+      assert(target?.agreementStatus === 'suggested' && framing?.status === 'pending', 'First project framing cleanup target is stale.', 'stale-target');
+      assert(framing.assistantTurnId === operation.payload.assistantTurnId, 'Only the initiating turn may clear pending first-project framing.', 'stale-target');
+      delete target.acceptanceFraming;
+      return;
+    }
     case 'accept-first-project': {
       const target = map.projects.find((project) => sameRevision(project, operation.payload.projectId, operation.payload.projectRevision));
       assert(target?.agreementStatus === 'suggested' && target.number === 1, 'First project confirmation target is stale.', 'stale-target');
-      target.confirmation = auditableConfirmation(target, operation.payload.action);
+      assert(target.acceptanceFraming?.status === 'delivered' && target.acceptanceFraming.presentation, 'First project acceptance requires delivered durable R22 framing.');
+      target.confirmation = auditableConfirmation({
+        id: target.id,
+        revision: target.revision,
+        presentation: target.acceptanceFraming.presentation,
+      }, operation.payload.action);
       target.agreementStatus = 'accepted';
       return;
     }
@@ -463,6 +518,7 @@ function applyDomainOperation(map: CareerMap, operation: CareerMapOperation): vo
         workStatus: source.workStatus,
         workUpdates: source.workUpdates,
         presentation: operation.payload.presentation,
+        acceptanceFraming: source.acceptanceFraming,
         supersedesProjectId: source.id,
       });
       return;

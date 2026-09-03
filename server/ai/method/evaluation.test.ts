@@ -60,6 +60,8 @@ describe('Method evaluation assertions', () => {
   it('requires Spanish to predominate instead of accepting three injected marker words', () => {
     expect(isPredominantlySpanish('Claro. A partir de ahora seguimos en español. No recomendaré ningún camino.')).toBe(true);
     expect(isPredominantlySpanish('El objetivo no es tener éxito, sino aprender si quieres seguir explorando este camino.')).toBe(true);
+    expect(isPredominantlySpanish('¿Qué sueles leer o pensar durante horas?')).toBe(true);
+    expect(isPredominantlySpanish('¿What should you work on next?')).toBe(false);
     expect(isPredominantlySpanish('The project is ready and the next step is clear; el la que.')).toBe(false);
     expect(isPredominantlySpanish('Gracias. The rest of this response is in English, with el camino and la pregunta added at the end.')).toBe(false);
     expect(isPredominantlySpanish('')).toBe(false);

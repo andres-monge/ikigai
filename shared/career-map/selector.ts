@@ -195,7 +195,15 @@ function operationsForDecision(map: CareerMap, decision: PendingDecision): Caree
     ];
     case 'path-selection': return ['replace-purpose-path', 'combine-purpose-paths', 'select-purpose-path', 'open-path-revision-focus'];
     case 'path-revision-confirmation': return ['replace-purpose-path', 'combine-purpose-paths', 'confirm-purpose-path-revision', 'select-purpose-path', 'open-path-revision-focus'];
-    case 'first-project-confirmation': return ['replace-project-proposal', 'accept-first-project'];
+    case 'first-project-confirmation': {
+      const project = map.projects.find((item) => (
+        item.id === decision.targetId && item.revision === decision.targetRevision
+      ));
+      if (!project?.acceptanceFraming) return ['replace-project-proposal', 'present-first-project-framing'];
+      return project.acceptanceFraming.status === 'delivered'
+        ? ['replace-project-proposal', 'accept-first-project']
+        : [];
+    }
     case 'project-revision-confirmation': return ['replace-project-proposal', 'confirm-project-revision'];
     case 'follow-on-project-selection': return ['replace-follow-on-project', 'select-follow-on-project'];
     case 'continue-choice': return ['record-continue-choice', 'open-peer-focus', 'open-foundation-revision-focus', 'open-path-revision-focus'];

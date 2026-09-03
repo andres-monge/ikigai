@@ -51,3 +51,21 @@ export type RealityConstraint = z.infer<typeof realityConstraintSchema>;
 export type WhyInput = z.infer<typeof whyInputSchema>;
 export type WhyRevision = z.infer<typeof whyRevisionSchema>;
 export type FoundationState = z.infer<typeof foundationStateSchema>;
+
+export function selectCurrentFoundationEvidence(
+  foundation: FoundationState,
+): FoundationEvidence[] {
+  const supersededIds = new Set(foundation.evidence.flatMap((item) => (
+    item.supersedesEvidenceId ? [item.supersedesEvidenceId] : []
+  )));
+  return foundation.evidence.filter((item) => !supersededIds.has(item.id));
+}
+
+export function selectCurrentRealityConstraints(
+  foundation: FoundationState,
+): RealityConstraint[] {
+  const supersededIds = new Set(foundation.constraints.flatMap((item) => (
+    item.supersedesConstraintId ? [item.supersedesConstraintId] : []
+  )));
+  return foundation.constraints.filter((item) => !supersededIds.has(item.id));
+}

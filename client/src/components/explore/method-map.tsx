@@ -1,6 +1,8 @@
 import {
   deriveMethodCheckpoint,
   selectActivePurposePath,
+  selectCurrentFoundationEvidence,
+  selectCurrentRealityConstraints,
   type CareerMap,
   type CareerMapOperationType,
   type MethodModule,
@@ -474,6 +476,8 @@ function LaterMethodState({
 }
 
 export function MethodMap({ map, busy, onOperation, onConversationPrompt }: MethodMapProps) {
+  const currentEvidence = selectCurrentFoundationEvidence(map.foundation);
+  const currentConstraints = selectCurrentRealityConstraints(map.foundation);
   const why = map.foundation.whyRevisions.findLast((item) => item.status !== 'superseded');
   const suggestedPathSet = map.pathSets.findLast((item) => item.status === 'suggested');
   const activePathSet = map.pathSets.findLast((item) => item.status === 'active');
@@ -483,7 +487,8 @@ export function MethodMap({ map, busy, onOperation, onConversationPrompt }: Meth
     item.agreementStatus === 'suggested' || item.agreementStatus === 'accepted'
   ));
   const optionSet = map.projectOptionSets.findLast((item) => item.status !== 'superseded');
-  const hasState = why || suggestedPathSet || activePath || activeProject || optionSet
+  const hasState = currentEvidence.length > 0 || currentConstraints.length > 0
+    || why || suggestedPathSet || activePath || activeProject || optionSet
     || map.reflections.length || map.proofRevisions.length || map.sideDoorSets.length
     || map.commitmentIntent || map.provisionalCommitment;
 
@@ -516,6 +521,20 @@ export function MethodMap({ map, busy, onOperation, onConversationPrompt }: Meth
         </p>
       ) : null}
       <div className="mt-8 space-y-8">
+      {!why && (currentEvidence.length > 0 || currentConstraints.length > 0) ? (
+        <section className="max-w-3xl border-2 border-black bg-white p-5 shadow-[4px_4px_0_rgba(0,0,0,0.65)]">
+          <p className="method-map-label">Foundation in progress</p>
+          <h2 className="text-2xl font-black">What we know so far</h2>
+          {currentEvidence.length > 0 ? (
+            <ul className="mt-4 list-disc space-y-2 pl-5 text-sm">
+              {currentEvidence.map((item) => <li key={`${item.id}-${item.revision}`}>{item.content}</li>)}
+            </ul>
+          ) : null}
+          {currentConstraints.length > 0 ? (
+            <p className="mt-4 text-sm"><strong>Practical reality:</strong> {currentConstraints.map((item) => item.description).join(' · ')}</p>
+          ) : null}
+        </section>
+      ) : null}
       {why ? (
         <section className="max-w-3xl border-2 border-black bg-white p-5 shadow-[4px_4px_0_rgba(0,0,0,0.65)]">
           <p className="method-map-label">{why.status === 'confirmed' ? 'Confirmed foundation' : 'Suggested foundation'}</p>
@@ -525,13 +544,13 @@ export function MethodMap({ map, busy, onOperation, onConversationPrompt }: Meth
           <details className="mt-4 border-t border-slate-300 pt-3">
             <summary className="cursor-pointer text-sm font-bold">Inspect the Foundation</summary>
             <p className="mt-3 text-sm"><strong>Point of view:</strong> {why.pointOfView}</p>
-            {map.foundation.evidence.length > 0 ? (
+            {currentEvidence.length > 0 ? (
               <ul className="mt-3 list-disc space-y-1 pl-5 text-sm">
-                {map.foundation.evidence.map((item) => <li key={`${item.id}-${item.revision}`}>{item.content}</li>)}
+                {currentEvidence.map((item) => <li key={`${item.id}-${item.revision}`}>{item.content}</li>)}
               </ul>
             ) : null}
-            {map.foundation.constraints.length > 0 ? (
-              <p className="mt-3 text-sm"><strong>Practical reality:</strong> {map.foundation.constraints.map((item) => item.description).join(' · ')}</p>
+            {currentConstraints.length > 0 ? (
+              <p className="mt-3 text-sm"><strong>Practical reality:</strong> {currentConstraints.map((item) => item.description).join(' · ')}</p>
             ) : null}
           </details>
           <div className="mt-4 flex flex-wrap gap-2">
@@ -640,7 +659,11 @@ export function MethodMap({ map, busy, onOperation, onConversationPrompt }: Meth
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
             {activeProject.agreementStatus === 'suggested' ? (
-              <ConversationButton disabled={busy} prompt={`I want to accept “${activeProject.title}” as my ${activeProject.number === 1 ? 'first ' : ''}Path Project.`} onConversationPrompt={onConversationPrompt}>Accept this project</ConversationButton>
+              activeProject.acceptanceFraming?.status === 'delivered' ? (
+                <ConversationButton disabled={busy} prompt={activeProject.acceptanceFraming.acceptancePhrase} onConversationPrompt={onConversationPrompt}>Accept this project</ConversationButton>
+              ) : !activeProject.acceptanceFraming ? (
+                <ConversationButton disabled={busy} prompt="This Path Project is ready. Give me the required project framing and ask me to accept it, but do not accept it yet." onConversationPrompt={onConversationPrompt}>Review before accepting</ConversationButton>
+              ) : null
             ) : null}
             <ConversationButton disabled={busy} prompt={`Please refine “${activeProject.title}” without treating the revision as accepted.`} onConversationPrompt={onConversationPrompt}>Refine</ConversationButton>
             {activeProject.agreementStatus === 'suggested' && activeProject.number === 1 ? (

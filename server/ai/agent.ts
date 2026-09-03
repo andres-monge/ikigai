@@ -197,7 +197,14 @@ function pendingPresentationTurn(state: PreparedMethodState): string | undefined
       return state.map.pathSets.find(
         (item) => item.id === pending.targetId && item.revision === pending.targetRevision,
       )?.presentation.assistantTurnId;
-    case 'first-project-confirmation':
+    case 'first-project-confirmation': {
+      const project = state.map.projects.find(
+        (item) => item.id === pending.targetId && item.revision === pending.targetRevision,
+      );
+      return project?.acceptanceFraming?.presentation?.assistantTurnId
+        ?? project?.acceptanceFraming?.assistantTurnId
+        ?? project?.presentation.assistantTurnId;
+    }
     case 'project-revision-confirmation':
       return state.map.projects.find(
         (item) => item.id === pending.targetId && item.revision === pending.targetRevision,
@@ -320,6 +327,7 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
   };
   const markers: string[] = [];
   let requestAbortSignal = options.abortSignal;
+  let firstProjectAccepted = false;
 
   const methodTools = createMethodTools({
     storage: options.storage,
@@ -331,7 +339,14 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
     prepared,
     currentMessage: options.currentMessage,
     operationGuard,
-    onOperationStatus: options.onOperationStatus,
+    onOperationStatus: async (event) => {
+      if (
+        event.phase === 'terminal'
+        && event.operation === 'accept-first-project'
+        && event.status === 'saved'
+      ) firstProjectAccepted = true;
+      await options.onOperationStatus?.(event);
+    },
     abortSignal: options.abortSignal,
   });
   const tools: ToolSet = {
@@ -350,6 +365,10 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
     maxOutputTokens: 1_500,
     tools,
     toolChoice: 'auto',
+    // U7 deliberately ends at first-project acceptance. A committed
+    // acceptance derives guide-path-project, whose module is owned by U8 and
+    // is intentionally not registered in this three-module build.
+    stopWhen: () => firstProjectAccepted,
     prepareStep: async ({ stepNumber, messages }) => {
       throwIfAborted(requestAbortSignal);
       const state = await refreshMethodState(options.storage, options.loader, options.userId);

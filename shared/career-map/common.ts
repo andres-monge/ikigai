@@ -14,6 +14,14 @@ export const opaqueClientMessageIdSchema = z.string()
 export const revisionSchema = z.number().int().positive();
 export const mapRevisionSchema = z.number().int().nonnegative();
 export const timestampSchema = z.string().datetime({ offset: true });
+export const languageTagSchema = z.string().min(2).max(35).refine((value) => {
+  try {
+    Intl.getCanonicalLocales(value);
+    return true;
+  } catch {
+    return false;
+  }
+}, 'Locale must be a valid BCP 47 language tag.');
 
 export const modelPresentationSchema = z.object({
   kind: z.literal('model-presentation'),
@@ -110,6 +118,7 @@ export type RevisionRef = z.infer<typeof revisionRefSchema>;
 export type OperationReceipt = z.infer<typeof operationReceiptSchema>;
 export type Invalidation = z.infer<typeof invalidationSchema>;
 export type InvalidationTargetKind = z.infer<typeof invalidationTargetKindSchema>;
+export type LanguageTag = z.infer<typeof languageTagSchema>;
 
 export const invalidationTargetOrder = [
   'path-set',

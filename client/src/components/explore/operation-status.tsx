@@ -4,6 +4,9 @@ const operationNames: Record<string, string> = {
   'confirm-why': 'Why',
   'select-purpose-path': 'Purpose Path',
   'confirm-purpose-path-revision': 'Purpose Paths',
+  'present-first-project-framing': 'Path Project framing',
+  'deliver-first-project-framing': 'Path Project framing',
+  'abandon-first-project-framing': 'Path Project framing',
   'accept-first-project': 'Path Project',
 };
 

@@ -58,6 +58,28 @@ function selectedPathMap(): CareerMap {
 }
 
 describe('MethodMap', () => {
+  it('renders current Foundation evidence before a Why and hides superseded evidence', () => {
+    const map = createCareerMap('foundation-in-progress');
+    const provenance = {
+      kind: 'user-message' as const, actionId: 'message-1', turnId: 'turn-1',
+      turnSequence: 1, occurredAt: '2030-01-01T00:00:00.000Z',
+    };
+    map.foundation.evidence.push(
+      { id: 'old-evidence', revision: 1, category: 'fascination', content: 'Old wording', provenance },
+      { id: 'new-evidence', revision: 1, category: 'fascination', content: 'I lose track of time making complex ideas useful.', provenance, supersedesEvidenceId: 'old-evidence' },
+    );
+    map.foundation.constraints.push({
+      id: 'constraint-1', revision: 1, kind: 'time', description: 'Five hours each week', provenance,
+    });
+
+    render(<MethodMap map={map} busy={false} onOperation={vi.fn()} onConversationPrompt={vi.fn()} />);
+
+    expect(screen.getByRole('heading', { name: 'What we know so far' })).toBeTruthy();
+    expect(screen.getByText('I lose track of time making complex ideas useful.')).toBeTruthy();
+    expect(screen.queryByText('Old wording')).toBeNull();
+    expect(screen.getByText(/Five hours each week/)).toBeTruthy();
+  });
+
   it('puts the canonical Method checkpoint and pending decision first', () => {
     render(<MethodMap map={pathMap()} busy={false} onOperation={vi.fn()} onConversationPrompt={vi.fn()} />);
 
@@ -224,6 +246,32 @@ describe('MethodMap', () => {
     expect(within(projectCards[0]).getByText('One person')).toBeTruthy();
     expect(within(projectCards[0]).getByText('Why')).toBeTruthy();
     expect(within(projectCards[0]).getByText('Notice')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Review before accepting' })).toBeTruthy();
+  });
+
+  it('offers explicit acceptance only after the durable first-project framing marker', () => {
+    const map = selectedPathMap();
+    map.projects.push({
+      id: 'project-1', revision: 1, number: 1, basisPath: { id: 'path-1', revision: 1 },
+      title: 'Framed project', outcome: 'One outcome', audience: 'One person', whyWanted: 'Why',
+      learningGoal: 'Learn', firstVersion: 'Small', firstStep: 'Begin', decisionQuestion: 'Continue?',
+      evidenceCue: 'Notice', agreementStatus: 'suggested', workStatus: 'not-started', workUpdates: [], presentation,
+      acceptanceFraming: {
+        locale: 'en', framingText: 'Exact framing',
+        acceptancePhrase: 'I explicitly accept this Path Project.',
+        acceptanceQuestion: 'Will you explicitly accept by replying with the exact phrase?',
+        moduleVersion: '1.1.1', status: 'delivered', assistantTurnId: 'framing-turn',
+        turnSequence: 2, initiatedAt: presentation.presentedAt,
+        presentation: { ...presentation, assistantTurnId: 'framing-turn', turnSequence: 2 },
+      },
+    });
+    const onConversationPrompt = vi.fn();
+    render(<MethodMap map={map} busy={false} onOperation={vi.fn()} onConversationPrompt={onConversationPrompt} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Accept this project' }));
+    expect(onConversationPrompt).toHaveBeenCalledWith('I explicitly accept this Path Project.');
+    expect(onConversationPrompt).not.toHaveBeenCalledWith(expect.stringContaining('Framed project'));
+    expect(screen.queryByRole('button', { name: 'Review before accepting' })).toBeNull();
   });
 
   it('separates accepted project agreement from work and shows selected follow-on states', () => {

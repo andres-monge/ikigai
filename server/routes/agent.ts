@@ -177,6 +177,7 @@ function safeErrorClass(error: unknown): string {
     'CareerMapRepairRequiredError',
     'ConversationHistoryProviderError',
     'Error',
+    'FramingDeliveryError',
     'InternalContextBindingError',
     'MethodErasurePendingError',
     'MethodOwnerBusyError',
@@ -1116,6 +1117,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
                     ? { displayProjection }
                     : { displayRecovery: createDisplayRecovery(parsed.data.message, safeAssistantText, false) }),
                 },
+                assistantText: safeAssistantText,
                 abortSignal: abort.signal,
               });
               if (!completed || completed.status !== 'completed') {

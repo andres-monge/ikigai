@@ -11,6 +11,11 @@ import {
 const at = (n: number) => `2026-08-31T11:${String(n).padStart(2, '0')}:00.000Z`;
 const presentation = (n: number) => ({ kind: 'model-presentation' as const, assistantTurnId: `a-${n}`, turnSequence: n, completed: true as const, presentedAt: at(n) });
 const action = (n: number) => ({ kind: 'user-message' as const, actionId: `u-${n}`, turnId: `u-${n}`, turnSequence: n, occurredAt: at(n) });
+const framingText = "The point of a project is not to succeed, it's to learn if it's something you'd want to pursue. Think of projects like dating: you start with something chill and low commitment, then invest more only if each date makes you want another.";
+const acceptancePhrase = 'I explicitly accept this Path Project.';
+const acceptanceQuestion = `Will you explicitly accept this Path Project by replying “${acceptancePhrase}”?`;
+const framing = (projectId: string, n: number) => ({ projectId, projectRevision: 1, locale: 'en', framingText, acceptancePhrase, acceptanceQuestion, moduleVersion: '1.1.1', presentation: presentation(n) });
+const delivery = (projectId: string, n: number) => ({ projectId, projectRevision: 1, assistantText: `${framingText}\n\n${acceptanceQuestion}`, presentation: presentation(n) });
 const paths: [PurposePathInput, PurposePathInput, PurposePathInput] = [1, 2, 3].map((n) => ({
   id: `path-${n}`, revision: 1, name: `Path ${n}`, servesWhy: `Serve the Why through approach ${n}`,
   possibility: `Outcome ${n}`, evidence: [`Evidence ${n}`], centralUnknown: `Unknown ${n}`,
@@ -77,7 +82,9 @@ describe('Method checkpoint selector', () => {
     map = commit(map, 'propose-purpose-paths', { setId: 'set-1', setRevision: 1, paths, presentation: presentation(5) });
     map = commit(map, 'select-purpose-path', { setId: 'set-1', setRevision: 1, pathId: 'path-1', pathRevision: 1, action: action(6) });
     map = commit(map, 'propose-first-project', { project: { id: 'project-1', revision: 1, title: 'Build an aid', outcome: 'One person uses it', audience: 'A real colleague', whyWanted: 'Reduce decision waste', learningGoal: 'Learn whether iteration pulls me in', firstVersion: 'One-page prototype', firstStep: 'Interview the colleague', decisionQuestion: 'Do I want another iteration?', evidenceCue: 'Notice voluntary pull' }, presentation: presentation(7) });
-    map = commit(map, 'accept-first-project', { projectId: 'project-1', projectRevision: 1, action: action(8) });
+    map = commit(map, 'present-first-project-framing', framing('project-1', 8));
+    map = commit(map, 'deliver-first-project-framing', delivery('project-1', 8));
+    map = commit(map, 'accept-first-project', { projectId: 'project-1', projectRevision: 1, action: action(9) });
     expect(deriveMethodCheckpoint(map).module).toBe('guide-path-project');
 
     map = commit(map, 'open-foundation-revision-focus', { reason: 'New firsthand evidence changed the Why', action: action(9) });
@@ -111,17 +118,23 @@ describe('Method checkpoint selector', () => {
     expect(deriveMethodCheckpoint(map)).toMatchObject({
       module: 'design-path-project',
       pendingDecision: { kind: 'first-project-confirmation', targetId: 'project-2', targetRevision: 1 },
-      availableOperations: ['replace-project-proposal', 'accept-first-project'],
+      availableOperations: ['replace-project-proposal', 'present-first-project-framing'],
     });
 
-    map = commit(map, 'accept-first-project', { projectId: 'project-2', projectRevision: 1, action: action(7) });
+    map = commit(map, 'present-first-project-framing', framing('project-2', 7));
+    expect(deriveMethodCheckpoint(map).availableOperations).toEqual([]);
+    map = commit(map, 'deliver-first-project-framing', delivery('project-2', 7));
+    expect(deriveMethodCheckpoint(map).availableOperations).toEqual(['replace-project-proposal', 'accept-first-project']);
+    map = commit(map, 'accept-first-project', { projectId: 'project-2', projectRevision: 1, action: action(8) });
     expect(deriveMethodCheckpoint(map)).toMatchObject({ module: 'guide-path-project', pendingDecision: null });
   });
 
   it('keeps a revision of an accepted project in project-revision confirmation', () => {
     let map = withSelectedPath('explorer-accepted-project-revision');
     map = commit(map, 'propose-first-project', { project: project(), presentation: presentation(5) });
-    map = commit(map, 'accept-first-project', { projectId: 'project-1', projectRevision: 1, action: action(6) });
+    map = commit(map, 'present-first-project-framing', framing('project-1', 6));
+    map = commit(map, 'deliver-first-project-framing', delivery('project-1', 6));
+    map = commit(map, 'accept-first-project', { projectId: 'project-1', projectRevision: 1, action: action(7) });
     map = commit(map, 'propose-project-revision', {
       projectId: 'project-1',
       projectRevision: 1,
@@ -163,7 +176,9 @@ describe('Method checkpoint selector', () => {
     map = commit(map, 'propose-purpose-paths', { setId: 'set-1', setRevision: 1, paths, presentation: presentation(3) });
     map = commit(map, 'select-purpose-path', { setId: 'set-1', setRevision: 1, pathId: 'path-1', pathRevision: 1, action: action(4) });
     map = commit(map, 'propose-first-project', { project: { id: 'project-1', revision: 1, title: 'Build a real aid', outcome: 'One colleague uses it', audience: 'A real colleague', whyWanted: 'Reduce decision waste', learningGoal: 'Learn whether iteration pulls me in', firstVersion: 'One-page prototype', firstStep: 'Interview the colleague', decisionQuestion: 'Do I want another iteration?', evidenceCue: 'Notice voluntary pull' }, presentation: presentation(5) });
-    map = commit(map, 'accept-first-project', { projectId: 'project-1', projectRevision: 1, action: action(6) });
+    map = commit(map, 'present-first-project-framing', framing('project-1', 6));
+    map = commit(map, 'deliver-first-project-framing', delivery('project-1', 6));
+    map = commit(map, 'accept-first-project', { projectId: 'project-1', projectRevision: 1, action: action(7) });
     map = commit(map, 'open-reflection', { reflectionId: 'reflection-1', revision: 1, projectId: 'project-1', projectRevision: 1, action: action(7) });
     map = commit(map, 'append-reflection-evidence', { reflectionId: 'reflection-1', reflectionRevision: 1, evidence: { id: 'evidence-1', revision: 1, observation: 'Iteration created voluntary pull.', signal: 'voluntary-pull', interpretation: 'The path deserves a provisional commitment test', provenance: action(8) } });
     map = commit(map, 'close-reflection', { reflectionId: 'reflection-1', reflectionRevision: 1, action: action(9) });

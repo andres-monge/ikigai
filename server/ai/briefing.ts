@@ -1,7 +1,10 @@
 import {
   careerMapSchema,
   deriveMethodCheckpoint,
+  exactFirstProjectFramingReply,
   selectActivePurposePath,
+  selectCurrentFoundationEvidence,
+  selectCurrentRealityConstraints,
   selectLatestAcceptedProject,
   type CareerMap,
   type MethodCheckpoint,
@@ -64,7 +67,10 @@ function appendExactPath(
   if (!path) throw new CareerMapBriefingError();
   lines.push(`Purpose Path: ${path.name} (${path.id}@${path.revision}; ${path.selection})`);
   lines.push(`Serves Why: ${path.servesWhy}`);
+  lines.push(`Possibility: ${path.possibility}`);
+  lines.push(`Evidence: ${path.evidence.join('; ')}`);
   lines.push(`Central unknown: ${path.centralUnknown}`);
+  lines.push(`Path Project preview: ${path.projectPreview}`);
   lines.push(`Practical fit: ${path.practicalFit}`);
 }
 
@@ -75,8 +81,31 @@ function appendExactProject(
   if (!project) throw new CareerMapBriefingError();
   lines.push(`Project ${project.number}: ${project.title} (${project.id}@${project.revision}; ${project.agreementStatus}; ${project.workStatus})`);
   lines.push(`Outcome: ${project.outcome}`);
+  lines.push(`Audience: ${project.audience}`);
+  lines.push(`Why wanted: ${project.whyWanted}`);
+  lines.push(`First version: ${project.firstVersion}`);
   lines.push(`Learning question: ${project.decisionQuestion}`);
+  lines.push(`Evidence cue: ${project.evidenceCue}`);
   lines.push(`First step: ${project.firstStep}`);
+  appendFirstProjectFraming(lines, project);
+}
+
+function appendFirstProjectFraming(
+  lines: string[],
+  project: CareerMap['projects'][number],
+): void {
+  const framing = project.acceptanceFraming;
+  if (!framing) {
+    lines.push('First-project framing: not yet presented.');
+    return;
+  }
+  if (framing.status === 'pending') {
+    lines.push(`First-project framing: pending delivery in this assistant turn (${framing.assistantTurnId}; locale ${framing.locale}).`);
+    lines.push(`The complete visible reply must equal exactly: ${JSON.stringify(exactFirstProjectFramingReply(framing))}`);
+    return;
+  }
+  lines.push(`First-project framing: delivered once in ${framing.presentation!.assistantTurnId}; locale ${framing.locale}. Do not repeat it.`);
+  lines.push(`Only this exact later explorer message accepts the project: ${JSON.stringify(framing.acceptancePhrase)}`);
 }
 
 function appendExactReflection(
@@ -227,7 +256,10 @@ function appendPath(
   for (const path of paths) {
     lines.push(`### ${path.name} (${path.id}@${path.revision}; ${path.selection})`);
     lines.push(`Serves Why: ${path.servesWhy}`);
+    lines.push(`Possibility: ${path.possibility}`);
+    lines.push(`Evidence: ${path.evidence.join('; ')}`);
     lines.push(`Central unknown: ${path.centralUnknown}`);
+    lines.push(`Path Project preview: ${path.projectPreview}`);
     lines.push(`Practical fit: ${path.practicalFit}`);
   }
 }
@@ -244,8 +276,13 @@ function appendProject(
   lines.push(`Project ${project.number}: ${project.title} (${project.id}@${project.revision}; ${project.agreementStatus}; ${project.workStatus})`);
   lines.push(`Path basis: ${project.basisPath.id}@${project.basisPath.revision}`);
   lines.push(`Outcome: ${project.outcome}`);
+  lines.push(`Audience: ${project.audience}`);
+  lines.push(`Why wanted: ${project.whyWanted}`);
+  lines.push(`First version: ${project.firstVersion}`);
   lines.push(`Learning question: ${project.decisionQuestion}`);
+  lines.push(`Evidence cue: ${project.evidenceCue}`);
   lines.push(`First step: ${project.firstStep}`);
+  appendFirstProjectFraming(lines, project);
 
   const options = map.projectOptionSets.findLast((set) => set.status === 'suggested');
   if (options) {
@@ -436,11 +473,10 @@ function renderCareerMapBriefing(
   switch (checkpoint.module) {
     case 'form-foundation': {
       lines.push('## Current Foundation evidence');
-      const superseded = new Set(map.foundation.evidence.flatMap((item) => item.supersedesEvidenceId ? [item.supersedesEvidenceId] : []));
-      for (const evidence of map.foundation.evidence.filter((item) => !superseded.has(item.id))) {
+      for (const evidence of selectCurrentFoundationEvidence(map.foundation)) {
         lines.push(`- ${evidence.category}: ${evidence.content} (${evidence.id}@${evidence.revision})`);
       }
-      for (const constraint of map.foundation.constraints) {
+      for (const constraint of selectCurrentRealityConstraints(map.foundation)) {
         lines.push(`- Reality boundary — ${constraint.kind}: ${constraint.description}`);
       }
       break;

@@ -9,13 +9,16 @@
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { createOpenAI } from '@ai-sdk/openai';
-import { ToolLoopAgent, hasToolCall, stepCountIs, tool } from 'ai';
+import { ToolLoopAgent, stepCountIs, tool } from 'ai';
 import { z } from 'zod';
 import {
   applyCareerMapOperation,
   createCareerMap,
   deriveMethodCheckpoint,
   foundationEvidenceSchema,
+  hasSuggestedOperationVeto,
+  isExactFirstProjectFramingDelivery,
+  isExactPersistedAcceptance,
   pathProjectInputSchema,
   purposePathInputSchema,
   realityConstraintSchema,
@@ -24,6 +27,8 @@ import {
 import {
   BASE_INSTRUCTIONS_VERSION,
   BASE_METHOD_INSTRUCTIONS,
+  FIRST_PROJECT_ACCEPTANCE_PHRASE_ENGLISH,
+  FIRST_PROJECT_ACCEPTANCE_PHRASE_SPANISH,
   R22_CANONICAL_ENGLISH,
   R22_CANONICAL_SPANISH,
 } from '../server/ai/method/base-instructions.ts';
@@ -37,12 +42,8 @@ import {
 } from '../server/ai/method/evaluation.ts';
 import { createMethodModuleLoader } from '../server/ai/method/loader.ts';
 
-const allowedModels = new Set([
-  'gpt-5.6-luna',
-  'gpt-5.6-sol',
-  'gpt-5.5-2026-04-23',
-]);
-const modelId = process.env.REVELIO_METHOD_MODEL || 'gpt-5.6-luna';
+const allowedModels = new Set(['gpt-5.6-sol']);
+const modelId = process.env.REVELIO_METHOD_MODEL || 'gpt-5.6-sol';
 const apiKey = process.env.OPENAI_API_KEY;
 const requestTimeoutMs = Number(process.env.REVELIO_METHOD_TIMEOUT_MS || 60_000);
 const runStartedAt = new Date().toISOString();
@@ -104,6 +105,7 @@ const operationToTool = {
   'confirm-purpose-path-revision': 'confirm_purpose_path_revision',
   'propose-first-project': 'propose_first_project',
   'replace-project-proposal': 'replace_project_proposal',
+  'present-first-project-framing': 'present_first_project_framing',
   'accept-first-project': 'accept_first_project',
 };
 
@@ -221,6 +223,13 @@ function replyShape(text) {
   };
 }
 
+function visibleAssistantText(result) {
+  return result.steps
+    .filter((step) => !(step.toolCalls ?? []).some((call) => call.providerExecuted !== true))
+    .map((step) => step.text ?? '')
+    .join('');
+}
+
 function proveU2FirstProjectReplacementBoundary() {
   let map = createCareerMap('synthetic-u3-preflight');
   const at = (sequence) => timestamp(sequence);
@@ -288,6 +297,18 @@ function proveU2FirstProjectReplacementBoundary() {
     replacement: project('preflight-project-2', 'Replacement proposal'),
     presentation: presentation(6),
   }, 6);
+  apply('present-first-project-framing', {
+    projectId: 'preflight-project-2', projectRevision: 1, locale: 'en',
+    framingText: R22_CANONICAL_ENGLISH,
+    acceptancePhrase: 'I explicitly accept this Path Project.',
+    acceptanceQuestion: 'Will you explicitly accept this Path Project by replying “I explicitly accept this Path Project.”?',
+    moduleVersion: 'preflight@1', presentation: presentation(7),
+  }, 7);
+  apply('deliver-first-project-framing', {
+    projectId: 'preflight-project-2', projectRevision: 1,
+    assistantText: `${R22_CANONICAL_ENGLISH}\n\nWill you explicitly accept this Path Project by replying “I explicitly accept this Path Project.”?`,
+    presentation: presentation(7),
+  }, 7);
 
   const checkpoint = deriveMethodCheckpoint(map);
   assert(
@@ -326,6 +347,7 @@ function stateBriefing(map, checkpoint) {
       agreementStatus: project.agreementStatus,
       audience: project.audience,
       outcome: project.outcome,
+      acceptanceFraming: project.acceptanceFraming ?? null,
     } : null,
   });
 }
@@ -337,6 +359,7 @@ function createSyntheticHarness(scenario, loader, model) {
   let currentTurnSequence = 0;
   let currentUserText = '';
   let previousAssistantText = '';
+  let firstProjectAccepted = false;
   const operations = [];
   const preparations = [];
   const turns = [];
@@ -382,10 +405,17 @@ function createSyntheticHarness(scenario, loader, model) {
     return map.projects.findLast((item) => item.agreementStatus === 'suggested');
   }
 
-  function commit(type, payload, toolCallId, privacySafeObservation = {}) {
+  function commit(type, payload, toolCallId, privacySafeObservation = {}, serverOwned = false) {
     const before = deriveMethodCheckpoint(map);
     const beforeSet = currentPathSet();
-    assert(before.availableOperations.includes(type), `${scenario.id}: model called unavailable operation ${type}.`);
+    if (serverOwned) {
+      assert(
+        type === 'deliver-first-project-framing' || type === 'abandon-first-project-framing',
+        `${scenario.id}: non-terminal operation attempted the server-owned path ${type}.`,
+      );
+    } else {
+      assert(before.availableOperations.includes(type), `${scenario.id}: model called unavailable operation ${type}.`);
+    }
     const result = applyCareerMapOperation(map, {
       type,
       sourceId: toolCallId || nextId('source'),
@@ -550,7 +580,7 @@ function createSyntheticHarness(scenario, loader, model) {
       },
     }),
     propose_first_project: tool({
-      description: 'Propose exactly one grounded first Path Project on the active path. Ground it with either an outcome the explorer explicitly wants or a real beneficiary relationship they can access firsthand. Do not create follow-on options.',
+      description: 'Immediately after committed path selection, propose exactly one grounded first Path Project in the same response. Ground it with either an outcome the explorer explicitly wants or a real beneficiary relationship they can access firsthand. Do not stop to ask permission and do not create follow-on options.',
       inputSchema: groundedProjectInputSchema,
       execute: ({ grounding, ...project }, { toolCallId }) => commit('propose-first-project', {
         project: { id: nextId('project'), revision: 1, ...project },
@@ -581,20 +611,57 @@ function createSyntheticHarness(scenario, loader, model) {
         });
       },
     }),
+    present_first_project_framing: tool({
+      description: 'Record the locale-correct R22 framing once for the pending first project, then emit exactly that framing and one short acceptance question.',
+      inputSchema: z.object({
+        locale: z.string().min(2).max(35),
+        framingText: z.string().min(1).max(2_000),
+        acceptancePhrase: z.string().min(1).max(240),
+        acceptanceQuestion: z.string().min(1).max(240)
+          .refine((value) => /^[^?\uFF1F]*[?\uFF1F]$/u.test(value.replace(/^\u00BF/u, ''))),
+      }).strict(),
+      execute: ({ locale, framingText, acceptancePhrase, acceptanceQuestion }, { toolCallId }) => {
+        const project = currentSuggestedProject();
+        assert(project, `${scenario.id}: no first project is available for framing.`);
+        assert(/\b(framing|encuadre)\b/i.test(currentUserText), `${scenario.id}: framing lacked an exact current-message request.`);
+        assert(!hasSuggestedOperationVeto(currentUserText, [
+          'frame', 'framing', 'present', 'show', 'share', 'marco', 'encuadre', 'presentes', 'muestres',
+        ]), `${scenario.id}: framing ignored a whole-message veto.`);
+        assert(framingText === expectedR22Framing(scenario), `${scenario.id}: framing tool did not persist the locale-correct canonical text.`);
+        const expectedAcceptancePhrase = expectedR22Framing(scenario) === R22_CANONICAL_ENGLISH
+          ? FIRST_PROJECT_ACCEPTANCE_PHRASE_ENGLISH
+          : FIRST_PROJECT_ACCEPTANCE_PHRASE_SPANISH;
+        assert(acceptancePhrase === expectedAcceptancePhrase, `${scenario.id}: framing tool did not persist the canonical locale acceptance phrase.`);
+        assert(acceptanceQuestion.includes(acceptancePhrase), `${scenario.id}: acceptance question did not include the exact persisted phrase.`);
+        return commit('present-first-project-framing', {
+          projectId: project.id,
+          projectRevision: project.revision,
+          locale,
+          framingText,
+          acceptancePhrase,
+          acceptanceQuestion,
+          moduleVersion: loader.load(deriveMethodCheckpoint(map)).contentVersion,
+          presentation: presentation(),
+        }, toolCallId);
+      },
+    }),
     accept_first_project: tool({
       description: 'Accept the pending first project only after the prior completed assistant turn gave the locale-correct R22 framing and the current user explicitly accepts.',
       inputSchema: z.object({}).strict(),
       execute: (_input, { toolCallId }) => {
         const project = currentSuggestedProject();
         assert(project, `${scenario.id}: no first project is available to accept.`);
-        assert(/\baccept\b|\bacepto\b|\baceptar\b/i.test(currentUserText), `${scenario.id}: project acceptance lacked explicit user intent.`);
+        assert(project.acceptanceFraming?.status === 'delivered', `${scenario.id}: project framing was not durably delivered.`);
+        assert(isExactPersistedAcceptance(currentUserText, project.acceptanceFraming.acceptancePhrase), `${scenario.id}: project acceptance did not exact-match the persisted localized phrase.`);
         const expectedFraming = expectedR22Framing(scenario);
         assert(summarizeR22Presentation(previousAssistantText, expectedFraming).valid, `${scenario.id}: project acceptance did not follow the strict locale-correct R22 presentation.`);
-        return commit('accept-first-project', {
+        const result = commit('accept-first-project', {
           projectId: project.id,
           projectRevision: project.revision,
           action: userAction(),
         }, toolCallId);
+        firstProjectAccepted = result.status === 'committed' || result.status === 'replayed';
+        return result;
       },
     }),
   };
@@ -608,7 +675,7 @@ function createSyntheticHarness(scenario, loader, model) {
     maxOutputTokens: 1_500,
     maxRetries: 0,
     tools,
-    stopWhen: [hasToolCall('accept_first_project'), stepCountIs(20)],
+    stopWhen: [() => firstProjectAccepted, stepCountIs(20)],
     prepareStep: ({ stepNumber }) => {
       const checkpoint = deriveMethodCheckpoint(map);
       const bundle = loader.load(checkpoint);
@@ -662,7 +729,27 @@ function createSyntheticHarness(scenario, loader, model) {
       const operationStart = operations.length;
       const preparationStart = preparations.length;
       const result = await agent.generate({ messages, timeout: requestTimeoutMs });
-      const text = result.text || '';
+      // Production suppresses every step that contains a client-executed tool
+      // call. Evaluate and terminalize the same user-visible text rather than
+      // AI SDK's aggregate result.text, which can include pre-tool narration.
+      const text = visibleAssistantText(result);
+      const pendingFraming = map.projects.find((project) => (
+        project.acceptanceFraming?.status === 'pending'
+        && project.acceptanceFraming.assistantTurnId === `${scenario.id}-assistant-${currentTurnSequence}`
+      ));
+      if (pendingFraming?.acceptanceFraming) {
+        const exactFramingReply = `${pendingFraming.acceptanceFraming.framingText}\n\n${pendingFraming.acceptanceFraming.acceptanceQuestion}`;
+        assert(
+          isExactFirstProjectFramingDelivery(text, pendingFraming.acceptanceFraming),
+          `${scenario.id}: pending framing response was not exact; expected ${JSON.stringify(exactFramingReply)}, received ${JSON.stringify(text)}.`,
+        );
+        commit('deliver-first-project-framing', {
+          projectId: pendingFraming.id,
+          projectRevision: pendingFraming.revision,
+          assistantText: text,
+          presentation: presentation(),
+        }, `framing-delivery-${currentTurnIndex}`, {}, true);
+      }
       messages.push(...result.response.messages);
       const turnPreparations = preparations.slice(preparationStart);
       turns.push({

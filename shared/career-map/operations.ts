@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   entityIdSchema,
   exactThree,
+  languageTagSchema,
   modelPresentationSchema,
   revisionSchema,
   timestampSchema,
@@ -9,7 +10,12 @@ import {
 } from './common';
 import { foundationEvidenceSchema, realityConstraintSchema, whyInputSchema } from './foundation';
 import { purposePathInputSchema } from './paths';
-import { pathProjectInputSchema, projectWorkStatusSchema } from './projects';
+import {
+  pathProjectInputSchema,
+  projectAcceptancePhraseSchema,
+  projectAcceptanceQuestionSchema,
+  projectWorkStatusSchema,
+} from './projects';
 import { learningEvidenceSchema, nextMoveKindSchema } from './learning';
 import { peerExposureInputSchema } from './peers';
 import { proofInventoryInputSchema, sideDoorInputSchema } from './side-doors';
@@ -79,6 +85,27 @@ export const pathOperationSchemas = {
 export const projectOperationSchemas = {
   'propose-first-project': operationSchema('propose-first-project', z.object({ project: pathProjectInputSchema, presentation: modelPresentationSchema }).strict()),
   'replace-project-proposal': operationSchema('replace-project-proposal', z.object({ projectId: entityIdSchema, projectRevision: revisionSchema, replacement: pathProjectInputSchema, presentation: modelPresentationSchema }).strict()),
+  'present-first-project-framing': operationSchema('present-first-project-framing', z.object({
+    projectId: entityIdSchema,
+    projectRevision: revisionSchema,
+    locale: languageTagSchema,
+    framingText: z.string().min(1).max(2_000),
+    acceptancePhrase: projectAcceptancePhraseSchema,
+    acceptanceQuestion: projectAcceptanceQuestionSchema,
+    moduleVersion: z.string().min(1).max(80),
+    presentation: modelPresentationSchema,
+  }).strict()),
+  'deliver-first-project-framing': operationSchema('deliver-first-project-framing', z.object({
+    projectId: entityIdSchema,
+    projectRevision: revisionSchema,
+    assistantText: z.string().min(1).max(4_000),
+    presentation: modelPresentationSchema,
+  }).strict()),
+  'abandon-first-project-framing': operationSchema('abandon-first-project-framing', z.object({
+    projectId: entityIdSchema,
+    projectRevision: revisionSchema,
+    assistantTurnId: entityIdSchema,
+  }).strict()),
   'accept-first-project': operationSchema('accept-first-project', z.object({ projectId: entityIdSchema, projectRevision: revisionSchema, action: userActionProvenanceSchema }).strict()),
   'propose-project-revision': operationSchema('propose-project-revision', z.object({ projectId: entityIdSchema, projectRevision: revisionSchema, replacement: pathProjectInputSchema, presentation: modelPresentationSchema }).strict()),
   'confirm-project-revision': operationSchema('confirm-project-revision', z.object({ projectId: entityIdSchema, projectRevision: revisionSchema, action: userActionProvenanceSchema }).strict()),

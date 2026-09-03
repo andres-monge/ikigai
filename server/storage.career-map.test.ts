@@ -14,6 +14,7 @@ import {
   PostgresStorage,
   TurnLeaseIdentityConflictError,
   TurnLeaseLostError,
+  type AgentTurnRecord,
   type StorageFaultStage,
 } from './storage.js';
 import {
@@ -43,6 +44,9 @@ const owner = (value: string) => {
   return userId;
 };
 const at = (offset = 0) => new Date(now.getTime() + offset).toISOString();
+const framingText = "The point of a project is not to succeed, it's to learn if it's something you'd want to pursue. Think of projects like dating: you start with something chill and low commitment, then invest more only if each date makes you want another.";
+const acceptancePhrase = 'I explicitly accept this Path Project.';
+const acceptanceQuestion = `Will you explicitly accept this Path Project by replying “${acceptancePhrase}”?`;
 
 function action(sequence: number) {
   return {
@@ -178,6 +182,53 @@ async function persist(userId: string, leaseId: string, operation: CareerMapOper
     operation,
     moduleVersion: 'method-test@1',
   }));
+}
+
+async function seedPendingFirstProject(userId: string, leaseId: string, suffix: string) {
+  const projectId = id(`${suffix}-project`);
+  const operations: CareerMapOperation[] = [
+    { type: 'propose-why', sourceId: id(`${suffix}-why-propose`), expectedRevision: 0, occurredAt: at(1), payload: { why: { id: id(`${suffix}-why`), revision: 1, statement: 'Make useful decisions easier.', serves: 'People facing complex choices', pointOfView: 'Actionable clarity creates agency.' }, presentation: presentation(1) } },
+    { type: 'confirm-why', sourceId: id(`${suffix}-why-confirm`), expectedRevision: 1, occurredAt: at(2), payload: { whyId: id(`${suffix}-why`), whyRevision: 1, action: action(2) } },
+    { type: 'propose-purpose-paths', sourceId: id(`${suffix}-paths`), expectedRevision: 2, occurredAt: at(3), payload: { setId: id(`${suffix}-path-set`), setRevision: 1, paths: paths(), presentation: presentation(3) } },
+    { type: 'select-purpose-path', sourceId: id(`${suffix}-path-select`), expectedRevision: 3, occurredAt: at(4), payload: { setId: id(`${suffix}-path-set`), setRevision: 1, pathId: id('path-1'), pathRevision: 1, action: action(4) } },
+    { type: 'propose-first-project', sourceId: id(`${suffix}-project-propose`), expectedRevision: 4, occurredAt: at(5), payload: { project: project(projectId), presentation: presentation(5) } },
+  ];
+  for (const operation of operations) {
+    expect((await persist(userId, leaseId, operation)).status, `${operation.type} fixture failed`).toBe('committed');
+  }
+  return projectId;
+}
+
+async function persistPendingFraming(
+  userId: string,
+  turn: AgentTurnRecord,
+  projectId: string,
+  suffix: string,
+) {
+  const context = createAgentTurnPersistenceContext(turn, { turnSequence: 6, occurredAt: at(6) });
+  const result = await storage.persistCareerMapOperation({
+    userId,
+    leaseId: turn.leaseId,
+    context,
+    operation: {
+      type: 'present-first-project-framing',
+      sourceId: id(`${suffix}-framing`),
+      expectedRevision: 5,
+      occurredAt: at(6),
+      payload: {
+        projectId,
+        projectRevision: 1,
+        locale: 'en',
+        framingText,
+        acceptancePhrase,
+        acceptanceQuestion,
+        moduleVersion: '1.1.1',
+        presentation: context.presentation,
+      },
+    },
+    moduleVersion: '1.1.1',
+  });
+  expect(result.status).toBe('committed');
 }
 
 function provenanceTiming(operation: CareerMapOperation) {
@@ -664,6 +715,155 @@ describe('PostgresStorage Method map, history, and ownership', () => {
     expect(await storage.listCareerMapHistory(userId)).toHaveLength(6);
   });
 
+  it('delivers first-project framing atomically with the exact completed assistant turn', async () => {
+    const userId = owner('framing-delivery');
+    await storage.getOrCreateCareerMap(userId);
+    const setupTurn = await beginTurn(userId, 'framing-delivery-setup');
+    const projectId = await seedPendingFirstProject(userId, setupTurn.leaseId, 'framing-delivery');
+    await storage.completeAgentTurn({ userId, turnId: setupTurn.turnId, leaseId: setupTurn.leaseId });
+    const framingTurn = await beginTurn(userId, 'framing-delivery-turn', 'agent-turn');
+    await persistPendingFraming(userId, framingTurn, projectId, 'framing-delivery');
+
+    const completed = await storage.completeAgentTurn({
+      userId,
+      turnId: framingTurn.turnId,
+      leaseId: framingTurn.leaseId,
+      assistantText: `${framingText}\n\n${acceptanceQuestion}`,
+      result: { kind: 'completed', revision: 6, operationCommitted: true, refetch: true },
+    });
+
+    expect(completed).toMatchObject({
+      status: 'completed',
+      terminalResult: { revision: 7, operationCommitted: true },
+    });
+    const loaded = await storage.loadCareerMap(userId);
+    expect(loaded).toMatchObject({
+      status: 'ready',
+      map: {
+        revision: 7,
+        projects: [expect.objectContaining({
+          id: projectId,
+          acceptanceFraming: expect.objectContaining({
+            status: 'delivered',
+            assistantTurnId: framingTurn.turnId,
+            framingText,
+            acceptancePhrase,
+            acceptanceQuestion,
+          }),
+        })],
+      },
+    });
+    expect(await storage.listCareerMapHistory(userId)).toHaveLength(7);
+  });
+
+  it.each(['cancelled', 'failed'] as const)(
+    'clears pending first-project framing when its initiating turn is %s',
+    async (terminal) => {
+      const userId = owner(`framing-${terminal}`);
+      await storage.getOrCreateCareerMap(userId);
+      const setupTurn = await beginTurn(userId, `framing-${terminal}-setup`);
+      const projectId = await seedPendingFirstProject(userId, setupTurn.leaseId, `framing-${terminal}`);
+      await storage.completeAgentTurn({ userId, turnId: setupTurn.turnId, leaseId: setupTurn.leaseId });
+      const framingTurn = await beginTurn(userId, `framing-${terminal}-turn`, 'agent-turn');
+      await persistPendingFraming(userId, framingTurn, projectId, `framing-${terminal}`);
+
+      if (terminal === 'cancelled') {
+        await storage.cancelAgentTurn({ userId, turnId: framingTurn.turnId, leaseId: framingTurn.leaseId });
+      } else {
+        await storage.failAgentTurn({
+          userId, turnId: framingTurn.turnId, leaseId: framingTurn.leaseId,
+          errorClass: 'InjectedFailure',
+        });
+      }
+
+      const loaded = await storage.loadCareerMap(userId);
+      expect(loaded).toMatchObject({ status: 'ready', map: { revision: 7 } });
+      if (loaded.status === 'ready') {
+        expect(loaded.map.projects.find((candidate) => candidate.id === projectId)?.acceptanceFraming)
+          .toBeUndefined();
+      }
+    },
+  );
+
+  it('rolls back malformed framing delivery and leaves the project safely re-framable after failure cleanup', async () => {
+    const userId = owner('framing-malformed');
+    await storage.getOrCreateCareerMap(userId);
+    const setupTurn = await beginTurn(userId, 'framing-malformed-setup');
+    const projectId = await seedPendingFirstProject(userId, setupTurn.leaseId, 'framing-malformed');
+    await storage.completeAgentTurn({ userId, turnId: setupTurn.turnId, leaseId: setupTurn.leaseId });
+    const framingTurn = await beginTurn(userId, 'framing-malformed-turn', 'agent-turn');
+    await persistPendingFraming(userId, framingTurn, projectId, 'framing-malformed');
+
+    await expect(storage.completeAgentTurn({
+      userId,
+      turnId: framingTurn.turnId,
+      leaseId: framingTurn.leaseId,
+      assistantText: `Preface. ${framingText}\n\n${acceptanceQuestion}`,
+    })).rejects.toMatchObject({ name: 'FramingDeliveryError' });
+    expect(await storage.loadCareerMap(userId)).toMatchObject({
+      status: 'ready', map: { revision: 6, projects: [expect.objectContaining({ acceptanceFraming: expect.objectContaining({ status: 'pending' }) })] },
+    });
+    await storage.failAgentTurn({
+      userId, turnId: framingTurn.turnId, leaseId: framingTurn.leaseId,
+      errorClass: 'FramingDeliveryError',
+    });
+    const cleaned = await storage.loadCareerMap(userId);
+    expect(cleaned).toMatchObject({ status: 'ready', map: { revision: 7 } });
+    if (cleaned.status === 'ready') {
+      expect(cleaned.map.projects.find((candidate) => candidate.id === projectId)?.acceptanceFraming)
+        .toBeUndefined();
+    }
+  });
+
+  it('loads a pre-U7 schema-version-2 accepted first project without acceptance framing', async () => {
+    const userId = owner('legacy-accepted-project');
+    await storage.getOrCreateCareerMap(userId);
+    const setupTurn = await beginTurn(userId, 'legacy-accepted-setup');
+    const projectId = await seedPendingFirstProject(userId, setupTurn.leaseId, 'legacy-accepted');
+    await storage.completeAgentTurn({ userId, turnId: setupTurn.turnId, leaseId: setupTurn.leaseId });
+    const framingTurn = await beginTurn(userId, 'legacy-accepted-framing', 'agent-turn');
+    await persistPendingFraming(userId, framingTurn, projectId, 'legacy-accepted');
+    await storage.completeAgentTurn({
+      userId, turnId: framingTurn.turnId, leaseId: framingTurn.leaseId,
+      assistantText: `${framingText}\n\n${acceptanceQuestion}`,
+    });
+    const acceptanceTurn = await beginTurn(userId, 'legacy-accepted-confirm', 'workspace-action');
+    const acceptanceContext = createWorkspaceActionPersistenceContext(acceptanceTurn, {
+      turnSequence: 7, occurredAt: at(7),
+    });
+    expect((await storage.persistCareerMapOperation({
+      userId,
+      leaseId: acceptanceTurn.leaseId,
+      context: acceptanceContext,
+      operation: {
+        type: 'accept-first-project', sourceId: id('legacy-accepted-confirm'),
+        expectedRevision: 7, occurredAt: at(7), payload: {
+          projectId, projectRevision: 1, action: acceptanceContext.action,
+        },
+      },
+      moduleVersion: '1.1.1',
+    })).status).toBe('committed');
+    const current = await storage.loadCareerMap(userId);
+    if (current.status !== 'ready') throw new Error('Accepted project fixture did not load.');
+    const legacyDocument = structuredClone(current.map);
+    const accepted = legacyDocument.projects.find((candidate) => candidate.id === projectId);
+    if (!accepted) throw new Error('Accepted project fixture is missing.');
+    delete accepted.acceptanceFraming;
+    await db.update(careerMaps)
+      .set({ document: legacyDocument })
+      .where(eq(careerMaps.userId, userId));
+
+    const loaded = await storage.loadCareerMap(userId);
+    expect(loaded).toMatchObject({
+      status: 'ready',
+      map: { schemaVersion: 2, projects: [expect.objectContaining({ id: projectId, agreementStatus: 'accepted' })] },
+    });
+    if (loaded.status === 'ready') {
+      expect(loaded.map.projects.find((candidate) => candidate.id === projectId)?.acceptanceFraming)
+        .toBeUndefined();
+    }
+  });
+
   it('persists Side Door selection with one active and two parked siblings atomically', async () => {
     const userId = owner('side-door-selection');
     await storage.getOrCreateCareerMap(userId);
@@ -675,19 +875,21 @@ describe('PostgresStorage Method map, history, and ownership', () => {
       { type: 'propose-purpose-paths', sourceId: id('sd-3'), expectedRevision: 2, occurredAt: at(3), payload: { setId: id('sd-path-set'), setRevision: 1, paths: paths(), presentation: presentation(3) } },
       { type: 'select-purpose-path', sourceId: id('sd-4'), expectedRevision: 3, occurredAt: at(4), payload: { setId: id('sd-path-set'), setRevision: 1, pathId: id('path-1'), pathRevision: 1, action: action(4) } },
       { type: 'propose-first-project', sourceId: id('sd-5'), expectedRevision: 4, occurredAt: at(5), payload: { project: project(projectId), presentation: presentation(5) } },
-      { type: 'accept-first-project', sourceId: id('sd-6'), expectedRevision: 5, occurredAt: at(6), payload: { projectId, projectRevision: 1, action: action(6) } },
-      { type: 'open-reflection', sourceId: id('sd-7'), expectedRevision: 6, occurredAt: at(7), payload: { reflectionId: id('sd-reflection'), revision: 1, projectId, projectRevision: 1, action: action(7) } },
-      { type: 'append-reflection-evidence', sourceId: id('sd-8'), expectedRevision: 7, occurredAt: at(8), payload: { reflectionId: id('sd-reflection'), reflectionRevision: 1, evidence: { id: id('sd-learning'), revision: 1, observation: 'I kept iterating voluntarily.', signal: 'voluntary-pull', interpretation: 'The work may fit.', provenance: action(8) } } },
-      { type: 'close-reflection', sourceId: id('sd-9'), expectedRevision: 8, occurredAt: at(9), payload: { reflectionId: id('sd-reflection'), reflectionRevision: 1, action: action(9) } },
-      { type: 'record-continue-choice', sourceId: id('sd-10'), expectedRevision: 9, occurredAt: at(10), payload: { id: id('sd-continue'), revision: 1, reflectionId: id('sd-reflection'), reflectionRevision: 1, wantsToContinue: true, action: action(10) } },
-      { type: 'record-next-move', sourceId: id('sd-11'), expectedRevision: 10, occurredAt: at(11), payload: { id: id('sd-move'), revision: 1, continueChoiceId: id('sd-continue'), continueChoiceRevision: 1, kind: 'commit-provisionally', action: action(11) } },
-      { type: 'record-peer-exposure', sourceId: id('sd-12'), expectedRevision: 11, occurredAt: at(12), payload: { exposure: { id: id('sd-peer'), revision: 1, subjectKind: 'community', subject: 'Relevant practitioners', insight: 'Concrete cases create trust.' }, presentation: presentation(12) } },
-      { type: 'confirm-peer-exposure', sourceId: id('sd-13'), expectedRevision: 12, occurredAt: at(13), payload: { exposureId: id('sd-peer'), exposureRevision: 1, action: action(13) } },
-      { type: 'complete-provisional-commitment', sourceId: id('sd-14'), expectedRevision: 13, occurredAt: at(14), payload: { id: id('sd-commitment'), revision: 1, intentId: `intent-${id('sd-move')}`, action: action(14) } },
-      { type: 'propose-proof-inventory', sourceId: id('sd-15'), expectedRevision: 14, occurredAt: at(15), payload: { proof: { id: id('sd-proof'), revision: 1, artifacts: ['Prototype'], problemsSolved: ['Decision friction'], peopleHelped: ['One colleague'], usefulQualities: ['Synthesis'], knowledge: ['Decision design'], relationships: ['Practitioner'], pointsOfView: ['Evidence changes action'], shareableMaterial: ['Case note'] }, presentation: presentation(15) } },
-      { type: 'confirm-proof-inventory', sourceId: id('sd-16'), expectedRevision: 15, occurredAt: at(16), payload: { proofId: id('sd-proof'), proofRevision: 1, action: action(16) } },
-      { type: 'propose-side-doors', sourceId: id('sd-17'), expectedRevision: 16, occurredAt: at(17), payload: { setId: id('sd-door-set'), setRevision: 1, doors: sideDoors(), presentation: presentation(17) } },
-      { type: 'select-side-door', sourceId: id('sd-18'), expectedRevision: 17, occurredAt: at(18), payload: { setId: id('sd-door-set'), setRevision: 1, doorId: id('door-2'), doorRevision: 1, action: action(18) } },
+      { type: 'present-first-project-framing', sourceId: id('sd-6'), expectedRevision: 5, occurredAt: at(6), payload: { projectId, projectRevision: 1, locale: 'en', framingText, acceptancePhrase, acceptanceQuestion, moduleVersion: '1.1.1', presentation: presentation(6) } },
+      { type: 'deliver-first-project-framing', sourceId: id('sd-7'), expectedRevision: 6, occurredAt: at(7), payload: { projectId, projectRevision: 1, assistantText: `${framingText}\n\n${acceptanceQuestion}`, presentation: presentation(6) } },
+      { type: 'accept-first-project', sourceId: id('sd-8'), expectedRevision: 7, occurredAt: at(8), payload: { projectId, projectRevision: 1, action: action(8) } },
+      { type: 'open-reflection', sourceId: id('sd-9'), expectedRevision: 8, occurredAt: at(9), payload: { reflectionId: id('sd-reflection'), revision: 1, projectId, projectRevision: 1, action: action(9) } },
+      { type: 'append-reflection-evidence', sourceId: id('sd-10'), expectedRevision: 9, occurredAt: at(10), payload: { reflectionId: id('sd-reflection'), reflectionRevision: 1, evidence: { id: id('sd-learning'), revision: 1, observation: 'I kept iterating voluntarily.', signal: 'voluntary-pull', interpretation: 'The work may fit.', provenance: action(10) } } },
+      { type: 'close-reflection', sourceId: id('sd-11'), expectedRevision: 10, occurredAt: at(11), payload: { reflectionId: id('sd-reflection'), reflectionRevision: 1, action: action(11) } },
+      { type: 'record-continue-choice', sourceId: id('sd-12'), expectedRevision: 11, occurredAt: at(12), payload: { id: id('sd-continue'), revision: 1, reflectionId: id('sd-reflection'), reflectionRevision: 1, wantsToContinue: true, action: action(12) } },
+      { type: 'record-next-move', sourceId: id('sd-13'), expectedRevision: 12, occurredAt: at(13), payload: { id: id('sd-move'), revision: 1, continueChoiceId: id('sd-continue'), continueChoiceRevision: 1, kind: 'commit-provisionally', action: action(13) } },
+      { type: 'record-peer-exposure', sourceId: id('sd-14'), expectedRevision: 13, occurredAt: at(14), payload: { exposure: { id: id('sd-peer'), revision: 1, subjectKind: 'community', subject: 'Relevant practitioners', insight: 'Concrete cases create trust.' }, presentation: presentation(14) } },
+      { type: 'confirm-peer-exposure', sourceId: id('sd-15'), expectedRevision: 14, occurredAt: at(15), payload: { exposureId: id('sd-peer'), exposureRevision: 1, action: action(15) } },
+      { type: 'complete-provisional-commitment', sourceId: id('sd-16'), expectedRevision: 15, occurredAt: at(16), payload: { id: id('sd-commitment'), revision: 1, intentId: `intent-${id('sd-move')}`, action: action(16) } },
+      { type: 'propose-proof-inventory', sourceId: id('sd-17'), expectedRevision: 16, occurredAt: at(17), payload: { proof: { id: id('sd-proof'), revision: 1, artifacts: ['Prototype'], problemsSolved: ['Decision friction'], peopleHelped: ['One colleague'], usefulQualities: ['Synthesis'], knowledge: ['Decision design'], relationships: ['Practitioner'], pointsOfView: ['Evidence changes action'], shareableMaterial: ['Case note'] }, presentation: presentation(17) } },
+      { type: 'confirm-proof-inventory', sourceId: id('sd-18'), expectedRevision: 17, occurredAt: at(18), payload: { proofId: id('sd-proof'), proofRevision: 1, action: action(18) } },
+      { type: 'propose-side-doors', sourceId: id('sd-19'), expectedRevision: 18, occurredAt: at(19), payload: { setId: id('sd-door-set'), setRevision: 1, doors: sideDoors(), presentation: presentation(19) } },
+      { type: 'select-side-door', sourceId: id('sd-20'), expectedRevision: 19, occurredAt: at(20), payload: { setId: id('sd-door-set'), setRevision: 1, doorId: id('door-2'), doorRevision: 1, action: action(20) } },
     ];
     for (const operation of operations) {
       const result = await persist(userId, turn.leaseId, operation);
@@ -700,7 +902,7 @@ describe('PostgresStorage Method map, history, and ownership', () => {
       expect(doors.filter((door) => door.selection === 'active')).toHaveLength(1);
       expect(doors.filter((door) => door.selection === 'parked')).toHaveLength(2);
     }
-    expect(await storage.listCareerMapHistory(userId)).toHaveLength(18);
+    expect(await storage.listCareerMapHistory(userId)).toHaveLength(20);
   });
 
   it('never marks a valid map for repair while an atomic writer is between row and history updates', async () => {
@@ -964,6 +1166,30 @@ describe('PostgresStorage lease and client-message turns', () => {
       expect(loser.activeTurnId).toBe(winner.turn.turnId);
     }
     expect((await storage.getAgentTurn(userId, expired.clientMessageId))?.status).toBe('failed');
+  });
+
+  it('clears pending first-project framing exactly once when a new turn reclaims its expired lease', async () => {
+    const userId = owner('framing-expired-reclaim');
+    await storage.getOrCreateCareerMap(userId);
+    const setupTurn = await beginTurn(userId, 'framing-expired-reclaim-setup');
+    const projectId = await seedPendingFirstProject(userId, setupTurn.leaseId, 'framing-expired-reclaim');
+    await storage.completeAgentTurn({ userId, turnId: setupTurn.turnId, leaseId: setupTurn.leaseId });
+    const framingTurn = await beginTurn(userId, 'framing-expired-reclaim-turn', 'agent-turn');
+    await persistPendingFraming(userId, framingTurn, projectId, 'framing-expired-reclaim');
+    now = new Date(now.getTime() + 400_000);
+
+    const replacement = await beginTurn(userId, 'framing-expired-reclaim-replacement', 'agent-turn');
+
+    expect(replacement.turn.turnId).not.toBe(framingTurn.turnId);
+    expect((await storage.getAgentTurn(userId, framingTurn.clientMessageId))?.status).toBe('failed');
+    const loaded = await storage.loadCareerMap(userId);
+    expect(loaded).toMatchObject({ status: 'ready', map: { revision: 7 } });
+    if (loaded.status === 'ready') {
+      expect(loaded.map.projects.find((candidate) => candidate.id === projectId)?.acceptanceFraming)
+        .toBeUndefined();
+      expect(loaded.map.operationHistory.filter((receipt) => receipt.operationType === 'abandon-first-project-framing'))
+        .toHaveLength(1);
+    }
   });
 
   it('rejects lease-token ABA reuse after expiry', async () => {

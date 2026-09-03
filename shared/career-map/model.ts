@@ -154,6 +154,12 @@ export const careerMapSchema = composedCareerMapSchema.superRefine((map, context
     if (project.agreementStatus === 'accepted' && !project.confirmation) {
       context.addIssue({ code: z.ZodIssueCode.custom, path: ['projects', projectIndex], message: 'Accepted project requires auditable confirmation.' });
     }
+    if (project.acceptanceFraming?.status === 'delivered' && !project.acceptanceFraming.presentation) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['projects', projectIndex, 'acceptanceFraming'], message: 'Delivered first-project framing requires completed presentation provenance.' });
+    }
+    if (project.acceptanceFraming?.status === 'pending' && project.acceptanceFraming.presentation) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['projects', projectIndex, 'acceptanceFraming'], message: 'Pending first-project framing cannot claim completed presentation.' });
+    }
     const lastWorkStatus = project.workUpdates.at(-1)?.status ?? 'not-started';
     if (lastWorkStatus !== project.workStatus) {
       context.addIssue({ code: z.ZodIssueCode.custom, path: ['projects', projectIndex, 'workStatus'], message: 'Project work status must match its latest provenance record.' });

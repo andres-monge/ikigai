@@ -1,4 +1,5 @@
 export * from './common';
+export * from './authority';
 export * from './foundation';
 export * from './paths';
 export * from './projects';

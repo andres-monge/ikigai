@@ -4,11 +4,19 @@ import {
   deriveMethodCheckpoint,
   entityIdSchema,
   foundationEvidenceSchema,
+  languageTagSchema,
   pathProjectInputSchema,
   opaqueClientMessageIdSchema,
+  projectAcceptancePhraseSchema,
+  projectAcceptanceQuestionSchema,
   purposePathInputSchema,
   realityConstraintSchema,
   revisionSchema,
+  selectCurrentFoundationEvidence,
+  selectCurrentRealityConstraints,
+  hasSuggestedOperationVeto,
+  isExactPersistedAcceptance,
+  normalizeAuthorityMessage,
   whyInputSchema,
   type CareerMap,
   type CareerMapOperation,
@@ -16,6 +24,12 @@ import {
   type MethodCheckpoint,
 } from '../../shared/career-map/index.js';
 import { compileCareerMapBriefing, type CareerMapBriefing } from './briefing.js';
+import {
+  FIRST_PROJECT_ACCEPTANCE_PHRASE_ENGLISH,
+  FIRST_PROJECT_ACCEPTANCE_PHRASE_SPANISH,
+  R22_CANONICAL_ENGLISH,
+  R22_CANONICAL_SPANISH,
+} from './method/base-instructions.js';
 import type { LoadedMethodModule, MethodModuleLoader } from './method/loader.js';
 import {
   createAgentTurnPersistenceContext,
@@ -123,6 +137,13 @@ const confirmationTargetSchema = z.object({
 const whyConfirmationSchema = z.object({
   whyId: entityIdSchema,
   whyRevision: revisionSchema,
+  presentedInTurnId: entityIdSchema,
+  sourceMessageId: entityIdSchema,
+}).strict();
+
+const projectAcceptanceSchema = z.object({
+  projectId: entityIdSchema,
+  projectRevision: revisionSchema,
   presentedInTurnId: entityIdSchema,
   sourceMessageId: entityIdSchema,
 }).strict();
@@ -249,17 +270,7 @@ export async function executeMethodOperation(
   return envelopeFromState(options.operationType, before, normalized.status, normalized.errorClass, normalized.retryable);
 }
 
-function normalizedMessage(value: string): string {
-  return value
-    .normalize('NFKD')
-    .replace(/(?<=\p{Script=Latin})\p{Diacritic}+/gu, '')
-    .normalize('NFC')
-    .replace(/[\u2018\u2019\u2032]/g, "'")
-    .replace(/[\u201C\u201D\u2033]/g, '"')
-    .replace(/[\u2013\u2014\u2212]/g, '-')
-    .toLowerCase()
-    .trim();
-}
+const normalizedMessage = normalizeAuthorityMessage;
 
 /** Deterministic vetoes are a write guard, never a model-routing decision. */
 function hasConsequentialDisqualifier(message: string): boolean {
@@ -314,14 +325,15 @@ function hasPositiveWhyAuthorization(
 
 function pathReferenceAliases(path: { id: string; name: string }, index: number): string[] {
   const languageAliases = [
-    ['first', 'first one', 'first option', 'first path', 'primero', 'primera', 'primera opcion', 'premiere voie', 'premier chemin', '1番目の道'],
+    ['first', 'first one', 'first option', 'first path', 'primer', 'primero', 'primera', 'primera opcion', 'premiere voie', 'premier chemin', '1番目の道'],
     ['second', 'second one', 'second option', 'second path', 'segundo', 'segunda', 'segunda opcion', 'deuxieme voie', 'deuxieme chemin', '2番目の道'],
     ['third', 'third one', 'third option', 'third path', 'tercero', 'tercera', 'tercera opcion', 'troisieme voie', 'troisieme chemin', '3番目の道'],
   ][index] ?? [];
   const number = index + 1;
   return [...new Set([
     normalizedMessage(path.id), normalizedMessage(path.name),
-    `path ${number}`, `path number ${number}`, `camino ${number}`, `ruta ${number}`,
+    String(number), `path ${number}`, `paths ${number}`, `path number ${number}`,
+    `camino ${number}`, `caminos ${number}`, `ruta ${number}`, `rutas ${number}`,
     ...languageAliases,
   ].filter(Boolean))];
 }
@@ -365,8 +377,52 @@ function hasPositivePathAuthorization(
   return matchingPaths.length === 1 && matchingPaths[0] === pathIndex;
 }
 
+function hasPositiveProjectAuthorization(
+  state: PreparedMethodState | undefined,
+  input: { targetId: string; targetRevision: number },
+  message: string,
+): boolean {
+  const project = state?.map.projects.find((candidate) => (
+    candidate.id === input.targetId && candidate.revision === input.targetRevision
+  ));
+  return project?.acceptanceFraming?.status === 'delivered'
+    && isExactPersistedAcceptance(message, project.acceptanceFraming.acceptancePhrase);
+}
+
+function assertCurrentMessageFramingRequest(runtime: MethodToolRuntime): void {
+  if (runtime.surface === 'workspace-action') return;
+  const message = normalizedMessage(runtime.currentMessage ?? '');
+  const pendingDecision = runtime.prepared.current?.checkpoint.pendingDecision;
+  const project = pendingDecision?.kind === 'first-project-confirmation'
+    ? runtime.prepared.current?.map.projects.find((candidate) => (
+      candidate.id === pendingDecision.targetId
+      && candidate.revision === pendingDecision.targetRevision
+    ))
+    : undefined;
+  const requestsFraming = [
+    /\b(?:ready|want|would like)\b.*\b(?:accept|acceptance)\b.*\bproject\b/u,
+    /\b(?:give|show|present|share)\b.*\b(?:required\s+)?(?:framing|project framing)\b/u,
+    /\b(?:list[oa]|preparad[oa]|quiero)\b.*\bacept(?:ar|o)\b.*\bproyecto\b/u,
+    /\b(?:dame|muestra|presenta)\b.*\b(?:marco|encuadre)\b/u,
+  ].some((pattern) => pattern.test(message));
+  const explicitlyRejectsFraming = hasSuggestedOperationVeto(message, [
+    'frame', 'framing', 'present', 'show', 'share', 'marco', 'encuadre', 'presentes', 'muestres',
+  ]);
+  const attemptedAcceptance = project
+    ? hasPositiveProjectAuthorization(runtime.prepared.current, {
+      targetId: project.id,
+      targetRevision: project.revision,
+    }, message)
+    : false;
+  if (!message || explicitlyRejectsFraming || (!requestsFraming && !attemptedAcceptance)) {
+    const error = new Error('The current message does not request the first-project acceptance framing.');
+    error.name = 'ConfirmationAuthorizationError';
+    throw error;
+  }
+}
+
 function assertCurrentMessageAuthorization(runtime: MethodToolRuntime, input: {
-  operation: 'confirm-why' | 'select-purpose-path' | 'confirm-purpose-path-revision';
+  operation: 'confirm-why' | 'select-purpose-path' | 'confirm-purpose-path-revision' | 'accept-first-project';
   targetId: string;
   targetRevision: number;
   choiceId?: string;
@@ -381,7 +437,9 @@ function assertCurrentMessageAuthorization(runtime: MethodToolRuntime, input: {
   ].some((pattern) => pattern.test(normalized));
   const hasPositiveAuthority = input.operation === 'confirm-why'
     ? hasPositiveWhyAuthorization(normalized, input)
-    : hasPositivePathAuthorization(runtime.prepared.current, input, normalized);
+    : input.operation === 'accept-first-project'
+      ? hasPositiveProjectAuthorization(runtime.prepared.current, input, normalized)
+      : hasPositivePathAuthorization(runtime.prepared.current, input, normalized);
   if (
     !message
     || hasConsequentialDisqualifier(normalized)
@@ -409,11 +467,39 @@ function assertCurrentMessageSuggestedOperation(
 ): void {
   if (runtime.surface === 'workspace-action') return;
   const message = normalizedMessage(runtime.currentMessage ?? '');
-  const prohibited = [
-    /\b(?:no|not|never|dont|don't|do not|without|wait|hold off|pause|not yet|no quiero|no hagas|sin|espera)\b/u,
-    /\b(?:quoting|quoted|i am quoting|i'm quoting|reported speech|citando|entre comillas)\b/u,
-    /\b(?:if|provided that|assuming|only if|solo si|siempre que)\b/u,
-  ].some((pattern) => pattern.test(message));
+  const explicitlyVetoed = hasSuggestedOperationVeto(message, [
+    'suggest', 'propose', 'draft', 'create', 'design', 'replace', 'revise', 'combine',
+    'sugieras', 'propongas', 'redactes', 'crees', 'disenes', 'reemplaces', 'revises', 'combines',
+  ]);
+  const prepared = runtime.prepared.current;
+  const currentAction = (value: { provenance?: { actionId?: string; turnId?: string } } | undefined) => (
+    value?.provenance?.actionId === runtime.turn.clientMessageId
+    && value.provenance.turnId === runtime.turn.turnId
+  );
+  const currentEvidence = prepared
+    ? selectCurrentFoundationEvidence(prepared.map.foundation)
+    : [];
+  const currentConstraints = prepared
+    ? selectCurrentRealityConstraints(prepared.map.foundation)
+    : [];
+  const foundationCategories = new Set(currentEvidence.map((item) => item.category));
+  const foundationComplete = ['fascination', 'importance', 'point-of-view', 'starting-asset'].every(
+    (category) => foundationCategories.has(category as typeof currentEvidence[number]['category']),
+  ) && (currentConstraints.length > 0 || foundationCategories.has('reality-boundary'));
+  const touchedFoundationThisMessage = currentEvidence.some(currentAction)
+    || currentConstraints.some(currentAction);
+  const confirmedWhy = prepared?.map.foundation.whyRevisions.findLast((item) => item.status === 'confirmed');
+  const activeSet = prepared?.map.pathSets.findLast((item) => item.status === 'active');
+  const automaticTransitionAuthorized = !explicitlyVetoed && (
+    (operation === 'propose-why' && Boolean(foundationComplete && touchedFoundationThisMessage))
+    || (operation === 'propose-purpose-paths'
+      && confirmedWhy?.confirmation?.confirmedBy.actionId === runtime.turn.clientMessageId
+      && confirmedWhy.confirmation.confirmedBy.turnId === runtime.turn.turnId)
+    || (operation === 'propose-first-project'
+      && activeSet?.confirmation?.confirmedBy.actionId === runtime.turn.clientMessageId
+      && activeSet.confirmation.confirmedBy.turnId === runtime.turn.turnId)
+  );
+  if (automaticTransitionAuthorized) return;
   const action = operation === 'combine-purpose-paths'
     ? /\b(?:combine|merge|blend|combina|fusiona|mezcla)\b/u
     : operation === 'replace-purpose-path' || operation === 'replace-project-proposal'
@@ -426,8 +512,40 @@ function assertCurrentMessageSuggestedOperation(
     : operation === 'propose-first-project' || operation === 'replace-project-proposal'
       ? /\b(?:project|proyecto)\b/u
       : /\b(?:path|paths|direction|directions|camino|caminos|ruta|rutas|direccion|direcciones)\b/u;
-  if (!message || prohibited || !action.test(message) || !subject.test(message)) {
+  if (!message || explicitlyVetoed || !action.test(message) || !subject.test(message)) {
     const error = new Error('The current message does not explicitly request this Suggested operation.');
+    error.name = 'SuggestedOperationAuthorizationError';
+    throw error;
+  }
+}
+
+function pathReferenceAppears(path: { id: string; name: string }, index: number, message: string): boolean {
+  return pathReferenceAliases(path, index).some((alias) => new RegExp(
+    `(?:^|[^a-z0-9])${escapeRegExp(alias)}(?:$|[^a-z0-9])`,
+    'u',
+  ).test(message));
+}
+
+function assertRequestedPathEditTargets(
+  runtime: MethodToolRuntime,
+  input: { sourceSetId: string; sourceSetRevision: number; pathIds: string[]; allowAdditionalMentions?: boolean },
+): void {
+  if (runtime.surface === 'workspace-action') return;
+  const set = runtime.prepared.current?.map.pathSets.find((candidate) => (
+    candidate.id === input.sourceSetId && candidate.revision === input.sourceSetRevision
+  ));
+  const message = normalizedMessage(runtime.currentMessage ?? '');
+  const requestedIds = new Set(input.pathIds);
+  const mentionedIds = new Set((set?.paths ?? []).flatMap((path, index) => (
+    pathReferenceAppears(path, index, message) ? [path.id] : []
+  )));
+  if (
+    !set
+    || requestedIds.size !== input.pathIds.length
+    || [...requestedIds].some((id) => !mentionedIds.has(id))
+    || (!input.allowAdditionalMentions && mentionedIds.size !== requestedIds.size)
+  ) {
+    const error = new Error('The path edit does not match the exact targets named in the current message.');
     error.name = 'SuggestedOperationAuthorizationError';
     throw error;
   }
@@ -436,6 +554,7 @@ function assertCurrentMessageSuggestedOperation(
 function confirmationPayload(
   runtime: MethodToolRuntime,
   input: z.infer<typeof confirmationTargetSchema>,
+  operation: 'confirm-why' | 'accept-first-project',
   expectedKind: NonNullable<MethodCheckpoint['pendingDecision']>['kind'],
   targetKey: string,
 ): Record<string, unknown> {
@@ -445,13 +564,13 @@ function confirmationPayload(
     && pending.kind === expectedKind
     && pending.targetId === input.targetId
     && pending.targetRevision === input.targetRevision;
-  const why = prepared?.map.foundation.whyRevisions.find(
-    (item) => item.id === input.targetId && item.revision === input.targetRevision,
-  );
-  const project = prepared?.map.projects.find(
-    (item) => item.id === input.targetId && item.revision === input.targetRevision,
-  );
-  const presentedInTurnId = why?.presentation.assistantTurnId ?? project?.presentation.assistantTurnId;
+  const presentedInTurnId = operation === 'confirm-why'
+    ? prepared?.map.foundation.whyRevisions.find(
+      (item) => item.id === input.targetId && item.revision === input.targetRevision,
+    )?.presentation.assistantTurnId
+    : prepared?.map.projects.find(
+      (item) => item.id === input.targetId && item.revision === input.targetRevision,
+    )?.acceptanceFraming?.presentation?.assistantTurnId;
   if (
     !targetMatches
     || input.sourceMessageId !== runtime.turn.clientMessageId
@@ -462,7 +581,7 @@ function confirmationPayload(
     throw error;
   }
   assertCurrentMessageAuthorization(runtime, {
-    operation: 'confirm-why', targetId: input.targetId, targetRevision: input.targetRevision,
+    operation, targetId: input.targetId, targetRevision: input.targetRevision,
   });
   const context = runtime.surface === 'agent-turn'
     ? createAgentTurnPersistenceContext(runtime.turn, runtime.timing)
@@ -644,7 +763,15 @@ export const OPERATION_TO_TOOL_NAME = {
   'confirm-purpose-path-revision': 'confirm_purpose_path_revision',
   'propose-first-project': 'propose_first_project',
   'replace-project-proposal': 'replace_project_proposal',
+  'present-first-project-framing': 'present_first_project_framing',
+  'accept-first-project': 'accept_first_project',
 } as const satisfies Partial<Record<CareerMapOperationType, string>>;
+
+export const WORKSPACE_OPERATION_TYPES = [
+  'confirm-why',
+  'select-purpose-path',
+  'confirm-purpose-path-revision',
+] as const satisfies readonly (keyof typeof OPERATION_TO_TOOL_NAME)[];
 
 export function toolNamesForCheckpoint(
   checkpoint: MethodCheckpoint,
@@ -689,17 +816,19 @@ export function createMethodTools(runtime: MethodToolRuntime): ToolSet {
       assertCurrentMessageSuggestedOperation(runtime, 'revise-why');
       return { supersedesWhyId, why, presentation: context().presentation };
     }),
-    confirm_why: operationTool(runtime, 'confirm-why', 'Confirm only the exact pending Why from a completed prior assistant turn and this exact user message.', whyConfirmationSchema, (input) => confirmationPayload(runtime, { ...input, targetId: input.whyId, targetRevision: input.whyRevision }, 'why-confirmation', 'whyId')),
+    confirm_why: operationTool(runtime, 'confirm-why', 'Confirm only the exact pending Why from a completed prior assistant turn and this exact user message.', whyConfirmationSchema, (input) => confirmationPayload(runtime, { ...input, targetId: input.whyId, targetRevision: input.whyRevision }, 'confirm-why', 'why-confirmation', 'whyId')),
     propose_purpose_paths: operationTool(runtime, 'propose-purpose-paths', 'Suggest exactly three equal-weight Purpose Paths grounded in the confirmed Why.', z.object({ setId: entityIdSchema, setRevision: revisionSchema, paths: z.array(pathToolInputSchema).length(3) }).strict(), ({ setId, setRevision, paths }) => {
       assertCurrentMessageSuggestedOperation(runtime, 'propose-purpose-paths');
       return { setId, setRevision, paths, presentation: context().presentation };
     }),
     replace_purpose_path: operationTool(runtime, 'replace-purpose-path', 'Replace exactly one path while preserving the other two.', z.object({ sourceSetId: entityIdSchema, sourceSetRevision: revisionSchema, replacedPathId: entityIdSchema, replacementSetId: entityIdSchema, replacementSetRevision: revisionSchema, replacement: pathToolInputSchema }).strict(), (input) => {
       assertCurrentMessageSuggestedOperation(runtime, 'replace-purpose-path');
+      assertRequestedPathEditTargets(runtime, { sourceSetId: input.sourceSetId, sourceSetRevision: input.sourceSetRevision, pathIds: [input.replacedPathId] });
       return { ...input, presentation: context().presentation };
     }),
     combine_purpose_paths: operationTool(runtime, 'combine-purpose-paths', 'Combine exactly two paths and preserve an exact-three equal-weight set.', z.object({ sourceSetId: entityIdSchema, sourceSetRevision: revisionSchema, combinedPathIds: z.array(entityIdSchema).length(2), replacementSetId: entityIdSchema, replacementSetRevision: revisionSchema, paths: z.array(pathToolInputSchema).length(3) }).strict(), (input) => {
       assertCurrentMessageSuggestedOperation(runtime, 'combine-purpose-paths');
+      assertRequestedPathEditTargets(runtime, { sourceSetId: input.sourceSetId, sourceSetRevision: input.sourceSetRevision, pathIds: input.combinedPathIds, allowAdditionalMentions: true });
       return { ...input, presentation: context().presentation };
     }),
     select_purpose_path: operationTool(runtime, 'select-purpose-path', 'Select one exact pending Purpose Path from a completed prior presentation.', targetSelectionSchema, (input) => {
@@ -724,7 +853,7 @@ export function createMethodTools(runtime: MethodToolRuntime): ToolSet {
       assertCurrentMessageAuthorization(runtime, { operation: 'confirm-purpose-path-revision', targetId: input.setId, targetRevision: input.setRevision, choiceId: input.pathId, choiceRevision: input.pathRevision });
       return { setId: input.setId, setRevision: input.setRevision, pathId: input.pathId, pathRevision: input.pathRevision, action: context().action };
     }),
-    propose_first_project: operationTool(runtime, 'propose-first-project', 'Suggest one small firsthand Path Project for collaborative refinement.', projectToolInputSchema, (project) => {
+    propose_first_project: operationTool(runtime, 'propose-first-project', 'Immediately after committed path selection, suggest one small firsthand Path Project in the same response for collaborative refinement.', projectToolInputSchema, (project) => {
       assertCurrentMessageSuggestedOperation(runtime, 'propose-first-project');
       return { project, presentation: context().presentation };
     }),
@@ -732,6 +861,40 @@ export function createMethodTools(runtime: MethodToolRuntime): ToolSet {
       assertCurrentMessageSuggestedOperation(runtime, 'replace-project-proposal');
       return { ...input, presentation: context().presentation };
     }),
+    present_first_project_framing: operationTool(runtime, 'present-first-project-framing', 'Record that the required locale-correct first-project framing will be the only framing in this completed assistant turn.', z.object({
+      projectId: entityIdSchema,
+      projectRevision: revisionSchema,
+      locale: languageTagSchema,
+      framingText: z.string().min(1).max(2_000),
+      acceptancePhrase: projectAcceptancePhraseSchema,
+      acceptanceQuestion: projectAcceptanceQuestionSchema,
+    }).strict(), (input) => {
+      assertCurrentMessageFramingRequest(runtime);
+      const language = input.locale.split('-')[0]?.toLowerCase();
+      const canonicalAcceptancePhrase = language === 'en'
+        ? FIRST_PROJECT_ACCEPTANCE_PHRASE_ENGLISH
+        : language === 'es' ? FIRST_PROJECT_ACCEPTANCE_PHRASE_SPANISH : undefined;
+      if (
+        (language === 'en' && input.framingText !== R22_CANONICAL_ENGLISH)
+        || (language === 'es' && input.framingText !== R22_CANONICAL_SPANISH)
+        || (canonicalAcceptancePhrase !== undefined && input.acceptancePhrase !== canonicalAcceptancePhrase)
+        || !input.acceptanceQuestion.includes(input.acceptancePhrase)
+      ) {
+        const error = new Error('The first-project framing or acceptance copy does not match the canonical locale contract.');
+        error.name = 'FramingDeliveryError';
+        throw error;
+      }
+      return {
+        ...input,
+        moduleVersion: runtime.prepared.current?.module.contentVersion ?? 'unavailable',
+        presentation: context().presentation,
+      };
+    }),
+    accept_first_project: operationTool(runtime, 'accept-first-project', 'Accept only the exact pending first Path Project after the required framing appeared in a completed prior assistant turn and this message explicitly accepts it.', projectAcceptanceSchema, (input) => confirmationPayload(runtime, {
+      ...input,
+      targetId: input.projectId,
+      targetRevision: input.projectRevision,
+    }, 'accept-first-project', 'first-project-confirmation', 'projectId')),
   } satisfies ToolSet;
 }
 
@@ -743,6 +906,9 @@ export async function executeWorkspaceTool(input: {
   rawInput: unknown;
 }): Promise<MethodOperationEnvelope> {
   const prepared = await refreshMethodState(input.runtime.storage, input.runtime.loader, input.runtime.userId);
+  if (!(WORKSPACE_OPERATION_TYPES as readonly string[]).includes(input.operationType)) {
+    return envelopeFromState(input.operationType, prepared, 'rejected', 'operation-unavailable');
+  }
   if (prepared.map.revision !== input.expectedRevision) {
     return envelopeFromState(input.operationType, prepared, 'conflict', 'revision-conflict', true);
   }
@@ -773,7 +939,7 @@ export const workspaceOperationRequestSchema = z.object({
   clientMessageId: opaqueClientMessageIdSchema,
   expectedRevision: z.number().int().nonnegative(),
   operation: z.object({
-    type: z.enum(Object.keys(OPERATION_TO_TOOL_NAME) as [keyof typeof OPERATION_TO_TOOL_NAME, ...(keyof typeof OPERATION_TO_TOOL_NAME)[]]),
+    type: z.enum(WORKSPACE_OPERATION_TYPES),
     input: z.record(z.unknown()),
   }).strict(),
 }).strict();

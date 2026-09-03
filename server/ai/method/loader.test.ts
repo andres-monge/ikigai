@@ -182,6 +182,9 @@ describe('repository-owned Method module loader', () => {
     expect(project).toMatch(/exactly one first Path Project/i);
     expect(project).toMatch(/one replacement/i);
     expect(project).toMatch(/firsthand beneficiary/i);
+    expect(project).toMatch(/present-first-project-framing.*once/i);
+    expect(project).toMatch(/later turn/i);
+    expect(project).toMatch(/durable marker prevents repetition after reload or compaction/i);
     expect(project).toContain(R22_CANONICAL_ENGLISH);
     expect(project).toContain(R22_CANONICAL_SPANISH);
     expect(project.indexOf(R22_CANONICAL_ENGLISH)).toBe(project.lastIndexOf(R22_CANONICAL_ENGLISH));

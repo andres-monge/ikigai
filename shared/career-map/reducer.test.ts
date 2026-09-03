@@ -13,6 +13,9 @@ import {
 } from './index';
 
 const at = (n: number) => `2026-08-31T10:${String(n).padStart(2, '0')}:00.000Z`;
+const framingText = "The point of a project is not to succeed, it's to learn if it's something you'd want to pursue. Think of projects like dating: you start with something chill and low commitment, then invest more only if each date makes you want another.";
+const acceptancePhrase = 'I explicitly accept this Path Project.';
+const acceptanceQuestion = `Will you explicitly accept this Path Project by replying “${acceptancePhrase}”?`;
 
 const presentation = (sequence: number) => ({
   kind: 'model-presentation' as const,
@@ -28,6 +31,16 @@ const action = (sequence: number, kind: UserActionProvenance['kind'] = 'user-mes
   turnId: `user-${sequence}`,
   turnSequence: sequence,
   occurredAt: at(sequence),
+});
+
+const framing = (projectId: string, sequence: number) => ({
+  projectId, projectRevision: 1, locale: 'en', framingText, acceptancePhrase,
+  acceptanceQuestion, moduleVersion: '1.1.1', presentation: presentation(sequence),
+});
+
+const delivery = (projectId: string, sequence: number) => ({
+  projectId, projectRevision: 1, assistantText: `${framingText}\n\n${acceptanceQuestion}`,
+  presentation: presentation(sequence),
 });
 
 const paths = (prefix = 'path', revision = 1): [PurposePathInput, PurposePathInput, PurposePathInput] => [
@@ -124,7 +137,9 @@ function withSelectedPath(): CareerMap {
 function withAcceptedProject(): CareerMap {
   let map = withSelectedPath();
   map = commit(map, 'propose-first-project', { project: project(), presentation: presentation(5) });
-  return commit(map, 'accept-first-project', { projectId: 'project-1', projectRevision: 1, action: action(6) });
+  map = commit(map, 'present-first-project-framing', framing('project-1', 6));
+  map = commit(map, 'deliver-first-project-framing', delivery('project-1', 6));
+  return commit(map, 'accept-first-project', { projectId: 'project-1', projectRevision: 1, action: action(7) });
 }
 
 function withCompletedLearningLoop(nextMove: 'explore-further' | 'commit-provisionally' | 'return-to-paths'): CareerMap {
@@ -282,6 +297,33 @@ describe('Method reducer', () => {
     expect(ui.status).toBe('committed');
   });
 
+  it('records the first-project framing once and requires a later acceptance against it', () => {
+    let map = withSelectedPath();
+    map = commit(map, 'propose-first-project', { project: project(), presentation: presentation(5) });
+
+    const beforeFraming = applyCareerMapOperation(map, operation(map, 'accept-first-project', {
+      projectId: 'project-1', projectRevision: 1, action: action(6),
+    }));
+    expect(beforeFraming.status).toBe('rejected');
+
+    map = commit(map, 'present-first-project-framing', framing('project-1', 6));
+    const repeated = applyCareerMapOperation(map, operation(map, 'present-first-project-framing', {
+      ...framing('project-1', 7),
+    }));
+    expect(repeated.status).toBe('rejected');
+
+    const sameTurn = applyCareerMapOperation(map, operation(map, 'accept-first-project', {
+      projectId: 'project-1', projectRevision: 1, action: action(6),
+    }));
+    expect(sameTurn.status).toBe('rejected');
+
+    map = commit(map, 'deliver-first-project-framing', delivery('project-1', 6));
+    map = commit(map, 'accept-first-project', {
+      projectId: 'project-1', projectRevision: 1, action: action(7),
+    });
+    expect(map.projects.at(-1)?.confirmation?.presentedInTurnId).toBe('assistant-6');
+  });
+
   it.each(['not-started', 'in-progress', 'stopped', 'completed'] as const)(
     'opens reflection while work is %s without changing work status',
     (workStatus) => {
@@ -343,7 +385,9 @@ describe('Method reducer', () => {
     map = commit(map, 'propose-first-project', { project: project(), presentation: presentation(5) });
     map = commit(map, 'replace-project-proposal', { projectId: 'project-1', projectRevision: 1, replacement: project('project-2', 1), presentation: presentation(6) });
     expect(map.projects.at(-1)?.number).toBe(1);
-    map = commit(map, 'accept-first-project', { projectId: 'project-2', projectRevision: 1, action: action(7) });
+    map = commit(map, 'present-first-project-framing', framing('project-2', 7));
+    map = commit(map, 'deliver-first-project-framing', delivery('project-2', 7));
+    map = commit(map, 'accept-first-project', { projectId: 'project-2', projectRevision: 1, action: action(8) });
 
     map = commit(map, 'open-reflection', { reflectionId: 'reflection-1', revision: 1, projectId: 'project-2', projectRevision: 1, action: action(8) });
     map = commit(map, 'append-reflection-evidence', { reflectionId: 'reflection-1', reflectionRevision: 1, evidence: { id: 'e-1', revision: 1, observation: 'I wanted another iteration.', signal: 'desire-to-continue', interpretation: 'More evidence is useful', provenance: action(9) } });

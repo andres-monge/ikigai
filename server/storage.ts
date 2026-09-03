@@ -418,6 +418,7 @@ export interface IStorage {
     turnId: string;
     leaseId: string;
     result?: Record<string, unknown>;
+    assistantText?: string;
     abortSignal?: AbortSignal;
   }): Promise<AgentTurnRecord | undefined>;
   cancelAgentTurn(input: {
@@ -704,6 +705,99 @@ async function validateCareerMapForWrite(
       .where(eq(careerMaps.userId, userId));
   }
   return result;
+}
+
+async function transitionPendingFirstProjectFraming(
+  transaction: StorageTransaction,
+  input: {
+    userId: string;
+    turnId: string;
+    status: Exclude<AgentTurnStatus, 'pending'>;
+    assistantText?: string;
+    occurredAt: Date;
+  },
+): Promise<CareerMap | undefined> {
+  const [row] = await transaction.select().from(careerMaps).where(eq(careerMaps.userId, input.userId));
+  if (!row) return undefined;
+  const history = await transaction.select().from(careerMapHistory)
+    .where(eq(careerMapHistory.userId, input.userId))
+    .orderBy(asc(careerMapHistory.resultRevision));
+  const loaded = validateCareerMapRow(row, history);
+  if (loaded.status !== 'ready') throw new CareerMapRepairRequiredError(loaded);
+  const project = loaded.map.projects.find((candidate) => (
+    candidate.acceptanceFraming?.status === 'pending'
+    && candidate.acceptanceFraming.assistantTurnId === input.turnId
+  ));
+  if (!project?.acceptanceFraming) return undefined;
+  const occurredAt = input.occurredAt.toISOString();
+  const operation: CareerMapOperation = input.status === 'completed'
+    ? {
+        type: 'deliver-first-project-framing',
+        sourceId: `framing-delivery:${input.turnId}`,
+        expectedRevision: loaded.map.revision,
+        occurredAt,
+        payload: {
+          projectId: project.id,
+          projectRevision: project.revision,
+          assistantText: input.assistantText ?? '',
+          presentation: {
+            kind: 'model-presentation',
+            assistantTurnId: input.turnId,
+            turnSequence: project.acceptanceFraming.turnSequence,
+            completed: true,
+            presentedAt: occurredAt,
+          },
+        },
+      }
+    : {
+        type: 'abandon-first-project-framing',
+        sourceId: `framing-abandon:${input.turnId}`,
+        expectedRevision: loaded.map.revision,
+        occurredAt,
+        payload: {
+          projectId: project.id,
+          projectRevision: project.revision,
+          assistantTurnId: input.turnId,
+        },
+      };
+  const reduced = reduceCareerMapOperation(loaded.map, operation);
+  if (reduced.status !== 'committed') {
+    const error = new Error('First-project framing could not be terminalized with its assistant turn.');
+    error.name = 'FramingDeliveryError';
+    throw error;
+  }
+  const persistedMap = careerMapSchema.parse({
+    ...reduced.map,
+    operationHistory: [
+      ...reduced.map.operationHistory.slice(0, -1),
+      { ...reduced.receipt, moduleVersion: project.acceptanceFraming.moduleVersion },
+    ],
+  });
+  const receipt = persistedMap.operationHistory.at(-1)!;
+  const [updatedMap] = await transaction.update(careerMaps).set({
+    document: persistedMap,
+    revision: persistedMap.revision,
+    schemaVersion: persistedMap.schemaVersion,
+    repairRequired: false,
+    updatedAt: input.occurredAt,
+  }).where(and(
+    eq(careerMaps.userId, input.userId),
+    eq(careerMaps.revision, loaded.map.revision),
+  )).returning({ revision: careerMaps.revision });
+  if (!updatedMap) throw new MethodOwnerBusyError();
+  await transaction.insert(careerMapHistory).values({
+    userId: input.userId,
+    operationSourceId: receipt.sourceId,
+    operationType: receipt.operationType,
+    payloadFingerprint: receipt.payloadFingerprint,
+    baseRevision: operation.expectedRevision,
+    resultRevision: receipt.resultRevision,
+    result: receipt,
+    confirmationProvenance: receipt.confirmationProvenance,
+    moduleVersion: receipt.moduleVersion!,
+    committedAt: new Date(receipt.committedAt),
+  });
+  return persistedMap;
 }
 
 async function lockMethodOwner(
@@ -1321,6 +1415,12 @@ export class PostgresStorage implements IStorage {
         if (matchingLease && matchingLease.expiresAt > now) {
           return { status: 'attached', turn, shouldInvokeModel: false };
         }
+        await transitionPendingFirstProjectFraming(tx, {
+          userId: input.userId,
+          turnId: turn.turnId,
+          status: 'failed',
+          occurredAt: now,
+        });
         const [expired] = await tx
           .update(agentTurns)
           .set({
@@ -1444,6 +1544,12 @@ export class PostgresStorage implements IStorage {
             eq(agentTurns.turnId, previousLease.turnId),
             eq(agentTurns.leaseId, previousLease.leaseId),
           ));
+        await transitionPendingFirstProjectFraming(tx, {
+          userId: input.userId,
+          turnId: previousLease.turnId,
+          status: 'failed',
+          occurredAt: now,
+        });
         const [expiredTurn] = await tx
           .update(agentTurns)
           .set({
@@ -1498,6 +1604,7 @@ export class PostgresStorage implements IStorage {
     leaseId: string;
     status: Exclude<AgentTurnStatus, 'pending'>;
     result: Record<string, unknown>;
+    assistantText?: string;
     abortSignal?: AbortSignal;
   }): Promise<AgentTurnRecord | undefined> {
     throwIfPersistenceAborted(input.abortSignal);
@@ -1524,8 +1631,15 @@ export class PostgresStorage implements IStorage {
         throwIfPersistenceAborted(input.abortSignal);
         return existing ? asAgentTurnRecord(existing) : undefined;
       }
+      let terminalResult = input.result;
       if (lease.expiresAt <= now) {
         throwIfPersistenceAborted(input.abortSignal);
+        await transitionPendingFirstProjectFraming(tx, {
+          userId: input.userId,
+          turnId: input.turnId,
+          status: 'failed',
+          occurredAt: now,
+        });
         const [current] = await tx.select({ terminalResult: agentTurns.terminalResult })
           .from(agentTurns)
           .where(and(
@@ -1582,13 +1696,23 @@ export class PostgresStorage implements IStorage {
         );
         throwIfPersistenceAborted(input.abortSignal);
       }
+      const transitionedMap = await transitionPendingFirstProjectFraming(tx, {
+        userId: input.userId,
+        turnId: input.turnId,
+        status: input.status,
+        assistantText: input.assistantText,
+        occurredAt: this.now(),
+      });
+      if (transitionedMap) {
+        terminalResult = { ...terminalResult, revision: transitionedMap.revision, operationCommitted: true };
+      }
       const terminalNow = this.now();
       const [updated] = await tx
         .update(agentTurns)
         .set({
           status: input.status,
           terminalResult: {
-            ...input.result,
+            ...terminalResult,
             ...(existingTerminal.conversationProvisioning
               ? { conversationProvisioning: existingTerminal.conversationProvisioning }
               : {}),
@@ -1629,6 +1753,7 @@ export class PostgresStorage implements IStorage {
     turnId: string;
     leaseId: string;
     result?: Record<string, unknown>;
+    assistantText?: string;
     abortSignal?: AbortSignal;
   }): Promise<AgentTurnRecord | undefined> {
     return this.finishAgentTurn({

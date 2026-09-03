@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   applyCareerMapOperation,
   createCareerMap,
+  deriveMethodCheckpoint,
   type CareerMap,
   type CareerMapOperation,
   type PathProjectInput,
@@ -9,8 +10,11 @@ import {
   type SideDoorInput,
 } from '../../shared/career-map/index.js';
 import { CareerMapBriefingError, compileCareerMapBriefing } from './briefing.js';
+import { R22_CANONICAL_ENGLISH } from './method/base-instructions.js';
 
 const at = (sequence: number) => `2030-01-01T00:00:${String(sequence).padStart(2, '0')}.000Z`;
+const acceptancePhrase = 'I explicitly accept this Path Project.';
+const acceptanceQuestion = `Will you explicitly accept this Path Project by replying “${acceptancePhrase}”?`;
 const presentation = (sequence: number) => ({
   kind: 'model-presentation' as const,
   assistantTurnId: `briefing-assistant-${sequence}`,
@@ -80,10 +84,25 @@ function withPendingProject(): CareerMap {
 }
 
 function withAcceptedProject(): CareerMap {
-  return commit(withPendingProject(), 'accept-first-project', {
+  let map = commit(withPendingProject(), 'present-first-project-framing', {
     projectId: project.id,
     projectRevision: project.revision,
-    action: action(6),
+    locale: 'en',
+    framingText: R22_CANONICAL_ENGLISH,
+    acceptancePhrase,
+    acceptanceQuestion,
+    moduleVersion: '1.1.1',
+    presentation: presentation(6),
+  });
+  map = commit(map, 'deliver-first-project-framing', {
+    projectId: project.id, projectRevision: project.revision,
+    assistantText: `${R22_CANONICAL_ENGLISH}\n\n${acceptanceQuestion}`,
+    presentation: presentation(6),
+  });
+  return commit(map, 'accept-first-project', {
+    projectId: project.id,
+    projectRevision: project.revision,
+    action: action(7),
   });
 }
 
@@ -291,9 +310,39 @@ describe('compileCareerMapBriefing', () => {
     expect(briefing.markdown).toContain('Make complex choices more humane.');
     expect(briefing.markdown).toContain('Build humane tools');
     expect(briefing.markdown).toContain('Build a real decision aid');
+    expect(briefing.markdown).toContain('A colleague with a live choice');
+    expect(briefing.markdown).toContain('A one-page prototype');
+    expect(briefing.markdown).toContain('First-project framing: not yet presented.');
     expect(briefing.markdown).not.toContain('Parked facilitation');
     expect(briefing.markdown).not.toContain('Parked research');
     expect(briefing.markdown).not.toContain('briefing-source-1');
+  });
+
+  it('resumes after the durable first-project framing without repeating it after reload or compaction', () => {
+    let map = commit(withPendingProject(), 'present-first-project-framing', {
+      projectId: project.id, projectRevision: project.revision, locale: 'en',
+      framingText: R22_CANONICAL_ENGLISH, acceptancePhrase, acceptanceQuestion,
+      moduleVersion: '1.1.1', presentation: presentation(6),
+    });
+    const pendingBriefing = compileCareerMapBriefing(structuredClone(map));
+    expect(pendingBriefing.markdown).toContain('First-project framing: pending delivery');
+    expect(pendingBriefing.markdown).toContain(JSON.stringify(`${R22_CANONICAL_ENGLISH}\n\n${acceptanceQuestion}`));
+    expect(deriveMethodCheckpoint(map).availableOperations).toEqual([]);
+    map = commit(map, 'deliver-first-project-framing', {
+      projectId: project.id, projectRevision: project.revision,
+      assistantText: `${R22_CANONICAL_ENGLISH}\n\n${acceptanceQuestion}`,
+      presentation: presentation(6),
+    });
+    const briefing = compileCareerMapBriefing(structuredClone(map));
+
+    expect(briefing.pendingDecision).toMatchObject({
+      kind: 'first-project-confirmation', targetId: project.id, targetRevision: project.revision,
+    });
+    expect(briefing.markdown).toContain('First-project framing: delivered once in briefing-assistant-6; locale en. Do not repeat it.');
+    expect(briefing.markdown).toContain(JSON.stringify(acceptancePhrase));
+    expect(deriveMethodCheckpoint(map).availableOperations).toEqual([
+      'replace-project-proposal', 'accept-first-project',
+    ]);
   });
 
   it('does not compile canonical records carrying provider research metadata', () => {

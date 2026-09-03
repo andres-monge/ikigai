@@ -72,9 +72,10 @@ const spanishTokens = new Set([
   'ahora', 'al', 'aunque', 'aqui', 'asi', 'cada', 'camino', 'claro', 'como', 'con', 'cual', 'cuales',
   'cuando', 'de', 'del', 'donde', 'el', 'ella', 'ellas', 'ellos', 'en', 'es', 'esa', 'esas', 'ese', 'eso',
   'esos', 'espanol', 'esta', 'estas', 'este', 'esto', 'estos', 'explorar', 'fue', 'gracias', 'hasta', 'hay',
-  'la', 'las', 'lo', 'los', 'mas', 'muy', 'ningun', 'ninguna', 'o', 'para', 'pero', 'porque', 'por',
+  'horas', 'la', 'las', 'leer', 'lo', 'los', 'mas', 'mirar', 'muy', 'ningun', 'ninguna', 'o', 'para',
+  'pensar', 'pero', 'porque', 'por',
   'pregunta', 'proyecto', 'puede', 'puedes', 'que', 'quien', 'quienes', 'quieres', 'seguimos', 'ser', 'si',
-  'sin', 'sobre', 'solo', 'son', 'su', 'sus', 'tambien', 'te', 'tu', 'tus', 'un', 'una', 'unas', 'unos',
+  'sin', 'sobre', 'solo', 'son', 'su', 'sueles', 'sus', 'tambien', 'te', 'tu', 'tus', 'un', 'una', 'unas', 'unos',
   'y', 'ya',
 ]);
 
@@ -165,9 +166,12 @@ export function isPredominantlySpanish(text: string): boolean {
   const classifiedHits = spanishHits + englishHits;
   if (classifiedHits === 0) return false;
 
-  return spanishHits >= 3
-    && spanishHits / classifiedHits >= 0.7
+  const spanishDominates = spanishHits / classifiedHits >= 0.7
     && spanishHits / tokens.length >= 0.18;
+  return spanishDominates && (
+    spanishHits >= 3
+    || (/[¿¡]/u.test(text) && spanishHits >= 2 && spanishHits > englishHits * 2)
+  );
 }
 
 export function matchesPathOperationExpectation(

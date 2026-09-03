@@ -10,8 +10,9 @@ export interface InteractionOwnership {
 
 /**
  * Compile-time complete ownership for every canonical Career Map operation.
- * U6 connects only exact prior-presentation choices supported by U5. It does
- * not widen the U5 tool registry or pre-implement U7–U9 operations.
+ * The deterministic surface remains limited to exact prior-presentation
+ * choices supported by U5. U7 adds only its conversation-owned framing and
+ * first-project acceptance operations; later lifecycle operations stay closed.
  */
 export const interactionOwnership = {
   'append-foundation-evidence': { owner: 'conversation-only', affordance: 'Chat composer', reason: 'The explorer’s own words and context are the evidence payload.' },
@@ -28,7 +29,10 @@ export const interactionOwnership = {
   'choose-parked-purpose-path': { owner: 'conversation-only', affordance: 'Chat composer', reason: 'This post-loop branch belongs to U8; U6 renders it without widening U5 tools.' },
   'propose-first-project': { owner: 'conversation-only', affordance: 'Chat composer', reason: 'The first project is one agent-designed proposal, not a UI template.' },
   'replace-project-proposal': { owner: 'conversation-only', affordance: 'Suggest something different', reason: 'The agent must replace rather than defend the singular proposal and keep its number.' },
-  'accept-first-project': { owner: 'conversation-only', affordance: 'Accept this project', reason: 'U7 owns first-project acceptance; U6 prepares exact language without adding its missing endpoint tool.' },
+  'present-first-project-framing': { owner: 'conversation-only', affordance: 'Review the learning framing', reason: 'U7 records the locale-correct framing once in conversation before a later acceptance can be valid.' },
+  'deliver-first-project-framing': { owner: 'conversation-only', affordance: 'Automatic turn completion', reason: 'The server atomically marks exact framing delivered with the durable assistant turn.' },
+  'abandon-first-project-framing': { owner: 'conversation-only', affordance: 'Automatic turn recovery', reason: 'The server clears an incomplete framing marker when its assistant turn fails or is cancelled.' },
+  'accept-first-project': { owner: 'conversation-only', affordance: 'Accept this project', reason: 'U7 accepts only after the durable framing marker and a later explicit explorer message.' },
   'propose-project-revision': { owner: 'conversation-only', affordance: 'Refine', reason: 'The agent designs the revision and keeps it Suggested.' },
   'confirm-project-revision': { owner: 'conversation-only', affordance: 'Chat composer', reason: 'U8 owns project-work lifecycle operations and their presentation handshake.' },
   'update-project-work-status': { owner: 'conversation-only', affordance: 'Chat composer', reason: 'Work status comes from the explorer’s report and is implemented with U8.' },

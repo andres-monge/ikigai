@@ -3,9 +3,11 @@ import {
   confirmationSchema,
   entityIdSchema,
   exactThree,
+  languageTagSchema,
   modelPresentationSchema,
   revisionRefSchema,
   revisionSchema,
+  timestampSchema,
   userActionProvenanceSchema,
 } from './common';
 
@@ -30,6 +32,29 @@ export const projectWorkUpdateSchema = z.object({
   action: userActionProvenanceSchema,
 }).strict();
 
+export const projectAcceptancePhraseSchema = z.string().min(1).max(240)
+  .refine((value) => !value.includes('\n'), 'Acceptance phrase must be one line.');
+
+export const projectAcceptanceQuestionSchema = z.string().min(1).max(240)
+  .refine((value) => !value.includes('\n'), 'Acceptance question must be one line.')
+  .refine(
+    (value) => /^[^?\uFF1F]*[?\uFF1F]$/u.test(value.replace(/^\u00BF/u, '')),
+    'Acceptance question must end with one question mark.',
+  );
+
+export const projectAcceptanceFramingSchema = z.object({
+  locale: languageTagSchema,
+  framingText: z.string().min(1).max(2_000),
+  acceptancePhrase: projectAcceptancePhraseSchema,
+  acceptanceQuestion: projectAcceptanceQuestionSchema,
+  moduleVersion: z.string().min(1).max(80),
+  status: z.enum(['pending', 'delivered']),
+  assistantTurnId: entityIdSchema,
+  turnSequence: z.number().int().nonnegative(),
+  initiatedAt: timestampSchema,
+  presentation: modelPresentationSchema.optional(),
+}).strict();
+
 export const pathProjectSchema = pathProjectInputSchema.extend({
   number: z.number().int().positive(),
   basisPath: revisionRefSchema,
@@ -37,6 +62,7 @@ export const pathProjectSchema = pathProjectInputSchema.extend({
   workStatus: projectWorkStatusSchema,
   workUpdates: z.array(projectWorkUpdateSchema),
   presentation: modelPresentationSchema,
+  acceptanceFraming: projectAcceptanceFramingSchema.optional(),
   confirmation: confirmationSchema.optional(),
   supersedesProjectId: entityIdSchema.optional(),
   sourceOptionSetId: entityIdSchema.optional(),

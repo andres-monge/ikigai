@@ -709,6 +709,29 @@ describe('protected Method routes', () => {
     });
   });
 
+  it('keeps first-project framing and acceptance conversation-only at the workspace route boundary', async () => {
+    const storage = createStorage();
+    const response = await request(testApp({
+      storage, requireAuth: authenticated, agentEnabled: true, operationalLog: vi.fn(),
+    })).post('/api/agent/workspace/operations').send({
+      operationId: 'workspace-project-acceptance',
+      clientMessageId: 'client-message-1',
+      expectedRevision: 1,
+      operation: {
+        type: 'accept-first-project',
+        input: {
+          projectId: 'project-1', projectRevision: 1,
+          presentedInTurnId: 'prior-assistant-turn', sourceMessageId: 'client-message-1',
+        },
+      },
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toMatchObject({ errorClass: 'ValidationError' });
+    expect(storage.beginWorkspaceActionTurn).not.toHaveBeenCalled();
+    expect(storage.persistCareerMapOperation).not.toHaveBeenCalled();
+  });
+
   it('rejects a stale workspace revision before persisting the operation', async () => {
     const storage = createStorage();
     const response = await request(testApp({
@@ -1324,6 +1347,7 @@ describe('protected Method routes', () => {
       abortSignal: expect.any(AbortSignal),
     });
     expect(storage.completeAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
+      assistantText: 'A normal reflective response without a write.',
       result: expect.objectContaining({
         kind: 'completed',
         internalContextItemIds: ['test-internal-context-0'],
@@ -1808,6 +1832,29 @@ describe('protected Method routes', () => {
     expect(storage.completeAgentTurn).toHaveBeenCalledOnce();
     expect(storage.failAgentTurn).toHaveBeenCalledOnce();
     expect(storage.releaseTurnLease).toHaveBeenCalledOnce();
+  });
+
+  it('fails the turn when completed framing text cannot be atomically delivered', async () => {
+    const deliveryError = new Error('Malformed framing reply.');
+    deliveryError.name = 'FramingDeliveryError';
+    const storage = createStorage({
+      getConversationMapping: vi.fn(async () => 'server-conversation'),
+      completeAgentTurn: vi.fn(async () => { throw deliveryError; }),
+    });
+    const assistantText = 'Extra preface before a framing response.';
+    const response = await request(testApp({
+      storage, requireAuth: authenticated, agentEnabled: true,
+      model: new MockLanguageModelV4({ doStream: textStream(assistantText) as never }),
+      conversationClient: { listItems: vi.fn(async () => ({ data: [], hasMore: false })) },
+      operationalLog: vi.fn(),
+    })).post('/api/agent').send({ id: 'client-message-1', message: 'Show the framing.' });
+
+    expect(storage.completeAgentTurn).toHaveBeenCalledWith(expect.objectContaining({ assistantText }));
+    expect(storage.failAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
+      errorClass: 'FramingDeliveryError',
+    }));
+    expect(response.text).not.toContain('"type":"finish"');
+    expect(response.text).toContain('The agent request failed.');
   });
 
   it('bounds Conversation creation with a request-scoped provisioning timeout', async () => {
