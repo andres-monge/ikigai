@@ -28,7 +28,7 @@ function SessionLoading() {
     <main
       role="status"
       aria-live="polite"
-      className="flex min-h-screen items-center justify-center bg-ikigai-beige px-6 text-slate-600"
+      className="flex min-h-screen items-center justify-center bg-ikigai-beige px-6 text-stone-600"
     >
       Checking your session…
     </main>

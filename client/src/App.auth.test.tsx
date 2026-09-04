@@ -98,7 +98,7 @@ describe('canonical auth and legacy route split', () => {
 
     render(<App />);
 
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Welcome to Revelio' })).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Revelio', level: 1 })).toBeTruthy());
     expect(window.location.pathname).toBe('/');
   });
 
@@ -129,7 +129,7 @@ describe('canonical auth and legacy route split', () => {
 
     render(<App />);
 
-    expect(screen.getByRole('heading', { name: 'Welcome to Revelio' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Revelio', level: 1 })).toBeTruthy();
     expect(screen.getByText('explorer@example.com')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
     await waitFor(() => expect(signOut).toHaveBeenCalledOnce());

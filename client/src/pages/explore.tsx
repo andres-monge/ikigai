@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { ArrowUp, Loader2, Mic, Square } from 'lucide-react';
 import {
   conversationHistoryPageSchema,
   methodOperationEnvelopeSchema,
@@ -46,6 +47,14 @@ function dedupeMessages(messages: readonly NormalizedHistoryMessage[]): Normaliz
   return order.map((id) => latest.get(id)!);
 }
 
+function prefersReducedMotion(): boolean {
+  return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+function isPinnedToBottom(element: HTMLElement): boolean {
+  return element.scrollHeight - element.scrollTop - element.clientHeight <= 96;
+}
+
 async function parseJson(response: Response): Promise<unknown> {
   return response.json().catch(() => null);
 }
@@ -74,6 +83,10 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
   const focusFramesRef = useRef(new Set<number>());
   const draftValueRef = useRef('');
   const draftRef = useRef<HTMLTextAreaElement | null>(null);
+  const transcriptRef = useRef<HTMLDivElement | null>(null);
+  const pinnedToBottomRef = useRef(true);
+  const settledTranscriptRef = useRef(false);
+  const renderedMessageCountRef = useRef(0);
   const mapHeadingRef = useRef<HTMLHeadingElement | null>(null);
   const tabRefs = useRef<Record<Panel, HTMLButtonElement | null>>({ chat: null, map: null });
   const streamStateRef = useRef<AgentStreamState>({ text: '', citations: [], attempts: {}, providerFailed: false });
@@ -186,6 +199,14 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
     };
   }, [refreshNewest]);
 
+
+  useLayoutEffect(() => {
+    const field = draftRef.current;
+    if (!field) return;
+    field.style.height = 'auto';
+    field.style.height = `${Math.min(field.scrollHeight, 176)}px`;
+  }, [draft]);
+
   const speech = useSpeechToText({
     language: 'en',
     endpoint: '/api/agent/audio/transcribe',
@@ -256,6 +277,7 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
     const existingAttemptKeys = new Set(Object.keys(attempts));
     const controller = new AbortController();
     abortRef.current = controller;
+    pinnedToBottomRef.current = true;
     setTurnBusy(true);
     setTurnNotice(null);
     setSubmittedDraft(message);
@@ -434,6 +456,11 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
     }
   }
 
+  const goToConversation = useCallback(() => {
+    setActivePanel('chat');
+    scheduleFocus(() => draftRef.current);
+  }, [scheduleFocus]);
+
   function prepareConversation(prompt: string) {
     setDraft((current) => {
       const next = current.trim() ? `${current}\n\n${prompt}` : prompt;
@@ -453,148 +480,233 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
       }]
     : messages;
 
+  useLayoutEffect(() => {
+    const transcript = transcriptRef.current;
+    if (!transcript || activePanel !== 'chat' || historyState === 'loading') return;
+    const grew = displayedMessages.length > renderedMessageCountRef.current;
+    const settled = settledTranscriptRef.current;
+    renderedMessageCountRef.current = displayedMessages.length;
+    settledTranscriptRef.current = true;
+    // Never pull the explorer away from older history they scrolled back to read.
+    if (!pinnedToBottomRef.current) return;
+    const animate = settled && grew && !streamedText && !prefersReducedMotion();
+    if (typeof transcript.scrollTo === 'function') {
+      transcript.scrollTo({ top: transcript.scrollHeight, behavior: animate ? 'smooth' : 'auto' });
+    } else {
+      transcript.scrollTop = transcript.scrollHeight;
+    }
+  }, [displayedMessages.length, streamedText, activePanel, historyState]);
+
+  const isFirstRun = displayedMessages.length === 0;
+  const mapHasContent = Boolean(map && map.revision > 0);
+  const micLabel = !speech.isSupported
+    ? 'Microphone unavailable'
+    : speech.recordingState === 'recording'
+      ? 'Stop recording'
+      : speech.recordingState === 'processing'
+        ? 'Transcribing your recording'
+        : 'Record a message';
+
   return (
-    <main className="min-h-screen bg-ikigai-beige text-slate-950">
-      <header className="border-b-2 border-black bg-white px-4 py-3 sm:px-6">
+    <main className="flex h-[100dvh] flex-col overflow-hidden bg-ikigai-beige text-stone-900">
+      <header className="shrink-0 border-b-2 border-black bg-white px-4 py-3 sm:px-6">
         <div className="mx-auto flex max-w-[112rem] items-center justify-between gap-4">
-          <div>
-            <p className="font-display text-xs font-black uppercase tracking-[0.12em] text-slate-600">Revelio</p>
-            <h1 className="text-xl font-black sm:text-2xl">Welcome to Revelio</h1>
+          <div className="min-w-0">
+            <h1 className="font-display text-xl font-black leading-none tracking-tight sm:text-2xl">Revelio</h1>
+            <p className="mt-1 truncate font-display text-[0.65rem] font-bold uppercase tracking-[0.12em] text-stone-600 sm:text-xs">Figure out what to work on next</p>
           </div>
-          <div className="flex items-center gap-3">
-            <span className="hidden text-xs text-slate-600 sm:inline">{userEmail}</span>
-            <button type="button" onClick={onSignOut} disabled={isSigningOut} className="min-h-11 border-2 border-black bg-white px-3 text-xs font-black shadow-[2px_2px_0_rgba(0,0,0,0.65)] disabled:opacity-50">
+          <div className="flex shrink-0 items-center gap-3">
+            <span className="hidden text-xs text-stone-600 sm:inline">{userEmail}</span>
+            <button type="button" onClick={onSignOut} disabled={isSigningOut} className="min-h-11 border-2 border-black bg-white px-3 font-display text-xs font-black shadow-[2px_2px_0_rgba(0,0,0,0.65)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black disabled:opacity-50">
               {isSigningOut ? 'Signing out…' : 'Sign out'}
             </button>
           </div>
         </div>
       </header>
-      {signOutError ? <p role="alert" className="mx-auto mt-4 max-w-[112rem] px-4 text-sm font-bold text-red-800">{signOutError}</p> : null}
+      {signOutError ? <p role="alert" className="mx-auto w-full max-w-[112rem] shrink-0 px-4 pt-3 text-sm font-bold text-red-800">{signOutError}</p> : null}
 
-      <nav role="tablist" aria-label="Workspace views" className="sticky top-0 z-10 grid grid-cols-2 border-b-2 border-black bg-white lg:hidden">
-        {(['chat', 'map'] as const).map((panel) => (
-          <button
-            key={panel}
-            id={`${panel}-tab`}
-            ref={(node) => { tabRefs.current[panel] = node; }}
-            type="button"
-            role="tab"
-            aria-selected={activePanel === panel}
-            aria-controls={`${panel}-panel`}
-            tabIndex={activePanel === panel ? 0 : -1}
-            className={`min-h-12 border-r-2 border-black font-display text-sm font-black last:border-r-0 ${activePanel === panel ? 'bg-[#ffc107]' : 'bg-white'}`}
-            onClick={() => setActivePanel(panel)}
-            onKeyDown={(event) => {
-              if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
-              event.preventDefault();
-              const next: Panel = event.key === 'ArrowLeft' || event.key === 'Home' ? 'chat' : 'map';
-              setActivePanel(next);
-              requestAnimationFrame(() => tabRefs.current[next]?.focus());
-            }}
-          >
-            {panel === 'chat' ? 'Chat' : 'Your Map'}
-          </button>
-        ))}
-      </nav>
-
-      <div className="mx-auto grid max-w-[112rem] lg:grid-cols-[minmax(20rem,0.7fr)_minmax(0,1.8fr)]">
-        <section id="chat-panel" role="tabpanel" aria-labelledby="chat-tab chat-heading" className={`${activePanel === 'chat' ? 'flex' : 'hidden'} min-h-[calc(100vh-74px)] flex-col border-black bg-[#f6f4ed] lg:flex lg:border-r-2`}>
-          <div className="border-b-2 border-black bg-white px-4 py-3">
-            <h2 id="chat-heading" className="text-lg font-black">Conversation</h2>
-            <p className="text-xs text-slate-600">Ask, question, rewrite, or decide in your own words.</p>
-          </div>
-          <div className="flex-1 space-y-4 overflow-y-auto p-4" aria-live="polite">
-            {historyState === 'loading' ? <p role="status">Loading your conversation…</p> : null}
-            {historyState === 'error' ? (
-              <div role="alert" className="border-2 border-red-800 bg-red-50 p-4 text-sm">
-                <p className="font-bold">Your conversation could not be loaded.</p>
-                <button type="button" className="mt-3 underline" onClick={() => void refreshNewest()}>Try again</button>
-              </div>
-            ) : null}
-            {historyState === 'empty' && displayedMessages.length === 0 ? (
-              <p className="border-2 border-dashed border-black bg-white/60 p-4 text-sm leading-6">Start wherever you are. What has been pulling at your attention lately?</p>
-            ) : null}
-            {olderCursor ? (
-              <button type="button" disabled={olderBusy} className="mx-auto block min-h-11 px-3 text-sm font-bold underline" onClick={() => void loadOlder()}>
-                {olderBusy ? 'Loading…' : 'Load older messages'}
-              </button>
-            ) : null}
-            {displayedMessages.map((message) => <SafeMessage key={message.id} message={message} />)}
-          </div>
-          <div className="sticky bottom-0 space-y-3 border-t-2 border-black bg-white p-4">
-            <OperationStatusList attempts={attempts} />
-            {turnNotice ? <p role="status" aria-live="polite" className="text-xs font-bold text-slate-700">{turnNotice}</p> : null}
-            {micNotice ? <p role="status" aria-live="polite" className="text-xs text-slate-600">{micNotice}</p> : null}
-            <label htmlFor="revelio-draft" className="sr-only">Message Revelio</label>
-            <textarea
-              id="revelio-draft"
-              ref={draftRef}
-              rows={3}
-              value={draft}
-              disabled={false}
-              onChange={(event) => {
-                draftValueRef.current = event.target.value;
-                setDraft(event.target.value);
-              }}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && !event.shiftKey) {
+      <div className="shrink-0 border-b-2 border-black bg-white">
+        <div className="mx-auto max-w-[112rem] sm:px-6 sm:py-3">
+          <div role="tablist" aria-label="Workspace views" className="grid grid-cols-2 sm:inline-grid sm:grid-cols-[auto_auto] sm:border-2 sm:border-black sm:shadow-[3px_3px_0_rgba(0,0,0,0.65)]">
+            {(['chat', 'map'] as const).map((panel) => (
+              <button
+                key={panel}
+                id={`${panel}-tab`}
+                ref={(node) => { tabRefs.current[panel] = node; }}
+                type="button"
+                role="tab"
+                aria-selected={activePanel === panel}
+                aria-controls={`${panel}-panel`}
+                tabIndex={activePanel === panel ? 0 : -1}
+                className={`min-h-12 border-r-2 border-black px-4 font-display text-sm font-black transition-colors last:border-r-0 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-4 focus-visible:outline-black sm:min-h-10 sm:px-8 ${activePanel === panel ? 'bg-ikigai-yellow' : 'bg-white hover:bg-ikigai-beige'}`}
+                onClick={() => setActivePanel(panel)}
+                onKeyDown={(event) => {
+                  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
                   event.preventDefault();
-                  void submitMessage();
-                }
-              }}
-              placeholder="Write to Revelio…"
-              className="w-full resize-none border-2 border-black bg-white p-3 text-sm outline-none focus:ring-2 focus:ring-black focus:ring-offset-2"
-            />
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled={!draft.trim() || turnBusy || bootstrapPending}
-                aria-describedby={bootstrapPending ? 'composer-loading-reason' : undefined}
-                onClick={() => void submitMessage()}
-                className="min-h-11 flex-1 border-2 border-black bg-[#4db6ac] px-4 font-display text-sm font-black shadow-[3px_3px_0_rgba(0,0,0,0.65)] disabled:cursor-not-allowed disabled:opacity-50"
+                  const next: Panel = event.key === 'ArrowLeft' || event.key === 'Home' ? 'chat' : 'map';
+                  setActivePanel(next);
+                  requestAnimationFrame(() => tabRefs.current[next]?.focus());
+                }}
               >
-                Send
+                {panel === 'chat' ? 'Chat' : 'Your Map'}
+                {panel === 'map' && mapHasContent && activePanel !== 'map' ? (
+                  <span aria-hidden="true" className="ml-2 inline-block h-2 w-2 border border-black bg-ikigai-teal align-middle" />
+                ) : null}
               </button>
-              {turnBusy ? (
-                <button type="button" onClick={() => abortRef.current?.abort()} className="min-h-11 border-2 border-black bg-white px-4 font-display text-sm font-black">Stop</button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="mx-auto flex w-full min-h-0 max-w-[112rem] flex-1 flex-col">
+        <section id="chat-panel" role="tabpanel" aria-labelledby="chat-tab" className={`${activePanel === 'chat' ? 'flex' : 'hidden'} min-h-0 flex-1 flex-col bg-ikigai-beige`}>
+          <div
+            ref={transcriptRef}
+            onScroll={(event) => { pinnedToBottomRef.current = isPinnedToBottom(event.currentTarget); }}
+            className="chat-scroll-fade min-h-0 flex-1 overflow-y-auto px-4 pt-6 sm:px-6"
+            aria-live="polite"
+          >
+            <div className="mx-auto w-full max-w-[38rem] space-y-6 pb-10">
+              {historyState === 'loading' ? <p role="status" className="text-sm text-stone-600">Loading your conversation…</p> : null}
+              {historyState === 'error' ? (
+                <div role="alert" className="border-2 border-red-800 bg-red-50 p-4 text-sm">
+                  <p className="font-bold">Your conversation could not be loaded.</p>
+                  <button type="button" className="mt-3 min-h-11 font-bold underline" onClick={() => void refreshNewest()}>Try again</button>
+                </div>
               ) : null}
-              <button
-                type="button"
-                disabled={!speech.isSupported || speech.recordingState === 'processing' || turnBusy || bootstrapPending}
-                aria-pressed={speech.recordingState === 'recording'}
-                aria-label={speech.recordingState === 'recording' ? 'Stop recording' : 'Record a message'}
-                onClick={() => speech.recordingState === 'recording' ? speech.stopRecording() : void speech.startRecording('revelio-draft')}
-                className="min-h-11 border-2 border-black bg-white px-4 font-display text-sm font-black disabled:opacity-50"
-              >
-                {!speech.isSupported ? 'Microphone unavailable' : speech.recordingState === 'recording' ? 'Stop recording' : speech.recordingState === 'processing' ? 'Transcribing…' : 'Use microphone'}
-              </button>
+              {historyState === 'empty' && displayedMessages.length === 0 ? (
+                <article aria-label="Revelio" className="max-w-none">
+                  <p className="text-[1.0625rem] font-medium leading-7">
+                    Hey! I’m here to help you figure out what to work on next, so I’ll ask a few questions to get
+                    to know you first.
+                  </p>
+                  <p className="mt-4 text-[1.0625rem] font-medium leading-7">
+                    What activities pull you in so much that you lose track of time?
+                  </p>
+                </article>
+              ) : null}
+              {olderCursor ? (
+                <button type="button" disabled={olderBusy} className="mx-auto block min-h-11 px-3 text-sm font-bold underline" onClick={() => void loadOlder()}>
+                  {olderBusy ? 'Loading…' : 'Load older messages'}
+                </button>
+              ) : null}
+              {displayedMessages.map((message) => <SafeMessage key={message.id} message={message} />)}
             </div>
-            {bootstrapPending ? <span id="composer-loading-reason" className="sr-only">Send and microphone controls are available after the initial workspace load.</span> : null}
-            {submittedDraft ? <span className="sr-only">Sending: {submittedDraft}</span> : null}
+          </div>
+          <div className="shrink-0 px-4 pb-4 pt-2 sm:px-6">
+            <div className="mx-auto w-full max-w-[38rem] space-y-3">
+              <OperationStatusList attempts={attempts} />
+              {turnNotice ? <p role="status" aria-live="polite" className="text-xs font-bold text-stone-700">{turnNotice}</p> : null}
+              {micNotice ? <p role="status" aria-live="polite" className="text-xs text-stone-600">{micNotice}</p> : null}
+              <label htmlFor="revelio-draft" className="sr-only">Message Revelio</label>
+              <div className="flex items-end gap-1 border-2 border-black bg-white p-2 shadow-[3px_3px_0_rgba(0,0,0,0.65)] transition-[border-color,box-shadow] focus-within:border-ikigai-teal">
+                <textarea
+                  id="revelio-draft"
+                  ref={draftRef}
+                  rows={1}
+                  value={draft}
+                  disabled={false}
+                  onChange={(event) => {
+                    draftValueRef.current = event.target.value;
+                    setDraft(event.target.value);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && !event.shiftKey) {
+                      event.preventDefault();
+                      void submitMessage();
+                    }
+                  }}
+                  placeholder={isFirstRun ? 'Write your answer…' : 'Reply, ask, or push back'}
+                  className="min-h-11 max-h-44 flex-1 resize-none self-center border-0 bg-transparent px-2 py-2 text-[1.0625rem] font-medium leading-7 outline-none placeholder:font-normal placeholder:text-stone-500"
+                />
+                <button
+                  type="button"
+                  disabled={!speech.isSupported || speech.recordingState === 'processing' || turnBusy || bootstrapPending}
+                  aria-pressed={speech.recordingState === 'recording'}
+                  aria-label={micLabel}
+                  title={micLabel}
+                  onClick={() => speech.recordingState === 'recording' ? speech.stopRecording() : void speech.startRecording('revelio-draft')}
+                  className={`grid h-11 w-11 shrink-0 place-items-center border-2 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black disabled:cursor-not-allowed disabled:opacity-40 ${speech.recordingState === 'recording' ? 'border-black bg-ikigai-pink text-white' : 'border-transparent text-stone-700 hover:border-black hover:bg-ikigai-beige'}`}
+                >
+                  {speech.recordingState === 'processing'
+                    ? <Loader2 aria-hidden="true" className="h-5 w-5 motion-safe:animate-spin" />
+                    : speech.recordingState === 'recording'
+                      ? <Square aria-hidden="true" className="h-4 w-4 fill-current" />
+                      : <Mic aria-hidden="true" className="h-5 w-5" strokeWidth={2.25} />}
+                </button>
+                {turnBusy ? (
+                  <button
+                    type="button"
+                    aria-label="Stop"
+                    title="Stop"
+                    onClick={() => abortRef.current?.abort()}
+                    className="grid h-11 w-11 shrink-0 place-items-center border-2 border-black bg-white text-black shadow-[2px_2px_0_rgba(0,0,0,0.65)] transition-[transform,box-shadow] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black active:translate-x-0.5 active:translate-y-0.5 active:shadow-none"
+                  >
+                    <Square aria-hidden="true" className="h-4 w-4 fill-current" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={!draft.trim() || bootstrapPending}
+                    aria-label="Send"
+                    title="Send"
+                    aria-describedby={bootstrapPending ? 'composer-loading-reason' : undefined}
+                    onClick={() => void submitMessage()}
+                    className="grid h-11 w-11 shrink-0 place-items-center border-2 border-black bg-ikigai-teal text-black shadow-[2px_2px_0_rgba(0,0,0,0.65)] transition-[transform,box-shadow,opacity] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black active:translate-x-0.5 active:translate-y-0.5 active:shadow-none disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
+                  >
+                    <ArrowUp aria-hidden="true" className="h-5 w-5" strokeWidth={3} />
+                  </button>
+                )}
+              </div>
+              {bootstrapPending ? <span id="composer-loading-reason" className="sr-only">Send and microphone controls are available after the initial workspace load.</span> : null}
+              {submittedDraft ? <span className="sr-only">Sending: {submittedDraft}</span> : null}
+            </div>
           </div>
         </section>
 
-        <section id="map-panel" role="tabpanel" aria-labelledby="map-tab map-heading" className={`${activePanel === 'map' ? 'block' : 'hidden'} min-w-0 bg-ikigai-beige p-4 sm:p-6 lg:block lg:p-8`}>
-          <h2 id="map-heading" ref={mapHeadingRef} tabIndex={-1} className="mb-6 text-3xl font-black outline-none">Your Map</h2>
-          {workspaceState === 'loading' ? <p role="status">Loading your map…</p> : null}
-          {workspaceState === 'error' ? (
-            <div role="alert" className="border-2 border-red-800 bg-red-50 p-5">
-              <p className="font-bold">Your map could not be loaded.</p>
-              <button type="button" className="mt-3 underline" onClick={() => void refreshNewest()}>Try again</button>
-            </div>
-          ) : null}
-          {workspaceState === 'repair-required' ? (
-            <div role="alert" className="border-2 border-red-900 bg-red-50 p-5">
-              <h3 className="text-xl font-black">Your map needs repair</h3>
-              <p className="mt-2 text-sm leading-6">Revelio has stopped Method actions to protect your saved work. Please contact support before continuing.</p>
-            </div>
-          ) : null}
-          {(workspaceState === 'ready' || workspaceState === 'empty') && map ? (
-            <MethodMap map={map} busy={turnBusy} onOperation={(operation) => void runOperation(operation)} onConversationPrompt={prepareConversation} />
-          ) : null}
-          {workspaceState === 'empty' && !map ? (
-            <div className="border-2 border-dashed border-black bg-white/60 p-8 text-center"><h3 className="text-2xl font-black">Your map will take shape here</h3><p className="mt-3 text-sm text-slate-600">Start in the conversation. Only validated Method state appears here.</p></div>
-          ) : null}
+        <section id="map-panel" role="tabpanel" aria-labelledby="map-tab" className={`${activePanel === 'map' ? 'block' : 'hidden'} min-h-0 min-w-0 flex-1 overflow-y-auto bg-ikigai-beige p-4 sm:p-6 lg:p-8`}>
+          <div className="mx-auto w-full max-w-6xl">
+            <h2 id="map-heading" ref={mapHeadingRef} tabIndex={-1} className="sr-only">Your Map</h2>
+            {workspaceState === 'loading' ? <p role="status" className="text-sm text-stone-600">Loading your map…</p> : null}
+            {workspaceState === 'error' ? (
+              <div role="alert" className="border-2 border-red-800 bg-red-50 p-5">
+                <p className="font-bold">Your map could not be loaded.</p>
+                <button type="button" className="mt-3 min-h-11 font-bold underline" onClick={() => void refreshNewest()}>Try again</button>
+              </div>
+            ) : null}
+            {workspaceState === 'repair-required' ? (
+              <div role="alert" className="border-2 border-red-900 bg-red-50 p-5">
+                <h3 className="text-xl font-black">Your map needs repair</h3>
+                <p className="mt-2 text-sm leading-6">Revelio has stopped Method actions to protect your saved work. Please contact support before continuing.</p>
+              </div>
+            ) : null}
+            {(workspaceState === 'ready' || workspaceState === 'empty') && map ? (
+              <MethodMap
+                map={map}
+                busy={turnBusy}
+                onOperation={(operation) => void runOperation(operation)}
+                onConversationPrompt={prepareConversation}
+                onGoToConversation={goToConversation}
+              />
+            ) : null}
+            {workspaceState === 'empty' && !map ? (
+              <div className="max-w-2xl border-2 border-dashed border-black bg-white/70 p-6 sm:p-8">
+                <h3 className="font-display text-2xl font-black">Nothing on your map yet</h3>
+                <p className="mt-3 text-sm leading-6 text-stone-700">
+                  This is the record of what you and Revelio work out together: what pulls you in, why it matters
+                  to you, the directions worth trying, and the project you take on first. Nothing lands here until
+                  you’ve confirmed it, so you can change your mind in the chat at any point.
+                </p>
+                <button
+                  type="button"
+                  onClick={goToConversation}
+                  className="mt-6 min-h-11 border-2 border-black bg-ikigai-teal px-4 font-display text-sm font-black shadow-[3px_3px_0_rgba(0,0,0,0.65)] transition-[transform,box-shadow] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black active:translate-x-0.5 active:translate-y-0.5 active:shadow-none"
+                >
+                  Start in the chat
+                </button>
+              </div>
+            ) : null}
+          </div>
         </section>
       </div>
     </main>

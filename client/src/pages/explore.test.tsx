@@ -104,8 +104,8 @@ describe('Explore workspace', () => {
 
   it('distinguishes a valid empty bootstrap from independent fetch failures', async () => {
     render(<Explore {...props()} />);
-    expect(await screen.findByText(/What has been pulling/)).toBeTruthy();
-    expect(screen.getByText('Your map will take shape here')).toBeTruthy();
+    expect(await screen.findByText(/What activities pull you in so much that you lose track of time\?/)).toBeTruthy();
+    expect(screen.getByText('Nothing on your map yet')).toBeTruthy();
     expect(screen.queryByRole('alert')).toBeNull();
 
     cleanup();

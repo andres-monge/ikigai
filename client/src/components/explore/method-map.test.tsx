@@ -480,7 +480,7 @@ describe('MethodMap', () => {
 
   it('shows an empty canonical map without treating it as a fetch failure', () => {
     render(<MethodMap map={createCareerMap('explorer-1')} busy={false} onOperation={vi.fn()} onConversationPrompt={vi.fn()} />);
-    expect(screen.getByText('Your map will take shape here')).toBeTruthy();
+    expect(screen.getByText('Nothing on your map yet')).toBeTruthy();
     expect(screen.queryByRole('alert')).toBeNull();
   });
 

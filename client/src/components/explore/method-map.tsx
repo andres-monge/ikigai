@@ -20,6 +20,7 @@ interface MethodMapProps {
   busy: boolean;
   onOperation: (operation: DeterministicOperationRequest) => void;
   onConversationPrompt: (prompt: string) => void;
+  onGoToConversation?: () => void;
 }
 
 const pathStyles = [
@@ -444,7 +445,7 @@ function LaterMethodState({
       {doors ? (
         <section>
           <h2 className="text-xl font-black">Side Doors</h2>
-          <p className="mt-1 text-sm text-slate-600">Three routes, shown without ranking. Revelio never sends outreach.</p>
+          <p className="mt-1 text-sm text-stone-600">Three routes, shown without ranking. Revelio never sends outreach.</p>
           <div className="mt-4 grid gap-4 xl:grid-cols-3">
             {doors.doors.map((door) => (
               <article data-testid="side-door-card" key={`${door.id}-${door.revision}`} className="border-2 border-black bg-white p-5 shadow-[4px_4px_0_rgba(0,0,0,0.65)]">
@@ -475,7 +476,7 @@ function LaterMethodState({
   );
 }
 
-export function MethodMap({ map, busy, onOperation, onConversationPrompt }: MethodMapProps) {
+export function MethodMap({ map, busy, onOperation, onConversationPrompt, onGoToConversation }: MethodMapProps) {
   const currentEvidence = selectCurrentFoundationEvidence(map.foundation);
   const currentConstraints = selectCurrentRealityConstraints(map.foundation);
   const why = map.foundation.whyRevisions.findLast((item) => item.status !== 'superseded');
@@ -494,15 +495,23 @@ export function MethodMap({ map, busy, onOperation, onConversationPrompt }: Meth
 
   if (!hasState) {
     return (
-      <div className="space-y-8">
-        <CheckpointSummary map={map} />
-        <section className="border-2 border-dashed border-black bg-white/60 p-8 text-center">
-          <h2 className="text-2xl font-black">Your map will take shape here</h2>
-          <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-slate-600">
-            Start in the conversation. Only validated Method state appears in this panel.
-          </p>
-        </section>
-      </div>
+      <section className="max-w-2xl border-2 border-dashed border-black bg-white/70 p-6 sm:p-8">
+        <h2 className="font-display text-2xl font-black">Nothing on your map yet</h2>
+        <p className="mt-3 text-sm leading-6 text-stone-700">
+          This is the record of what you and Revelio work out together: what pulls you in, why it matters to
+          you, the directions worth trying, and the project you take on first. Nothing lands here until you’ve
+          confirmed it, so you can change your mind in the chat at any point.
+        </p>
+        {onGoToConversation ? (
+          <button
+            type="button"
+            onClick={onGoToConversation}
+            className="mt-6 min-h-11 border-2 border-black bg-ikigai-teal px-4 font-display text-sm font-black shadow-[3px_3px_0_rgba(0,0,0,0.65)] transition-[transform,box-shadow] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black active:translate-x-0.5 active:translate-y-0.5 active:shadow-none"
+          >
+            Start in the chat
+          </button>
+        ) : null}
+      </section>
     );
   }
 
@@ -540,7 +549,7 @@ export function MethodMap({ map, busy, onOperation, onConversationPrompt }: Meth
           <p className="method-map-label">{why.status === 'confirmed' ? 'Confirmed foundation' : 'Suggested foundation'}</p>
           <h2 className="text-2xl font-black">Why You Work</h2>
           <p className="mt-3 text-lg font-medium leading-7">{why.statement}</p>
-          <p className="mt-2 text-sm text-slate-600">{why.serves}</p>
+          <p className="mt-2 text-sm text-stone-600">{why.serves}</p>
           <details className="mt-4 border-t border-slate-300 pt-3">
             <summary className="cursor-pointer text-sm font-bold">Inspect the Foundation</summary>
             <p className="mt-3 text-sm"><strong>Point of view:</strong> {why.pointOfView}</p>
@@ -617,7 +626,7 @@ export function MethodMap({ map, busy, onOperation, onConversationPrompt }: Meth
       {suggestedPathSet ? (
         <section aria-labelledby="purpose-paths-heading">
           <h2 id="purpose-paths-heading" className="text-3xl font-black">Three ways to serve that</h2>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
             Each path is a different way of working, not a ranking. Read all three before choosing or changing one.
           </p>
           <div className="method-path-grid mt-5">

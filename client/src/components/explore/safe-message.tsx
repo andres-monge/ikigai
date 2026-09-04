@@ -68,17 +68,14 @@ export function SafeMessage({ message }: { message: NormalizedHistoryMessage }) 
     <article
       aria-label={message.role === 'assistant' ? 'Revelio' : 'You'}
       className={message.role === 'assistant'
-        ? 'max-w-[92%] border-2 border-black bg-white p-4 shadow-[4px_4px_0_rgba(0,0,0,0.65)]'
-        : 'ml-auto max-w-[88%] border-2 border-black bg-ikigai-cream p-4'}
+        ? 'max-w-none'
+        : 'ml-auto w-fit max-w-[85%] border-2 border-black bg-ikigai-cream px-4 py-3'}
     >
-      <p className="mb-2 font-display text-xs font-extrabold uppercase tracking-[0.09em]">
-        {message.role === 'assistant' ? 'Revelio' : 'You'}
-      </p>
-      <p className="whitespace-pre-wrap break-words text-sm leading-6 [unicode-bidi:plaintext]">
+      <p className="whitespace-pre-wrap break-words text-[1.0625rem] font-medium leading-7 [unicode-bidi:plaintext]">
         {renderCitedText(text, message.citations ?? [])}
       </p>
       {message.deliveryStatus === 'stopped' ? (
-        <span className="mt-2 inline-block text-xs font-bold text-slate-600">Stopped</span>
+        <span className="mt-2 inline-block text-xs font-bold text-stone-600">Stopped</span>
       ) : null}
     </article>
   );
