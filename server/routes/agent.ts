@@ -234,6 +234,12 @@ function attachAbort(request: Request, response: express.Response): {
   };
 }
 
+function clientDisconnected(request: Request, response: express.Response, signal: AbortSignal): boolean {
+  // Node 24 may report a fully consumed IncomingMessage as destroyed after
+  // express.json() completes. That is not a client disconnect.
+  return request.aborted || response.destroyed || signal.aborted;
+}
+
 function statusForEnvelope(envelope: MethodOperationEnvelope): number {
   if (envelope.status === 'conflict') return 409;
   if (envelope.status === 'rejected') return 422;
@@ -556,7 +562,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
     }
     const identity = getProtectedIdentity(response);
     const abort = attachAbort(request, response);
-    if (request.destroyed || abort.signal.aborted) {
+    if (clientDisconnected(request, response, abort.signal)) {
       abort.detach();
       return;
     }
@@ -710,7 +716,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
     }
     const identity = getProtectedIdentity(response);
     const abort = attachAbort(request, response);
-    if (request.destroyed || abort.signal.aborted) {
+    if (clientDisconnected(request, response, abort.signal)) {
       abort.detach();
       return;
     }

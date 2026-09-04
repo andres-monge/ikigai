@@ -625,6 +625,98 @@ describe('protected Method routes', () => {
     expect(storage.beginAgentTurn).not.toHaveBeenCalled();
   });
 
+  it('processes a complete parsed request when Node marks only the consumed request stream destroyed', async () => {
+    const storage = createStorage({
+      beginAgentTurn: vi.fn(async (): Promise<BeginAgentTurnResult> => ({
+        status: 'terminal',
+        shouldInvokeModel: false,
+        turn: turn('agent-turn', 'completed'),
+      })),
+    });
+    const consumedBodyAuthenticated: RequestHandler = (request, response, next) => {
+      Object.defineProperty(request, 'destroyed', { configurable: true, value: true });
+      authenticated(request, response, next);
+    };
+
+    const response = await request(testApp({
+      storage,
+      requireAuth: consumedBodyAuthenticated,
+      agentEnabled: true,
+      operationalLog: vi.fn(),
+    })).post('/api/agent').send({ id: 'client-message-1', message: 'hello' });
+
+    expect(response.status).toBe(200);
+    expect(response.body.status).toBe('completed-replay');
+    expect(storage.getOrCreateCareerMap).toHaveBeenCalledOnce();
+    expect(storage.beginAgentTurn).toHaveBeenCalledOnce();
+  });
+
+  it('processes a workspace operation when Node marks only the consumed request stream destroyed', async () => {
+    const operationEnvelope = {
+      status: 'committed', operation: 'confirm-why', authoritativeRevision: 2,
+      derivedModule: 'create-purpose-paths', pendingDecision: null,
+    };
+    const storage = createStorage({
+      beginWorkspaceActionTurn: vi.fn(async (): Promise<BeginAgentTurnResult> => ({
+        status: 'terminal', shouldInvokeModel: false,
+        turn: {
+          ...turn('workspace-action', 'completed'),
+          terminalResult: { kind: 'workspace-result', refetch: true, operationEnvelope },
+        },
+      })),
+    });
+    const consumedBodyAuthenticated: RequestHandler = (request, response, next) => {
+      Object.defineProperty(request, 'destroyed', { configurable: true, value: true });
+      authenticated(request, response, next);
+    };
+
+    const response = await request(testApp({
+      storage,
+      requireAuth: consumedBodyAuthenticated,
+      agentEnabled: true,
+      operationalLog: vi.fn(),
+    })).post('/api/agent/workspace/operations').send({
+      operationId: 'operation-replay', clientMessageId: 'client-message-1',
+      expectedRevision: 1,
+      operation: { type: 'confirm-why', input: {} },
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ ...operationEnvelope, turnStatus: 'completed', replay: true });
+    expect(storage.getOrCreateCareerMap).toHaveBeenCalledOnce();
+    expect(storage.beginWorkspaceActionTurn).toHaveBeenCalledOnce();
+  });
+
+  it.each(['request-aborted', 'response-destroyed'] as const)(
+    'does not begin agent work for a genuinely disconnected %s request',
+    async (disconnectState) => {
+      const storage = createStorage();
+      const model = new MockLanguageModelV4({ doStream: textStream('must not run') as never });
+      const disconnectedAuthenticated: RequestHandler = (request, response, next) => {
+        if (disconnectState === 'request-aborted') {
+          Object.defineProperty(request, 'aborted', { configurable: true, value: true });
+          authenticated(request, response, next);
+          setImmediate(() => response.destroy());
+          return;
+        }
+        response.destroy();
+        authenticated(request, response, next);
+      };
+
+      await Promise.resolve(request(testApp({
+        storage,
+        requireAuth: disconnectedAuthenticated,
+        agentEnabled: true,
+        model,
+        operationalLog: vi.fn(),
+      })).post('/api/agent').send({ id: 'client-message-1', message: 'hello' })).catch(() => undefined);
+
+      expect(storage.getOrCreateCareerMap).not.toHaveBeenCalled();
+      expect(storage.beginAgentTurn).not.toHaveBeenCalled();
+      expect(model.doStreamCalls).toHaveLength(0);
+    },
+  );
+
   it('rejects newline-bearing client message ids before the durable turn or provider boundary', async () => {
     const clientIdSentinel = 'PRIVATE_CLIENT_ID_SENTINEL';
     const logs: Array<Record<string, unknown>> = [];
