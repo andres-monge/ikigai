@@ -16,12 +16,12 @@ export interface InteractionOwnership {
  */
 export const interactionOwnership = {
   'append-foundation-evidence': { owner: 'conversation-only', affordance: 'Chat composer', reason: 'The explorer’s own words and context are the evidence payload.' },
-  'correct-foundation-evidence': { owner: 'conversation-only', affordance: 'Revise this Why / chat', reason: 'A correction must identify the exact user-authored evidence and replacement text.' },
+  'correct-foundation-evidence': { owner: 'conversation-only', affordance: 'Chat composer', reason: 'A correction must identify the exact user-authored evidence and replacement text.' },
   'record-reality-constraint': { owner: 'conversation-only', affordance: 'Chat composer', reason: 'Constraints are explorer-authored facts, not inferred form values.' },
   'propose-why': { owner: 'conversation-only', affordance: 'Chat composer', reason: 'Revelio composes the provisional interpretation; the UI never invents canonical text.' },
-  'revise-why': { owner: 'conversation-only', affordance: 'Revise this Why', reason: 'Revision is collaborative and remains Suggested until a later action.' },
-  'confirm-why': { owner: 'deterministic-ui', affordance: 'Confirm this Why', reason: 'An exact, previously presented Suggested revision can be confirmed atomically.' },
-  'propose-purpose-paths': { owner: 'conversation-only', affordance: 'Chat composer', reason: 'The agent must produce a validated exact-three set grounded in the confirmed Why.' },
+  'revise-why': { owner: 'conversation-only', affordance: 'Chat composer', reason: 'North Star revision is collaborative and remains Suggested until a later action.' },
+  'confirm-why': { owner: 'conversation-only', affordance: 'Chat composer', reason: 'The main agent judges later-turn North Star confirmation in context.' },
+  'propose-purpose-paths': { owner: 'conversation-only', affordance: 'Chat composer', reason: 'The agent must produce a validated exact-three set grounded in the confirmed North Star.' },
   'replace-purpose-path': { owner: 'conversation-only', affordance: 'Replace', reason: 'The UI names one path; the agent designs its replacement and atomically preserves exact three.' },
   'combine-purpose-paths': { owner: 'conversation-only', affordance: 'Combine two paths', reason: 'The agent clarifies the pair and creates a distinct third path atomically.' },
   'select-purpose-path': { owner: 'deterministic-ui', affordance: 'Start this path', reason: 'One exact member of a completed initial presentation can be selected directly.' },
@@ -58,14 +58,13 @@ export const interactionOwnership = {
   'replace-side-door': { owner: 'conversation-only', affordance: 'Chat composer', reason: 'The agent researches a credible replacement without ranking the other routes.' },
   'select-side-door': { owner: 'conversation-only', affordance: 'Chat composer', reason: 'U9 owns explicit route activation; U6 renders active and parked state.' },
   'record-route-outcome': { owner: 'conversation-only', affordance: 'Chat composer', reason: 'Outcomes are explorer-reported; the product exposes no send or outreach capability.' },
-  'open-foundation-revision-focus': { owner: 'conversation-only', affordance: 'Revise this Why', reason: 'A focus change is conversational and does not rewrite canonical state by itself.' },
+  'open-foundation-revision-focus': { owner: 'conversation-only', affordance: 'Chat composer', reason: 'A North Star focus change is conversational and does not rewrite canonical state by itself.' },
   'open-path-revision-focus': { owner: 'conversation-only', affordance: 'Rewrite / Replace / Combine', reason: 'A focus change clarifies intent before any atomic path-set operation.' },
   'close-focus': { owner: 'conversation-only', affordance: 'Chat composer', reason: 'The active module closes focus after the explorer finishes the detour.' },
   'resolve-basis-review': { owner: 'conversation-only', affordance: 'Chat composer', reason: 'Reaffirm, revise, or replace requires reviewing the invalidated basis with the explorer.' },
 } as const satisfies Record<CareerMapOperationType, InteractionOwnership>;
 
 export const connectedU5DeterministicOperations = [
-  'confirm-why',
   'select-purpose-path',
   'confirm-purpose-path-revision',
 ] as const satisfies readonly CareerMapOperationType[];

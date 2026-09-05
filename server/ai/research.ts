@@ -156,9 +156,16 @@ export function resolveNativeSearchCitationClaim(
 
 function textCitations(step: NativeSearchStep): TextCitation[] {
   const citations: TextCitation[] = [];
-  for (const part of step.content ?? []) {
+  const textParts = (step.content ?? []).flatMap((part) => {
     const record = asRecord(part);
-    if (record?.type !== 'text' || typeof record.text !== 'string' || record.text.length === 0) continue;
+    return record?.type === 'text' && typeof record.text === 'string' && record.text.length > 0
+      ? [{ record, text: record.text }]
+      : [];
+  });
+  const fullText = textParts.map((part) => part.text).join('');
+  const fullTextHash = createHash('sha256').update(fullText).digest('hex');
+  let partOffset = 0;
+  for (const { record, text } of textParts) {
     const openai = asRecord(asRecord(record.providerMetadata)?.openai);
     const annotations = Array.isArray(openai?.annotations) ? openai.annotations : [];
     for (const annotation of annotations) {
@@ -167,19 +174,20 @@ function textCitations(step: NativeSearchStep): TextCitation[] {
       const start = candidate.start_index;
       const end = candidate.end_index;
       if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end)) continue;
-      if ((start as number) < 0 || (end as number) <= (start as number) || (end as number) > record.text.length) continue;
+      if ((start as number) < 0 || (end as number) <= (start as number) || (end as number) > text.length) continue;
       const url = safeHttpsUrl(candidate.url);
       if (!url) continue;
       const title = boundedText(candidate.title, MAX_TITLE_CHARACTERS);
       citations.push({
-        text: record.text,
-        textHash: createHash('sha256').update(record.text).digest('hex'),
-        start: start as number,
-        end: end as number,
+        text: fullText,
+        textHash: fullTextHash,
+        start: partOffset + (start as number),
+        end: partOffset + (end as number),
         url,
         ...(title ? { title } : {}),
       });
     }
+    partOffset += text.length;
   }
   return citations;
 }

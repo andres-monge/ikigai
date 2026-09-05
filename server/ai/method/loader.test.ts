@@ -6,6 +6,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { MethodCheckpoint } from '@shared/career-map';
 import {
   BASE_METHOD_INSTRUCTIONS,
+  PURPOSE_PATHS_OFFER_ENGLISH,
+  PURPOSE_PATHS_OFFER_SPANISH,
   R22_CANONICAL_ENGLISH,
   R22_CANONICAL_SPANISH,
 } from './base-instructions';
@@ -120,7 +122,7 @@ describe('repository-owned Method module loader', () => {
       },
       {
         name: 'non-H1 body',
-        mutate: (content: string) => content.replace('\n# Form the Foundation', '\n## Form the Foundation'),
+        mutate: (content: string) => content.replace('\n# Form Your North Star', '\n## Form Your North Star'),
         expected: /level-one heading/i,
       },
     ];
@@ -150,6 +152,15 @@ describe('repository-owned Method module loader', () => {
     expect(BASE_METHOD_INSTRUCTIONS).toMatch(/committed operation result/i);
     expect(BASE_METHOD_INSTRUCTIONS).toMatch(/mirror the language of the explorer's latest message/i);
     expect(BASE_METHOD_INSTRUCTIONS).toMatch(/explicit language change/i);
+    expect(BASE_METHOD_INSTRUCTIONS).toMatch(/paragraphs.*H2–H4.*bold.*italics.*ordered.*unordered lists/is);
+    expect(BASE_METHOD_INSTRUCTIONS).toMatch(/do not author HTML, links, images, code, tables, or blockquotes/i);
+    expect(BASE_METHOD_INSTRUCTIONS).toMatch(/cards are application-owned/i);
+    expect(BASE_METHOD_INSTRUCTIONS).toMatch(/main agent.*current explorer message.*language/is);
+    expect(BASE_METHOD_INSTRUCTIONS).toMatch(/hedges, quotations, questions, conditionals, ambiguity, generic assent.*multiple.*multi-target/is);
+    expect(BASE_METHOD_INSTRUCTIONS).toMatch(/bare ordinal.*exact current path/i);
+    expect(BASE_METHOD_INSTRUCTIONS).not.toMatch(/Why I Work|confirmed Why|Suggested Why/i);
+    expect(PURPOSE_PATHS_OFFER_ENGLISH).toBe('Here are three ways to serve your North Star.');
+    expect(PURPOSE_PATHS_OFFER_SPANISH).toBe('Aquí tienes tres formas de servir a tu Estrella Polar.');
     expect(R22_CANONICAL_ENGLISH).toBe(
       "The point of a project is not to succeed, it's to learn if it's something you'd want to pursue. Think of projects like dating: you start with something chill and low commitment, then invest more only if each date makes you want another.",
     );
@@ -169,6 +180,14 @@ describe('repository-owned Method module loader', () => {
     expect(foundation).toMatch(/one short question per turn/i);
     expect(foundation).toMatch(/do not propose Purpose Paths until.*confirmed/i);
     expect(foundation).toMatch(/never switch to English.*example is written in English/i);
+    expect(foundation).toMatch(/exact.*invalidatedArtifactClasses/i);
+    expect(foundation).toMatch(/zero.*ordinary later-turn confirmation.*no impact classes/is);
+    expect(foundation).toMatch(/nonzero.*only.*exact affected.*later explorer turn/is);
+    expect(foundation).toMatch(/presentation.*failed.*revise-why.*again/is);
+    expect(foundation).toMatch(/unambiguous.*change.*revise-why.*immediately/is);
+    expect(foundation).toMatch(/acknowledgment or confirmation.*confirm-why.*never.*revise-why/is);
+    expect(foundation).toMatch(/do not.*same assistant turn.*confirm-why/is);
+    expect(foundation).not.toMatch(/Why I Work|confirmed Why|Suggested Why/i);
 
     expect(paths).toMatch(/exactly three/i);
     expect(paths).toMatch(/equal weight/i);
@@ -176,14 +195,20 @@ describe('repository-owned Method module loader', () => {
     expect(paths).toMatch(/replace only the requested path/i);
     expect(paths).toMatch(/combine.*complete three-path set/i);
     expect(paths).toMatch(/explicitly asks for a recommendation/i);
-    expect(paths).toMatch(/explicit ordinal reference.*exact choice/i);
-    expect(paths).toMatch(/each path at 80 words or fewer.*whole reply at 350 words or fewer/i);
+    expect(paths).toMatch(/bare ordinal.*exact current path/i);
+    expect(paths).toContain(PURPOSE_PATHS_OFFER_ENGLISH);
+    expect(paths).toContain(PURPOSE_PATHS_OFFER_SPANISH);
+    expect(paths).toMatch(/only.*localized offer.*no.*footer invitation/is);
+    expect(paths).toMatch(/do not repeat.*seven.*fields/is);
+    expect(paths).not.toMatch(/350 words|80 words|confirmed Why|same Why/i);
 
     expect(project).toMatch(/exactly one first Path Project/i);
     expect(project).toMatch(/one replacement/i);
     expect(project).toMatch(/firsthand beneficiary/i);
     expect(project).toMatch(/present-first-project-framing.*once/i);
-    expect(project).toMatch(/later turn/i);
+    expect(project).toMatch(/later (?:explorer message|turn)/i);
+    expect(project).toMatch(/main agent.*semantic.*acceptance.*current explorer message/is);
+    expect(project).toMatch(/acceptancePhrase.*not.*exact-match/is);
     expect(project).toMatch(/durable marker prevents repetition after reload or compaction/i);
     expect(project).toContain(R22_CANONICAL_ENGLISH);
     expect(project).toContain(R22_CANONICAL_SPANISH);

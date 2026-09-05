@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   classifyFoundationQuestionTopics,
@@ -10,6 +11,42 @@ import {
 import { R22_CANONICAL_ENGLISH, R22_CANONICAL_SPANISH } from './base-instructions';
 
 describe('Method evaluation assertions', () => {
+  it('executes every declared U7 semantic-intent fixture before retaining its metadata', () => {
+    const source = readFileSync(
+      new URL('../../../scripts/eval-revelio-method.mjs', import.meta.url),
+      'utf8',
+    );
+    const fixtureBlock = source.slice(
+      source.indexOf('const semanticIntentFixtures ='),
+      source.indexOf('const northStarRevisionFixtures ='),
+    );
+    const revisionRunnerBlock = source.slice(
+      source.indexOf('async function runNorthStarRevisionFixtures'),
+      source.indexOf('function createSyntheticHarness'),
+    );
+
+    expect(fixtureBlock.match(/expectedOperation:/g)).toHaveLength(5);
+    expect(fixtureBlock.match(/state: 'pending-(?:why|paths)'/g)).toHaveLength(12);
+    expect(source).toMatch(/const result = await createSyntheticHarness\([\s\S]*?\}, loader, model\)\.run\(\)/);
+    expect(source).toMatch(/reports\.push\(await runSemanticIntentProbe\(fixture, fixtureIndex, loader, model\)\)/);
+    expect(source).toMatch(/const semanticIntentReports = await runSemanticIntentFixtures\(loader, model\)/);
+    expect(source).toMatch(/semanticPositive: semanticIntentReports\.filter/);
+    expect(source).toMatch(/semanticClarification: semanticIntentReports\.filter/);
+    expect(source).not.toMatch(/semanticPositive: semanticIntentFixtures\./);
+    expect(source).not.toMatch(/semanticClarification: semanticIntentFixtures\./);
+    expect(source).toMatch(/const northStarRevisionReports = await runNorthStarRevisionFixtures\(loader, model\)/);
+    expect(source).toMatch(/northStarRevision: northStarRevisionReports/);
+    expect(revisionRunnerBlock.match(/await createSyntheticHarness\(/g)).toHaveLength(2);
+    expect(revisionRunnerBlock).toMatch(/reports\.push\(\{\s*kind,\s*invalidatedArtifactClasses:/);
+    expect(revisionRunnerBlock).toMatch(/kind: 'failed-presentation',[\s\S]*?recoveryOperation:/);
+    expect(revisionRunnerBlock).toMatch(/assert\(reports\.length === 3/);
+    expect(source.indexOf('proveNorthStarRevisionSeedCoverage();'))
+      .toBeLessThan(source.indexOf("assert(apiKey, 'OPENAI_API_KEY"));
+    expect(source).not.toMatch(/revisionImpactClassCount: northStarRevisionFixtures\./);
+    expect(source).not.toMatch(/failedPresentationRecoveryOperation: northStarRevisionFixtures\./);
+    expect(source).toMatch(/revise_why: tool\([\s\S]*?current explorer message asks to change[\s\S]*?never use it for an acknowledgment or confirmation/i);
+  });
+
   it('requires minimum-sufficient privacy-safe Foundation coverage before propose-why', () => {
     const summary = summarizeFoundationTrace([
       { turnIndex: 0, type: 'append-foundation-evidence', evidenceCategory: 'fascination' },
@@ -40,7 +77,7 @@ describe('Method evaluation assertions', () => {
   });
 
   it('distinguishes adaptive follow-up topics from an ordinary Why confirmation question', () => {
-    expect(classifyFoundationQuestionTopics('Does this provisional Why feel accurate to you?')).toEqual([]);
+    expect(classifyFoundationQuestionTopics('Does this provisional North Star feel accurate to you?')).toEqual([]);
     expect(classifyFoundationQuestionTopics(
       'What activities make you lose track of time? In ten years, what meaningful change would make you proud? What do people rely on you for? What must a new direction fit around now?',
     )).toEqual([

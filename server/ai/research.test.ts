@@ -94,6 +94,29 @@ describe('ordinary native-search citation projection', () => {
     }))).toEqual([]);
   });
 
+  it('normalizes later-part citations against the complete visible assistant message', () => {
+    const prefix = 'Registry result: ';
+    const claim = 'application/json';
+    const text = `${prefix}${claim}`;
+    const result = extractNativeSearchDisplayCitations({ content: [
+      { type: 'text', text: prefix },
+      {
+        type: 'text', text: claim,
+        providerMetadata: { openai: { annotations: [{
+          type: 'url_citation', url: 'https://example.com/registry',
+          start_index: 0, end_index: claim.length,
+        }] } },
+      },
+    ] });
+
+    expect(result).toEqual([expect.objectContaining({
+      textHash: createHash('sha256').update(text).digest('hex'),
+      exactClaim: claim,
+      start: prefix.length,
+      end: text.length,
+    })]);
+  });
+
   it('deduplicates identical annotations and caps a display step', () => {
     const content = Array.from({ length: 24 }, (_, index) => ({
       type: 'text',

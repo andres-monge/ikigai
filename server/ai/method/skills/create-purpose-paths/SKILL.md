@@ -1,27 +1,27 @@
 ---
 name: create-purpose-paths
 description: Create and revise exactly three distinct Purpose Paths with equal weight and explorer-owned choice.
-version: 1.0.2
+version: 1.1.0
 ---
 # Create Purpose Paths
 
 ## Outcome
 
-After a Why I Work is confirmed, offer exactly three meaningfully distinct ways to serve it. A Purpose Path is a direction for exploration, not a job title, identity prediction, prestige ladder, or fit score. The explorer owns every consequential choice.
+After Your North Star is confirmed, offer exactly three meaningfully distinct ways to serve it. A Purpose Path is a direction for exploration, not a job title, identity prediction, prestige ladder, or fit score. The explorer owns every consequential choice.
 
 ## Path contract
 
 Each path must contain:
 
 - a clear, concrete name;
-- how it serves the confirmed Why;
+- how it serves the confirmed North Star;
 - what could become possible;
 - evidence for why it may be worth exploring;
 - the central unknown that action should answer;
 - a Path Project preview; and
 - a concise researched view of practical fit, including relevant economics, access, credentials, and constraints without using them to define meaning or prestige.
 
-The set must contain exactly three distinct mechanisms for serving the same Why. Give every path equal weight. Never rank, score, highlight, preselect, or recommend a path unless the explorer explicitly asks for a recommendation. Even then, explain uncertainty and leave the choice with them.
+The set must contain exactly three distinct mechanisms for serving the same North Star. Give every path equal weight. Never rank, score, highlight, preselect, or recommend a path unless the explorer explicitly asks for a recommendation. Even then, explain uncertainty and leave the choice with them.
 
 ## Revision and choice
 
@@ -30,7 +30,7 @@ The set must contain exactly three distinct mechanisms for serving the same Why.
 - When you combine paths, commit one complete three-path set atomically: preserve the uncombined sibling, add the merged path, and add a genuinely new third path. Combining never implicitly selects a path.
 - If prestige, status, or an attractive identity is carrying a path, investigate that distortion and revise or replace the path without ranking the alternatives.
 - Only an explicit explorer choice may activate one path. Do not treat interest, generic assent, or your own recommendation as selection.
-- An explicit ordinal reference such as "the first path in the current set" is an exact choice: resolve it against the canonical current three-path order and select that path without asking the explorer to repeat its generated name.
+- A contextual bare ordinal is an exact choice when it identifies one exact current path: resolve it against the canonical current three-path order without aliases or asking the explorer to repeat its generated name.
 
 ## State operations
 
@@ -41,4 +41,6 @@ The set must contain exactly three distinct mechanisms for serving the same Why.
 
 ## Reply discipline
 
-Present the paths in parallel language with comparable detail. Keep each path at 80 words or fewer and the whole reply at 350 words or fewer, including any introduction and question. Compress the canonical fields into concise prose rather than explaining the Method. Invite questions, revision, combination, replacement, or an explicit choice without steering the explorer toward one option.
+After `propose-purpose-paths`, `replace-purpose-path`, or `combine-purpose-paths` commits, final visible prose is only one short localized offer immediately before the application-owned cards. In English use exactly: “Here are three ways to serve your North Star.” In Spanish use the faithful fixture: “Aquí tienes tres formas de servir a tu Estrella Polar.” In any other language, translate that sentence faithfully and concisely.
+
+Do not repeat path names or any of the seven structured card fields in prose. Add no summary, recommendation, question, or footer invitation after the cards. Discussion-only replies may use normal concise prose while leaving every choice with the explorer.

@@ -1190,7 +1190,7 @@ export class PostgresStorage implements IStorage {
       const persistedReceipt = persistedMap.data.operationHistory.at(-1)!;
 
       const presentedInTurnId = confirmationPresentationTurnId(persistedMap.data, input.operation);
-      if (context.origin === 'agent-turn' && presentedInTurnId) {
+      if (presentedInTurnId) {
         const [completedPresentationTurn] = await tx
           .select({ turnId: agentTurns.turnId })
           .from(agentTurns)
@@ -1274,7 +1274,10 @@ export class PostgresStorage implements IStorage {
         this.now(),
       );
       throwIfPersistenceAborted(input.abortSignal);
-        return { status: 'committed', map: persistedMap.data, receipt: persistedReceipt };
+        return {
+          status: 'committed', map: persistedMap.data, receipt: persistedReceipt,
+          ...(reduced.effects ? { effects: reduced.effects } : {}),
+        };
       });
     } catch (error) {
       if (error instanceof TurnLeaseLostError) {
@@ -1320,7 +1323,7 @@ export class PostgresStorage implements IStorage {
         eq(agentTurns.userId, input.userId),
         eq(agentTurns.turnId, input.turnId),
       ));
-      if (!turn || (turn.status !== 'completed' && turn.status !== 'cancelled')) return;
+      if (!turn || (turn.status !== 'completed' && turn.status !== 'cancelled' && turn.status !== 'failed')) return;
       const terminal = turn.terminalResult && typeof turn.terminalResult === 'object'
         ? turn.terminalResult as Record<string, unknown>
         : {};

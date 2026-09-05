@@ -7,6 +7,7 @@ import {
   type ToolSet,
 } from 'ai';
 import { APICallError } from '@ai-sdk/provider';
+import { createHash } from 'node:crypto';
 import { BASE_INSTRUCTIONS_VERSION, BASE_METHOD_INSTRUCTIONS } from './method/base-instructions.js';
 import type { MethodModuleLoader } from './method/loader.js';
 import type { DurableMethodTurnIdentity, IStorage, MethodProvenanceTiming } from '../storage.js';
@@ -28,6 +29,7 @@ export const REVELIO_AGENT_MODEL = 'gpt-5.6-sol';
 export const REVELIO_AGENT_PROVIDER = 'openai-responses';
 export const REVELIO_COMPACT_THRESHOLD = 1_000;
 export const METHOD_INTERNAL_CONTEXT_MARKER = 'SERVER REFRESH CONTEXT';
+const METHOD_DIRECT_CONTINUATION_SEED = 'SERVER DIRECT CONTINUATION SEED';
 
 export interface MethodPreparedStepTrace {
   stepNumber: number;
@@ -41,7 +43,7 @@ export interface MethodPreparedStepTrace {
 export interface CreateMethodAgentOptions {
   model: LanguageModel;
   nativeWebSearchTool: ToolSet[string];
-  storage: Pick<IStorage, 'loadCareerMap' | 'persistCareerMapOperation'>;
+  storage: Pick<IStorage, 'loadCareerMap' | 'persistCareerMapOperation' | 'listAgentTurns'>;
   loader: MethodModuleLoader;
   userId: string;
   conversationId: string;
@@ -53,6 +55,7 @@ export interface CreateMethodAgentOptions {
   onError?: (error: unknown) => void;
   onPreparedStep?: (trace: MethodPreparedStepTrace) => void;
   onOperationStatus?: (event: MethodOperationLifecycleEvent) => void | Promise<void>;
+  operationIdForToolCall?: (toolCallId: string) => string;
   internalContextMarker?: (responseIndex: number) => string;
 }
 
@@ -307,6 +310,35 @@ function isCurrentTurnInternalContextMessage(
   }
 }
 
+function directContinuationSeed(turnId: string, sourceMessageId: string): ModelMessage {
+  return {
+    role: 'user',
+    content: `${METHOD_DIRECT_CONTINUATION_SEED}\n${JSON.stringify({
+      version: 1,
+      turnId,
+      sourceMessageId,
+    })}`,
+  };
+}
+
+function isCurrentDirectContinuationSeed(
+  message: ModelMessage,
+  turnId: string,
+  sourceMessageId: string,
+): boolean {
+  if (message.role !== 'user' || typeof message.content !== 'string') return false;
+  const separator = message.content.indexOf('\n');
+  if (separator < 0 || message.content.slice(0, separator) !== METHOD_DIRECT_CONTINUATION_SEED) return false;
+  try {
+    const payload = JSON.parse(message.content.slice(separator + 1)) as Record<string, unknown>;
+    return payload.version === 1
+      && payload.turnId === turnId
+      && payload.sourceMessageId === sourceMessageId;
+  } catch {
+    return false;
+  }
+}
+
 function displayParts(
   parts: readonly TextStreamPart<ToolSet>[],
   hasClientTool: boolean,
@@ -360,10 +392,11 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
     userId: options.userId,
     turn: options.turn,
     timing,
-    surface: 'agent-turn',
+    surface: options.turn.origin,
     prepared,
     currentMessage: options.currentMessage,
     operationGuard,
+    operationIdForToolCall: options.operationIdForToolCall,
     onOperationStatus: async (event) => {
       if (
         event.phase === 'terminal'
@@ -405,6 +438,11 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
         !isCurrentTurnInternalContextMessage(
           message,
           priorMarkers,
+          options.turn.turnId,
+          options.turn.clientMessageId,
+        )
+        && !isCurrentDirectContinuationSeed(
+          message,
           options.turn.turnId,
           options.turn.clientMessageId,
         )
@@ -450,8 +488,11 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
 
   const methodAgent = {
     toolLoopAgent,
-    async stream(input: {
+    async stream(input: ({
       prompt: string;
+    } | {
+      continueFromConversation: true;
+    }) & {
       abortSignal?: AbortSignal;
       onTextDelta?: (text: string) => void;
       onCitation?: (citation: NativeSearchDisplayCitation) => void;
@@ -467,10 +508,12 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
         async start(controller) {
           try {
             throwIfAborted(signal);
-            const result = await toolLoopAgent.stream({
-              prompt: input.prompt,
-              abortSignal: signal,
-            });
+            const result = await toolLoopAgent.stream('prompt' in input
+              ? { prompt: input.prompt, abortSignal: signal }
+              : {
+                  messages: [directContinuationSeed(options.turn.turnId, options.turn.clientMessageId)],
+                  abortSignal: signal,
+                });
             const rawParts: TextStreamPart<ToolSet>[] = [];
             for await (const part of result.stream) rawParts.push(part);
             const steps = await result.steps;
@@ -490,20 +533,38 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
             }
             if (current.length > 0) groups.push(current);
 
-            for (let index = 0; index < groups.length; index += 1) {
+            const displayGroups = groups.map((group, index) => {
               const step = steps[index] as StepResult<ToolSet> | undefined;
-              if (!step) continue;
+              if (!step) return { group, hasClientTool: true, citations: [] };
               const hasClientTool = (step.toolCalls ?? []).some(isClientToolCall);
               const citations = hasClientTool
                 ? []
                 : extractNativeSearchDisplayCitations(step as NativeSearchStep);
-              for (const citation of citations) {
+              return { group, hasClientTool, citations };
+            });
+            const finalVisibleText = displayGroups.flatMap(({ group, hasClientTool }) => (
+              hasClientTool ? [] : group.flatMap((part) => part.type === 'text-delta' ? [part.text] : [])
+            )).join('');
+            const finalVisibleTextHash = createHash('sha256').update(finalVisibleText).digest('hex');
+            let visibleOffset = 0;
+            for (const { group, hasClientTool, citations } of displayGroups) {
+              const displayText = hasClientTool
+                ? ''
+                : group.flatMap((part) => part.type === 'text-delta' ? [part.text] : []).join('');
+              const normalizedCitations = citations.map((citation) => ({
+                ...citation,
+                textHash: finalVisibleTextHash,
+                start: visibleOffset + citation.start,
+                end: visibleOffset + citation.end,
+              }));
+              for (const citation of normalizedCitations) {
                 input.onCitation?.(citation);
               }
-              for (const part of displayParts(groups[index]!, hasClientTool, citations)) {
+              for (const part of displayParts(group, hasClientTool, normalizedCitations)) {
                 if (part.type === 'text-delta') input.onTextDelta?.(part.text);
                 controller.enqueue(part);
               }
+              visibleOffset += displayText.length;
             }
             if (outerFinish) controller.enqueue(outerFinish);
             controller.close();

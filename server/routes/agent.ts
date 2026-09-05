@@ -36,6 +36,7 @@ import {
   listConversationItems,
   listRecentConversationItems,
   loadConversationHistory,
+  resolveAssistantDisplayProjection,
   resolveDisplayProjection,
   resolveInternalContextItemIds,
   type ConversationItemsClient,
@@ -43,10 +44,11 @@ import {
 import {
   executeWorkspaceTool,
   OPERATION_TO_TOOL_NAME,
+  WORKSPACE_OPERATION_TYPES,
   workspaceOperationRequestSchema,
   type MethodOperationEnvelope,
 } from '../ai/tools.js';
-import { opaqueClientMessageIdSchema } from '../../shared/career-map/index.js';
+import { invalidationTargetKindSchema, opaqueClientMessageIdSchema } from '../../shared/career-map/index.js';
 import {
   claimLinkedCitationStreamPartSchema,
   operationStatusStreamPartSchema,
@@ -248,10 +250,7 @@ function statusForEnvelope(envelope: MethodOperationEnvelope): number {
 
 const storedOperationEnvelopeSchema = z.object({
   status: z.enum(['committed', 'idempotent-replay', 'conflict', 'rejected']),
-  operation: z.enum(Object.keys(OPERATION_TO_TOOL_NAME) as [
-    keyof typeof OPERATION_TO_TOOL_NAME,
-    ...(keyof typeof OPERATION_TO_TOOL_NAME)[],
-  ]),
+  operation: z.enum(WORKSPACE_OPERATION_TYPES),
   authoritativeRevision: z.number().int().nonnegative(),
   derivedModule: z.enum(['form-foundation', 'create-purpose-paths', 'design-path-project']),
   pendingDecision: z.object({
@@ -259,6 +258,7 @@ const storedOperationEnvelopeSchema = z.object({
     targetId: z.string().min(1).max(160),
     targetRevision: z.number().int().positive(),
   }).strict().nullable(),
+  invalidatedArtifactClasses: z.array(invalidationTargetKindSchema).optional(),
   errorClass: z.string().min(1).max(160).optional(),
   retryable: z.boolean().optional(),
 }).strict();
@@ -571,20 +571,108 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
     const occurredAt = now().toISOString();
     let turn: AgentTurnRecord | undefined;
     let startingRevision: number | undefined;
+    let operationEnvelope: MethodOperationEnvelope | undefined;
+    let selectionCommitted = false;
+    let leaseFinalized = false;
+    let safeAssistantText = '';
+    let conversationId: string | undefined;
+    let methodResult: MethodAgentTurnStreamResult | undefined;
+    let continuationOperationSaved = false;
+    let latestSavedRevision: number | undefined;
+    let terminalProviderStatePromise: Promise<{
+      items: unknown[];
+      internalContextItemIds: string[];
+      markers: readonly string[];
+      complete: boolean;
+    }> | undefined;
+    const terminalProviderState = (timeoutMs = 5_000, requestSignal?: AbortSignal) => {
+      terminalProviderStatePromise ??= (async () => {
+        if (!methodResult || !conversationId) {
+          return { items: [], internalContextItemIds: [], markers: [], complete: false };
+        }
+        const markerTimeoutSignal = AbortSignal.timeout(timeoutMs);
+        const markerSignal = requestSignal
+          ? AbortSignal.any([requestSignal, markerTimeoutSignal])
+          : markerTimeoutSignal;
+        const markers = await awaitWithAbort(methodResult.internalContextMarkers, markerSignal)
+          .catch(() => methodResult?.observedInternalContextMarkers() ?? []);
+        if (markers.length === 0) {
+          return { items: [], internalContextItemIds: [], markers, complete: false };
+        }
+        const timeoutSignal = AbortSignal.timeout(timeoutMs);
+        const terminalSignal = requestSignal
+          ? AbortSignal.any([requestSignal, timeoutSignal])
+          : timeoutSignal;
+        let latest = {
+          items: [] as unknown[], internalContextItemIds: [] as string[], markers, complete: false,
+        };
+        for (let attempt = 0; attempt < 5; attempt += 1) {
+          const items = await awaitWithAbort(
+            listRecentConversationItems({
+              client: conversationClient(),
+              conversationId,
+              abortSignal: terminalSignal,
+            }),
+            terminalSignal,
+          );
+          const resolved = resolveInternalContextItemIds(items, markers);
+          latest = {
+            items,
+            internalContextItemIds: resolved.itemIds,
+            markers,
+            complete: resolved.complete,
+          };
+          if (resolved.complete) return latest;
+          if (attempt < 4) await abortableDelay(100, terminalSignal);
+        }
+        return latest;
+      })().catch(() => ({
+        items: [],
+        internalContextItemIds: [],
+        markers: methodResult?.observedInternalContextMarkers() ?? [],
+        complete: false,
+      }));
+      return terminalProviderStatePromise;
+    };
+    const continuationRecovery = async (timeoutMs = 500) => {
+      const [authoritative, providerState] = await Promise.all([
+        storage.loadCareerMap(identity.userId).catch(() => undefined),
+        terminalProviderState(timeoutMs),
+      ]);
+      const revision = authoritative?.status === 'ready'
+        ? authoritative.map.revision
+        : latestSavedRevision;
+      const assistantDisplayProjection = providerState.complete
+        ? resolveAssistantDisplayProjection(
+            providerState.items,
+            safeAssistantText,
+            new Set(providerState.internalContextItemIds),
+          )
+        : undefined;
+      return {
+        ...(revision !== undefined ? { revision } : {}),
+        operationCommitted: selectionCommitted
+          || continuationOperationSaved
+          || (revision !== undefined && startingRevision !== undefined && revision > startingRevision),
+        ...(providerState.internalContextItemIds.length > 0
+          ? { internalContextItemIds: providerState.internalContextItemIds }
+          : {}),
+        ...(!providerState.complete && providerState.markers.length > 0
+          ? { internalContextMarkers: providerState.markers }
+          : {}),
+        ...(assistantDisplayProjection ? { assistantDisplayProjection } : {}),
+      };
+    };
     const cancelWithCanonicalRecovery = async () => {
       if (!turn) return undefined;
-      const authoritative = await storage.loadCareerMap(identity.userId).catch(() => undefined);
-      const revision = authoritative?.status === 'ready' ? authoritative.map.revision : undefined;
+      const recovery = await continuationRecovery();
       return storage.cancelAgentTurn({
         userId: identity.userId,
         turnId: turn.turnId,
         leaseId: turn.leaseId,
         result: {
           kind: 'cancelled', stopped: true, refetch: true,
-          ...(revision !== undefined ? {
-            revision,
-            operationCommitted: startingRevision !== undefined && revision > startingRevision,
-          } : {}),
+          ...recovery,
         },
       });
     };
@@ -615,7 +703,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
       if (leasedState.status !== 'ready') throw new Error('CareerMapUnavailableAfterLease');
       startingRevision = leasedState.map.revision;
       const turnSequence = nextMethodTurnSequence(leasedState.map);
-      const envelope = await executeWorkspaceTool({
+      operationEnvelope = await executeWorkspaceTool({
         runtime: {
           storage,
           loader: await loaderPromise,
@@ -629,43 +717,294 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
         operationId: parsed.data.operationId,
         rawInput: parsed.data.operation.input,
       });
+      selectionCommitted = operationEnvelope.status === 'committed';
       throwIfRouteAborted(abort.signal);
-      const completed = await storage.completeAgentTurn({
-        userId: identity.userId,
-        turnId: turn.turnId,
-        leaseId: turn.leaseId,
-        result: { kind: 'workspace-result', refetch: true, operationEnvelope: envelope },
-        abortSignal: abort.signal,
-      });
-      if (!completed || completed.status !== 'completed') {
-        response.status(409).json({
-          status: `${completed?.status ?? 'failed'}-replay`,
-          terminal: completed?.status ?? 'failed',
-          result: completed ? safeTerminalResult(completed) : { kind: 'failed', refetch: true },
-          retryable: false,
+      if (operationEnvelope.status !== 'committed') {
+        const completed = await storage.completeAgentTurn({
+          userId: identity.userId,
+          turnId: turn.turnId,
+          leaseId: turn.leaseId,
+          result: { kind: 'workspace-result', refetch: true, operationEnvelope },
+          abortSignal: abort.signal,
         });
+        if (!completed || completed.status !== 'completed') {
+          response.status(409).json({
+            status: `${completed?.status ?? 'failed'}-replay`,
+            terminal: completed?.status ?? 'failed',
+            result: completed ? safeTerminalResult(completed) : { kind: 'failed', refetch: true },
+            retryable: false,
+          });
+          return;
+        }
+        response.locals.methodLog = {
+          operationId: opaqueOperationId(parsed.data.operationId),
+          revision: operationEnvelope.authoritativeRevision,
+          errorClass: operationEnvelope.errorClass,
+        };
+        response.status(statusForEnvelope(operationEnvelope)).json(operationEnvelope);
         return;
       }
-      response.locals.methodLog = { operationId: opaqueOperationId(parsed.data.operationId), revision: envelope.authoritativeRevision, errorClass: envelope.errorClass };
-      response.status(statusForEnvelope(envelope)).json(envelope);
+      conversationId = await storage.getConversationMapping(identity.userId);
+      if (!conversationId) throw new Error('ConversationMappingUnavailableForContinuation');
+      const activeConversationId = conversationId;
+      const loader = await loaderPromise;
+      let streamError: unknown;
+      response.locals.methodLog = {
+        provider: REVELIO_AGENT_PROVIDER,
+        turnId: turn.turnId,
+        operationId: opaqueOperationId(parsed.data.operationId),
+        revision: operationEnvelope.authoritativeRevision,
+      };
+      const uiStream = createUIMessageStream({
+        execute: async ({ writer }) => {
+          const agent = createMethodAgent({
+            model: model(),
+            nativeWebSearchTool: nativeWebSearchTool(),
+            storage,
+            loader,
+            userId: identity.userId,
+            conversationId: activeConversationId,
+            turn: turn!,
+            turnSequence,
+            occurredAt,
+            abortSignal: abort.signal,
+            internalContextMarker: (responseIndex) => options.internalContextMarker?.(responseIndex)
+              ?? `ctx_${createHash('sha256').update([
+                turn!.turnId,
+                String(responseIndex),
+                randomUUID(),
+              ].join('\u0000')).digest('base64url').slice(0, 32)}`,
+            operationIdForToolCall: (toolCallId) => opaqueOperationId([
+              turn!.turnId,
+              toolCallId,
+            ].join('\u0000')),
+            onOperationStatus: async (event) => {
+              if (event.phase === 'terminal' && event.status === 'saved') {
+                continuationOperationSaved = true;
+                if (event.authoritativeRevision !== undefined) {
+                  latestSavedRevision = event.authoritativeRevision;
+                }
+              }
+              writer.write(operationStatusStreamPartSchema.parse({
+                type: 'data-operation-status',
+                id: event.operationId,
+                transient: true,
+                data: {
+                  version: 1,
+                  turnId: turn!.turnId,
+                  messageId: turn!.clientMessageId,
+                  operationId: event.operationId,
+                  operation: event.operation,
+                  status: event.phase === 'saving'
+                    ? 'Saving'
+                    : ({ saved: 'Saved', conflict: 'Conflict', rejected: 'Rejected', failed: 'Failed' } as const)[event.status],
+                  sequence: event.phase === 'saving' ? 0 : 1,
+                  authoritativeRevision: event.phase === 'saving'
+                    ? null
+                    : event.authoritativeRevision ?? null,
+                  ...(event.phase === 'terminal' && event.errorClass
+                    ? { errorClass: event.errorClass }
+                    : {}),
+                  ...(event.phase === 'terminal' && event.retryable ? { retryable: true } : {}),
+                },
+              }) as UIMessageChunk);
+            },
+            onError: (error) => {
+              streamError = error;
+              response.locals.methodLog = {
+                ...response.locals.methodLog,
+                errorClass: safeErrorClass(error),
+              };
+            },
+          });
+          methodResult = await agent.stream({
+            continueFromConversation: true,
+            abortSignal: abort.signal,
+            onTextDelta: (text) => { safeAssistantText += text; },
+            onCitation: (citation) => {
+              writer.write(claimLinkedCitationStreamPartSchema.parse({
+                type: 'data-claim-citation',
+                id: citation.citationId,
+                data: {
+                  version: 1,
+                  citationId: citation.citationId,
+                  turnId: turn!.turnId,
+                  messageId: turn!.turnId,
+                  textHash: citation.textHash,
+                  exactClaim: citation.exactClaim,
+                  start: citation.start,
+                  end: citation.end,
+                  url: citation.url,
+                  title: citation.title ?? null,
+                  support: citation.support,
+                },
+              }) as UIMessageChunk);
+            },
+          });
+          const display = toUIMessageStream({
+            stream: methodResult.stream,
+            sendReasoning: false,
+            sendSources: true,
+            onError: (error) => {
+              streamError = error;
+              response.locals.methodLog = {
+                ...response.locals.methodLog,
+                errorClass: safeErrorClass(error),
+              };
+              return 'The agent request failed.';
+            },
+          });
+          const reader = display.getReader();
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              writer.write(value);
+            }
+          } finally {
+            reader.releaseLock();
+          }
+        },
+        onError: (error) => {
+          streamError = error;
+          response.locals.methodLog = {
+            ...response.locals.methodLog,
+            errorClass: safeErrorClass(error),
+          };
+          return 'The agent request failed.';
+        },
+      });
+      const terminalGatedStream = gateTerminalUIStream(uiStream, async (terminalType) => {
+        let terminalFailure: unknown;
+        try {
+          if (streamError || terminalType === 'error') {
+            terminalFailure = streamError ?? new Error('The provider stream failed.');
+          } else if (abort.signal.aborted || terminalType === 'abort') {
+            const cancelled = await cancelWithCanonicalRecovery();
+            if (!cancelled || cancelled.status !== 'cancelled') {
+              const cancellationError = new Error('The direct continuation could not be durably cancelled.');
+              cancellationError.name = 'TurnLeaseLostError';
+              terminalFailure = cancellationError;
+            }
+          } else {
+            const authoritative = await storage.loadCareerMap(identity.userId);
+            const revision = authoritative.status === 'ready'
+              ? authoritative.map.revision
+              : latestSavedRevision;
+            if (revision !== undefined) {
+              response.locals.methodLog = { ...response.locals.methodLog, revision };
+            }
+            const providerState = await terminalProviderState(5_000, abort.signal);
+            if (!providerState.complete) {
+              const bindingError = new Error('Direct continuation provider items were not durably bound.');
+              bindingError.name = 'InternalContextBindingError';
+              throw bindingError;
+            }
+            const assistantDisplayProjection = resolveAssistantDisplayProjection(
+              providerState.items,
+              safeAssistantText,
+              new Set(providerState.internalContextItemIds),
+            );
+            if (!assistantDisplayProjection) {
+              const bindingError = new Error('Direct continuation has no exact assistant projection.');
+              bindingError.name = 'InternalContextBindingError';
+              throw bindingError;
+            }
+            const completed = await storage.completeAgentTurn({
+              userId: identity.userId,
+              turnId: turn!.turnId,
+              leaseId: turn!.leaseId,
+              result: {
+                kind: 'workspace-result',
+                refetch: true,
+                operationEnvelope,
+                operationCommitted: true,
+                ...(revision !== undefined ? { revision } : {}),
+                internalContextItemIds: providerState.internalContextItemIds,
+                assistantDisplayProjection,
+              },
+              assistantText: safeAssistantText,
+              abortSignal: abort.signal,
+            });
+            if (!completed || completed.status !== 'completed') {
+              const terminalError = new Error('The direct continuation could not be durably completed.');
+              terminalError.name = completed?.status === 'failed'
+                && typeof completed.terminalResult?.errorClass === 'string'
+                ? completed.terminalResult.errorClass
+                : 'TurnLeaseLostError';
+              terminalFailure = terminalError;
+            }
+          }
+        } catch (error) {
+          terminalFailure = error;
+        }
+        let terminalFailureClass: string | undefined;
+        try {
+          if (terminalFailure && (
+            abort.signal.aborted
+            || (terminalFailure instanceof Error && terminalFailure.name === 'AbortError')
+          )) {
+            const cancelled = await cancelWithCanonicalRecovery();
+            if (cancelled?.status === 'cancelled') {
+              terminalFailure = undefined;
+            } else {
+              const cancellationError = new Error('The direct continuation could not be durably cancelled.');
+              cancellationError.name = 'TurnLeaseLostError';
+              terminalFailure = cancellationError;
+            }
+          }
+          if (terminalFailure) {
+            const errorClass = safeErrorClass(terminalFailure);
+            terminalFailureClass = errorClass;
+            response.locals.methodLog = { ...response.locals.methodLog, errorClass };
+            const failed = await storage.failAgentTurn({
+              userId: identity.userId,
+              turnId: turn!.turnId,
+              leaseId: turn!.leaseId,
+              errorClass,
+              result: await continuationRecovery(),
+            });
+            if (!failed || failed.status === 'pending') terminalFailureClass = 'TurnLeaseLostError';
+          }
+        } finally {
+          leaseFinalized = await storage
+            .releaseTurnLease(identity.userId, turn!.turnId, turn!.leaseId)
+            .then(() => true)
+            .catch(() => false);
+        }
+        return terminalFailureClass
+          ? { type: 'error', errorText: 'The agent request failed.' }
+          : undefined;
+      });
+      await pipeUIMessageStreamToResponse({ response, stream: terminalGatedStream });
     } catch (error) {
-      if (turn) {
+      if (turn && !leaseFinalized) {
         if (abort.signal.aborted) {
           await cancelWithCanonicalRecovery().catch(() => undefined);
         } else {
-          await storage.failAgentTurn({ userId: identity.userId, turnId: turn.turnId, leaseId: turn.leaseId, errorClass: safeErrorClass(error) }).catch(() => undefined);
+          await storage.failAgentTurn({
+            userId: identity.userId,
+            turnId: turn.turnId,
+            leaseId: turn.leaseId,
+            errorClass: safeErrorClass(error),
+            ...(selectionCommitted ? { result: await continuationRecovery() } : {}),
+          }).catch(() => undefined);
         }
       }
       if (abort.signal.aborted) return;
       response.locals.methodLog = { operationId: opaqueOperationId(parsed.data.operationId), errorClass: safeErrorClass(error) };
-      response.status(error instanceof MethodOwnerBusyError ? 409 : 500).json({
-        error: 'Workspace operation failed',
-        errorClass: safeErrorClass(error),
-        ...(error instanceof MethodOwnerBusyError ? { retryable: true } : {}),
-      });
+      if (!response.headersSent) {
+        response.status(error instanceof MethodOwnerBusyError ? 409 : 500).json({
+          error: 'Workspace operation failed',
+          errorClass: safeErrorClass(error),
+          ...(error instanceof MethodOwnerBusyError ? { retryable: true } : {}),
+        });
+      }
     } finally {
       abort.detach();
-      if (turn) await storage.releaseTurnLease(identity.userId, turn.turnId, turn.leaseId).catch(() => undefined);
+      if (turn && !leaseFinalized) {
+        await storage.releaseTurnLease(identity.userId, turn.turnId, turn.leaseId).catch(() => undefined);
+      }
     }
   });
 
@@ -794,6 +1133,14 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
       const operationCommitted = operationSaved
         || latestSavedRevision !== undefined
         || (revision !== undefined && startingRevision !== undefined && revision > startingRevision);
+      const displayProjection = providerState.complete && safeAssistantText.length > 0
+        ? resolveDisplayProjection(
+            providerState.items,
+            parsed.data.message,
+            safeAssistantText,
+            new Set(providerState.internalContextItemIds),
+          )
+        : undefined;
       return {
         ...(revision !== undefined ? { revision } : {}),
         ...(operationCommitted ? { operationCommitted: true } : {}),
@@ -803,6 +1150,11 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
         ...(!providerState.complete && providerState.markers.length > 0
           ? { internalContextMarkers: providerState.markers }
           : {}),
+        ...(displayProjection
+          ? { displayProjection }
+          : safeAssistantText.length > 0
+            ? { displayRecovery: createDisplayRecovery(parsed.data.message, safeAssistantText, true) }
+            : {}),
       };
     };
     const cancelWithCanonicalRecovery = async () => {
@@ -980,6 +1332,10 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
                 String(responseIndex),
                 randomUUID(),
               ].join('\u0000')).digest('base64url').slice(0, 32)}`,
+            operationIdForToolCall: (toolCallId) => opaqueOperationId([
+              turn!.turnId,
+              toolCallId,
+            ].join('\u0000')),
             onOperationStatus: async (event) => {
               if (event.phase === 'terminal' && event.status === 'saved') {
                 operationSaved = true;
@@ -987,7 +1343,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
                   latestSavedRevision = event.authoritativeRevision;
                 }
               }
-              const operationId = opaqueOperationId(event.operationId);
+              const operationId = event.operationId;
               writer.write(operationStatusStreamPartSchema.parse({
                 type: 'data-operation-status',
                 id: operationId,
@@ -995,7 +1351,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
                 data: {
                   version: 1,
                   turnId: turn!.turnId,
-                  messageId: turn!.turnId,
+                  messageId: turn!.clientMessageId,
                   operationId,
                   operation: event.operation,
                   status: event.phase === 'saving'

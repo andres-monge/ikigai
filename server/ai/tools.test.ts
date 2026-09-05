@@ -170,11 +170,15 @@ class ReducerStorage {
 
   loadCareerMap = vi.fn(async () => ({ status: 'ready' as const, map: this.map }));
   persistCareerMapOperation = this.persist;
+  listAgentTurns = vi.fn(async () => ([{
+    turnId: 'paths-turn', origin: 'agent-turn', status: 'completed',
+    terminalResult: { kind: 'completed' },
+  }] as never));
 }
 
 function runtime(storage: ReducerStorage, origin: 'agent-turn' | 'workspace-action' = 'agent-turn') {
   return {
-    storage: storage as unknown as Pick<IStorage, 'loadCareerMap' | 'persistCareerMapOperation'>,
+    storage: storage as unknown as Pick<IStorage, 'loadCareerMap' | 'persistCareerMapOperation' | 'listAgentTurns'>,
     userId: 'explorer-1',
     turn: {
       turnId: 'current-turn', leaseId: 'current-lease', clientMessageId: 'current-message',
@@ -236,6 +240,7 @@ describe('strict state-specific Method tools', () => {
     const source = readFileSync(new URL('./tools.ts', import.meta.url), 'utf8');
     expect(source).not.toMatch(/ResearchSourceReference|MethodEvidenceResolver|researchSources|userSources/);
     expect(source).not.toMatch(/nativeSearchObserved|researchResolutionRequired|ResearchHandleError/);
+    expect(source).toMatch(/revise_why:[\s\S]*?current explorer message asks to change[\s\S]*?never use it for an acknowledgment or confirmation/i);
   });
 
   it('contains no external-action surface and marks every tool strict', async () => {
@@ -264,284 +269,32 @@ describe('strict state-specific Method tools', () => {
     ]));
   });
 
-  it('does not let generic assent authorize an arbitrary model-selected path from a three-path set', async () => {
-    const storage = new ReducerStorage(pendingPaths());
-    const loader = await createMethodModuleLoader();
-    const prepared = await refreshMethodState(storage, loader, 'explorer-1');
-    const tools = createMethodTools({
-      ...runtime(storage), loader, surface: 'agent-turn', prepared: { current: prepared },
-      currentMessage: 'yes',
-    } as never);
-
-    const result = await tools.select_purpose_path.execute?.({
-      setId: 'set-1', setRevision: 1, pathId: 'path-3', pathRevision: 1,
-      presentedInTurnId: 'paths-turn', sourceMessageId: 'current-message',
-    }, { toolCallId: 'arbitrary-model-target', messages: [] } as never);
-
-    expect(result).toMatchObject({ status: 'rejected', errorClass: 'ConfirmationAuthorizationError' });
-    expect(storage.persist).not.toHaveBeenCalled();
-  });
-
   it.each([
-    ['English exact ordinal', 'I choose Path 2.'],
-    ['English imperative ordinal', 'Choose Path 2 and help me design the first project.'],
-    ['English conversational ordinal', 'Go with the second one.'],
-    ['Spanish exact ordinal', 'Elijo el Camino 2.'],
-    ['English natural ordinal', 'The second one is the direction I want to pursue.'],
-    ['Spanish natural ordinal', 'Me quedo con la segunda opción.'],
-  ])('accepts an unambiguous %s path choice', async (_label, currentMessage) => {
-    const { result, storage } = await selectPendingPath(currentMessage);
+    ['English', 'That captures my North Star. Go ahead.'],
+    ['bare ordinal', '1'],
+    ['German', 'Genau das meine ich.'],
+    ['Portuguese', 'É exatamente isso.'],
+    ['Russian', 'Да, именно это.'],
+  ])('lets the main agent authorize an exact semantic call without a server language gate: %s', async (_label, currentMessage) => {
+    const { result, storage } = currentMessage === '1'
+      ? await selectPendingPath(currentMessage)
+      : await confirmPendingWhy(currentMessage);
 
-    expect(result).toMatchObject({ status: 'committed', authoritativeRevision: 4 });
-    expect(storage.map.pathSets.at(-1)?.paths.map((path) => [path.id, path.selection])).toEqual([
-      ['path-1', 'parked'], ['path-2', 'active'], ['path-3', 'parked'],
-    ]);
+    expect(result).toMatchObject({ status: 'committed' });
     expect(storage.persist).toHaveBeenCalledOnce();
   });
 
   it.each([
-    ['French', 'C’est exactement ce que je veux dire.'],
-    ['Japanese', 'それはまさに私の言いたいことです。'],
-  ])('lets the one-loop tool call interpret an exact %s Why confirmation', async (
-    _language,
-    currentMessage,
-  ) => {
-    const { result, storage } = await confirmPendingWhy(currentMessage);
-
-    expect(result).toMatchObject({ status: 'committed', authoritativeRevision: 2 });
-    expect(storage.map.foundation.whyRevisions.at(-1)?.status).toBe('confirmed');
-    expect(storage.persist).toHaveBeenCalledOnce();
-  });
-
-  it.each([
-    ['French', 'Je choisis la deuxième voie.'],
-    ['Japanese', '2番目の道を選びます。'],
-  ])('lets the one-loop tool call interpret an exact %s ordinal path selection', async (
-    _language,
-    currentMessage,
-  ) => {
-    const { result, storage } = await selectPendingPath(currentMessage);
-
-    expect(result).toMatchObject({ status: 'committed', authoritativeRevision: 4 });
-    expect(storage.map.pathSets.at(-1)?.paths.map((path) => [path.id, path.selection])).toEqual([
-      ['path-1', 'parked'], ['path-2', 'active'], ['path-3', 'parked'],
-    ]);
-    expect(storage.persist).toHaveBeenCalledOnce();
-  });
-
-  it.each([
-    ['French negation', 'Non, ne le confirme pas.'],
-    ['Japanese negation', 'いいえ、まだ確認しないでください。'],
-    ['French deferral', 'Cela me semble juste, mais attends avant de le confirmer.'],
-    ['Japanese deferral', 'その通りですが、確認するのは待ってください。'],
-  ])('fails closed on the deterministic %s veto', async (_label, currentMessage) => {
-    const { result, storage } = await confirmPendingWhy(currentMessage);
-
-    expect(result).toMatchObject({ status: 'rejected', errorClass: 'ConfirmationAuthorizationError' });
-    expect(storage.persist).not.toHaveBeenCalled();
-    expect(storage.map.revision).toBe(1);
-  });
-
-  it.each([
-    ['French question', 'Devrais-je choisir la deuxième voie ?'],
-    ['Japanese question', '2番目の道を選ぶべきですか？'],
-    ['French research/refinement', 'Recherche et affine la deuxième voie avant que je choisisse.'],
-    ['Japanese research/refinement', '選ぶ前に2番目の道を調べて改善してください。'],
-    ['French multiple targets', 'Je choisis la première et la deuxième voie.'],
-    ['Japanese multiple targets', '1番目と2番目の道を選びます。'],
-  ])('fails closed on the deterministic %s veto', async (_label, currentMessage) => {
-    const { result, storage } = await selectPendingPath(currentMessage);
-
-    expect(result).toMatchObject({ status: 'rejected', errorClass: 'ConfirmationAuthorizationError' });
-    expect(storage.persist).not.toHaveBeenCalled();
-    expect(storage.map.revision).toBe(3);
-  });
-
-  it.each([
-    ['exact pending choice', { pathId: 'path-3' }],
-    ['completed prior presentation', { presentedInTurnId: 'current-turn' }],
-    ['current-message provenance', { sourceMessageId: 'other-message' }],
-  ])('does not let one-loop interpretation bypass %s', async (_label, overrides) => {
-    const { result, storage } = await selectPendingPath('Je choisis la deuxième voie.', overrides);
+    ['wrong path member', { pathId: 'path-99' }],
+    ['same presentation turn', { presentedInTurnId: 'current-turn' }],
+    ['wrong current-message provenance', { sourceMessageId: 'other-message' }],
+  ])('keeps the deterministic %s guard after removing lexical authorization', async (_label, overrides) => {
+    const { result, storage } = await selectPendingPath('language is intentionally irrelevant here', overrides);
 
     expect(result).toMatchObject({ status: 'rejected' });
     expect(storage.persist).not.toHaveBeenCalled();
     expect(storage.map.revision).toBe(3);
   });
-
-  it.each([
-    ['English', 'That captures what I mean. Use it as my provisional foundation.'],
-    ['Spanish', 'Eso refleja lo que quiero decir. Dejémoslo como mi fundamento provisional.'],
-    ['English exact-right', 'That feels exactly right.'],
-  ])('accepts an unambiguous %s confirmation paraphrase for the sole pending Why', async (
-    _language,
-    currentMessage,
-  ) => {
-    const { result, storage } = await confirmPendingWhy(currentMessage);
-
-    expect(result).toMatchObject({ status: 'committed', authoritativeRevision: 2 });
-    expect(storage.map.foundation.whyRevisions.at(-1)?.status).toBe('confirmed');
-    expect(storage.persist).toHaveBeenCalledOnce();
-  });
-
-  it('accepts only the exact dynamic Why id and revision when the message names them', async () => {
-    const storage = new ReducerStorage(pendingWhy('prior-assistant-turn', 'why-dynamic-42'));
-    const loader = await createMethodModuleLoader();
-    const prepared = await refreshMethodState(storage, loader, 'explorer-1');
-    const tools = createMethodTools({
-      ...runtime(storage), loader, surface: 'agent-turn', prepared: { current: prepared },
-      currentMessage: 'Confirm why-dynamic-42 revision 1.',
-    });
-
-    const result = await tools.confirm_why.execute?.({
-      whyId: 'why-dynamic-42', whyRevision: 1,
-      presentedInTurnId: 'prior-assistant-turn', sourceMessageId: 'current-message',
-    }, { toolCallId: 'exact-dynamic-why', messages: [] } as never);
-
-    expect(result).toMatchObject({ status: 'committed', authoritativeRevision: 2 });
-    expect(storage.persist).toHaveBeenCalledOnce();
-  });
-
-  it.each([
-    ['different explicit id', 'Confirm why-dynamic-99 revision 1.'],
-    ['different explicit revision', 'Confirm why-dynamic-42 revision 2.'],
-  ])('rejects a %s even when the tool arguments name the pending Why', async (_label, currentMessage) => {
-    const storage = new ReducerStorage(pendingWhy('prior-assistant-turn', 'why-dynamic-42'));
-    const loader = await createMethodModuleLoader();
-    const prepared = await refreshMethodState(storage, loader, 'explorer-1');
-    const tools = createMethodTools({
-      ...runtime(storage), loader, surface: 'agent-turn', prepared: { current: prepared }, currentMessage,
-    });
-
-    const result = await tools.confirm_why.execute?.({
-      whyId: 'why-dynamic-42', whyRevision: 1,
-      presentedInTurnId: 'prior-assistant-turn', sourceMessageId: 'current-message',
-    }, { toolCallId: 'mismatched-dynamic-why', messages: [] } as never);
-
-    expect(result).toMatchObject({ status: 'rejected', errorClass: 'ConfirmationAuthorizationError' });
-    expect(storage.persist).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    ['English negation', "I don't choose Path 2 yet."],
-    ['Spanish negation', 'No elijo el Camino 2 todavía.'],
-    ['English question', 'Should I choose Path 2, or keep discussing it?'],
-    ['Spanish question', '¿Debería elegir el Camino 2 o seguir hablando?'],
-    ['English research request', 'Research Path 2 before I decide.'],
-    ['Spanish research request', 'Investiga el Camino 2 antes de que decida.'],
-    ['English refinement request', 'Revise Path 2 to focus more on community before I choose.'],
-    ['Spanish refinement request', 'Refina el Camino 2 para centrarnos más en la comunidad antes de elegir.'],
-    ['English explicit refusal', 'I do not want Path 2.'],
-    ['English explanation question', 'Can you explain Path 2?'],
-    ['Spanish explicit refusal', 'No quiero el Camino 2.'],
-    ['Spanish explanation question', '¿Puedes explicar el Camino 2?'],
-    ['English exclusion', 'I choose anything except Path 2.'],
-    ['English neither', 'I choose neither Path 2.'],
-    ['Spanish emphatic refusal', 'Jamás elijo el Camino 2.'],
-    ['English non-exact numeric target', 'I choose Path 20.'],
-    ['English discussion instead of choice', 'I choose to discuss Path 2.'],
-    ['Spanish delay instead of choice', 'Elijo esperar antes de seleccionar el Camino 2.'],
-    ['English conditional', 'Choose Path 2 if it can be entirely remote.'],
-  ])('rejects %s as authority for a consequential path choice', async (_label, currentMessage) => {
-    const { result, storage } = await selectPendingPath(currentMessage);
-
-    expect(result).toMatchObject({ status: 'rejected', errorClass: 'ConfirmationAuthorizationError' });
-    expect(storage.persist).not.toHaveBeenCalled();
-    expect(storage.map.revision).toBe(3);
-  });
-
-  it.each([
-    ['English negated assent', "Yes, don't confirm it yet; I want to refine it."],
-    ['Spanish negated assent', 'Sí, no lo confirmes todavía; quiero refinarlo.'],
-    ['English decision question', 'Confirm why-1 now, or should we research it first?'],
-    ['Spanish decision question', '¿Confirmamos why-1 ahora o lo investigamos antes?'],
-    ['English explicit prohibition', 'Do not confirm why-1.'],
-    ['Spanish explicit prohibition', 'No confirmes why-1.'],
-    ['English incidental agreement word', 'Right now I need more time.'],
-    ['Spanish incidental agreement word', 'Vale la pena esperar.'],
-    ['English neutral acknowledgement', 'Right.'],
-    ['Spanish neutral acknowledgement', 'Vale.'],
-    ['English request for more', 'Tell me more.'],
-    ['unrelated reflection', 'I have been thinking about my work this week.'],
-    ['unrelated greeting', 'Hello there.'],
-    ['unsupported-locale ambiguity', 'Да, именно это.'],
-    ['typo ambiguity', 'Tha feals exacly rite.'],
-    ['English smart-punctuation deferral', 'That feels exactly right — don’t confirm it yet.'],
-    ['English hold-off deferral', 'That feels exactly right, but hold off for now.'],
-    ['English wait deferral', 'That captures what I mean; wait before confirming.'],
-    ['Spanish wait deferral', 'Eso refleja lo que quiero decir, pero espera por ahora.'],
-    ['English quoted confirmation', 'I’m quoting “That feels exactly right.”'],
-  ])('rejects %s as authority for a pending Why', async (_label, currentMessage) => {
-    const { result, storage } = await confirmPendingWhy(currentMessage);
-
-    expect(result).toMatchObject({ status: 'rejected', errorClass: 'ConfirmationAuthorizationError' });
-    expect(storage.persist).not.toHaveBeenCalled();
-    expect(storage.map.revision).toBe(1);
-  });
-
-  it.each([
-    ['English smart-punctuation deferral', 'That feels exactly right — don’t confirm it yet.'],
-    ['English hold-off deferral', 'That feels exactly right, but hold off for now.'],
-    ['English wait deferral', 'That captures what I mean; wait before confirming.'],
-    ['Spanish wait deferral', 'Eso refleja lo que quiero decir, pero espera por ahora.'],
-    ['English quoted confirmation', 'I’m quoting “That feels exactly right.”'],
-  ])('does not let one-loop interpretation override %s', async (_label, currentMessage) => {
-    const { result, storage } = await confirmPendingWhy(currentMessage);
-
-    expect(result).toMatchObject({ status: 'rejected', errorClass: 'ConfirmationAuthorizationError' });
-    expect(storage.persist).not.toHaveBeenCalled();
-    expect(storage.map.revision).toBe(1);
-  });
-
-  it('fails closed when an agent confirmation tool has no current user message', async () => {
-    const storage = new ReducerStorage(pendingWhy());
-    const loader = await createMethodModuleLoader();
-    const prepared = await refreshMethodState(storage, loader, 'explorer-1');
-    const tools = createMethodTools({
-      ...runtime(storage), loader, surface: 'agent-turn', prepared: { current: prepared },
-    } as never);
-
-    const result = await tools.confirm_why.execute?.({
-      whyId: 'why-1', whyRevision: 1,
-      presentedInTurnId: 'prior-assistant-turn', sourceMessageId: 'current-message',
-    }, { toolCallId: 'missing-current-message', messages: [] } as never);
-
-    expect(result).toMatchObject({ status: 'rejected', errorClass: 'ConfirmationAuthorizationError' });
-    expect(storage.persist).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    ['English multiple targets', 'I am still choosing between Path 1 and Path 2.'],
-    ['Spanish multiple targets', 'Todavía estoy entre el Camino 1 y el Camino 2.'],
-    ['English generic target', 'Yes, whichever one you think is best.'],
-    ['Spanish generic target', 'Sí, el que tú prefieras.'],
-  ])('rejects %s instead of guessing a model-selected path', async (_label, currentMessage) => {
-    const { result, storage } = await selectPendingPath(currentMessage);
-
-    expect(result).toMatchObject({ status: 'rejected', errorClass: 'ConfirmationAuthorizationError' });
-    expect(storage.persist).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    ['duplicate sibling names', ['Path 2', 'Path 2', 'Path 3']],
-    ['name-to-ordinal alias collision', ['Path 2', 'Different direction', 'Path 3']],
-  ])('rejects a path phrase with %s', async (_label, pathNames) => {
-    const { result, storage } = await selectPendingPath('I choose Path 2.', {}, pathNames);
-
-    expect(result).toMatchObject({ status: 'rejected', errorClass: 'ConfirmationAuthorizationError' });
-    expect(storage.persist).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    ['English stale set', 'I choose Path 2.', { setRevision: 2 }, 'ConfirmationTargetMismatchError'],
-    ['Spanish stale set', 'Elijo el Camino 2.', { setRevision: 2 }, 'ConfirmationTargetMismatchError'],
-  ])('rejects an %s', async (_label, currentMessage, overrides, errorClass) => {
-    const { result, storage } = await selectPendingPath(currentMessage, overrides);
-
-    expect(result).toMatchObject({ status: 'rejected', errorClass });
-    expect(storage.persist).not.toHaveBeenCalled();
-  });
-
   it('maps a checkpoint only to its stage operations because native search belongs to the main loop', async () => {
     const storage = new ReducerStorage(pendingPaths());
     const loader = await createMethodModuleLoader();
@@ -741,14 +494,15 @@ describe('strict state-specific Method tools', () => {
     expect(retrieved.storage.persist).not.toHaveBeenCalled();
   });
 
-  it('accepts at most one canonical operation per provider Response and resets for continuation', async () => {
+  it.each(['agent-turn', 'workspace-action'] as const)(
+    'accepts at most one canonical operation per provider Response and resets for continuation on %s', async (surface) => {
     const storage = new ReducerStorage(createCareerMap('explorer-1'));
     const loader = await createMethodModuleLoader();
     const prepared = { current: await refreshMethodState(storage, loader, 'explorer-1') };
     const operationGuard = createMethodResponseOperationGuard();
     const onOperationStatus = vi.fn();
     const tools = createMethodTools({
-      ...runtime(storage), loader, surface: 'agent-turn', prepared, operationGuard, onOperationStatus,
+      ...runtime(storage, surface), loader, surface, prepared, operationGuard, onOperationStatus,
       currentMessage: 'Evidence evidence-first Evidence evidence-second Evidence evidence-third',
     });
     const execute = (id: string, toolCallId: string) => tools.append_foundation_evidence.execute?.({
@@ -896,93 +650,30 @@ describe('strict state-specific Method tools', () => {
     );
   });
 
-  it.each([
-    ['quoted request followed by a sentence-boundary denial', 'Please "suggest three Purpose Paths." But do not suggest them.'],
-    ['quoted request followed by a global authorization denial', 'My coach wrote “replace Path 2.” I do not authorize that change.'],
-    ['direct whole-message veto', "I don't want you to suggest three Purpose Paths."],
-  ])('vetoes a Suggested operation for %s', async (_label, currentMessage) => {
-    const storage = new ReducerStorage(confirmedWhy());
+  it('uses exact path-edit arguments while ignoring natural-language aliases and target mentions', async () => {
+    const storage = new ReducerStorage(pendingPaths());
     const loader = await createMethodModuleLoader();
     const tools = createMethodTools({
       ...runtime(storage), loader, surface: 'agent-turn',
       prepared: { current: await refreshMethodState(storage, loader, 'explorer-1') },
-      currentMessage,
+      currentMessage: 'Bitte ändere die mittlere Richtung.',
+      timing: { turnSequence: 4, occurredAt: at(4) },
     });
-    const path = (number: number) => ({
-      id: `veto-path-${number}`, revision: 1, name: `Veto Path ${number}`,
-      servesWhy: `Serve ${number}`, possibility: `Possibility ${number}`,
-      evidence: [`Evidence ${number}`], centralUnknown: `Unknown ${number}`,
-      projectPreview: `Project ${number}`, practicalFit: `Fit ${number}`,
-    });
-
-    const result = await tools.propose_purpose_paths.execute?.({
-      setId: 'veto-set', setRevision: 1, paths: [path(1), path(2), path(3)],
-    }, { toolCallId: `veto-${_label}`, messages: [] } as never);
-
-    expect(result).toMatchObject({ status: 'rejected', errorClass: 'SuggestedOperationAuthorizationError' });
-    expect(storage.persist).not.toHaveBeenCalled();
-  });
-
-  it('takes Suggested proposal and edit authority only from the exact current explorer message', async () => {
-    const loader = await createMethodModuleLoader();
-    const path = (number: number) => ({
-      id: `path-${number}`, revision: 1, name: `Path ${number}`,
-      servesWhy: `Serve ${number}`, possibility: `Possibility ${number}`,
-      evidence: [`Evidence ${number}`], centralUnknown: `Unknown ${number}`,
-      projectPreview: `Project ${number}`, practicalFit: `Fit ${number}`,
-    });
-    const proposalInput = {
-      setId: 'set-explicit', setRevision: 1, paths: [path(1), path(2), path(3)],
+    const replacement = {
+      id: 'path-4', revision: 1, name: 'Replacement Path',
+      servesWhy: 'Serve another way', possibility: 'A distinct possibility',
+      evidence: ['Evidence 4'], centralUnknown: 'Unknown 4',
+      projectPreview: 'Project 4', practicalFit: 'Fit 4',
     };
 
-    const unauthorizedStorage = new ReducerStorage(confirmedWhy());
-    const unauthorizedTools = createMethodTools({
-      ...runtime(unauthorizedStorage), loader, surface: 'agent-turn',
-      prepared: { current: await refreshMethodState(unauthorizedStorage, loader, 'explorer-1') },
-      currentMessage: 'Research the current landscape before I decide.',
-    });
-    const unauthorized = await unauthorizedTools.propose_purpose_paths.execute?.(
-      proposalInput,
-      { toolCallId: 'retrieved-only-proposal', messages: [] } as never,
-    );
-    expect(unauthorized).toMatchObject({
-      status: 'rejected', errorClass: 'SuggestedOperationAuthorizationError',
-    });
-    expect(unauthorizedStorage.persist).not.toHaveBeenCalled();
-
-    const wrongTargetStorage = new ReducerStorage(pendingPaths());
-    const wrongTargetTools = createMethodTools({
-      ...runtime(wrongTargetStorage), loader, surface: 'agent-turn',
-      prepared: { current: await refreshMethodState(wrongTargetStorage, loader, 'explorer-1') },
-      currentMessage: "Please replace Path 2; I don't want a networking-heavy path.",
-      timing: { turnSequence: 4, occurredAt: at(4) },
-    });
-    const wrongTarget = await wrongTargetTools.replace_purpose_path.execute?.({
-      sourceSetId: 'set-1', sourceSetRevision: 1, replacedPathId: 'path-1',
-      replacementSetId: 'set-wrong', replacementSetRevision: 1,
-      replacement: { ...path(1), id: 'path-wrong', name: 'Wrong replacement' },
-    }, { toolCallId: 'wrong-path-edit', messages: [] } as never);
-    expect(wrongTarget).toMatchObject({
-      status: 'rejected', errorClass: 'SuggestedOperationAuthorizationError',
-    });
-    expect(wrongTargetStorage.persist).not.toHaveBeenCalled();
-
-    const editStorage = new ReducerStorage(pendingPaths());
-    const editTools = createMethodTools({
-      ...runtime(editStorage), loader, surface: 'agent-turn',
-      prepared: { current: await refreshMethodState(editStorage, loader, 'explorer-1') },
-      currentMessage: 'Please replace Path 2.',
-      timing: { turnSequence: 4, occurredAt: at(4) },
-    });
-    const edited = await editTools.replace_purpose_path.execute?.({
+    const result = await tools.replace_purpose_path.execute?.({
       sourceSetId: 'set-1', sourceSetRevision: 1, replacedPathId: 'path-2',
-      replacementSetId: 'set-2', replacementSetRevision: 1,
-      replacement: { ...path(2), id: 'path-4', name: 'Replacement Path' },
-    }, { toolCallId: 'explicit-path-edit', messages: [] } as never);
-    expect(edited).toMatchObject({ status: 'committed', authoritativeRevision: 4 });
-    expect(editStorage.persist).toHaveBeenCalledOnce();
-  });
+      replacementSetId: 'set-2', replacementSetRevision: 1, replacement,
+    }, { toolCallId: 'semantic-path-edit', messages: [] } as never);
 
+    expect(result).toMatchObject({ status: 'committed', authoritativeRevision: 4 });
+    expect(storage.persist).toHaveBeenCalledOnce();
+  });
   it('combines both requested plural numeric aliases while allowing the separately named preserved sibling', async () => {
     const storage = new ReducerStorage(pendingPaths());
     const loader = await createMethodModuleLoader();
@@ -1111,30 +802,51 @@ describe('strict state-specific Method tools', () => {
     expect(project).toMatchObject({ status: 'committed', authoritativeRevision: 5 });
   });
 
-  it('returns the same reducer envelope for an agent confirmation and a workspace confirmation', async () => {
+  it('limits direct workspace operations to the two exact Purpose Path Start cases', async () => {
     const loader = await createMethodModuleLoader();
-    const agentStorage = new ReducerStorage(pendingWhy());
-    const workspaceStorage = new ReducerStorage(pendingWhy());
-    const agentPrepared = await refreshMethodState(agentStorage, loader, 'explorer-1');
-    const agentTools = createMethodTools({
-      ...runtime(agentStorage), loader, surface: 'agent-turn', prepared: { current: agentPrepared },
-      currentMessage: 'That feels exactly right.',
-    });
+    const storage = new ReducerStorage(pendingPaths());
     const exact = {
-      whyId: 'why-1', whyRevision: 1, presentedInTurnId: 'prior-assistant-turn', sourceMessageId: 'current-message',
+      setId: 'set-1', setRevision: 1, pathId: 'path-2', pathRevision: 1,
+      presentedInTurnId: 'paths-turn', sourceMessageId: 'current-message',
     };
-    const agentResult = await agentTools.confirm_why.execute?.(exact, { toolCallId: 'parity-operation', messages: [] } as never);
-    const workspaceResult = await executeWorkspaceTool({
-      runtime: { ...runtime(workspaceStorage, 'workspace-action'), loader },
-      expectedRevision: workspaceStorage.map.revision,
-      operationType: 'confirm-why', operationId: 'parity-operation', rawInput: exact,
+    const result = await executeWorkspaceTool({
+      runtime: { ...runtime(storage, 'workspace-action'), loader, timing: { turnSequence: 4, occurredAt: at(4) } },
+      expectedRevision: storage.map.revision,
+      operationType: 'select-purpose-path', operationId: 'path-start', rawInput: exact,
     });
 
-    expect(agentResult).toEqual(workspaceResult);
-    expect(agentStorage.map.foundation.whyRevisions.at(-1)?.status).toBe('confirmed');
-    expect(workspaceStorage.map.foundation.whyRevisions.at(-1)?.status).toBe('confirmed');
+    expect(result).toMatchObject({ status: 'committed', operation: 'select-purpose-path' });
+    expect(workspaceOperationRequestSchema.safeParse({
+      operationId: 'why-direct', clientMessageId: 'current-message', expectedRevision: 1,
+      operation: { type: 'confirm-why', input: {} },
+    }).success).toBe(false);
   });
 
+  it.each([
+    ['missing or cross-user', undefined],
+    ['failed', 'failed'],
+    ['cancelled', 'cancelled'],
+    ['nonterminal', 'pending'],
+  ] as const)('rejects a direct Start whose presentation turn is %s before dispatch', async (_label, status) => {
+    const storage = new ReducerStorage(pendingPaths());
+    storage.listAgentTurns = vi.fn(async () => (status ? [{
+      turnId: 'paths-turn', origin: 'agent-turn', status,
+      terminalResult: { kind: status },
+    }] : []) as never);
+    const loader = await createMethodModuleLoader();
+    const result = await executeWorkspaceTool({
+      runtime: { ...runtime(storage, 'workspace-action'), loader, timing: { turnSequence: 4, occurredAt: at(4) } },
+      expectedRevision: storage.map.revision,
+      operationType: 'select-purpose-path', operationId: `blocked-${_label}`,
+      rawInput: {
+        setId: 'set-1', setRevision: 1, pathId: 'path-2', pathRevision: 1,
+        presentedInTurnId: 'paths-turn', sourceMessageId: 'current-message',
+      },
+    });
+
+    expect(result).toMatchObject({ status: 'rejected', errorClass: 'confirmation-not-auditable' });
+    expect(storage.persist).not.toHaveBeenCalled();
+  });
   it('exposes U7 first-project acceptance only to the conversation with exact current-message and target authority', async () => {
     const loader = await createMethodModuleLoader();
     const agentStorage = new ReducerStorage(pendingProject());
@@ -1171,7 +883,7 @@ describe('strict state-specific Method tools', () => {
     }).success).toBe(false);
   });
 
-  it('accepts the exact persisted localized phrase without using a language allowlist', async () => {
+  it('accepts semantic localized intent without using an exact-phrase allowlist', async () => {
     const localizedPhrase = 'このパス・プロジェクトを明確に受け入れます。';
     const map = pendingProject();
     const project = map.projects.at(-1);
@@ -1187,7 +899,7 @@ describe('strict state-specific Method tools', () => {
     const tools = createMethodTools({
       ...runtime(storage), loader, surface: 'agent-turn',
       prepared: { current: await refreshMethodState(storage, loader, 'explorer-1') },
-      currentMessage: localizedPhrase,
+      currentMessage: 'このプロジェクトで進めたいので、受け入れて始めます。',
       timing: { turnSequence: 7, occurredAt: at(7) },
     });
 
@@ -1200,60 +912,7 @@ describe('strict state-specific Method tools', () => {
     expect(storage.map.projects.at(-1)?.agreementStatus).toBe('accepted');
   });
 
-  it.each([
-    ['generic assent', 'yes'],
-    ['question', 'Should I accept this Path Project?'],
-    ['conditional', 'I accept this Path Project if the research supports it.'],
-    ['negative', 'I do not accept this Path Project.'],
-  ])('rejects first-project acceptance from %s', async (_label, currentMessage) => {
-    const storage = new ReducerStorage(pendingProject());
-    const loader = await createMethodModuleLoader();
-    const prepared = await refreshMethodState(storage, loader, 'explorer-1');
-    const tools = createMethodTools({
-      ...runtime(storage), loader, surface: 'agent-turn', prepared: { current: prepared },
-      currentMessage, timing: { turnSequence: 7, occurredAt: at(7) },
-    });
-
-    const result = await tools.accept_first_project.execute?.({
-      projectId: 'project-1', projectRevision: 1,
-      presentedInTurnId: 'project-framing-turn', sourceMessageId: 'current-message',
-    }, { toolCallId: `rejected-project-acceptance-${_label}`, messages: [] } as never);
-
-    expect(result).toMatchObject({ status: 'rejected', errorClass: 'ConfirmationAuthorizationError' });
-    expect(storage.map.projects.at(-1)?.agreementStatus).toBe('suggested');
-    expect(storage.persist).not.toHaveBeenCalled();
-  });
-
   it('durably presents the R22 framing once before acceptance becomes available', async () => {
-    const blockedStorage = new ReducerStorage(pendingProject(false));
-    const blockedLoader = await createMethodModuleLoader();
-    const blockedTools = createMethodTools({
-      ...runtime(blockedStorage), loader: blockedLoader, surface: 'agent-turn',
-      prepared: { current: await refreshMethodState(blockedStorage, blockedLoader, 'explorer-1') },
-      currentMessage: 'Please "present the required framing." But do not present it.',
-      timing: { turnSequence: 6, occurredAt: at(6) },
-    });
-    const blocked = await blockedTools.present_first_project_framing.execute?.({
-      projectId: 'project-1', projectRevision: 1, locale: 'en',
-      framingText: R22_CANONICAL_ENGLISH, acceptancePhrase, acceptanceQuestion,
-    }, { toolCallId: 'blocked-present-framing', messages: [] } as never);
-    expect(blocked).toMatchObject({ status: 'rejected', errorClass: 'ConfirmationAuthorizationError' });
-    expect(blockedStorage.persist).not.toHaveBeenCalled();
-
-    const globallyBlockedStorage = new ReducerStorage(pendingProject(false));
-    const globallyBlockedTools = createMethodTools({
-      ...runtime(globallyBlockedStorage), loader: blockedLoader, surface: 'agent-turn',
-      prepared: { current: await refreshMethodState(globallyBlockedStorage, blockedLoader, 'explorer-1') },
-      currentMessage: 'My coach wrote “present the required framing.” I do not authorize that presentation.',
-      timing: { turnSequence: 6, occurredAt: at(6) },
-    });
-    const globallyBlocked = await globallyBlockedTools.present_first_project_framing.execute?.({
-      projectId: 'project-1', projectRevision: 1, locale: 'en',
-      framingText: R22_CANONICAL_ENGLISH, acceptancePhrase, acceptanceQuestion,
-    }, { toolCallId: 'globally-blocked-present-framing', messages: [] } as never);
-    expect(globallyBlocked).toMatchObject({ status: 'rejected', errorClass: 'ConfirmationAuthorizationError' });
-    expect(globallyBlockedStorage.persist).not.toHaveBeenCalled();
-
     const storage = new ReducerStorage(pendingProject(false));
     const loader = await createMethodModuleLoader();
     const prepared = await refreshMethodState(storage, loader, 'explorer-1');

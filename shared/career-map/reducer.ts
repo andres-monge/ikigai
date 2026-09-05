@@ -30,9 +30,13 @@ type RejectionCode =
   | 'invariant-violation';
 
 export type ApplyCareerMapResult =
-  | { status: 'committed'; map: CareerMap; receipt: CareerMap['operationHistory'][number] }
-  | { status: 'replayed'; map: CareerMap; receipt: CareerMap['operationHistory'][number] }
+  | { status: 'committed'; map: CareerMap; receipt: CareerMap['operationHistory'][number]; effects?: CareerMapOperationEffects }
+  | { status: 'replayed'; map: CareerMap; receipt: CareerMap['operationHistory'][number]; effects?: CareerMapOperationEffects }
   | { status: 'rejected'; map: CareerMap; error: { code: RejectionCode; message: string; details?: unknown } };
+
+export interface CareerMapOperationEffects {
+  invalidatedArtifactClasses: InvalidationTargetKind[];
+}
 
 class DomainError extends Error {
   constructor(readonly code: RejectionCode, message: string) {
@@ -204,7 +208,14 @@ function invalidateFromPath(map: CareerMap, pathId: string, pathRevision: number
   if (commitmentDepends) invalidateCommitmentClosure(map, 'purpose-path', pathId, pathRevision, true);
 }
 
-function invalidateFromWhy(map: CareerMap, oldWhyId: string, oldWhyRevision: number, newWhyId: string, newWhyRevision: number): void {
+function invalidateFromWhy(
+  map: CareerMap,
+  oldWhyId: string,
+  oldWhyRevision: number,
+  newWhyId: string,
+  newWhyRevision: number,
+): { invalidatedRecords: CareerMap['invalidations']; invalidatedArtifactClasses: InvalidationTargetKind[] } {
+  const firstInvalidationIndex = map.invalidations.length;
   const impactedSets = map.pathSets.filter((set) => set.basisWhy.id === oldWhyId && set.basisWhy.revision === oldWhyRevision);
   for (const set of impactedSets) addInvalidation(map, 'why', newWhyId, newWhyRevision, 'path-set', set.id, set.revision);
   const impactedPaths = impactedSets.flatMap((set) => set.paths);
@@ -226,6 +237,13 @@ function invalidateFromWhy(map: CareerMap, oldWhyId: string, oldWhyRevision: num
     }
   }
   invalidateCommitmentClosure(map, 'why', newWhyId, newWhyRevision, true);
+  const invalidatedRecords = map.invalidations.slice(firstInvalidationIndex);
+  return {
+    invalidatedRecords,
+    invalidatedArtifactClasses: invalidationTargetOrder.filter((targetKind) => (
+      invalidatedRecords.some((record) => record.targetKind === targetKind)
+    )),
+  };
 }
 
 function invalidateFromProof(map: CareerMap, oldProofId: string, oldProofRevision: number): void {
@@ -247,6 +265,13 @@ function invalidateFromPeerExposure(map: CareerMap, oldExposureId: string, newEx
 function ensureNoPendingReview(map: CareerMap, type: CareerMapOperationType): void {
   if (type === 'resolve-basis-review') return;
   assert(!map.invalidations.some((item) => item.status === 'pending'), 'Resolve the earliest invalidated basis before downstream changes.');
+  const pendingWhyRevision = map.foundation.whyRevisions.some((why) => (
+    why.status === 'suggested' && why.supersedesWhyId !== undefined
+  ));
+  assert(
+    !pendingWhyRevision || type === 'revise-why' || type === 'confirm-why',
+    'Confirm or revise the pending Why revision before downstream changes.',
+  );
 }
 
 function nextProjectNumber(map: CareerMap): number {
@@ -259,7 +284,7 @@ function nextProjectNumber(map: CareerMap): number {
   return highestAcceptedNumber + 1;
 }
 
-function applyDomainOperation(map: CareerMap, operation: CareerMapOperation): void {
+function applyDomainOperation(map: CareerMap, operation: CareerMapOperation): CareerMapOperationEffects | undefined {
   ensureNoPendingReview(map, operation.type);
 
   switch (operation.type) {
@@ -281,9 +306,19 @@ function applyDomainOperation(map: CareerMap, operation: CareerMapOperation): vo
     }
     case 'propose-why':
     case 'revise-why': {
+      let effects: CareerMapOperationEffects | undefined;
       if (operation.type === 'revise-why') {
         const confirmed = currentWhy(map);
         assert(confirmed?.id === operation.payload.supersedesWhyId, 'Why revision must target the current confirmed Why.', 'stale-target');
+        effects = {
+          invalidatedArtifactClasses: invalidateFromWhy(
+            cloneMap(map),
+            confirmed.id,
+            confirmed.revision,
+            operation.payload.why.id,
+            operation.payload.why.revision,
+          ).invalidatedArtifactClasses,
+        };
       } else {
         assert(!currentWhy(map), 'Use revise-why after a Why has been confirmed.');
       }
@@ -294,7 +329,7 @@ function applyDomainOperation(map: CareerMap, operation: CareerMapOperation): vo
         presentation: operation.payload.presentation,
         ...(operation.type === 'revise-why' ? { supersedesWhyId: operation.payload.supersedesWhyId } : {}),
       });
-      return;
+      return effects;
     }
     case 'confirm-why': {
       const target = map.foundation.whyRevisions.find((why) => sameRevision(why, operation.payload.whyId, operation.payload.whyRevision));
@@ -937,9 +972,27 @@ export function applyCareerMapOperation(mapInput: CareerMap, operationInput: unk
   });
   const existing = map.operationHistory.find((receipt) => receipt.sourceId === operation.sourceId);
   if (existing) {
-    return existing.payloadFingerprint === payloadFingerprint
-      ? { status: 'replayed', map, receipt: existing }
-      : reject(map, 'source-id-reused', 'Operation source ID was reused with a different payload.');
+    if (existing.payloadFingerprint !== payloadFingerprint) {
+      return reject(map, 'source-id-reused', 'Operation source ID was reused with a different payload.');
+    }
+    if (operation.type === 'revise-why') {
+      const confirmed = currentWhy(map);
+      if (confirmed?.id === operation.payload.supersedesWhyId) {
+        return {
+          status: 'replayed', map, receipt: existing,
+          effects: {
+            invalidatedArtifactClasses: invalidateFromWhy(
+              cloneMap(map),
+              confirmed.id,
+              confirmed.revision,
+              operation.payload.why.id,
+              operation.payload.why.revision,
+            ).invalidatedArtifactClasses,
+          },
+        };
+      }
+    }
+    return { status: 'replayed', map, receipt: existing };
   }
   if (operation.expectedRevision !== map.revision) {
     return reject(map, 'revision-conflict', `Expected map revision ${operation.expectedRevision}, found ${map.revision}.`);
@@ -947,7 +1000,7 @@ export function applyCareerMapOperation(mapInput: CareerMap, operationInput: unk
 
   const candidate = cloneMap(map);
   try {
-    applyDomainOperation(candidate, operation);
+    const effects = applyDomainOperation(candidate, operation);
     candidate.revision = map.revision + 1;
     const receipt = {
       sourceId: operation.sourceId,
@@ -963,7 +1016,7 @@ export function applyCareerMapOperation(mapInput: CareerMap, operationInput: unk
     if (!validated.success) {
       return reject(map, 'invariant-violation', 'Operation would create an invalid career map.', validated.error.flatten());
     }
-    return { status: 'committed', map: validated.data, receipt };
+    return { status: 'committed', map: validated.data, receipt, ...(effects ? { effects } : {}) };
   } catch (error) {
     if (error instanceof DomainError) return reject(map, error.code, error.message);
     return reject(map, 'invariant-violation', 'Operation failed without changing the career map.', error instanceof Error ? error.message : error);

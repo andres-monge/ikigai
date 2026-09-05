@@ -269,12 +269,13 @@ describe('compileCareerMapBriefing', () => {
     expect(briefing.markdown).not.toContain('operationHistory');
   });
 
-  it('briefs the exact suggested Why while retaining its confirmed predecessor', () => {
+  it('briefs the exact suggested North Star while retaining its confirmed predecessor', () => {
     let map = withConfirmedWhy();
     map = commit(map, 'open-foundation-revision-focus', {
       reason: 'The people served are now clearer.',
       action: action(3),
     });
+    map = commit(map, 'close-focus', { action: action(4) });
     map = commit(map, 'revise-why', {
       why: {
         id: 'briefing-why-revision',
@@ -284,23 +285,23 @@ describe('compileCareerMapBriefing', () => {
         pointOfView: 'Evidence becomes useful when it changes the next action.',
       },
       supersedesWhyId: 'briefing-why',
-      presentation: presentation(4),
+      presentation: presentation(5),
     });
-    map = commit(map, 'close-focus', { action: action(5) });
-
     const briefing = compileCareerMapBriefing(map);
     expect(briefing.pendingDecision).toMatchObject({
       kind: 'why-confirmation',
       targetId: 'briefing-why-revision',
       targetRevision: 1,
     });
-    expect(briefing.markdown).toContain('Confirmed Why I Work');
+    expect(briefing.markdown).toContain('Confirmed Your North Star');
     expect(briefing.markdown).toContain('Make complex choices more humane.');
-    expect(briefing.markdown).toContain('Suggested Why I Work — pending confirmation');
+    expect(briefing.markdown).toContain('Suggested Your North Star — pending confirmation');
     expect(briefing.markdown).toContain('briefing-why-revision@1; suggested');
     expect(briefing.markdown).toContain('Help people turn complex choices into humane action.');
     expect(briefing.markdown).toContain('Serves: People stalled by consequential choices');
     expect(briefing.markdown).toContain('Point of view: Evidence becomes useful when it changes the next action.');
+    expect(briefing.markdown).toContain('exact revise-why result classes');
+    expect(briefing.markdown).toContain('after a failed presentation, use revise-why again');
   });
 
   it('keeps only the relevant confirmed basis, active work, and decision', () => {
@@ -340,6 +341,7 @@ describe('compileCareerMapBriefing', () => {
     });
     expect(briefing.markdown).toContain('First-project framing: delivered once in briefing-assistant-6; locale en. Do not repeat it.');
     expect(briefing.markdown).toContain(JSON.stringify(acceptancePhrase));
+    expect(briefing.markdown).toContain('exact text matching is not required');
     expect(deriveMethodCheckpoint(map).availableOperations).toEqual([
       'replace-project-proposal', 'accept-first-project',
     ]);
@@ -380,9 +382,9 @@ describe('compileCareerMapBriefing', () => {
     const briefing = compileCareerMapBriefing(map);
     expect(briefing.markdown).toContain('Repair the earliest stale basis');
     expect(briefing.markdown).toContain('Help people act on complex choices.');
-    expect(briefing.markdown).toContain('Direct Why basis: briefing-why@1 — Make complex choices more humane.');
-    expect(briefing.markdown.indexOf('Direct Why basis: briefing-why@1'))
-      .toBeLessThan(briefing.markdown.indexOf('## Confirmed Why I Work'));
+    expect(briefing.markdown).toContain('Direct North Star basis: briefing-why@1 — Make complex choices more humane.');
+    expect(briefing.markdown.indexOf('Direct North Star basis: briefing-why@1'))
+      .toBeLessThan(briefing.markdown.indexOf('## Confirmed Your North Star'));
     expect(briefing.markdown).toContain('Canonical state below outranks conflicting or stale transcript text.');
   });
 

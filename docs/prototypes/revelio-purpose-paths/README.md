@@ -21,6 +21,12 @@ python3 -m http.server 8000 --directory docs/prototypes/revelio-purpose-paths
 `index.html` is the exploration surface. `selected-single-view.html` is the outcome — the
 presentation the founder selected, and the thing connected U6 implements.
 
+> **2026-09-05 connected-product amendment:** the selected file remains the visual authority for
+> numbering, colours, borders, band order, subgrid alignment, and equal weight. In the product,
+> Chat alone may add one `Start this path` action to each currently eligible card; Your Map and
+> historical cards are inspection-only. Rewrite, replace, combine, and questions now happen in
+> conversation, so the prototype's other buttons document the earlier interaction exploration.
+
 ## Files
 
 | File | What it is |
@@ -42,7 +48,7 @@ palette from the selected view; that direction was explored and rejected (see be
 
 Every presentation shows the same three paths with the same content, so what is being judged is
 the mechanism. Each path carries the seven elements Method R14 requires: a name, how it serves
-the confirmed Why, what could become possible, evidence it may fit, the central unknown, a first
+the confirmed North Star, what could become possible, evidence it may fit, the central unknown, a first
 project, and a researched view of how it would fit this person's life.
 
 ## Fixture explorer
@@ -73,12 +79,12 @@ product's existing design language. This is what connected U6 implements.
 
 ### Hierarchy
 
-1. **The confirmed Why sits above the three paths**, on the same white as the path bands, titled
-   *Why You Work*. It is context for the comparison, not a fourth card competing with it.
+1. **The confirmed North Star sits above the three paths**, on the same white as the path bands,
+   titled *Your North Star*. It is context for the comparison, not a fourth card competing with it.
 2. **Three equal cards side by side**, each numbered `Path 01 / 02 / 03` and given its own colour.
    Numbering and colour are identification, not ranking — door one, door two, door three.
 3. **Within a card, seven bands in a fixed order**, identical across all three paths: name and how
-   it serves the Why (in the coloured header), what could become possible, evidence it may fit,
+   it serves the North Star (in the coloured header), what could become possible, evidence it may fit,
    the central unknown, the first project, how it could fit your life, then the actions.
 4. **Two of those seven bands are marked**, and marked identically: the central unknown (cream)
    and the first project (the path's own colour at 18%). Both carry 2px rules on both edges, flush
@@ -99,9 +105,9 @@ These are structural, not a matter of discipline:
   path needed white text where the others had black, which would have been an asymmetry.
 - **No score, badge, highlight, preselection, or recommended state.** Nothing is chosen until the
   explorer starts a path.
-- **Identical action sets.** Every card carries Start this path / Rewrite / Replace, styled the
-  same, in the same order. The primary is filled with the path's own colour so no card's primary
-  is louder than another's.
+- **Identical optional action placement.** Current eligible Chat cards each carry one `Start this
+  path` action in the seventh band, styled with that path's colour. Every read-only placement keeps
+  the same empty seventh band so alignment and visual weight do not change.
 - **Entrance animation is a staggered fade-up across the three cards** (60/180/300 ms), suppressed
   under `prefers-reduced-motion`. Sequence here is reading order, not preference order.
 
@@ -115,11 +121,12 @@ These are structural, not a matter of discipline:
 
 ### Interaction language
 
-- Buttons are verb-led and name what happens: *Start this path*, *Rewrite*, *Replace*, *Combine
-  two paths*, *Ask about these paths*.
+- The only connected card button is verb-led and exact: *Start this path*. Rewrite, replace,
+  combine, questions, and every other decision stay in Chat conversation.
 - Square corners, 2px black borders, hard offset shadow, press-down active state
   (`translate(2px, 2px)`, shadow to zero). Minimum 44px touch target.
-- Rewriting or replacing a path changes only that path, and confirms or activates nothing (R16).
+- Starting uses the exact authenticated current presentation. Discussion or revision in Chat
+  confirms or activates nothing until the explorer explicitly chooses.
 
 ### Design language
 

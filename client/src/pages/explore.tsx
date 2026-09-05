@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ArrowUp, Loader2, Mic, Square } from 'lucide-react';
 import {
   conversationHistoryPageSchema,
@@ -6,24 +6,51 @@ import {
   methodWorkspaceResponseSchema,
   type OperationStatusData,
 } from '@shared/streaming-schemas';
-import type { CareerMap } from '@shared/career-map';
+import { deriveMethodCheckpoint, type CareerMap, type CareerMapOperationType } from '@shared/career-map';
 import { useSpeechToText } from '@/hooks/use-speech-to-text';
 import {
   consumeAgentStreamLine,
-  failUnresolvedOperationAttempts,
-  reduceOperationAttempts,
-  terminalStatusForEnvelope,
   type AgentStreamState,
   type NormalizedHistoryMessage,
-  type OperationAttempts,
 } from '@/components/explore/explore-state';
 import { SafeMessage } from '@/components/explore/safe-message';
-import { MethodMap, type DeterministicOperationRequest } from '@/components/explore/method-map';
-import { OperationStatusList } from '@/components/explore/operation-status';
+import { MethodMap } from '@/components/explore/method-map';
+import { PurposePathCard } from '@/components/explore/purpose-path-card';
 
 type LoadState = 'loading' | 'empty' | 'ready' | 'error';
 type WorkspaceLoadState = LoadState | 'repair-required';
 type Panel = 'chat' | 'map';
+type DirectOperationType = 'select-purpose-path' | 'confirm-purpose-path-revision';
+
+interface DeterministicOperationRequest {
+  type: DirectOperationType;
+  input: Record<string, unknown>;
+}
+
+interface PendingAttempt {
+  operationId: string;
+  turnId: string;
+  messageId: string;
+  operation: CareerMapOperationType;
+  startedAt: number;
+  terminal?: OperationStatusData['status'];
+  cancelled?: boolean;
+  directOperation?: DeterministicOperationRequest;
+}
+
+interface PersistenceError {
+  kind: 'failed' | 'conflict' | 'reply-failed' | 'unknown';
+  message: string;
+  action: 'retry' | 'refresh' | 'continue';
+  retryOperation?: DeterministicOperationRequest;
+}
+
+const persistenceErrorPriority: Record<PersistenceError['kind'], number> = {
+  failed: 1,
+  conflict: 2,
+  unknown: 3,
+  'reply-failed': 4,
+};
 
 interface ExploreProps {
   userEmail: string;
@@ -47,6 +74,24 @@ function dedupeMessages(messages: readonly NormalizedHistoryMessage[]): Normaliz
   return order.map((id) => latest.get(id)!);
 }
 
+export function attachPurposePathSets(
+  messages: readonly NormalizedHistoryMessage[],
+  pathSets: readonly CareerMap['pathSets'][number][],
+): Map<string, CareerMap['pathSets'][number][]> {
+  const attached = new Map<string, CareerMap['pathSets'][number][]>();
+  const seen = new Set<string>();
+  for (const message of messages) {
+    if (message.role !== 'assistant' || !message.isFinalAssistantItem || !message.turn) continue;
+    for (const set of pathSets) {
+      const key = `${set.id}@${set.revision}`;
+      if (seen.has(key) || set.presentation.assistantTurnId !== message.turn.turnId) continue;
+      seen.add(key);
+      attached.set(message.id, [...(attached.get(message.id) ?? []), set]);
+    }
+  }
+  return attached;
+}
+
 function prefersReducedMotion(): boolean {
   return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
@@ -68,7 +113,11 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
   const [draft, setDraft] = useState('');
   const [submittedDraft, setSubmittedDraft] = useState<string | null>(null);
   const [streamedText, setStreamedText] = useState('');
-  const [attempts, setAttempts] = useState<OperationAttempts>({});
+  const [unresolvedOperationCount, setUnresolvedOperationCount] = useState(0);
+  const [savingVisible, setSavingVisible] = useState(false);
+  const [persistenceError, setPersistenceErrorState] = useState<PersistenceError | null>(null);
+  const [unseenChatError, setUnseenChatError] = useState(false);
+  const [terminalValidated, setTerminalValidated] = useState(false);
   const [turnBusy, setTurnBusy] = useState(false);
   const [olderBusy, setOlderBusy] = useState(false);
   const [turnNotice, setTurnNotice] = useState<string | null>(null);
@@ -87,10 +136,47 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
   const pinnedToBottomRef = useRef(true);
   const settledTranscriptRef = useRef(false);
   const renderedMessageCountRef = useRef(0);
-  const mapHeadingRef = useRef<HTMLHeadingElement | null>(null);
   const tabRefs = useRef<Record<Panel, HTMLButtonElement | null>>({ chat: null, map: null });
-  const streamStateRef = useRef<AgentStreamState>({ text: '', citations: [], attempts: {}, providerFailed: false });
+  const streamStateRef = useRef<AgentStreamState>({ text: '', citations: [], operationEvents: [], providerFailed: false });
+  const processedOperationEventsRef = useRef(0);
+  const pendingAttemptsRef = useRef(new Map<string, PendingAttempt>());
+  const savingTimersRef = useRef(new Map<string, number>());
+  const matureSavingAttemptsRef = useRef(new Set<string>());
+  const activePanelRef = useRef<Panel>('chat');
   const bootstrapPending = historyState === 'loading' || workspaceState === 'loading';
+
+  const setPersistenceError = useCallback((error: PersistenceError | null) => {
+    setPersistenceErrorState(error);
+    if (error && activePanelRef.current === 'map') setUnseenChatError(true);
+  }, []);
+
+  const syncUnresolvedState = useCallback(() => {
+    setUnresolvedOperationCount(pendingAttemptsRef.current.size);
+  }, []);
+
+  const startAttempt = useCallback((attempt: PendingAttempt) => {
+    if (pendingAttemptsRef.current.has(attempt.operationId)) return;
+    pendingAttemptsRef.current.set(attempt.operationId, attempt);
+    const timer = window.setTimeout(() => {
+      savingTimersRef.current.delete(attempt.operationId);
+      if (pendingAttemptsRef.current.has(attempt.operationId)) {
+        matureSavingAttemptsRef.current.add(attempt.operationId);
+        setSavingVisible(true);
+      }
+    }, 500);
+    savingTimersRef.current.set(attempt.operationId, timer);
+    syncUnresolvedState();
+  }, [syncUnresolvedState]);
+
+  const finishAttempt = useCallback((operationId: string) => {
+    pendingAttemptsRef.current.delete(operationId);
+    const timer = savingTimersRef.current.get(operationId);
+    if (timer !== undefined) window.clearTimeout(timer);
+    savingTimersRef.current.delete(operationId);
+    matureSavingAttemptsRef.current.delete(operationId);
+    setSavingVisible(matureSavingAttemptsRef.current.size > 0);
+    syncUnresolvedState();
+  }, [syncUnresolvedState]);
 
   const scheduleFocus = useCallback((target: () => HTMLElement | null) => {
     const frame = requestAnimationFrame(() => {
@@ -137,14 +223,14 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
     return parsed.data;
   }, []);
 
-  const refreshNewest = useCallback(async (focusMap = false) => {
+  const refreshNewest = useCallback(async () => {
     const generation = ++refreshGenerationRef.current;
     const [historyResult, workspaceResult] = await Promise.allSettled([
       withReadTimeout((signal) => loadHistory(undefined, signal)),
       withReadTimeout((signal) => loadWorkspace(signal)),
     ]);
     if (!mountedRef.current || generation !== refreshGenerationRef.current) {
-      return { historyLoaded: false, workspaceLoaded: false };
+      return { history: undefined, workspace: undefined };
     }
     if (historyResult.status === 'fulfilled') {
       setMessages((current) => dedupeMessages([
@@ -172,23 +258,21 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
     } else {
       setWorkspaceState('error');
     }
-    if (
-      focusMap
-      && workspaceResult.status === 'fulfilled'
-      && document.activeElement !== draftRef.current
-      && !draftValueRef.current.trim()
-    ) {
-      scheduleFocus(() => mapHeadingRef.current);
-    }
     return {
-      historyLoaded: historyResult.status === 'fulfilled',
-      workspaceLoaded: workspaceResult.status === 'fulfilled',
+      history: historyResult.status === 'fulfilled' ? historyResult.value : undefined,
+      workspace: workspaceResult.status === 'fulfilled' ? workspaceResult.value : undefined,
     };
-  }, [loadHistory, loadWorkspace, scheduleFocus, withReadTimeout]);
+  }, [loadHistory, loadWorkspace, withReadTimeout]);
+
+  const refreshNewestAndValidate = useCallback(async () => {
+    const snapshot = await refreshNewest();
+    if (mountedRef.current && snapshot.history && snapshot.workspace) setTerminalValidated(true);
+    return snapshot;
+  }, [refreshNewest]);
 
   useEffect(() => {
     mountedRef.current = true;
-    void refreshNewest();
+    void refreshNewestAndValidate();
     return () => {
       mountedRef.current = false;
       refreshGenerationRef.current += 1;
@@ -196,8 +280,16 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
       for (const controller of readControllersRef.current) controller.abort();
       for (const frame of focusFramesRef.current) cancelAnimationFrame(frame);
       focusFramesRef.current.clear();
+      for (const timer of savingTimersRef.current.values()) window.clearTimeout(timer);
+      savingTimersRef.current.clear();
+      matureSavingAttemptsRef.current.clear();
     };
-  }, [refreshNewest]);
+  }, [refreshNewestAndValidate]);
+
+  useEffect(() => {
+    activePanelRef.current = activePanel;
+    if (activePanel === 'chat') setUnseenChatError(false);
+  }, [activePanel]);
 
 
   useLayoutEffect(() => {
@@ -245,15 +337,26 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
     if (!mountedRef.current) return;
     streamStateRef.current = next;
     setStreamedText(next.text);
-    setAttempts(next.attempts);
+    for (const event of next.operationEvents.slice(processedOperationEventsRef.current)) {
+      if (event.status === 'Saving') {
+        startAttempt({
+          operationId: event.operationId,
+          turnId: event.turnId,
+          messageId: event.messageId,
+          operation: event.operation,
+          startedAt: Date.now(),
+        });
+      } else {
+        const attempt = pendingAttemptsRef.current.get(event.operationId);
+        if (attempt && attempt.turnId === event.turnId && attempt.messageId === event.messageId) {
+          attempt.terminal = event.status;
+        }
+      }
+    }
+    processedOperationEventsRef.current = next.operationEvents.length;
   }
 
-  function failUnresolvedAttempts(existingKeys: ReadonlySet<string>) {
-    const next = failUnresolvedOperationAttempts(streamStateRef.current.attempts, existingKeys);
-    absorbStreamState({ ...streamStateRef.current, attempts: next });
-  }
-
-  async function consumeStream(response: Response, existingKeys: ReadonlySet<string>) {
+  async function consumeStream(response: Response) {
     if (!response.body) throw new Error('MissingStream');
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
@@ -267,24 +370,101 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
       if (done) break;
     }
     if (buffer) absorbStreamState(consumeAgentStreamLine(streamStateRef.current, buffer.trimEnd()));
-    failUnresolvedAttempts(existingKeys);
+  }
+
+  function reconcileAttempts(
+    snapshot: Awaited<ReturnType<typeof refreshNewest>>,
+    options: { providerFailed?: boolean; cancelled?: boolean } = {},
+  ) {
+    const workspace = snapshot.workspace?.status === 'ready' ? snapshot.workspace.map : undefined;
+    const readsEstablishAbsence = Boolean(
+      snapshot.history
+      && snapshot.workspace
+      && snapshot.workspace.status !== 'repair-required',
+    );
+    let nextError: PersistenceError | undefined;
+    const retainHighestPriorityError = (candidate: PersistenceError) => {
+      if (!nextError || persistenceErrorPriority[candidate.kind] > persistenceErrorPriority[nextError.kind]) {
+        nextError = candidate;
+      }
+    };
+    for (const attempt of [...pendingAttemptsRef.current.values()]) {
+      const receipt = workspace?.operationHistory.find((item) => item.sourceId === attempt.operationId);
+      const receiptMatchesAttempt = Boolean(receipt && (
+        attempt.directOperation
+          ? receipt.confirmationProvenance?.kind === 'ui-action'
+            && receipt.confirmationProvenance.actionId === attempt.messageId
+          : !receipt.confirmationProvenance
+            || receipt.confirmationProvenance.turnId === attempt.turnId
+      ));
+      if (receiptMatchesAttempt) {
+        finishAttempt(attempt.operationId);
+        if (options.providerFailed || options.cancelled || attempt.cancelled) {
+          retainHighestPriorityError({
+            kind: 'reply-failed',
+            message: 'Your map was updated, but Revelio’s follow-up reply did not finish.',
+            action: 'continue',
+          });
+        }
+        continue;
+      }
+      if (attempt.terminal === 'Rejected') {
+        finishAttempt(attempt.operationId);
+        continue;
+      }
+      if (options.cancelled || attempt.cancelled) {
+        finishAttempt(attempt.operationId);
+        if (!readsEstablishAbsence || receipt) {
+          retainHighestPriorityError({
+            kind: 'unknown',
+            message: 'Revelio could not confirm whether your map was updated. Refresh before trying again.',
+            action: 'refresh',
+          });
+        }
+        continue;
+      }
+      if (attempt.terminal === 'Conflict') {
+        finishAttempt(attempt.operationId);
+        retainHighestPriorityError({
+          kind: 'conflict', message: 'Your map changed — take another look.', action: 'refresh',
+        });
+        continue;
+      }
+      if (attempt.terminal === 'Failed') {
+        finishAttempt(attempt.operationId);
+        retainHighestPriorityError({
+          kind: 'failed', message: 'Something went wrong. Try again.', action: 'retry',
+          retryOperation: attempt.directOperation,
+        });
+        continue;
+      }
+      finishAttempt(attempt.operationId);
+      retainHighestPriorityError({
+        kind: 'unknown',
+        message: 'Revelio could not confirm whether your map was updated. Refresh before trying again.',
+        action: 'refresh',
+      });
+    }
+    if (nextError) setPersistenceError(nextError);
   }
 
   async function submitMessage() {
     const message = draft.trim();
     if (!message || turnBusy || bootstrapPending) return;
+    refreshGenerationRef.current += 1;
     const messageId = newOpaqueId('message');
-    const existingAttemptKeys = new Set(Object.keys(attempts));
     const controller = new AbortController();
     abortRef.current = controller;
     pinnedToBottomRef.current = true;
     setTurnBusy(true);
+    setTerminalValidated(false);
     setTurnNotice(null);
     setSubmittedDraft(message);
     setDraft('');
     draftValueRef.current = '';
     setStreamedText('');
-    streamStateRef.current = { text: '', citations: [], attempts, providerFailed: false };
+    streamStateRef.current = { text: '', citations: [], operationEvents: [], providerFailed: false };
+    processedOperationEventsRef.current = 0;
     setMessages((current) => [...current, {
       id: messageId,
       role: 'user',
@@ -303,46 +483,38 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
       if (contentType.includes('application/json')) {
         const body = await parseJson(response) as Record<string, unknown> | null;
         const status = body?.status;
-        if (status === 'completed-replay') setTurnNotice('This message was already completed. Showing the saved result.');
+        if (status === 'completed-replay') setTurnNotice(null);
         else if (status === 'in-flight') setTurnNotice('This message is already in progress. Refreshing its latest state.');
         else if (status === 'cancelled-replay') setTurnNotice('This message was already stopped.');
         else setTurnNotice('Revelio could not complete that reply. Your map may still contain an earlier saved change.');
       } else if (!response.ok) {
         throw new Error('AgentRequestFailed');
       } else {
-        await consumeStream(response, existingAttemptKeys);
+        await consumeStream(response);
         if (!mountedRef.current) return;
-        const saved = Object.entries(streamStateRef.current.attempts).some(([key, attempt]) => (
-          !existingAttemptKeys.has(key) && attempt.status === 'Saved'
-        ));
         if (streamStateRef.current.providerFailed) {
           const restored = !draftValueRef.current.trim();
           if (restored) {
             draftValueRef.current = message;
             setDraft(message);
           }
-          setTurnNotice(saved
-            ? 'Your map was saved, but Revelio’s follow-up reply failed. The saved state is preserved.'
-            : restored
-              ? 'Revelio’s reply failed. Nothing new was saved. Your submitted message is available to edit.'
-              : 'Revelio’s reply failed. Nothing new was saved. Your current draft is unchanged.');
+          if (pendingAttemptsRef.current.size === 0) {
+            setTurnNotice(restored
+              ? 'Revelio’s reply failed. Your submitted message is available to edit.'
+              : 'Revelio’s reply failed. Your current draft is unchanged.');
+          }
         }
       }
     } catch (error) {
       if (!mountedRef.current) return;
-      failUnresolvedAttempts(existingAttemptKeys);
       const restored = !draftValueRef.current.trim();
       if (restored) {
         draftValueRef.current = message;
         setDraft(message);
       }
       if (controller.signal.aborted) {
-        const saved = Object.entries(streamStateRef.current.attempts).some(([key, attempt]) => (
-          !existingAttemptKeys.has(key) && attempt.status === 'Saved'
-        ));
-        setTurnNotice(saved
-          ? 'Stopped after a saved change. The map remains authoritative.'
-          : restored ? 'Stopped. Your submitted message has been restored.' : 'Stopped. Your current draft is unchanged.');
+        for (const attempt of pendingAttemptsRef.current.values()) attempt.cancelled = true;
+        setTurnNotice(restored ? 'Stopped. Your submitted message has been restored.' : 'Stopped. Your current draft is unchanged.');
       } else {
         setTurnNotice(restored
           ? 'Revelio is temporarily unavailable. Your submitted message has been restored.'
@@ -350,8 +522,13 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
       }
     } finally {
       if (abortRef.current === controller) abortRef.current = null;
-      await refreshNewest();
+      const snapshot = await refreshNewest();
       if (mountedRef.current) {
+        reconcileAttempts(snapshot, {
+          providerFailed: streamStateRef.current.providerFailed,
+          cancelled: controller.signal.aborted,
+        });
+        setTerminalValidated(Boolean(snapshot.history && snapshot.workspace));
         setTurnBusy(false);
         setSubmittedDraft(null);
         scheduleFocus(() => draftRef.current);
@@ -360,26 +537,30 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
   }
 
   async function runOperation(operation: DeterministicOperationRequest) {
-    if (!map || turnBusy) return;
+    if (!map || turnBusy || unresolvedOperationCount > 0 || !terminalValidated) return;
+    refreshGenerationRef.current += 1;
     const sourceMessageId = typeof operation.input.sourceMessageId === 'string'
       ? operation.input.sourceMessageId
       : newOpaqueId('workspace-message');
     const operationId = newOpaqueId('workspace-operation');
     const controller = new AbortController();
-    const saving: OperationStatusData = {
-      version: 1,
+    const attempt: PendingAttempt = {
       turnId: sourceMessageId,
       messageId: sourceMessageId,
       operationId,
       operation: operation.type,
-      authoritativeRevision: null,
-      status: 'Saving',
-      sequence: 0,
+      startedAt: Date.now(),
+      directOperation: operation,
     };
     setTurnBusy(true);
+    setTerminalValidated(false);
     abortRef.current = controller;
     setTurnNotice(null);
-    setAttempts((current) => reduceOperationAttempts(current, saving));
+    setStreamedText('');
+    streamStateRef.current = { text: '', citations: [], operationEvents: [], providerFailed: false };
+    processedOperationEventsRef.current = 0;
+    startAttempt(attempt);
+    let replyFailed = false;
     try {
       const response = await fetch('/api/agent/workspace/operations', {
         method: 'POST',
@@ -394,91 +575,104 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
         signal: controller.signal,
       });
       if (!mountedRef.current) return;
-      const responseBody = await parseJson(response);
-      const envelope = methodOperationEnvelopeSchema.safeParse(responseBody);
-      const responseMarker = responseBody && typeof responseBody === 'object'
-        ? responseBody as Record<string, unknown>
-        : null;
-      if (!envelope.success && response.ok && responseMarker?.terminal !== 'failed') {
-        throw new Error('WorkspaceOperationEnvelopeInvalid');
-      }
-      const terminal: OperationStatusData = envelope.success
-        ? {
-            ...saving,
-            status: terminalStatusForEnvelope(envelope.data.status),
-            sequence: 1,
-            authoritativeRevision: envelope.data.authoritativeRevision,
-            ...(envelope.data.errorClass ? { errorClass: envelope.data.errorClass } : {}),
-            ...(envelope.data.retryable ? { retryable: true } : {}),
-          }
-        : {
-            ...saving,
-            status: responseMarker?.terminal === 'failed'
-              ? 'Failed'
-              : response.status === 409
-                ? 'Conflict'
-                : 'Failed',
-            sequence: 1,
-            authoritativeRevision: map.revision,
-            errorClass: 'WorkspaceOperationError',
-          };
-      setAttempts((current) => reduceOperationAttempts(current, terminal));
-      if (terminal.status === 'Conflict') setTurnNotice('Your map changed elsewhere. The latest version is being loaded; your chat draft is unchanged.');
-      if (terminal.status === 'Rejected') setTurnNotice('That action no longer fits the current Method state. The latest map is being loaded.');
-      if (terminal.status === 'Failed') setTurnNotice('That action failed before a save. Your chat draft is unchanged.');
-    } catch {
-      const authoritative = await withReadTimeout((signal) => loadWorkspace(signal), 2_000).catch(() => undefined);
-      if (!mountedRef.current) return;
-      const receipt = authoritative?.status === 'ready'
-        ? authoritative.map.operationHistory.find((item) => item.sourceId === operationId)
-        : undefined;
-      const status: 'Saved' | 'Failed' = receipt ? 'Saved' : 'Failed';
-      setAttempts((current) => reduceOperationAttempts(current, {
-        ...saving,
-        status,
-        sequence: 1,
-        authoritativeRevision: receipt?.resultRevision ?? map.revision,
-        ...(status === 'Failed' ? { errorClass: 'WorkspaceOperationError' } : {}),
-      }));
-      if (receipt) {
-        setTurnNotice(controller.signal.aborted
-          ? 'Stopped after this change was saved. The map remains authoritative.'
-          : 'The connection ended after this change was saved. The map remains authoritative.');
+      const contentType = response.headers.get('content-type') ?? '';
+      if (contentType.includes('application/json')) {
+        const responseBody = await parseJson(response);
+        const envelope = methodOperationEnvelopeSchema.safeParse(responseBody);
+        const responseMarker = responseBody && typeof responseBody === 'object'
+          ? responseBody as Record<string, unknown>
+          : null;
+        if (!envelope.success && response.ok && responseMarker?.terminal !== 'failed') {
+          throw new Error('WorkspaceOperationEnvelopeInvalid');
+        }
+        if (!envelope.success) {
+          const result = responseMarker?.result && typeof responseMarker.result === 'object'
+            ? responseMarker.result as Record<string, unknown>
+            : null;
+          replyFailed = response.status >= 500 || result?.operationCommitted === true;
+        }
+        attempt.terminal = envelope.success
+          ? envelope.data.status === 'conflict' ? 'Conflict'
+            : envelope.data.status === 'rejected' ? 'Rejected' : 'Saved'
+          : response.status === 409 ? 'Conflict' : 'Failed';
+      } else if (!response.ok) {
+        throw new Error('WorkspaceOperationContinuationFailed');
       } else {
-        setTurnNotice(controller.signal.aborted
-          ? 'Stopped before this action was confirmed saved. Your chat draft is unchanged.'
-          : 'That action was not confirmed saved. The latest map is being loaded before you retry.');
+        await consumeStream(response);
+        replyFailed = streamStateRef.current.providerFailed;
       }
+    } catch {
+      attempt.cancelled = controller.signal.aborted;
+      replyFailed = !controller.signal.aborted;
     } finally {
       if (abortRef.current === controller) abortRef.current = null;
-      await refreshNewest(true);
-      if (mountedRef.current) setTurnBusy(false);
+      const snapshot = await refreshNewest();
+      if (mountedRef.current) {
+        reconcileAttempts(snapshot, {
+          providerFailed: replyFailed,
+          cancelled: controller.signal.aborted,
+        });
+        setTerminalValidated(Boolean(snapshot.history && snapshot.workspace));
+        setTurnBusy(false);
+        if (activePanelRef.current === 'chat') scheduleFocus(() => draftRef.current);
+      }
     }
   }
 
-  const goToConversation = useCallback(() => {
-    setActivePanel('chat');
-    scheduleFocus(() => draftRef.current);
-  }, [scheduleFocus]);
-
-  function prepareConversation(prompt: string) {
-    setDraft((current) => {
-      const next = current.trim() ? `${current}\n\n${prompt}` : prompt;
-      draftValueRef.current = next;
-      return next;
-    });
-    setActivePanel('chat');
-    scheduleFocus(() => draftRef.current);
-  }
-
-  const displayedMessages = streamedText
+  const liveCitationIdentity = streamStateRef.current.citations[0];
+  const displayedMessages: NormalizedHistoryMessage[] = streamedText
     ? [...messages, {
-        id: 'streaming-assistant',
+        id: liveCitationIdentity?.messageId ?? 'streaming-assistant',
         role: 'assistant' as const,
+        ...(liveCitationIdentity ? {
+          turn: { turnId: liveCitationIdentity.turnId, status: 'completed' as const },
+        } : {}),
         parts: [{ type: 'text' as const, text: streamedText }],
         citations: streamStateRef.current.citations,
       }]
     : messages;
+  const pathSetAttachments = useMemo(
+    () => attachPurposePathSets(messages, map?.pathSets ?? []),
+    [messages, map?.pathSets],
+  );
+  const checkpoint = map ? deriveMethodCheckpoint(map) : null;
+  const currentSuggestedSet = map?.pathSets.findLast((set) => set.status === 'suggested');
+  const directOperationType = checkpoint?.pendingDecision?.kind === 'path-selection'
+    ? 'select-purpose-path' as const
+    : checkpoint?.pendingDecision?.kind === 'path-revision-confirmation'
+      ? 'confirm-purpose-path-revision' as const
+      : null;
+  const actionsBlocked = turnBusy || unresolvedOperationCount > 0 || !terminalValidated;
+
+  function canStartFromSet(set: CareerMap['pathSets'][number], message: NormalizedHistoryMessage): boolean {
+    return Boolean(
+      directOperationType
+      && message.turn?.status === 'completed'
+      && currentSuggestedSet?.id === set.id
+      && currentSuggestedSet.revision === set.revision
+      && checkpoint?.pendingDecision?.targetId === set.id
+      && checkpoint.pendingDecision.targetRevision === set.revision
+    );
+  }
+
+  function startPath(
+    set: CareerMap['pathSets'][number],
+    path: CareerMap['pathSets'][number]['paths'][number],
+  ) {
+    if (!directOperationType) return;
+    const sourceMessageId = newOpaqueId('workspace-message');
+    void runOperation({
+      type: directOperationType,
+      input: {
+        setId: set.id,
+        setRevision: set.revision,
+        pathId: path.id,
+        pathRevision: path.revision,
+        presentedInTurnId: set.presentation.assistantTurnId,
+        sourceMessageId,
+      },
+    });
+  }
 
   useLayoutEffect(() => {
     const transcript = transcriptRef.current;
@@ -498,7 +692,6 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
   }, [displayedMessages.length, streamedText, activePanel, historyState]);
 
   const isFirstRun = displayedMessages.length === 0;
-  const mapHasContent = Boolean(map && map.revision > 0);
   const micLabel = !speech.isSupported
     ? 'Microphone unavailable'
     : speech.recordingState === 'recording'
@@ -549,8 +742,8 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
                 }}
               >
                 {panel === 'chat' ? 'Chat' : 'Your Map'}
-                {panel === 'map' && mapHasContent && activePanel !== 'map' ? (
-                  <span aria-hidden="true" className="ml-2 inline-block h-2 w-2 border border-black bg-ikigai-teal align-middle" />
+                {panel === 'chat' && unseenChatError ? (
+                  <span aria-label="Unseen Chat error" className="ml-2 inline-block h-2 w-2 border border-black bg-red-600 align-middle" />
                 ) : null}
               </button>
             ))}
@@ -566,12 +759,12 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
             className="chat-scroll-fade min-h-0 flex-1 overflow-y-auto px-4 pt-6 sm:px-6"
             aria-live="polite"
           >
-            <div className="mx-auto w-full max-w-[38rem] space-y-6 pb-10">
+            <div className="mx-auto w-full max-w-[82rem] space-y-6 pb-10">
               {historyState === 'loading' ? <p role="status" className="text-sm text-stone-600">Loading your conversation…</p> : null}
               {historyState === 'error' ? (
                 <div role="alert" className="border-2 border-red-800 bg-red-50 p-4 text-sm">
                   <p className="font-bold">Your conversation could not be loaded.</p>
-                  <button type="button" className="mt-3 min-h-11 font-bold underline" onClick={() => void refreshNewest()}>Try again</button>
+                  <button type="button" className="mt-3 min-h-11 font-bold underline" onClick={() => void refreshNewestAndValidate()}>Try again</button>
                 </div>
               ) : null}
               {historyState === 'empty' && displayedMessages.length === 0 ? (
@@ -590,12 +783,70 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
                   {olderBusy ? 'Loading…' : 'Load older messages'}
                 </button>
               ) : null}
-              {displayedMessages.map((message) => <SafeMessage key={message.id} message={message} />)}
+              {displayedMessages.map((message) => (
+                <div key={message.id} className="w-full space-y-5">
+                  <SafeMessage message={message} />
+                  {(pathSetAttachments.get(message.id) ?? []).map((set) => {
+                    const startAvailable = canStartFromSet(set, message);
+                    return (
+                      <div key={`${set.id}@${set.revision}`} className="purpose-path-comparison" data-path-set={`${set.id}@${set.revision}`}>
+                        <div className="method-path-grid">
+                          {set.paths.map((path, index) => (
+                            <PurposePathCard
+                              key={`${path.id}-${path.revision}`}
+                              path={path}
+                              index={index}
+                              {...(startAvailable ? {
+                                onStart: () => startPath(set, path),
+                                startDisabled: actionsBlocked,
+                              } : {})}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
             </div>
           </div>
           <div className="shrink-0 px-4 pb-4 pt-2 sm:px-6">
             <div className="mx-auto w-full max-w-[38rem] space-y-3">
-              <OperationStatusList attempts={attempts} />
+              {savingVisible ? <p role="status" aria-live="polite" className="text-xs font-bold text-amber-900">Saving…</p> : null}
+              {persistenceError ? (
+                <div role="alert" className="border-l-4 border-red-800 bg-red-50 px-3 py-2 text-xs text-red-950">
+                  <p className="font-bold">{persistenceError.message}</p>
+                  <button
+                    type="button"
+                    className="mt-2 min-h-9 font-bold underline"
+                    onClick={() => {
+                      if (persistenceError.action === 'retry' && persistenceError.retryOperation) {
+                        setPersistenceError(null);
+                        void runOperation({
+                          ...persistenceError.retryOperation,
+                          input: {
+                            ...persistenceError.retryOperation.input,
+                            sourceMessageId: newOpaqueId('workspace-message'),
+                          },
+                        });
+                      } else if (persistenceError.action === 'retry') {
+                        scheduleFocus(() => draftRef.current);
+                      } else if (persistenceError.action === 'continue') {
+                        setPersistenceError(null);
+                        scheduleFocus(() => draftRef.current);
+                      } else {
+                        void refreshNewestAndValidate().then((snapshot) => {
+                          if (snapshot.history && snapshot.workspace) {
+                            setPersistenceError(null);
+                          }
+                        });
+                      }
+                    }}
+                  >
+                    {persistenceError.action === 'retry' ? 'Try again' : persistenceError.action === 'continue' ? 'Continue in Chat' : 'Refresh'}
+                  </button>
+                </div>
+              ) : null}
               {turnNotice ? <p role="status" aria-live="polite" className="text-xs font-bold text-stone-700">{turnNotice}</p> : null}
               {micNotice ? <p role="status" aria-live="polite" className="text-xs text-stone-600">{micNotice}</p> : null}
               <label htmlFor="revelio-draft" className="sr-only">Message Revelio</label>
@@ -666,12 +917,12 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
 
         <section id="map-panel" role="tabpanel" aria-labelledby="map-tab" className={`${activePanel === 'map' ? 'block' : 'hidden'} min-h-0 min-w-0 flex-1 overflow-y-auto bg-ikigai-beige p-4 sm:p-6 lg:p-8`}>
           <div className="mx-auto w-full max-w-6xl">
-            <h2 id="map-heading" ref={mapHeadingRef} tabIndex={-1} className="sr-only">Your Map</h2>
+            <h2 id="map-heading" className="sr-only">Your Map</h2>
             {workspaceState === 'loading' ? <p role="status" className="text-sm text-stone-600">Loading your map…</p> : null}
             {workspaceState === 'error' ? (
               <div role="alert" className="border-2 border-red-800 bg-red-50 p-5">
                 <p className="font-bold">Your map could not be loaded.</p>
-                <button type="button" className="mt-3 min-h-11 font-bold underline" onClick={() => void refreshNewest()}>Try again</button>
+                <button type="button" className="mt-3 min-h-11 font-bold underline" onClick={() => void refreshNewestAndValidate()}>Try again</button>
               </div>
             ) : null}
             {workspaceState === 'repair-required' ? (
@@ -681,13 +932,7 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
               </div>
             ) : null}
             {(workspaceState === 'ready' || workspaceState === 'empty') && map ? (
-              <MethodMap
-                map={map}
-                busy={turnBusy}
-                onOperation={(operation) => void runOperation(operation)}
-                onConversationPrompt={prepareConversation}
-                onGoToConversation={goToConversation}
-              />
+              <MethodMap map={map} />
             ) : null}
             {workspaceState === 'empty' && !map ? (
               <div className="max-w-2xl border-2 border-dashed border-black bg-white/70 p-6 sm:p-8">
@@ -697,13 +942,6 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
                   to you, the directions worth trying, and the project you take on first. Nothing lands here until
                   you’ve confirmed it, so you can change your mind in the chat at any point.
                 </p>
-                <button
-                  type="button"
-                  onClick={goToConversation}
-                  className="mt-6 min-h-11 border-2 border-black bg-ikigai-teal px-4 font-display text-sm font-black shadow-[3px_3px_0_rgba(0,0,0,0.65)] transition-[transform,box-shadow] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black active:translate-x-0.5 active:translate-y-0.5 active:shadow-none"
-                >
-                  Start in the chat
-                </button>
               </div>
             ) : null}
           </div>

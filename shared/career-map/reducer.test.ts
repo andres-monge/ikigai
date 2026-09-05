@@ -495,7 +495,23 @@ describe('Method reducer', () => {
     map = commit(map, 'record-route-outcome', { id: 'outcome-1', revision: 1, doorId: 'door-1', doorRevision: 1, result: 'positive-response', learning: 'The contribution opened a useful conversation', action: action(19) });
     const evidenceBefore = map.reflections;
 
-    map = commit(map, 'revise-why', { why: { id: 'why-2', revision: 1, statement: 'I work to help small groups act on difficult choices.', serves: 'Small groups facing consequential choices', pointOfView: 'Shared clarity should unlock an owned next move' }, supersedesWhyId: 'why-1', presentation: presentation(20) });
+    const revise = operation(map, 'revise-why', {
+      why: { id: 'why-2', revision: 1, statement: 'I work to help small groups act on difficult choices.', serves: 'Small groups facing consequential choices', pointOfView: 'Shared clarity should unlock an owned next move' },
+      supersedesWhyId: 'why-1', presentation: presentation(20),
+    }, 'revise-why-deepest');
+    const revised = applyCareerMapOperation(map, revise);
+    expect(revised.status).toBe('committed');
+    if (revised.status !== 'committed') throw new Error('Deep Why revision fixture failed.');
+    expect(revised.effects?.invalidatedArtifactClasses).toEqual([
+      'path-set', 'project', 'reflection', 'next-move', 'peer-exposure',
+      'commitment', 'proof', 'side-door-set', 'route-outcome',
+    ]);
+    const replayed = applyCareerMapOperation(revised.map, revise);
+    expect(replayed.status).toBe('replayed');
+    if (replayed.status !== 'replayed') throw new Error('Deep Why revision replay fixture failed.');
+    expect(replayed.effects).toEqual(revised.effects);
+    expect(replayed.map).toEqual(revised.map);
+    map = replayed.map;
     map = commit(map, 'confirm-why', { whyId: 'why-2', whyRevision: 1, action: action(21) });
 
     expect(map.reflections).toEqual(evidenceBefore);
@@ -503,6 +519,96 @@ describe('Method reducer', () => {
       new Set(['path-set', 'project', 'reflection', 'next-move', 'peer-exposure', 'commitment', 'proof', 'side-door-set', 'route-outcome']),
     );
     expect(careerMapSchema.safeParse(map).success).toBe(true);
+  });
+
+  it('derives exact Why-revision invalidation classes before confirmation without storing a preview', () => {
+    const map = withConfirmedWhy();
+    const revise = operation(map, 'revise-why', {
+      why: { id: 'why-2', revision: 1, statement: 'I work to help small groups act on difficult choices.', serves: 'Small groups facing consequential choices', pointOfView: 'Shared clarity should unlock an owned next move' },
+      supersedesWhyId: 'why-1', presentation: presentation(20),
+    }, 'revise-why-zero');
+    const revised = applyCareerMapOperation(map, revise);
+
+    expect(revised.status).toBe('committed');
+    if (revised.status !== 'committed') throw new Error('Why revision fixture failed.');
+    expect(revised.effects).toEqual({ invalidatedArtifactClasses: [] });
+    expect(revised.map.invalidations).toHaveLength(0);
+    const replayed = applyCareerMapOperation(revised.map, revise);
+    expect(replayed.status).toBe('replayed');
+    if (replayed.status !== 'replayed') throw new Error('Why revision replay fixture failed.');
+    expect(replayed.effects).toEqual({ invalidatedArtifactClasses: [] });
+    expect(replayed.map).toEqual(revised.map);
+  });
+
+  it('derives and replays the exact shallow Why-revision invalidation class', () => {
+    const map = withSelectedPath();
+    const revise = operation(map, 'revise-why', {
+      why: { id: 'why-2', revision: 1, statement: 'I work to help small groups act on difficult choices.', serves: 'Small groups facing consequential choices', pointOfView: 'Shared clarity should unlock an owned next move' },
+      supersedesWhyId: 'why-1', presentation: presentation(20),
+    }, 'revise-why-shallow');
+
+    const revised = applyCareerMapOperation(map, revise);
+    expect(revised.status).toBe('committed');
+    if (revised.status !== 'committed') throw new Error('Shallow Why revision fixture failed.');
+    expect(revised.effects).toEqual({ invalidatedArtifactClasses: ['path-set'] });
+    expect(revised.map.invalidations).toHaveLength(0);
+
+    const replayed = applyCareerMapOperation(revised.map, revise);
+    expect(replayed.status).toBe('replayed');
+    if (replayed.status !== 'replayed') throw new Error('Shallow Why revision replay fixture failed.');
+    expect(replayed.effects).toEqual(revised.effects);
+    expect(replayed.map).toEqual(revised.map);
+  });
+
+  it('rejects stale confirmation after a pending Why revision is superseded and accepts the later exact target', () => {
+    let map = withConfirmedWhy();
+    map = commit(map, 'revise-why', {
+      why: { id: 'why-2', revision: 1, statement: 'I help small groups move through difficult choices.', serves: 'Small groups facing consequential choices', pointOfView: 'Shared clarity should unlock an owned next move' },
+      supersedesWhyId: 'why-1', presentation: presentation(20),
+    });
+    const staleExpectedRevision = operation(map, 'confirm-why', {
+      whyId: 'why-2', whyRevision: 1, action: action(21),
+    });
+
+    map = commit(map, 'revise-why', {
+      why: { id: 'why-3', revision: 1, statement: 'I help small groups own their next difficult move.', serves: 'Small groups facing consequential choices', pointOfView: 'Shared clarity should unlock an owned next move' },
+      supersedesWhyId: 'why-1', presentation: presentation(21),
+    });
+
+    const conflicted = applyCareerMapOperation(map, staleExpectedRevision);
+    expect(conflicted.status).toBe('rejected');
+    if (conflicted.status !== 'rejected') throw new Error('Stale expected-revision fixture unexpectedly committed.');
+    expect(conflicted.error.code).toBe('revision-conflict');
+
+    const superseded = applyCareerMapOperation(map, operation(map, 'confirm-why', {
+      whyId: 'why-2', whyRevision: 1, action: action(22),
+    }));
+    expect(superseded.status).toBe('rejected');
+    if (superseded.status !== 'rejected') throw new Error('Superseded Why fixture unexpectedly committed.');
+    expect(superseded.error.code).toBe('stale-target');
+
+    const confirmed = applyCareerMapOperation(map, operation(map, 'confirm-why', {
+      whyId: 'why-3', whyRevision: 1, action: action(22),
+    }));
+    expect(confirmed.status).toBe('committed');
+    expect(confirmed.map.foundation.whyRevisions.find((why) => why.id === 'why-3')?.status).toBe('confirmed');
+  });
+
+  it('rejects dependent writes while a revised Why awaits confirmation', () => {
+    let map = withConfirmedWhy();
+    map = commit(map, 'revise-why', {
+      why: { id: 'why-2', revision: 1, statement: 'I work to help small groups act on difficult choices.', serves: 'Small groups facing consequential choices', pointOfView: 'Shared clarity should unlock an owned next move' },
+      supersedesWhyId: 'why-1', presentation: presentation(20),
+    });
+
+    const dependent = applyCareerMapOperation(map, operation(map, 'propose-purpose-paths', {
+      setId: 'blocked-paths', setRevision: 1, paths: paths('blocked'), presentation: presentation(21),
+    }));
+
+    expect(dependent.status).toBe('rejected');
+    if (dependent.status !== 'rejected') throw new Error('Dependent-write guard fixture unexpectedly committed.');
+    expect(dependent.error.code).toBe('illegal-transition');
+    expect(dependent.map).toEqual(map);
   });
 
   it('does not invalidate active work for a parked sibling revision but does for an active-path revision', () => {

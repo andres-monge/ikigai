@@ -19,7 +19,7 @@ import {
   careerMapOperationSchemas,
   type CareerMapOperationType,
 } from './career-map/operations';
-import { methodModuleSchema } from './career-map/common';
+import { invalidationTargetKindSchema, methodModuleSchema } from './career-map/common';
 import { careerMapSchema } from './career-map/model';
 
 /* -------------------------------------------------------------------------- */
@@ -245,6 +245,11 @@ export const NORMALIZED_HISTORY_MAX_CITATIONS = 100;
 export const normalizedHistoryMessageSchema = z.object({
   id: streamCorrelationIdSchema,
   role: z.enum(['user', 'assistant']),
+  turn: z.object({
+    turnId: streamCorrelationIdSchema,
+    status: z.enum(['completed', 'cancelled', 'failed']),
+  }).strict().optional(),
+  isFinalAssistantItem: z.literal(true).optional(),
   parts: z.array(z.object({
     type: z.literal('text'),
     text: z.string().max(NORMALIZED_HISTORY_MAX_TEXT_LENGTH),
@@ -252,7 +257,19 @@ export const normalizedHistoryMessageSchema = z.object({
   sources: z.array(browserSourceUrlPartSchema).max(NORMALIZED_HISTORY_MAX_CITATIONS).optional(),
   citations: z.array(claimLinkedCitationSchema).max(NORMALIZED_HISTORY_MAX_CITATIONS).optional(),
   deliveryStatus: z.literal('stopped').optional(),
-}).strict();
+}).strict().superRefine((message, context) => {
+  if (message.isFinalAssistantItem && (message.role !== 'assistant' || !message.turn)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['isFinalAssistantItem'], message: 'Only an assistant item can be final.' });
+  }
+  if (message.deliveryStatus === 'stopped' && message.turn?.status !== 'cancelled') {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['deliveryStatus'], message: 'Only a cancelled turn can be stopped.' });
+  }
+  message.citations?.forEach((citation, index) => {
+    if (!message.turn || citation.turnId !== message.turn.turnId || citation.messageId !== message.id) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['citations', index], message: 'Citation identity must match its exact turn and display item.' });
+    }
+  });
+});
 
 export type NormalizedHistoryMessageData = z.infer<typeof normalizedHistoryMessageSchema>;
 
@@ -304,6 +321,9 @@ export const methodOperationEnvelopeSchema = z.object({
     targetId: z.string().min(1).max(160),
     targetRevision: z.number().int().positive(),
   }).strict().nullable(),
+  invalidatedArtifactClasses: z.array(invalidationTargetKindSchema)
+    .refine((classes) => new Set(classes).size === classes.length)
+    .optional(),
   errorClass: z.string().min(1).max(160).optional(),
   retryable: z.boolean().optional(),
   turnStatus: z.literal('completed').optional(),

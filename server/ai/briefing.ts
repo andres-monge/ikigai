@@ -31,7 +31,7 @@ export interface CareerMapBriefing {
 function appendWhy(lines: string[], map: CareerMap): void {
   const confirmed = map.foundation.whyRevisions.findLast((item) => item.status === 'confirmed');
   if (confirmed) {
-    lines.push('## Confirmed Why I Work');
+    lines.push('## Confirmed Your North Star');
     lines.push(`Basis: ${confirmed.id}@${confirmed.revision}`);
     lines.push(confirmed.statement);
     lines.push(`Serves: ${confirmed.serves}`);
@@ -39,11 +39,14 @@ function appendWhy(lines: string[], map: CareerMap): void {
   }
   const suggested = map.foundation.whyRevisions.findLast((item) => item.status === 'suggested');
   if (suggested) {
-    lines.push('## Suggested Why I Work — pending confirmation');
+    lines.push('## Suggested Your North Star — pending confirmation');
     lines.push(`Basis: ${suggested.id}@${suggested.revision}; ${suggested.status}`);
     lines.push(suggested.statement);
     lines.push(`Serves: ${suggested.serves}`);
     lines.push(`Point of view: ${suggested.pointOfView}`);
+    if (suggested.supersedesWhyId) {
+      lines.push('Confirm only after a completed presentation disclosed the exact revise-why result classes and a later explorer message acknowledges that impact. Never infer classes from this briefing; after a failed presentation, use revise-why again.');
+    }
   }
 }
 
@@ -66,7 +69,7 @@ function appendExactPath(
 ): void {
   if (!path) throw new CareerMapBriefingError();
   lines.push(`Purpose Path: ${path.name} (${path.id}@${path.revision}; ${path.selection})`);
-  lines.push(`Serves Why: ${path.servesWhy}`);
+  lines.push(`Serves North Star: ${path.servesWhy}`);
   lines.push(`Possibility: ${path.possibility}`);
   lines.push(`Evidence: ${path.evidence.join('; ')}`);
   lines.push(`Central unknown: ${path.centralUnknown}`);
@@ -105,7 +108,7 @@ function appendFirstProjectFraming(
     return;
   }
   lines.push(`First-project framing: delivered once in ${framing.presentation!.assistantTurnId}; locale ${framing.locale}. Do not repeat it.`);
-  lines.push(`Only this exact later explorer message accepts the project: ${JSON.stringify(framing.acceptancePhrase)}`);
+  lines.push(`Acceptance reference copy: ${JSON.stringify(framing.acceptancePhrase)}. A later unambiguous semantic acceptance may accept; exact text matching is not required.`);
 }
 
 function appendExactReflection(
@@ -133,7 +136,7 @@ function appendExactReviewContext(
       if (!set) throw new CareerMapBriefingError();
       const why = exactRevision(map.foundation.whyRevisions, set.basisWhy.id, set.basisWhy.revision);
       if (!why) throw new CareerMapBriefingError();
-      lines.push(`Direct Why basis: ${why.id}@${why.revision} — ${why.statement}`);
+      lines.push(`Direct North Star basis: ${why.id}@${why.revision} — ${why.statement}`);
       lines.push(`Purpose Path set: ${set.id}@${set.revision}; ${set.status}`);
       for (const path of set.paths) appendExactPath(lines, path);
       return;
@@ -249,13 +252,13 @@ function appendPath(
     ?? map.pathSets.findLast((item) => item.status === 'active');
   if (!set) return;
   lines.push('## Purpose Path context');
-  lines.push(`Set: ${set.id}@${set.revision}; Why basis: ${set.basisWhy.id}@${set.basisWhy.revision}`);
+  lines.push(`Set: ${set.id}@${set.revision}; North Star basis: ${set.basisWhy.id}@${set.basisWhy.revision}`);
   const paths = includeAlternatives
     ? set.paths
     : set.paths.filter((path) => path.selection === 'active');
   for (const path of paths) {
     lines.push(`### ${path.name} (${path.id}@${path.revision}; ${path.selection})`);
-    lines.push(`Serves Why: ${path.servesWhy}`);
+    lines.push(`Serves North Star: ${path.servesWhy}`);
     lines.push(`Possibility: ${path.possibility}`);
     lines.push(`Evidence: ${path.evidence.join('; ')}`);
     lines.push(`Central unknown: ${path.centralUnknown}`);
@@ -472,7 +475,7 @@ function renderCareerMapBriefing(
 
   switch (checkpoint.module) {
     case 'form-foundation': {
-      lines.push('## Current Foundation evidence');
+      lines.push('## Current North Star evidence');
       for (const evidence of selectCurrentFoundationEvidence(map.foundation)) {
         lines.push(`- ${evidence.category}: ${evidence.content} (${evidence.id}@${evidence.revision})`);
       }

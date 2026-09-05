@@ -96,6 +96,58 @@ function confirmWhyThenTextModel(input: {
   });
 }
 
+const DIRECT_CONTINUATION_TEXT = 'Here is one first project to test this path.';
+
+function proposeFirstProjectThenTextModel(text = DIRECT_CONTINUATION_TEXT) {
+  let providerCall = 0;
+  return new MockLanguageModelV4({
+    doStream: async () => {
+      providerCall += 1;
+      if (providerCall === 1) {
+        return {
+          stream: simulateReadableStream({
+            chunks: [
+              { type: 'stream-start', warnings: [] },
+              {
+                type: 'tool-call', toolCallId: 'direct-first-project-call', toolName: 'propose_first_project',
+                input: JSON.stringify({
+                  id: 'direct-project-1', revision: 1,
+                  title: 'Test the selected path',
+                  outcome: 'One real person uses a small result',
+                  audience: 'A firsthand beneficiary',
+                  whyWanted: 'Learn through a result that matters now',
+                  learningGoal: 'Learn whether this work creates voluntary pull',
+                  firstVersion: 'One small useful version',
+                  firstStep: 'Ask one person what would help most',
+                  decisionQuestion: 'Do I want another iteration?',
+                  evidenceCue: 'Notice whether I choose to keep improving it',
+                }),
+              },
+              { type: 'finish', finishReason: { unified: 'tool-calls', raw: 'tool-calls' }, usage: usage() },
+            ] as never,
+          }),
+        };
+      }
+      return textStream(text);
+    },
+  });
+}
+
+function directContinuationProvider(text = DIRECT_CONTINUATION_TEXT) {
+  return {
+    model: proposeFirstProjectThenTextModel(text),
+    conversationClient: {
+      listItems: vi.fn(async () => ({
+        data: [{
+          id: 'direct-assistant-item', type: 'message', role: 'assistant',
+          content: [{ type: 'output_text', text }],
+        }],
+        hasMore: false,
+      })),
+    },
+  };
+}
+
 function searchStream(text: string, url: string, title = 'Provider source') {
   const callId = 'provider-search-call-private';
   const resultId = 'provider-search-result-private';
@@ -197,6 +249,42 @@ function pendingWhy(): CareerMap {
   return proposed.map;
 }
 
+function pendingPaths(): CareerMap {
+  let map = pendingWhy();
+  const commit = (operation: CareerMapOperation) => {
+    const result = applyCareerMapOperation(map, operation);
+    if (result.status !== 'committed') throw new Error(`${operation.type} fixture did not commit.`);
+    map = result.map;
+  };
+  commit({
+    type: 'confirm-why', sourceId: 'why-confirmation', expectedRevision: map.revision,
+    occurredAt: timestamp(2), payload: {
+      whyId: 'why-1', whyRevision: 1,
+      action: {
+        kind: 'user-message', actionId: 'why-confirmation-message', turnId: 'why-confirmation-turn',
+        turnSequence: 2, occurredAt: timestamp(2),
+      },
+    },
+  });
+  const path = (number: number) => ({
+    id: `path-${number}`, revision: 1, name: `Path ${number}`,
+    servesWhy: `Serve ${number}`, possibility: `Possibility ${number}`,
+    evidence: [`Evidence ${number}`], centralUnknown: `Unknown ${number}`,
+    projectPreview: `Project ${number}`, practicalFit: `Fit ${number}`,
+  });
+  commit({
+    type: 'propose-purpose-paths', sourceId: 'paths-proposal', expectedRevision: map.revision,
+    occurredAt: timestamp(3), payload: {
+      setId: 'set-1', setRevision: 1, paths: [path(1), path(2), path(3)],
+      presentation: {
+        kind: 'model-presentation', assistantTurnId: 'paths-presentation-turn',
+        turnSequence: 3, completed: true, presentedAt: timestamp(3),
+      },
+    },
+  });
+  return map;
+}
+
 function turn(origin: AgentTurnRecord['origin'], status: AgentTurnRecord['status'] = 'pending'): AgentTurnRecord {
   return {
     turnId: `${origin}-turn`,
@@ -213,8 +301,8 @@ function turn(origin: AgentTurnRecord['origin'], status: AgentTurnRecord['status
   };
 }
 
-function createStorage(overrides: Record<string, unknown> = {}) {
-  let map = pendingWhy();
+function createStorage(overrides: Record<string, unknown> = {}, initialMap: CareerMap = pendingWhy()) {
+  let map = initialMap;
   const storage = {
     loadCareerMap: vi.fn(async (_userId: string) => ({ status: 'ready' as const, map })),
     getOrCreateCareerMap: vi.fn(async (_userId: string) => ({ status: 'ready' as const, map })),
@@ -250,6 +338,43 @@ function createStorage(overrides: Record<string, unknown> = {}) {
     ...overrides,
   };
   return storage as typeof storage & IStorage;
+}
+
+function completedPathPresentationTurn(): AgentTurnRecord {
+  return {
+    ...turn('agent-turn', 'completed'),
+    turnId: 'paths-presentation-turn',
+    terminalResult: { kind: 'completed', refetch: true },
+  };
+}
+
+function createPathSelectionStorage(overrides: Record<string, unknown> = {}) {
+  return createStorage({
+    getConversationMapping: vi.fn(async () => 'conversation-for-authenticated-owner'),
+    listAgentTurns: vi.fn(async () => [completedPathPresentationTurn()]),
+    ...overrides,
+  }, pendingPaths());
+}
+
+function selectPurposePathRequest(input: {
+  operationId: string;
+  clientMessageId?: string;
+  expectedRevision?: number;
+}) {
+  const clientMessageId = input.clientMessageId ?? 'client-message-1';
+  return {
+    operationId: input.operationId,
+    clientMessageId,
+    expectedRevision: input.expectedRevision ?? 3,
+    operation: {
+      type: 'select-purpose-path',
+      input: {
+        setId: 'set-1', setRevision: 1,
+        pathId: 'path-1', pathRevision: 1,
+        presentedInTurnId: 'paths-presentation-turn', sourceMessageId: clientMessageId,
+      },
+    },
+  };
 }
 
 const authenticated: RequestHandler = (_request, response, next) => {
@@ -333,12 +458,7 @@ describe('protected Method routes', () => {
 
   describe('custom POST request integrity', () => {
     const agentBody = { id: 'client-message-1', message: 'hello' };
-    const operationBody = {
-      operationId: 'operation-1',
-      clientMessageId: 'client-message-1',
-      expectedRevision: 1,
-      operation: { type: 'confirm-why', input: {} },
-    };
+    const operationBody = selectPurposePathRequest({ operationId: 'operation-1' });
 
     it.each([
       ['agent', '/api/agent', agentBody],
@@ -542,11 +662,11 @@ describe('protected Method routes', () => {
       const workspace = await request(app).get('/api/agent/workspace');
       const history = await request(app).get('/api/agent/history');
       const agent = await request(app).post('/api/agent').send({ id: 'message', message: SENTINEL });
-      const operation = await request(app).post('/api/agent/workspace/operations').send({
-        operationId: 'operation-disabled-flag', clientMessageId: 'message-disabled-flag',
-        expectedRevision: 1,
-        operation: { type: 'confirm-why', input: {} },
-      });
+      const operation = await request(app).post('/api/agent/workspace/operations').send(
+        selectPurposePathRequest({
+          operationId: 'operation-disabled-flag', clientMessageId: 'message-disabled-flag',
+        }),
+      );
       const audio = await request(app).post('/api/agent/audio/transcribe')
         .set('content-type', 'audio/webm').send(Buffer.from('audio'));
 
@@ -653,10 +773,10 @@ describe('protected Method routes', () => {
 
   it('processes a workspace operation when Node marks only the consumed request stream destroyed', async () => {
     const operationEnvelope = {
-      status: 'committed', operation: 'confirm-why', authoritativeRevision: 2,
-      derivedModule: 'create-purpose-paths', pendingDecision: null,
+      status: 'committed', operation: 'select-purpose-path', authoritativeRevision: 4,
+      derivedModule: 'design-path-project', pendingDecision: null,
     };
-    const storage = createStorage({
+    const storage = createPathSelectionStorage({
       beginWorkspaceActionTurn: vi.fn(async (): Promise<BeginAgentTurnResult> => ({
         status: 'terminal', shouldInvokeModel: false,
         turn: {
@@ -675,11 +795,9 @@ describe('protected Method routes', () => {
       requireAuth: consumedBodyAuthenticated,
       agentEnabled: true,
       operationalLog: vi.fn(),
-    })).post('/api/agent/workspace/operations').send({
-      operationId: 'operation-replay', clientMessageId: 'client-message-1',
-      expectedRevision: 1,
-      operation: { type: 'confirm-why', input: {} },
-    });
+    })).post('/api/agent/workspace/operations').send(
+      selectPurposePathRequest({ operationId: 'operation-replay' }),
+    );
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ ...operationEnvelope, turnStatus: 'completed', replay: true });
@@ -720,7 +838,7 @@ describe('protected Method routes', () => {
   it('rejects newline-bearing client message ids before the durable turn or provider boundary', async () => {
     const clientIdSentinel = 'PRIVATE_CLIENT_ID_SENTINEL';
     const logs: Array<Record<string, unknown>> = [];
-    const storage = createStorage();
+    const storage = createPathSelectionStorage();
     const model = new MockLanguageModelV4({ doStream: textStream('must not run') as never });
     const response = await request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true, model,
@@ -751,9 +869,11 @@ describe('protected Method routes', () => {
 
   it('executes workspace operations through the shared reducer with server provenance', async () => {
     const logs: Array<Record<string, unknown>> = [];
-    const storage = createStorage();
+    const storage = createPathSelectionStorage();
+    const continuation = directContinuationProvider('Aquí tienes un primer proyecto para probar este camino.');
     const app = testApp({
       storage,
+      ...continuation,
       requireAuth: authenticated,
       agentEnabled: true,
       id: (() => {
@@ -766,43 +886,89 @@ describe('protected Method routes', () => {
     const response = await request(app)
       .post('/api/agent/workspace/operations')
       .set('x-user-id', 'spoofed-user')
-      .send({
-        operationId: 'operation-1',
-        clientMessageId: 'client-message-1',
-        expectedRevision: 1,
-        operation: {
-          type: 'confirm-why',
-          input: {
-            whyId: 'why-1',
-            whyRevision: 1,
-            presentedInTurnId: 'prior-assistant-turn',
-            sourceMessageId: 'client-message-1',
-          },
-        },
-      });
+      .send(selectPurposePathRequest({ operationId: 'operation-1' }));
 
     expect(response.status, JSON.stringify({ body: response.body, logs })).toBe(200);
-    expect(response.body).toMatchObject({
-      status: 'committed',
-      operation: 'confirm-why',
-      authoritativeRevision: 2,
-      derivedModule: 'create-purpose-paths',
-      pendingDecision: null,
-    });
+    expect(response.text).toContain('Aquí tienes un primer proyecto');
+    expect(continuation.model.doStreamCalls).toHaveLength(2);
+    expect(continuation.model.doStreamCalls.every((call) => (
+      call.providerOptions?.openai?.conversation === 'conversation-for-authenticated-owner'
+    ))).toBe(true);
+    const providerPrompt = JSON.stringify(continuation.model.doStreamCalls.map((call) => call.prompt));
+    expect(providerPrompt).not.toContain('SERVER DIRECT CONTINUATION SEED');
+    expect(providerPrompt).not.toContain('Start this path');
     expect(storage.persistCareerMapOperation).toHaveBeenCalledWith(expect.objectContaining({ userId: USER_ID }));
-    expect(storage.completeAgentTurn).toHaveBeenCalledOnce();
+    expect(storage.completeAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
+      result: expect.objectContaining({
+        kind: 'workspace-result',
+        operationEnvelope: expect.objectContaining({
+          status: 'committed', operation: 'select-purpose-path', authoritativeRevision: 4,
+        }),
+        assistantDisplayProjection: { assistantItemIds: ['direct-assistant-item'] },
+      }),
+    }));
     expect(storage.releaseTurnLease).toHaveBeenCalledOnce();
     expect(JSON.stringify(logs)).not.toContain(SENTINEL);
     expect(logs.at(-1)).toMatchObject({
       route: 'workspace-operation',
       status: 200,
       operationId: expect.stringMatching(/^op_[a-f0-9]{16}$/),
-      revision: 2,
+      revision: 5,
     });
   });
 
+  it('keeps the selected path authoritative when its streamed project reply fails', async () => {
+    const providerFailure = new Error('private direct continuation failure');
+    const model = new MockLanguageModelV4({ doStream: errorStream(providerFailure) as never });
+    const storage = createPathSelectionStorage();
+    const response = await request(testApp({
+      storage,
+      requireAuth: authenticated,
+      agentEnabled: true,
+      model,
+      conversationClient: {
+        listItems: vi.fn(async () => ({ data: [], hasMore: false })),
+      },
+      operationalLog: vi.fn(),
+    })).post('/api/agent/workspace/operations').send(
+      selectPurposePathRequest({ operationId: 'operation-reply-failure' }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.text).toContain('The agent request failed.');
+    expect(model.doStreamCalls).toHaveLength(1);
+    expect(storage.failAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
+      result: expect.objectContaining({ operationCommitted: true, revision: 4 }),
+    }));
+    expect((await storage.loadCareerMap(USER_ID)).status).toBe('ready');
+    const canonical = await storage.loadCareerMap(USER_ID);
+    expect(canonical.status === 'ready' ? canonical.map.pathSets.at(-1)?.paths[0]?.selection : null)
+      .toBe('active');
+  });
+
+  it('retries direct-continuation lease release after a transient release error', async () => {
+    const storage = createPathSelectionStorage({
+      releaseTurnLease: vi.fn()
+        .mockRejectedValueOnce(new Error('transient release failure'))
+        .mockResolvedValueOnce(true),
+    });
+    const continuation = directContinuationProvider('Here is a first project for this path.');
+    const response = await request(testApp({
+      storage,
+      ...continuation,
+      requireAuth: authenticated,
+      agentEnabled: true,
+      operationalLog: vi.fn(),
+    })).post('/api/agent/workspace/operations').send(
+      selectPurposePathRequest({ operationId: 'operation-release-retry' }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(storage.releaseTurnLease).toHaveBeenCalledTimes(2);
+  });
+
   it('keeps first-project framing and acceptance conversation-only at the workspace route boundary', async () => {
-    const storage = createStorage();
+    const storage = createPathSelectionStorage();
     const response = await request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true, operationalLog: vi.fn(),
     })).post('/api/agent/workspace/operations').send({
@@ -825,26 +991,19 @@ describe('protected Method routes', () => {
   });
 
   it('rejects a stale workspace revision before persisting the operation', async () => {
-    const storage = createStorage();
+    const storage = createPathSelectionStorage();
     const response = await request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true,
       now: () => new Date(timestamp(3)), operationalLog: vi.fn(),
-    })).post('/api/agent/workspace/operations').send({
+    })).post('/api/agent/workspace/operations').send(selectPurposePathRequest({
       operationId: 'operation-stale-revision',
       clientMessageId: 'message-stale-revision',
-      expectedRevision: 0,
-      operation: {
-        type: 'confirm-why',
-        input: {
-          whyId: 'why-1', whyRevision: 1,
-          presentedInTurnId: 'prior-assistant-turn', sourceMessageId: 'message-stale-revision',
-        },
-      },
-    });
+      expectedRevision: 2,
+    }));
 
     expect(response.status).toBe(409);
     expect(response.body).toMatchObject({
-      status: 'conflict', authoritativeRevision: 1,
+      status: 'conflict', authoritativeRevision: 3,
       errorClass: 'revision-conflict', retryable: true,
     });
     expect(storage.persistCareerMapOperation).not.toHaveBeenCalled();
@@ -852,8 +1011,8 @@ describe('protected Method routes', () => {
   });
 
   it('derives a workspace action sequence after the canonical presentation despite clock skew', async () => {
-    const skewed = pendingWhy();
-    const pending = skewed.foundation.whyRevisions.at(-1)!;
+    const skewed = pendingPaths();
+    const pending = skewed.pathSets.at(-1)!;
     pending.presentation.turnSequence = new Date(timestamp(9)).getTime();
     let map = skewed;
     const storage = createStorage({
@@ -864,6 +1023,7 @@ describe('protected Method routes', () => {
         if (result.status === 'committed' || result.status === 'replayed') map = result.map;
         return result;
       }),
+      listAgentTurns: vi.fn(async () => [completedPathPresentationTurn()]),
       beginWorkspaceActionTurn: vi.fn(async (input: {
         clientMessageId: string; requestFingerprint: string; turnId: string; leaseId: string;
       }): Promise<BeginAgentTurnResult> => ({
@@ -876,29 +1036,21 @@ describe('protected Method routes', () => {
           leaseId: input.leaseId,
         },
       })),
+      getConversationMapping: vi.fn(async () => 'conversation-for-authenticated-owner'),
     });
 
     const response = await request(testApp({
-      storage, requireAuth: authenticated, agentEnabled: true,
+      storage, ...directContinuationProvider(), requireAuth: authenticated, agentEnabled: true,
       now: () => new Date(timestamp(1)), operationalLog: vi.fn(),
-    })).post('/api/agent/workspace/operations').send({
-      operationId: 'operation-clock-skew-confirm',
-      clientMessageId: 'message-clock-skew-confirm',
+    })).post('/api/agent/workspace/operations').send(selectPurposePathRequest({
+      operationId: 'operation-clock-skew-select',
+      clientMessageId: 'message-clock-skew-select',
       expectedRevision: skewed.revision,
-      operation: {
-        type: 'confirm-why',
-        input: {
-          whyId: pending.id,
-          whyRevision: pending.revision,
-          presentedInTurnId: pending.presentation.assistantTurnId,
-          sourceMessageId: 'message-clock-skew-confirm',
-        },
-      },
-    });
+    }));
 
     expect(response.status).toBe(200);
-    expect(response.body).toMatchObject({ status: 'committed', authoritativeRevision: 2 });
-    expect(map.foundation.whyRevisions.at(-1)?.status).toBe('confirmed');
+    expect(response.text).toContain(DIRECT_CONTINUATION_TEXT);
+    expect(map.pathSets.at(-1)?.paths[0]?.selection).toBe('active');
   });
 
   it('derives an agent turn sequence after a same-millisecond canonical presentation', async () => {
@@ -976,6 +1128,115 @@ describe('protected Method routes', () => {
       expect.objectContaining({ status: 'Saved', sequence: 1, authoritativeRevision: 2 }),
     ]);
     expect(response.text).not.toContain('same-time-confirm-call');
+  });
+
+  it('scopes reused provider tool-call ids to their exact durable turns', async () => {
+    const rawProviderCallId = 'provider-reused-call-id';
+    const pending = pendingWhy().foundation.whyRevisions.at(-1)!;
+    const storage = createStorage({
+      beginAgentTurn: vi.fn(async (input: {
+        clientMessageId: string; requestFingerprint: string; turnId: string; leaseId: string;
+      }): Promise<BeginAgentTurnResult> => ({
+        status: 'started', shouldInvokeModel: true,
+        turn: {
+          ...turn('agent-turn'),
+          clientMessageId: input.clientMessageId,
+          requestFingerprint: input.requestFingerprint,
+          turnId: input.turnId,
+          leaseId: input.leaseId,
+        },
+      })),
+      getConversationMapping: vi.fn(async () => 'server-conversation-reused-call-id'),
+    });
+    const path = (number: number) => ({
+      id: `reused-path-${number}`, revision: 1, name: `Path ${number}`,
+      servesWhy: `Serve ${number}`, possibility: `Possibility ${number}`,
+      evidence: [`Evidence ${number}`], centralUnknown: `Unknown ${number}`,
+      projectPreview: `Project ${number}`, practicalFit: `Fit ${number}`,
+    });
+    let providerCall = 0;
+    const model = new MockLanguageModelV4({
+      doStream: async () => {
+        providerCall += 1;
+        if (providerCall === 1) {
+          return {
+            stream: simulateReadableStream({
+              chunks: [
+                { type: 'stream-start', warnings: [] },
+                {
+                  type: 'tool-call', toolCallId: rawProviderCallId, toolName: 'confirm_why',
+                  input: JSON.stringify({
+                    whyId: pending.id, whyRevision: pending.revision,
+                    presentedInTurnId: pending.presentation.assistantTurnId,
+                    sourceMessageId: 'correlation-message-1',
+                  }),
+                },
+                { type: 'finish', finishReason: { unified: 'tool-calls', raw: 'tool-calls' }, usage: usage() },
+              ] as never,
+            }),
+          };
+        }
+        if (providerCall === 2) return textStream('Your North Star is confirmed.');
+        if (providerCall === 3) {
+          return {
+            stream: simulateReadableStream({
+              chunks: [
+                { type: 'stream-start', warnings: [] },
+                {
+                  type: 'tool-call', toolCallId: rawProviderCallId, toolName: 'propose_purpose_paths',
+                  input: JSON.stringify({
+                    setId: 'reused-set-1', setRevision: 1,
+                    paths: [path(1), path(2), path(3)],
+                  }),
+                },
+                { type: 'finish', finishReason: { unified: 'tool-calls', raw: 'tool-calls' }, usage: usage() },
+              ] as never,
+            }),
+          };
+        }
+        return textStream('Three paths are ready.');
+      },
+    });
+    let idSequence = 0;
+    const app = testApp({
+      storage, requireAuth: authenticated, agentEnabled: true, model,
+      id: () => `correlation-id-${++idSequence}`,
+      conversationClient: { listItems: vi.fn(async () => ({ data: [], hasMore: false })) },
+      operationalLog: vi.fn(),
+    });
+
+    const first = await request(app).post('/api/agent').send({
+      id: 'correlation-message-1', message: 'That feels exactly right.',
+    });
+    const second = await request(app).post('/api/agent').send({
+      id: 'correlation-message-2', message: 'Now propose three Purpose Paths.',
+    });
+    const lifecycleFor = (response: typeof first) => uiStreamChunks(response.text)
+      .filter((chunk) => chunk.type === 'data-operation-status')
+      .map((chunk) => chunk.data as Record<string, unknown>);
+    const firstLifecycle = lifecycleFor(first);
+    const secondLifecycle = lifecycleFor(second);
+    const firstOperationId = firstLifecycle[0]?.operationId;
+    const secondOperationId = secondLifecycle[0]?.operationId;
+    const [firstBegin, secondBegin] = storage.beginAgentTurn.mock.calls.map((call) => call[0]);
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(firstLifecycle).toHaveLength(2);
+    expect(secondLifecycle).toHaveLength(2);
+    expect(firstLifecycle).toEqual(firstLifecycle.map((event) => expect.objectContaining({
+      turnId: firstBegin?.turnId, messageId: 'correlation-message-1', operationId: firstOperationId,
+    })));
+    expect(secondLifecycle).toEqual(secondLifecycle.map((event) => expect.objectContaining({
+      turnId: secondBegin?.turnId, messageId: 'correlation-message-2', operationId: secondOperationId,
+    })));
+    expect(secondBegin?.turnId).not.toBe(firstBegin?.turnId);
+    expect(firstOperationId).toMatch(/^op_[a-f0-9]{16}$/);
+    expect(secondOperationId).toMatch(/^op_[a-f0-9]{16}$/);
+    expect(secondOperationId).not.toBe(firstOperationId);
+    expect(storage.persistCareerMapOperation.mock.calls.map((call) => call[0].operation.sourceId))
+      .toEqual([firstOperationId, secondOperationId]);
+    expect(`${first.text}${second.text}`).not.toContain(rawProviderCallId);
   });
 
   it('keeps Saved while a later narration failure persists canonical recovery and internal item ids', async () => {
@@ -1076,11 +1337,14 @@ describe('protected Method routes', () => {
     expect(statuses).not.toContainEqual(expect.objectContaining({ status: 'Failed' }));
     expect(storage.failAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
       errorClass: 'NoOutputGeneratedError',
-      result: {
+      result: expect.objectContaining({
         revision: 2,
         operationCommitted: true,
         internalContextItemIds: ['internal-context-0', 'internal-context-1'],
-      },
+        displayRecovery: expect.objectContaining({
+          status: 'pending', retainPartial: true,
+        }),
+      }),
     }));
     expect(conversationClient.listItems).toHaveBeenCalledTimes(2);
     expect(response.text).not.toContain('saved-operation-provider-id');
@@ -1215,26 +1479,20 @@ describe('protected Method routes', () => {
       ...turn('workspace-action', 'failed'),
       terminalResult: { kind: 'failed', refetch: true, errorClass: 'TurnLeaseLostError' },
     };
-    const storage = createStorage({ completeAgentTurn: vi.fn(async () => failedTurn) });
+    const storage = createPathSelectionStorage({ completeAgentTurn: vi.fn(async () => failedTurn) });
     const response = await request(testApp({
-      storage, requireAuth: authenticated, agentEnabled: true,
+      storage, ...directContinuationProvider(), requireAuth: authenticated, agentEnabled: true,
       now: () => new Date(timestamp(3)), operationalLog: vi.fn(),
-    })).post('/api/agent/workspace/operations').send({
-      operationId: 'operation-completion-race', clientMessageId: 'client-message-1',
-      expectedRevision: 1,
-      operation: {
-        type: 'confirm-why', input: {
-          whyId: 'why-1', whyRevision: 1,
-          presentedInTurnId: 'prior-assistant-turn', sourceMessageId: 'client-message-1',
-        },
-      },
-    });
+    })).post('/api/agent/workspace/operations').send(
+      selectPurposePathRequest({ operationId: 'operation-completion-race' }),
+    );
 
-    expect(response.status).toBe(409);
-    expect(response.body).toMatchObject({
-      status: 'failed-replay', terminal: 'failed',
-      result: { kind: 'failed', refetch: true, errorClass: 'TurnLeaseLostError' },
-    });
+    expect(response.status).toBe(200);
+    expect(response.text).toContain('The agent request failed.');
+    expect(storage.failAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
+      errorClass: 'TurnLeaseLostError',
+      result: expect.objectContaining({ operationCommitted: true }),
+    }));
   });
 
   it.each([
@@ -1311,10 +1569,10 @@ describe('protected Method routes', () => {
 
   it('replays the stored workspace operation envelope without converting it to a generic completion', async () => {
     const operationEnvelope = {
-      status: 'committed', operation: 'confirm-why', authoritativeRevision: 2,
-      derivedModule: 'create-purpose-paths', pendingDecision: null,
+      status: 'committed', operation: 'select-purpose-path', authoritativeRevision: 4,
+      derivedModule: 'design-path-project', pendingDecision: null,
     };
-    const storage = createStorage({
+    const storage = createPathSelectionStorage({
       beginWorkspaceActionTurn: vi.fn(async (): Promise<BeginAgentTurnResult> => ({
         status: 'terminal', shouldInvokeModel: false,
         turn: { ...turn('workspace-action', 'completed'), terminalResult: { kind: 'workspace-result', refetch: true, operationEnvelope } },
@@ -1322,11 +1580,9 @@ describe('protected Method routes', () => {
     });
     const response = await request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true, operationalLog: vi.fn(),
-    })).post('/api/agent/workspace/operations').send({
-      operationId: 'operation-replay', clientMessageId: 'client-message-1',
-      expectedRevision: 1,
-      operation: { type: 'confirm-why', input: {} },
-    });
+    })).post('/api/agent/workspace/operations').send(
+      selectPurposePathRequest({ operationId: 'operation-replay' }),
+    );
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ ...operationEnvelope, turnStatus: 'completed', replay: true });
@@ -1338,11 +1594,11 @@ describe('protected Method routes', () => {
     ['rejected', 422, 'operation-unavailable', false],
   ] as const)('preserves stored workspace %s HTTP semantics', async (status, httpStatus, errorClass, retryable) => {
     const operationEnvelope = {
-      status, operation: 'confirm-why', authoritativeRevision: 2,
-      derivedModule: 'create-purpose-paths', pendingDecision: null,
+      status, operation: 'select-purpose-path', authoritativeRevision: 4,
+      derivedModule: 'design-path-project', pendingDecision: null,
       errorClass, ...(retryable ? { retryable: true } : {}),
     };
-    const storage = createStorage({
+    const storage = createPathSelectionStorage({
       beginWorkspaceActionTurn: vi.fn(async (): Promise<BeginAgentTurnResult> => ({
         status: 'terminal', shouldInvokeModel: false,
         turn: {
@@ -1353,11 +1609,9 @@ describe('protected Method routes', () => {
     });
     const response = await request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true, operationalLog: vi.fn(),
-    })).post('/api/agent/workspace/operations').send({
-      operationId: 'operation-replay', clientMessageId: 'client-message-1',
-      expectedRevision: 1,
-      operation: { type: 'confirm-why', input: {} },
-    });
+    })).post('/api/agent/workspace/operations').send(
+      selectPurposePathRequest({ operationId: 'operation-replay' }),
+    );
 
     expect(response.status).toBe(httpStatus);
     expect(response.body).toEqual({ ...operationEnvelope, turnStatus: 'completed', replay: true });
@@ -1366,7 +1620,7 @@ describe('protected Method routes', () => {
 
   it('fails closed when a stored workspace replay envelope is malformed instead of spreading its payload', async () => {
     const terminalSentinel = 'PRIVATE-STORED-TERMINAL-PAYLOAD';
-    const storage = createStorage({
+    const storage = createPathSelectionStorage({
       beginWorkspaceActionTurn: vi.fn(async (): Promise<BeginAgentTurnResult> => ({
         status: 'terminal', shouldInvokeModel: false,
         turn: {
@@ -1380,11 +1634,9 @@ describe('protected Method routes', () => {
     });
     const response = await request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true, operationalLog: vi.fn(),
-    })).post('/api/agent/workspace/operations').send({
-      operationId: 'operation-replay', clientMessageId: 'client-message-1',
-      expectedRevision: 1,
-      operation: { type: 'confirm-why', input: {} },
-    });
+    })).post('/api/agent/workspace/operations').send(
+      selectPurposePathRequest({ operationId: 'operation-replay' }),
+    );
 
     expect(response.status).toBe(409);
     expect(response.body).toMatchObject({ status: 'failed-replay', terminal: 'failed' });
@@ -1891,10 +2143,13 @@ describe('protected Method routes', () => {
           {
             id: 'durability-provider-user', role: 'user',
             parts: [{ type: 'text', text: 'First durable message.' }],
+            turn: { turnId: 'durability-turn-1', status: 'completed' },
           },
           {
             id: 'durability-provider-assistant', role: 'assistant',
             parts: [{ type: 'text', text: 'Safe progressive reply.' }],
+            turn: { turnId: 'durability-turn-1', status: 'completed' },
+            isFinalAssistantItem: true,
           },
         ],
       });
@@ -2828,23 +3083,15 @@ describe('protected Method routes', () => {
       activeTurnId: 'opaque-active-turn',
       retryAfter: new Date(timestamp(9)),
     };
-    const storage = createStorage(surface === 'agent'
-      ? { beginAgentTurn: vi.fn(async () => conflict) }
-      : { beginWorkspaceActionTurn: vi.fn(async () => conflict) });
+    const storage = surface === 'agent'
+      ? createStorage({ beginAgentTurn: vi.fn(async () => conflict) })
+      : createPathSelectionStorage({ beginWorkspaceActionTurn: vi.fn(async () => conflict) });
     const app = testApp({ storage, requireAuth: authenticated, agentEnabled: true, operationalLog: vi.fn() });
     const response = surface === 'agent'
       ? await request(app).post('/api/agent').send({ id: 'client-message-1', message: 'hello' })
-      : await request(app).post('/api/agent/workspace/operations').send({
-        operationId: 'operation-1', clientMessageId: 'client-message-1',
-        expectedRevision: 1,
-        operation: {
-          type: 'confirm-why',
-          input: {
-            whyId: 'why-1', whyRevision: 1,
-            presentedInTurnId: 'prior-assistant-turn', sourceMessageId: 'client-message-1',
-          },
-        },
-      });
+      : await request(app).post('/api/agent/workspace/operations').send(
+        selectPurposePathRequest({ operationId: 'operation-1' }),
+      );
     expect(response.status).toBe(409);
     expect(response.body).toMatchObject({ status: 'conflict', retryable: true });
     expect(storage.persistCareerMapOperation).not.toHaveBeenCalled();
@@ -2919,19 +3166,12 @@ describe('protected Method routes', () => {
     const rawOperationId = 'operation-PRIVATE-IDENTIFIER-sentinel';
     const logs: Array<Record<string, unknown>> = [];
     const response = await request(testApp({
-      storage: createStorage(), requireAuth: authenticated, agentEnabled: true,
+      storage: createPathSelectionStorage(), ...directContinuationProvider(),
+      requireAuth: authenticated, agentEnabled: true,
       now: () => new Date(timestamp(3)), operationalLog: (entry) => logs.push(entry),
-    })).post('/api/agent/workspace/operations').send({
-      operationId: rawOperationId, clientMessageId: 'client-message-1',
-      expectedRevision: 1,
-      operation: {
-        type: 'confirm-why',
-        input: {
-          whyId: 'why-1', whyRevision: 1,
-          presentedInTurnId: 'prior-assistant-turn', sourceMessageId: 'client-message-1',
-        },
-      },
-    });
+    })).post('/api/agent/workspace/operations').send(
+      selectPurposePathRequest({ operationId: rawOperationId }),
+    );
     expect(response.status).toBe(200);
     expect(JSON.stringify(logs)).not.toContain(rawOperationId);
     expect(logs.at(-1)?.operationId).toMatch(/^op_[a-f0-9]{16}$/);
@@ -3078,7 +3318,7 @@ describe('protected Method routes', () => {
   });
 
   it('captures the cancellation baseline after lease acquisition so a foreign commit is not attributed to this turn', async () => {
-    const beforeLease = pendingWhy();
+    const beforeLease = pendingPaths();
     const foreign = applyCareerMapOperation(beforeLease, {
       type: 'append-foundation-evidence',
       sourceId: 'foreign-operation',
@@ -3090,7 +3330,7 @@ describe('protected Method routes', () => {
           content: 'A separately committed signal.',
           provenance: {
             kind: 'user-message', actionId: 'foreign-message', turnId: 'foreign-turn',
-            turnSequence: 2, occurredAt: timestamp(2),
+            turnSequence: 4, occurredAt: timestamp(2),
           },
         },
       },
@@ -3101,7 +3341,7 @@ describe('protected Method routes', () => {
     const persistStartedGate = new Promise<void>((resolve) => { persistStarted = resolve; });
     let releasePersist!: () => void;
     const persistGate = new Promise<void>((resolve) => { releasePersist = resolve; });
-    const storage = createStorage({
+    const storage = createPathSelectionStorage({
       getOrCreateCareerMap: vi.fn(async () => ({ status: 'ready' as const, map: beforeLease })),
       beginWorkspaceActionTurn: vi.fn(async (): Promise<BeginAgentTurnResult> => {
         canonical = foreign.map;
@@ -3117,17 +3357,10 @@ describe('protected Method routes', () => {
     const outbound = request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true,
       now: () => new Date(timestamp(3)), operationalLog: vi.fn(),
-    })).post('/api/agent/workspace/operations').send({
-      operationId: 'operation-after-foreign-commit', clientMessageId: 'client-message-1',
+    })).post('/api/agent/workspace/operations').send(selectPurposePathRequest({
+      operationId: 'operation-after-foreign-commit',
       expectedRevision: foreign.map.revision,
-      operation: {
-        type: 'confirm-why',
-        input: {
-          whyId: 'why-1', whyRevision: 1,
-          presentedInTurnId: 'prior-assistant-turn', sourceMessageId: 'client-message-1',
-        },
-      },
-    });
+    }));
     const settled = Promise.resolve(outbound).catch(() => undefined);
     await persistStartedGate;
     outbound.abort();
@@ -3142,14 +3375,14 @@ describe('protected Method routes', () => {
   });
 
   it('records abort-after-commit recovery markers and replays cancellation without invoking the workspace operation twice', async () => {
-    const storage = createStorage();
+    const storage = createPathSelectionStorage();
     const persist = storage.persistCareerMapOperation;
     let releasePersist!: () => void;
     const persistGate = new Promise<void>((resolve) => { releasePersist = resolve; });
     let committed!: () => void;
     const committedSignal = new Promise<void>((resolve) => { committed = resolve; });
     persist.mockImplementationOnce(async (input) => {
-      const result = await createStorage().persistCareerMapOperation(input);
+      const result = await createPathSelectionStorage().persistCareerMapOperation(input);
       // Reflect the durable commit in the canonical load used by recovery.
       if ('map' in result) {
         storage.loadCareerMap.mockResolvedValue({ status: 'ready', map: result.map });
@@ -3162,17 +3395,7 @@ describe('protected Method routes', () => {
       storage, requireAuth: authenticated, agentEnabled: true,
       now: () => new Date(timestamp(3)), operationalLog: vi.fn(),
     });
-    const body = {
-      operationId: 'operation-abort-after-commit', clientMessageId: 'client-message-1',
-      expectedRevision: 1,
-      operation: {
-        type: 'confirm-why',
-        input: {
-          whyId: 'why-1', whyRevision: 1,
-          presentedInTurnId: 'prior-assistant-turn', sourceMessageId: 'client-message-1',
-        },
-      },
-    };
+    const body = selectPurposePathRequest({ operationId: 'operation-abort-after-commit' });
     const outbound = request(app).post('/api/agent/workspace/operations').send(body);
     const settled = Promise.resolve(outbound).catch(() => undefined);
     await committedSignal;
@@ -3184,7 +3407,7 @@ describe('protected Method routes', () => {
 
     const cancellation = storage.cancelAgentTurn.mock.calls[0]?.[0]?.result;
     expect(cancellation).toMatchObject({
-      kind: 'cancelled', stopped: true, refetch: true, revision: 2, operationCommitted: true,
+      kind: 'cancelled', stopped: true, refetch: true, revision: 4, operationCommitted: true,
     });
     storage.beginWorkspaceActionTurn.mockResolvedValueOnce({
       status: 'terminal', shouldInvokeModel: false,
@@ -3195,7 +3418,7 @@ describe('protected Method routes', () => {
     expect(replay.status).toBe(409);
     expect(replay.body).toMatchObject({
       status: 'cancelled-replay', terminal: 'cancelled',
-      result: { kind: 'cancelled', stopped: true, refetch: true, revision: 2, operationCommitted: true },
+      result: { kind: 'cancelled', stopped: true, refetch: true, revision: 4, operationCommitted: true },
     });
     expect(persist).toHaveBeenCalledOnce();
   });

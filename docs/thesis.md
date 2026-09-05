@@ -58,6 +58,8 @@ Courses are expensive, do not scale, and can start you on your journey but not g
 
 A personalized guide to walk you through every step of the way that doesn't cost a fortune.
 
+Revelio helps the explorer name a provisional **North Star**: a service-oriented direction that can guide several distinct paths without becoming a fixed job, identity, or destiny. Action can strengthen or revise it.
+
 - Guiding self-reflection
 - Suggesting possible paths to explore
 - Designing personalized projects to work on for any given path 

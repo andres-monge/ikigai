@@ -1,38 +1,19 @@
 import {
   deriveMethodCheckpoint,
-  selectActivePurposePath,
   selectCurrentFoundationEvidence,
   selectCurrentRealityConstraints,
   type CareerMap,
-  type CareerMapOperationType,
   type MethodModule,
   type PendingDecision,
-  type PurposePath,
 } from '@shared/career-map';
-
-export interface DeterministicOperationRequest {
-  type: CareerMapOperationType;
-  input: Record<string, unknown>;
-}
+import { humanizeStatus, PurposePathCard } from './purpose-path-card';
 
 interface MethodMapProps {
   map: CareerMap;
-  busy: boolean;
-  onOperation: (operation: DeterministicOperationRequest) => void;
-  onConversationPrompt: (prompt: string) => void;
-  onGoToConversation?: () => void;
 }
 
-const pathStyles = [
-  { header: 'bg-[#4db6ac]', project: 'bg-[#dff3f1]' },
-  { header: 'bg-[#ffc107]', project: 'bg-[#fff4cc]' },
-  { header: 'bg-[#ff6b35]', project: 'bg-[#ffe1d6]' },
-] as const;
-
-const buttonClass = 'min-h-11 border-2 border-black bg-white px-3 py-2 font-display text-xs font-black shadow-[2px_2px_0_rgba(0,0,0,0.65)] transition-[transform,box-shadow] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black disabled:cursor-wait disabled:opacity-50';
-
 const moduleLabels: Record<MethodModule, string> = {
-  'form-foundation': 'Form the Foundation',
+  'form-foundation': 'Form Your North Star',
   'create-purpose-paths': 'Create Purpose Paths',
   'design-path-project': 'Design a Path Project',
   'guide-path-project': 'Guide a Path Project',
@@ -42,7 +23,7 @@ const moduleLabels: Record<MethodModule, string> = {
 };
 
 const decisionLabels: Record<PendingDecision['kind'], string> = {
-  'why-confirmation': 'Confirm your Why I Work',
+  'why-confirmation': 'Confirm your North Star',
   'path-selection': 'Choose a Purpose Path',
   'path-revision-confirmation': 'Confirm the revised Purpose Paths',
   'first-project-confirmation': 'Accept the first Path Project',
@@ -55,10 +36,6 @@ const decisionLabels: Record<PendingDecision['kind'], string> = {
   'proof-confirmation': 'Confirm the proof inventory',
   'side-door-selection': 'Choose a Side Door',
 };
-
-function humanizeStatus(status: string): string {
-  return status.replaceAll('-', ' ').replace(/^./u, (first) => first.toUpperCase());
-}
 
 function SelectionLabel({ selection }: { selection: 'available' | 'active' | 'parked' }) {
   return (
@@ -87,189 +64,6 @@ function CheckpointSummary({ map }: { map: CareerMap }) {
   );
 }
 
-function EvidenceList({ values }: { values: string[] }) {
-  return <p className="text-sm leading-6">{values.join(' · ')}</p>;
-}
-
-function ConversationButton({
-  children,
-  prompt,
-  disabled,
-  onConversationPrompt,
-  label,
-}: {
-  children: string;
-  prompt: string;
-  disabled: boolean;
-  onConversationPrompt: (prompt: string) => void;
-  label?: string;
-}) {
-  return (
-    <button
-      type="button"
-      className={buttonClass}
-      disabled={disabled}
-      aria-label={label}
-      onClick={() => onConversationPrompt(prompt)}
-    >
-      {children}
-    </button>
-  );
-}
-
-function PurposePathCard({
-  path,
-  index,
-  set,
-  hasActivePath,
-  busy,
-  onOperation,
-  onConversationPrompt,
-}: {
-  path: PurposePath;
-  index: number;
-  set: CareerMap['pathSets'][number];
-  hasActivePath: boolean;
-  busy: boolean;
-  onOperation: MethodMapProps['onOperation'];
-  onConversationPrompt: MethodMapProps['onConversationPrompt'];
-}) {
-  const style = pathStyles[index];
-  const selectable = set.status === 'suggested';
-  return (
-    <article
-      data-testid="purpose-path-card"
-      className="method-path-card border-2 border-black bg-white shadow-[6px_6px_0_rgba(0,0,0,0.65)]"
-    >
-      <header className={`border-b-2 border-black p-5 ${style.header}`}>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <span className="inline-block bg-black px-2 py-1 font-display text-xs font-black uppercase tracking-[0.1em] text-white">
-            Path {String(index + 1).padStart(2, '0')}
-          </span>
-          <SelectionLabel selection={path.selection} />
-        </div>
-        <h3 className="mt-3 text-xl font-black leading-tight">{path.name}</h3>
-        <p className="mt-2 text-sm font-semibold leading-6">{path.servesWhy}</p>
-      </header>
-      <section className="method-path-band">
-        <h4 className="method-map-label">What could become possible</h4>
-        <p className="text-sm leading-6">{path.possibility}</p>
-      </section>
-      <section className="method-path-band">
-        <h4 className="method-map-label">Evidence it may fit</h4>
-        <EvidenceList values={path.evidence} />
-      </section>
-      <section className="method-path-band border-y-2 !border-black bg-ikigai-cream">
-        <h4 className="method-map-label !text-black">The central unknown</h4>
-        <p className="font-display text-lg font-extrabold leading-6">{path.centralUnknown}</p>
-      </section>
-      <section className={`method-path-band border-y-2 !border-black ${style.project}`}>
-        <h4 className="method-map-label !text-black">First project</h4>
-        <p className="text-sm leading-6">{path.projectPreview}</p>
-      </section>
-      <section className="method-path-band">
-        <h4 className="method-map-label">How it could fit your life</h4>
-        <p className="text-sm leading-6">{path.practicalFit}</p>
-      </section>
-      <footer className="method-path-band flex flex-wrap items-end gap-2">
-        {selectable ? (
-          <button
-            type="button"
-            disabled={busy}
-            className={`${buttonClass} ${style.header}`}
-            aria-label={`Start path ${index + 1}: ${path.name}`}
-            onClick={() => {
-              const sourceMessageId = crypto.randomUUID();
-              onOperation({
-                type: hasActivePath
-                  ? 'confirm-purpose-path-revision'
-                  : 'select-purpose-path',
-                input: {
-                  setId: set.id,
-                  setRevision: set.revision,
-                  pathId: path.id,
-                  pathRevision: path.revision,
-                  presentedInTurnId: set.presentation.assistantTurnId,
-                  sourceMessageId,
-                },
-              });
-            }}
-          >
-            Start this path
-          </button>
-        ) : null}
-        <ConversationButton
-          disabled={busy}
-          label={`Rewrite path ${index + 1}: ${path.name}`}
-          prompt={`I want to rewrite only “${path.name}” while keeping the other two paths unchanged. Nothing should be selected yet.`}
-          onConversationPrompt={onConversationPrompt}
-        >
-          Rewrite
-        </ConversationButton>
-        <ConversationButton
-          disabled={busy}
-          label={`Replace path ${index + 1}: ${path.name}`}
-          prompt={`Please replace only “${path.name}” with a meaningfully distinct path. Keep the other two unchanged and do not select anything.`}
-          onConversationPrompt={onConversationPrompt}
-        >
-          Replace
-        </ConversationButton>
-      </footer>
-    </article>
-  );
-}
-
-function PurposePathContext({
-  path,
-  busy,
-  onConversationPrompt,
-  actions = false,
-}: {
-  path: PurposePath;
-  busy: boolean;
-  onConversationPrompt: MethodMapProps['onConversationPrompt'];
-  actions?: boolean;
-}) {
-  return (
-    <article data-testid={`purpose-path-${path.selection}`} className="border-2 border-black bg-white p-5 shadow-[4px_4px_0_rgba(0,0,0,0.65)]">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h3 className="text-xl font-black">{path.name}</h3>
-          <p className="mt-2 text-sm font-semibold leading-6">{path.servesWhy}</p>
-        </div>
-        <SelectionLabel selection={path.selection} />
-      </div>
-      <details className="mt-4 border-t border-slate-300 pt-3">
-        <summary className="cursor-pointer text-sm font-bold">Inspect this Purpose Path</summary>
-        <div className="mt-3 space-y-3 text-sm leading-6">
-          <p><strong>What could become possible:</strong> {path.possibility}</p>
-          <p><strong>Evidence it may fit:</strong> {path.evidence.join(' · ')}</p>
-          <p><strong>Central unknown:</strong> {path.centralUnknown}</p>
-          <p><strong>First project:</strong> {path.projectPreview}</p>
-          <p><strong>Practical fit:</strong> {path.practicalFit}</p>
-        </div>
-      </details>
-      {actions ? (
-        <div className="mt-4 flex flex-wrap gap-2">
-          <ConversationButton
-            disabled={busy}
-            prompt={`I want to revise “${path.name}” without confirming a new version yet.`}
-            onConversationPrompt={onConversationPrompt}
-          >
-            Revise this path
-          </ConversationButton>
-          <ConversationButton
-            disabled={busy}
-            prompt={`Please replace “${path.name}” with a meaningfully distinct path without selecting anything yet.`}
-            onConversationPrompt={onConversationPrompt}
-          >
-            Replace this path
-          </ConversationButton>
-        </div>
-      ) : null}
-    </article>
-  );
-}
 
 function ProjectCard({
   project,
@@ -307,11 +101,7 @@ function ProjectCard({
   );
 }
 
-function LaterMethodState({
-  map,
-  busy,
-  onConversationPrompt,
-}: Pick<MethodMapProps, 'map' | 'busy' | 'onConversationPrompt'>) {
+function LaterMethodState({ map }: MethodMapProps) {
   const reflection = map.reflections.at(-1);
   const continueChoice = reflection
     ? map.continueChoices.find((item) => (
@@ -364,34 +154,6 @@ function LaterMethodState({
               ? 'You said you want to continue. Choose one formal next step.'
               : 'You said you do not want to continue down this path.'}
           </p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {continueChoice.wantsToContinue ? (
-              <>
-                <ConversationButton
-                  disabled={busy}
-                  prompt="I want to explore further with another Path Project."
-                  onConversationPrompt={onConversationPrompt}
-                >
-                  Explore further
-                </ConversationButton>
-                <ConversationButton
-                  disabled={busy}
-                  prompt="I want to commit provisionally to this Purpose Path and begin Side Doors."
-                  onConversationPrompt={onConversationPrompt}
-                >
-                  Commit provisionally
-                </ConversationButton>
-              </>
-            ) : (
-              <ConversationButton
-                disabled={busy}
-                prompt="I want to return to Purpose Paths."
-                onConversationPrompt={onConversationPrompt}
-              >
-                Return to Purpose Paths
-              </ConversationButton>
-            )}
-          </div>
         </section>
       ) : null}
       {peer ? (
@@ -476,20 +238,17 @@ function LaterMethodState({
   );
 }
 
-export function MethodMap({ map, busy, onOperation, onConversationPrompt, onGoToConversation }: MethodMapProps) {
+export function MethodMap({ map }: MethodMapProps) {
   const currentEvidence = selectCurrentFoundationEvidence(map.foundation);
   const currentConstraints = selectCurrentRealityConstraints(map.foundation);
   const why = map.foundation.whyRevisions.findLast((item) => item.status !== 'superseded');
-  const suggestedPathSet = map.pathSets.findLast((item) => item.status === 'suggested');
-  const activePathSet = map.pathSets.findLast((item) => item.status === 'active');
-  const activePath = selectActivePurposePath(map);
-  const parkedPaths = activePathSet?.paths.filter((path) => path.selection === 'parked') ?? [];
+  const displayedPathSet = map.pathSets.findLast((item) => item.status !== 'superseded');
   const activeProject = map.projects.findLast((item) => (
     item.agreementStatus === 'suggested' || item.agreementStatus === 'accepted'
   ));
   const optionSet = map.projectOptionSets.findLast((item) => item.status !== 'superseded');
   const hasState = currentEvidence.length > 0 || currentConstraints.length > 0
-    || why || suggestedPathSet || activePath || activeProject || optionSet
+    || why || displayedPathSet || activeProject || optionSet
     || map.reflections.length || map.proofRevisions.length || map.sideDoorSets.length
     || map.commitmentIntent || map.provisionalCommitment;
 
@@ -502,37 +261,17 @@ export function MethodMap({ map, busy, onOperation, onConversationPrompt, onGoTo
           you, the directions worth trying, and the project you take on first. Nothing lands here until you’ve
           confirmed it, so you can change your mind in the chat at any point.
         </p>
-        {onGoToConversation ? (
-          <button
-            type="button"
-            onClick={onGoToConversation}
-            className="mt-6 min-h-11 border-2 border-black bg-ikigai-teal px-4 font-display text-sm font-black shadow-[3px_3px_0_rgba(0,0,0,0.65)] transition-[transform,box-shadow] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black active:translate-x-0.5 active:translate-y-0.5 active:shadow-none"
-          >
-            Start in the chat
-          </button>
-        ) : null}
       </section>
     );
   }
 
   return (
-    <fieldset
-      disabled={busy}
-      aria-busy={busy}
-      aria-describedby={busy ? 'method-actions-disabled-reason' : undefined}
-      className="m-0 min-w-0 border-0 p-0"
-    >
-      <legend className="sr-only">Method workspace</legend>
+    <div className="min-w-0">
       <CheckpointSummary map={map} />
-      {busy ? (
-        <p id="method-actions-disabled-reason" role="status" className="mb-5 mt-5 border-l-4 border-amber-700 bg-amber-50 px-3 py-2 text-sm font-bold">
-          Method actions are unavailable until the current turn finishes and the latest map is loaded.
-        </p>
-      ) : null}
       <div className="mt-8 space-y-8">
       {!why && (currentEvidence.length > 0 || currentConstraints.length > 0) ? (
         <section className="max-w-3xl border-2 border-black bg-white p-5 shadow-[4px_4px_0_rgba(0,0,0,0.65)]">
-          <p className="method-map-label">Foundation in progress</p>
+          <p className="method-map-label">Your North Star in progress</p>
           <h2 className="text-2xl font-black">What we know so far</h2>
           {currentEvidence.length > 0 ? (
             <ul className="mt-4 list-disc space-y-2 pl-5 text-sm">
@@ -546,12 +285,12 @@ export function MethodMap({ map, busy, onOperation, onConversationPrompt, onGoTo
       ) : null}
       {why ? (
         <section className="max-w-3xl border-2 border-black bg-white p-5 shadow-[4px_4px_0_rgba(0,0,0,0.65)]">
-          <p className="method-map-label">{why.status === 'confirmed' ? 'Confirmed foundation' : 'Suggested foundation'}</p>
-          <h2 className="text-2xl font-black">Why You Work</h2>
+          <p className="method-map-label">{why.status === 'confirmed' ? 'Confirmed Your North Star' : 'Suggested Your North Star'}</p>
+          <h2 className="text-2xl font-black">Your North Star</h2>
           <p className="mt-3 text-lg font-medium leading-7">{why.statement}</p>
           <p className="mt-2 text-sm text-stone-600">{why.serves}</p>
           <details className="mt-4 border-t border-slate-300 pt-3">
-            <summary className="cursor-pointer text-sm font-bold">Inspect the Foundation</summary>
+            <summary className="cursor-pointer text-sm font-bold">Inspect Your North Star</summary>
             <p className="mt-3 text-sm"><strong>Point of view:</strong> {why.pointOfView}</p>
             {currentEvidence.length > 0 ? (
               <ul className="mt-3 list-disc space-y-1 pl-5 text-sm">
@@ -562,95 +301,27 @@ export function MethodMap({ map, busy, onOperation, onConversationPrompt, onGoTo
               <p className="mt-3 text-sm"><strong>Practical reality:</strong> {currentConstraints.map((item) => item.description).join(' · ')}</p>
             ) : null}
           </details>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {why.status === 'suggested' ? (
-              <button
-                type="button"
-                className={`${buttonClass} bg-[#4db6ac]`}
-                disabled={busy}
-                onClick={() => {
-                  const sourceMessageId = crypto.randomUUID();
-                  onOperation({
-                    type: 'confirm-why',
-                    input: {
-                      whyId: why.id,
-                      whyRevision: why.revision,
-                      presentedInTurnId: why.presentation.assistantTurnId,
-                      sourceMessageId,
-                    },
-                  });
-                }}
-              >
-                Confirm this Why
-              </button>
-            ) : null}
-            <ConversationButton disabled={busy} prompt="I want to revise my Why without confirming a new version yet." onConversationPrompt={onConversationPrompt}>
-              Revise this Why
-            </ConversationButton>
-          </div>
         </section>
       ) : null}
 
-      {activePath ? (
-        <section aria-labelledby="active-purpose-path-heading">
-          <p className="method-map-label">Current Purpose Path context</p>
-          <h2 id="active-purpose-path-heading" className="text-2xl font-black">Your active Purpose Path</h2>
-          <div className="mt-4">
-            <PurposePathContext
-              path={activePath}
-              busy={busy}
-              onConversationPrompt={onConversationPrompt}
-              actions
-            />
-          </div>
-          {parkedPaths.length > 0 ? (
-            <details className="mt-4 border-2 border-black bg-white p-4">
-              <summary className="cursor-pointer font-display text-base font-black">
-                Parked Purpose Paths ({parkedPaths.length})
-              </summary>
-              <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                {parkedPaths.map((path) => (
-                  <PurposePathContext
-                    key={`${path.id}-${path.revision}`}
-                    path={path}
-                    busy={busy}
-                    onConversationPrompt={onConversationPrompt}
-                  />
-                ))}
-              </div>
-            </details>
-          ) : null}
-        </section>
-      ) : null}
-
-      {suggestedPathSet ? (
+      {displayedPathSet ? (
         <section aria-labelledby="purpose-paths-heading">
-          <h2 id="purpose-paths-heading" className="text-3xl font-black">Three ways to serve that</h2>
+          <h2 id="purpose-paths-heading" className="text-3xl font-black">Purpose Paths</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
-            Each path is a different way of working, not a ranking. Read all three before choosing or changing one.
+            {displayedPathSet.status === 'active'
+              ? 'Your active path and parked alternatives, shown without ranking.'
+              : 'Three equal ways to serve your North Star, shown without ranking.'}
           </p>
-          <div className="method-path-grid mt-5">
-            {suggestedPathSet.paths.map((path, index) => (
-              <PurposePathCard
-                key={`${path.id}-${path.revision}`}
-                path={path}
-                index={index}
-                set={suggestedPathSet}
-                hasActivePath={Boolean(activePath)}
-                busy={busy}
-                onOperation={onOperation}
-                onConversationPrompt={onConversationPrompt}
-              />
-            ))}
-          </div>
-          <div className="mt-6 flex flex-wrap items-center gap-3 border-2 border-black bg-white p-4 shadow-[4px_4px_0_rgba(0,0,0,0.65)]">
-            <p className="min-w-[16rem] flex-1 text-sm">Rewriting, replacing, or combining confirms and activates nothing.</p>
-            <ConversationButton disabled={busy} prompt="I want to combine two of these Purpose Paths. Ask me which two, then keep the set at exactly three distinct options without selecting one." onConversationPrompt={onConversationPrompt}>
-              Combine two paths
-            </ConversationButton>
-            <ConversationButton disabled={busy} prompt="I have questions about these Purpose Paths before I choose." onConversationPrompt={onConversationPrompt}>
-              Ask about these paths
-            </ConversationButton>
+          <div className="purpose-path-comparison mt-5">
+            <div className="method-path-grid">
+              {displayedPathSet.paths.map((path, index) => (
+                <PurposePathCard
+                  key={`${path.id}-${path.revision}`}
+                  path={path}
+                  index={index}
+                />
+              ))}
+            </div>
           </div>
         </section>
       ) : null}
@@ -666,19 +337,6 @@ export function MethodMap({ map, busy, onOperation, onConversationPrompt, onGoTo
           <div className="mt-4">
             <ProjectCard project={activeProject} compact={activeProject.agreementStatus === 'accepted'} />
           </div>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {activeProject.agreementStatus === 'suggested' ? (
-              activeProject.acceptanceFraming?.status === 'delivered' ? (
-                <ConversationButton disabled={busy} prompt={activeProject.acceptanceFraming.acceptancePhrase} onConversationPrompt={onConversationPrompt}>Accept this project</ConversationButton>
-              ) : !activeProject.acceptanceFraming ? (
-                <ConversationButton disabled={busy} prompt="This Path Project is ready. Give me the required project framing and ask me to accept it, but do not accept it yet." onConversationPrompt={onConversationPrompt}>Review before accepting</ConversationButton>
-              ) : null
-            ) : null}
-            <ConversationButton disabled={busy} prompt={`Please refine “${activeProject.title}” without treating the revision as accepted.`} onConversationPrompt={onConversationPrompt}>Refine</ConversationButton>
-            {activeProject.agreementStatus === 'suggested' && activeProject.number === 1 ? (
-              <ConversationButton disabled={busy} prompt="This first project does not convince me. Please replace it with one completely new proposal, keeping the same project number." onConversationPrompt={onConversationPrompt}>Suggest something different</ConversationButton>
-            ) : null}
-          </div>
         </section>
       ) : null}
 
@@ -692,8 +350,8 @@ export function MethodMap({ map, busy, onOperation, onConversationPrompt, onGoTo
         </section>
       ) : null}
 
-        <LaterMethodState map={map} busy={busy} onConversationPrompt={onConversationPrompt} />
+        <LaterMethodState map={map} />
       </div>
-    </fieldset>
+    </div>
   );
 }

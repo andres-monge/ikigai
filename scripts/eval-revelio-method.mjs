@@ -16,9 +16,8 @@ import {
   createCareerMap,
   deriveMethodCheckpoint,
   foundationEvidenceSchema,
-  hasSuggestedOperationVeto,
+  invalidationTargetOrder,
   isExactFirstProjectFramingDelivery,
-  isExactPersistedAcceptance,
   pathProjectInputSchema,
   purposePathInputSchema,
   realityConstraintSchema,
@@ -29,6 +28,8 @@ import {
   BASE_METHOD_INSTRUCTIONS,
   FIRST_PROJECT_ACCEPTANCE_PHRASE_ENGLISH,
   FIRST_PROJECT_ACCEPTANCE_PHRASE_SPANISH,
+  PURPOSE_PATHS_OFFER_ENGLISH,
+  PURPOSE_PATHS_OFFER_SPANISH,
   R22_CANONICAL_ENGLISH,
   R22_CANONICAL_SPANISH,
 } from '../server/ai/method/base-instructions.ts';
@@ -97,6 +98,7 @@ const operationToTool = {
   'append-foundation-evidence': 'append_foundation_evidence',
   'record-reality-constraint': 'record_reality_constraint',
   'propose-why': 'propose_why',
+  'revise-why': 'revise_why',
   'confirm-why': 'confirm_why',
   'propose-purpose-paths': 'propose_purpose_paths',
   'replace-purpose-path': 'replace_purpose_path',
@@ -108,6 +110,44 @@ const operationToTool = {
   'present-first-project-framing': 'present_first_project_framing',
   'accept-first-project': 'accept_first_project',
 };
+
+const semanticIntentFixtures = {
+  positive: [
+    { label: 'English', userText: "Yes, that's it exactly.", state: 'pending-why', expectedOperation: 'confirm-why' },
+    { label: 'German', userText: 'Ja, genau so.', state: 'pending-why', expectedOperation: 'confirm-why' },
+    { label: 'Portuguese', userText: 'Sim, é isso mesmo.', state: 'pending-why', expectedOperation: 'confirm-why' },
+    { label: 'Russian', userText: 'Да, именно это.', state: 'pending-why', expectedOperation: 'confirm-why' },
+    { label: 'bare ordinal', userText: '1', state: 'pending-paths', expectedOperation: 'select-purpose-path' },
+  ],
+  clarification: [
+    { label: 'hedge', userText: 'That may be right, but I am not ready to confirm it.', state: 'pending-why' },
+    { label: 'quote', userText: 'You said “Yes, that is it exactly.”', state: 'pending-why' },
+    { label: 'question', userText: 'Should I confirm this now?', state: 'pending-why' },
+    { label: 'conditional', userText: 'Choose the first path if it can be entirely remote.', state: 'pending-paths' },
+    { label: 'generic assent among three', userText: 'Yes.', state: 'pending-paths' },
+    { label: 'ambiguous', userText: 'The first or second could work.', state: 'pending-paths' },
+    { label: 'multi-target', userText: 'Start the first and second paths.', state: 'pending-paths' },
+  ],
+};
+
+const northStarRevisionFixtures = {
+  zeroImpactClasses: [],
+  deepImpactClasses: [
+    'path-set', 'project', 'reflection', 'next-move', 'peer-exposure',
+    'commitment', 'proof', 'side-door-set', 'route-outcome',
+  ],
+  acknowledgmentTiming: 'later-user-turn',
+  failedPresentationRecoveryOperation: 'revise-why',
+};
+
+function proveU7FixtureCoverage() {
+  assert(semanticIntentFixtures.positive.map(({ label }) => label).join('|') === 'English|German|Portuguese|Russian|bare ordinal', 'U7 semantic-positive fixture coverage drifted.');
+  assert(semanticIntentFixtures.clarification.map(({ label }) => label).join('|') === 'hedge|quote|question|conditional|generic assent among three|ambiguous|multi-target', 'U7 clarification fixture coverage drifted.');
+  assert(JSON.stringify(northStarRevisionFixtures.zeroImpactClasses) === '[]', 'U7 zero-impact revision fixture drifted.');
+  assert(JSON.stringify(northStarRevisionFixtures.deepImpactClasses) === JSON.stringify(invalidationTargetOrder), 'U7 deep-revision fixture must name the reducer-owned exact artifact classes in order.');
+  assert(northStarRevisionFixtures.acknowledgmentTiming === 'later-user-turn', 'U7 revision acknowledgment must be later-turn.');
+  assert(northStarRevisionFixtures.failedPresentationRecoveryOperation === 'revise-why', 'U7 failed revision presentation must reuse revise-why.');
+}
 
 const scenarios = [
   {
@@ -128,12 +168,12 @@ const scenarios = [
     requiredOperations: ['replace-purpose-path', 'replace-project-proposal'],
     turns: [
       'I lose track of time when I turn a messy process into a tool someone can actually use. I want small teams to make difficult choices with less waste, and I believe clarity matters only when it changes action. Colleagues already rely on me to explain complex systems and I have built several internal tools they adopted. I can spend five hours a week, need to keep my current income, and must work from Madrid.',
-      'Yes. That Why I Work is right, and I explicitly confirm it.',
+      "Yes, that's it exactly.",
       'I do not like the second path. Replace only that path, keep the other two unchanged, and do not rank the set.',
-      'I explicitly choose the first path in the current three-path set.',
+      '1',
       'I do not want this first project. Replace it with one new project for a real outcome I want or a beneficiary I know firsthand.',
       'The replacement project feels ready. Give me the required project framing now and ask me to accept it, but do not accept it yet.',
-      'I explicitly accept this Path Project.',
+      'I accept this Path Project and want to start.',
     ],
   },
   {
@@ -154,12 +194,12 @@ const scenarios = [
     turns: [
       'No se me ocurre ninguna actividad que me absorba de verdad. En diez años me gustaría haber ayudado a que equipos pequeños tomen decisiones más humanas, porque creo que la claridad debe llevar a una acción propia. La gente me pide que explique sistemas complejos. Tengo cinco horas semanales y necesito mantener mis ingresos.',
       'Suelo leer y pensar durante horas sobre cómo diseñar mejores decisiones, y una vez convertí esas ideas en una guía que mi equipo usó voluntariamente.',
-      'Sí, ese Porqué del Trabajo me representa y lo confirmo explícitamente.',
+      'Sí, esa Estrella Polar me representa y quiero confirmarla.',
       'Combina el primer y el segundo camino en uno, conserva el tercero y crea un nuevo tercer camino para que el conjunto siga teniendo exactamente tres opciones sin ranking.',
       'Elijo explícitamente el primer camino del conjunto actual.',
       'No quiero un ejercicio de portfolio para un cliente imaginario. Sustituye ese proyecto por uno nuevo con un resultado que yo quiera o para alguien que conozca de primera mano.',
       'El proyecto sustituto está listo. Dame ahora el encuadre obligatorio y pídeme que lo acepte, pero todavía no lo aceptes.',
-      'Acepto explícitamente este Proyecto de Camino.',
+      'Acepto este Proyecto de Camino y quiero empezar.',
     ],
   },
   {
@@ -175,12 +215,12 @@ const scenarios = [
     turns: [
       'I get absorbed building small tools that turn confusing information into a useful choice. People rely on me for synthesis and I have shipped internal prototypes. I can make five hours a week and must keep my current job, but I am not yet sure what meaningful ten-year change this should serve.',
       'In ten years I would be proud to have helped ordinary teams make consequential choices without depending on experts. I think good systems should transfer agency rather than create dependence.',
-      'That Why I Work is accurate. I explicitly confirm it.',
+      'That North Star is accurate. I want to confirm it.',
       'The second path appeals mainly because its title sounds prestigious. Investigate that distortion and replace or revise it without ranking the alternatives.',
       'A partir de ahora, hablemos en español. Confirma brevemente que has cambiado de idioma sin recomendarme ningún camino.',
       'Elijo explícitamente el primer camino del conjunto actual.',
       'Este proyecto está listo. Dame ahora el encuadre obligatorio en español y pídeme que lo acepte en el siguiente turno.',
-      'Acepto explícitamente este Proyecto de Camino.',
+      'Acepto este Proyecto de Camino y quiero empezar.',
     ],
   },
 ];
@@ -262,7 +302,7 @@ function proveU2FirstProjectReplacementBoundary() {
     id: `preflight-path-${number}`,
     revision: 1,
     name: `Path ${number}`,
-    servesWhy: `Serve the confirmed Why through mechanism ${number}`,
+    servesWhy: `Serve the confirmed North Star through mechanism ${number}`,
     possibility: `Possibility ${number}`,
     evidence: [`Evidence ${number}`],
     centralUnknown: `Unknown ${number}`,
@@ -352,14 +392,514 @@ function stateBriefing(map, checkpoint) {
   });
 }
 
+function createSemanticIntentSeed(fixture, fixtureIndex) {
+  const probeId = `semantic-intent-${fixtureIndex + 1}`;
+  let map = createCareerMap(probeId);
+  const applySeed = (type, payload, sequence) => {
+    const result = applyCareerMapOperation(map, {
+      type,
+      sourceId: `${probeId}-seed-${type}-${sequence}`,
+      expectedRevision: map.revision,
+      occurredAt: timestamp(sequence),
+      payload,
+    });
+    assert(result.status === 'committed', `${fixture.label}: could not seed ${type}.`);
+    map = result.map;
+  };
+  const seedPresentation = (sequence) => ({
+    kind: 'model-presentation',
+    assistantTurnId: `${probeId}-assistant-${sequence}`,
+    turnSequence: sequence,
+    completed: true,
+    presentedAt: timestamp(sequence),
+  });
+  const seedAction = (sequence) => ({
+    kind: 'user-message',
+    actionId: `${probeId}-action-${sequence}`,
+    turnId: `${probeId}-user-${sequence}`,
+    turnSequence: sequence,
+    occurredAt: timestamp(sequence),
+  });
+
+  applySeed('propose-why', {
+    why: {
+      id: `${probeId}-why`,
+      revision: 1,
+      statement: 'Help small teams turn difficult choices into clear action.',
+      serves: 'Small teams making consequential choices',
+      pointOfView: 'Clarity should transfer agency.',
+    },
+    presentation: seedPresentation(1),
+  }, 1);
+
+  if (fixture.state === 'pending-why') {
+    return {
+      map,
+      probeId,
+      currentTurnSequence: 3,
+      expectedTargetId: `${probeId}-why`,
+      priorMessages: [
+        { role: 'user', content: 'Help me articulate the direction my work should serve.' },
+        {
+          role: 'assistant',
+          content: 'Your provisional North Star is: Help small teams turn difficult choices into clear action, because clarity should transfer agency. Does that feel accurate?',
+        },
+      ],
+    };
+  }
+
+  applySeed('confirm-why', {
+    whyId: `${probeId}-why`,
+    whyRevision: 1,
+    action: seedAction(3),
+  }, 3);
+  const paths = [1, 2, 3].map((number) => ({
+    id: `${probeId}-path-${number}`,
+    revision: 1,
+    name: ['Decision Tools', 'Team Facilitation', 'Practical Research'][number - 1],
+    servesWhy: `Serve the confirmed North Star through mechanism ${number}.`,
+    possibility: `Possibility ${number}`,
+    evidence: [`Evidence ${number}`],
+    centralUnknown: `Unknown ${number}`,
+    projectPreview: `Project ${number}`,
+    practicalFit: `Practical fit ${number}`,
+  }));
+  applySeed('propose-purpose-paths', {
+    setId: `${probeId}-path-set`,
+    setRevision: 1,
+    paths,
+    presentation: seedPresentation(5),
+  }, 5);
+  return {
+    map,
+    probeId,
+    currentTurnSequence: 7,
+    expectedTargetId: paths[0].id,
+    priorMessages: [
+      { role: 'user', content: 'Show me three distinct ways to serve my confirmed North Star.' },
+      {
+        role: 'assistant',
+        content: 'Here are the current equal choices: 1. Decision Tools; 2. Team Facilitation; 3. Practical Research.',
+      },
+    ],
+  };
+}
+
+function createNorthStarRevisionSeed(kind, fixtureIndex) {
+  const probeId = `north-star-revision-${fixtureIndex + 1}`;
+  let map = createCareerMap(probeId);
+  const presentation = (sequence) => ({
+    kind: 'model-presentation',
+    assistantTurnId: `${probeId}-assistant-${sequence}`,
+    turnSequence: sequence,
+    completed: true,
+    presentedAt: timestamp(sequence),
+  });
+  const action = (sequence) => ({
+    kind: 'user-message',
+    actionId: `${probeId}-action-${sequence}`,
+    turnId: `${probeId}-user-${sequence}`,
+    turnSequence: sequence,
+    occurredAt: timestamp(sequence),
+  });
+  const commit = (type, payload, sequence) => {
+    const result = applyCareerMapOperation(map, {
+      type,
+      sourceId: `${probeId}-seed-${type}-${sequence}`,
+      expectedRevision: map.revision,
+      occurredAt: timestamp(sequence),
+      payload,
+    });
+    assert(result.status === 'committed', `${probeId}: could not seed ${type}.`);
+    map = result.map;
+    return result;
+  };
+  const paths = [1, 2, 3].map((number) => ({
+    id: `${probeId}-path-${number}`,
+    revision: 1,
+    name: `Path ${number}`,
+    servesWhy: `Serve the confirmed North Star through mechanism ${number}.`,
+    possibility: `Possibility ${number}`,
+    evidence: [`Evidence ${number}`],
+    centralUnknown: `Unknown ${number}`,
+    projectPreview: `Project preview ${number}`,
+    practicalFit: `Practical fit ${number}`,
+  }));
+  const project = {
+    id: `${probeId}-project`,
+    revision: 1,
+    title: 'Build a real decision aid',
+    outcome: 'A colleague uses it for a current decision',
+    audience: 'A colleague with a live decision',
+    whyWanted: 'Make one current decision easier',
+    learningGoal: 'Learn whether iteration creates voluntary pull',
+    firstVersion: 'A one-page decision aid',
+    firstStep: 'Ask the colleague about the live decision',
+    decisionQuestion: 'Do I want another iteration?',
+    evidenceCue: 'Notice voluntary pull while revising',
+  };
+
+  commit('propose-why', {
+    why: {
+      id: `${probeId}-why`, revision: 1,
+      statement: 'Help small teams turn difficult choices into clear action.',
+      serves: 'Small teams making consequential choices',
+      pointOfView: 'Clarity should transfer agency.',
+    },
+    presentation: presentation(1),
+  }, 1);
+  commit('confirm-why', {
+    whyId: `${probeId}-why`, whyRevision: 1, action: action(2),
+  }, 2);
+
+  let nextSequence = 3;
+  if (kind === 'deep') {
+    commit('propose-purpose-paths', {
+      setId: `${probeId}-path-set`, setRevision: 1, paths, presentation: presentation(3),
+    }, 3);
+    commit('select-purpose-path', {
+      setId: `${probeId}-path-set`, setRevision: 1,
+      pathId: paths[0].id, pathRevision: 1, action: action(4),
+    }, 4);
+    commit('propose-first-project', { project, presentation: presentation(5) }, 5);
+    const acceptanceQuestion = `Will you accept by replying “${FIRST_PROJECT_ACCEPTANCE_PHRASE_ENGLISH}”?`;
+    commit('present-first-project-framing', {
+      projectId: project.id, projectRevision: 1, locale: 'en',
+      framingText: R22_CANONICAL_ENGLISH,
+      acceptancePhrase: FIRST_PROJECT_ACCEPTANCE_PHRASE_ENGLISH,
+      acceptanceQuestion,
+      moduleVersion: 'revision-probe@1',
+      presentation: presentation(6),
+    }, 6);
+    commit('deliver-first-project-framing', {
+      projectId: project.id, projectRevision: 1,
+      assistantText: `${R22_CANONICAL_ENGLISH}\n\n${acceptanceQuestion}`,
+      presentation: presentation(6),
+    }, 6);
+    commit('accept-first-project', {
+      projectId: project.id, projectRevision: 1, action: action(7),
+    }, 7);
+    commit('open-reflection', {
+      reflectionId: `${probeId}-reflection`, revision: 1,
+      projectId: project.id, projectRevision: 1, action: action(8),
+    }, 8);
+    commit('append-reflection-evidence', {
+      reflectionId: `${probeId}-reflection`, reflectionRevision: 1,
+      evidence: {
+        id: `${probeId}-learning`, revision: 1,
+        observation: 'I kept improving the useful version.',
+        signal: 'voluntary-pull',
+        interpretation: 'Iteration may be energizing.',
+        provenance: action(9),
+      },
+    }, 9);
+    commit('close-reflection', {
+      reflectionId: `${probeId}-reflection`, reflectionRevision: 1, action: action(10),
+    }, 10);
+    commit('record-continue-choice', {
+      id: `${probeId}-continue`, revision: 1,
+      reflectionId: `${probeId}-reflection`, reflectionRevision: 1,
+      wantsToContinue: true, action: action(11),
+    }, 11);
+    commit('record-next-move', {
+      id: `${probeId}-move`, revision: 1,
+      continueChoiceId: `${probeId}-continue`, continueChoiceRevision: 1,
+      kind: 'commit-provisionally', action: action(12),
+    }, 12);
+    commit('record-peer-exposure', {
+      exposure: {
+        id: `${probeId}-peer`, revision: 1, subjectKind: 'real-person',
+        subject: 'A working practitioner', insight: 'Useful work requires repeated facilitation.',
+      },
+      presentation: presentation(13),
+    }, 13);
+    commit('confirm-peer-exposure', {
+      exposureId: `${probeId}-peer`, exposureRevision: 1, action: action(14),
+    }, 14);
+    commit('complete-provisional-commitment', {
+      id: `${probeId}-commitment`, revision: 1,
+      intentId: `intent-${probeId}-move`, action: action(15),
+    }, 15);
+    commit('propose-proof-inventory', {
+      proof: {
+        id: `${probeId}-proof`, revision: 1,
+        artifacts: ['Decision aid'], problemsSolved: ['Decision friction'], peopleHelped: ['A colleague'],
+        usefulQualities: ['Synthesis'], knowledge: ['Decision design'], relationships: ['A practitioner'],
+        pointsOfView: ['Evidence should change action'], shareableMaterial: ['A case note'],
+      },
+      presentation: presentation(16),
+    }, 16);
+    commit('confirm-proof-inventory', {
+      proofId: `${probeId}-proof`, proofRevision: 1, action: action(17),
+    }, 17);
+    const doors = [1, 2, 3].map((number) => ({
+      id: `${probeId}-door-${number}`, revision: 1,
+      name: `Side Door ${number}`, target: `Community ${number}`,
+      proofValue: `Proof value ${number}`, contribution: `Contribution ${number}`,
+      firstMove: `First move ${number}`, accessConstraints: [`Constraint ${number}`],
+    }));
+    commit('propose-side-doors', {
+      setId: `${probeId}-door-set`, setRevision: 1, doors, presentation: presentation(18),
+    }, 18);
+    commit('select-side-door', {
+      setId: `${probeId}-door-set`, setRevision: 1,
+      doorId: doors[0].id, doorRevision: 1, action: action(19),
+    }, 19);
+    commit('record-route-outcome', {
+      id: `${probeId}-outcome`, revision: 1,
+      doorId: doors[0].id, doorRevision: 1,
+      result: 'positive-response', learning: 'The contribution opened a useful conversation.',
+      action: action(20),
+    }, 20);
+    nextSequence = 21;
+  }
+
+  commit('open-foundation-revision-focus', {
+    reason: 'The explorer wants to refine whom the North Star serves.',
+    action: action(nextSequence),
+  }, nextSequence);
+  nextSequence += 2;
+  let failedSuggestedWhyId = null;
+  if (kind === 'failed-presentation') {
+    failedSuggestedWhyId = `${probeId}-unseen-why`;
+    commit('revise-why', {
+      why: {
+        id: failedSuggestedWhyId, revision: 1,
+        statement: 'Help community teams make difficult choices actionable.',
+        serves: 'Community teams', pointOfView: 'Clarity should transfer agency.',
+      },
+      supersedesWhyId: `${probeId}-why`, presentation: presentation(nextSequence),
+    }, nextSequence);
+    nextSequence += 2;
+  }
+
+  return {
+    map,
+    probeId,
+    currentTurnSequence: nextSequence,
+    failedSuggestedWhyId,
+    priorMessages: [
+      { role: 'user', content: 'Help me establish the direction my work should serve.' },
+      { role: 'assistant', content: 'Your North Star is confirmed.' },
+    ],
+  };
+}
+
+function proveNorthStarRevisionSeedCoverage() {
+  for (const [fixtureIndex, kind] of ['zero', 'deep'].entries()) {
+    const seed = createNorthStarRevisionSeed(kind, fixtureIndex);
+    const result = applyCareerMapOperation(seed.map, {
+      type: 'revise-why',
+      sourceId: `${seed.probeId}-preflight-revise`,
+      expectedRevision: seed.map.revision,
+      occurredAt: timestamp(seed.currentTurnSequence),
+      payload: {
+        why: {
+          id: `${seed.probeId}-preflight-why`, revision: 1,
+          statement: 'Help community teams make difficult choices actionable.',
+          serves: 'Community teams', pointOfView: 'Clarity should transfer agency.',
+        },
+        supersedesWhyId: `${seed.probeId}-why`,
+        presentation: {
+          kind: 'model-presentation',
+          assistantTurnId: `${seed.probeId}-assistant-${seed.currentTurnSequence}`,
+          turnSequence: seed.currentTurnSequence,
+          completed: true,
+          presentedAt: timestamp(seed.currentTurnSequence),
+        },
+      },
+    });
+    const expectedClasses = kind === 'deep'
+      ? northStarRevisionFixtures.deepImpactClasses
+      : northStarRevisionFixtures.zeroImpactClasses;
+    assert(result.status === 'committed', `${kind}: deterministic revision seed did not accept revise-why.`);
+    assert(
+      result.status === 'committed'
+      && JSON.stringify(result.effects?.invalidatedArtifactClasses) === JSON.stringify(expectedClasses),
+      `${kind}: deterministic revision seed produced the wrong impact classes.`,
+    );
+  }
+  const failedSeed = createNorthStarRevisionSeed('failed-presentation', 2);
+  assert(
+    failedSeed.map.foundation.whyRevisions.find((why) => why.id === failedSeed.failedSuggestedWhyId)?.status === 'suggested',
+    'failed-presentation: deterministic seed did not retain the unseen Suggested revision.',
+  );
+}
+
+async function runSemanticIntentProbe(fixture, fixtureIndex, loader, model) {
+  const seed = createSemanticIntentSeed(fixture, fixtureIndex);
+  const initialRevision = seed.map.revision;
+  const result = await createSyntheticHarness({
+    id: seed.probeId,
+    initialMap: seed.map,
+    initialMessages: seed.priorMessages,
+    turnSequenceStart: seed.currentTurnSequence,
+    maxSteps: 4,
+    maxOutputTokens: 400,
+    stopAfterOperations: fixture.expectedOperation ? [fixture.expectedOperation] : [],
+    turns: [fixture.userText],
+  }, loader, model).run();
+  const operations = result.operations;
+  const text = result.turns[0]?.replyText.trim() ?? '';
+
+  if (fixture.expectedOperation) {
+    assert(operations.length === 1, `${fixture.label}: expected exactly one consequential operation.`);
+    assert(operations[0].type === fixture.expectedOperation, `${fixture.label}: expected ${fixture.expectedOperation}, received ${operations[0].type}.`);
+    const targetId = fixture.expectedOperation === 'confirm-why'
+      ? result.map.foundation.whyRevisions.findLast((item) => item.status === 'confirmed')?.id
+      : result.map.pathSets.findLast((item) => item.status === 'active')?.paths.find((item) => item.selection === 'active')?.id;
+    assert(targetId === seed.expectedTargetId, `${fixture.label}: operation targeted the wrong canonical record.`);
+    assert(operations[0].status === 'committed' || operations[0].status === 'replayed', `${fixture.label}: operation did not commit.`);
+    assert(result.map.revision === initialRevision + 1, `${fixture.label}: successful intent probe did not advance one revision.`);
+  } else {
+    assert(operations.length === 0, `${fixture.label}: clarification fixture performed a consequential operation.`);
+    assert(result.map.revision === initialRevision, `${fixture.label}: clarification fixture changed canonical state.`);
+    assert(text.length > 0, `${fixture.label}: clarification fixture returned no visible question.`);
+    assert(replyShape(text).questions === 1, `${fixture.label}: expected exactly one natural clarifying question.`);
+  }
+
+  return {
+    label: fixture.label,
+    kind: fixture.expectedOperation ? 'positive' : 'clarification',
+    state: fixture.state,
+    operation: operations[0]?.type ?? null,
+    targetMatched: fixture.expectedOperation ? true : null,
+    resultingRevision: result.map.revision,
+    retryCount: 0,
+    replyShape: replyShape(text),
+  };
+}
+
+async function runSemanticIntentFixtures(loader, model) {
+  const reports = [];
+  const fixtures = [...semanticIntentFixtures.positive, ...semanticIntentFixtures.clarification];
+  for (const [fixtureIndex, fixture] of fixtures.entries()) {
+    reports.push(await runSemanticIntentProbe(fixture, fixtureIndex, loader, model));
+  }
+  assert(reports.length === fixtures.length, 'Not every U7 semantic-intent fixture executed.');
+  assert(reports.every((report) => report.retryCount === 0), 'A U7 semantic-intent fixture retried.');
+  return reports;
+}
+
+async function runNorthStarRevisionFixtures(loader, model) {
+  const reports = [];
+  for (const [fixtureIndex, kind] of ['zero', 'deep'].entries()) {
+    const seed = createNorthStarRevisionSeed(kind, fixtureIndex);
+    const expectedClasses = kind === 'deep'
+      ? northStarRevisionFixtures.deepImpactClasses
+      : northStarRevisionFixtures.zeroImpactClasses;
+    const acknowledgment = kind === 'deep'
+      ? `I explicitly acknowledge that this revision affects ${expectedClasses.join(', ')}, and I confirm the revised North Star.`
+      : 'Yes. I explicitly confirm this revised North Star.';
+    const result = await createSyntheticHarness({
+      id: seed.probeId,
+      initialMap: seed.map,
+      initialMessages: seed.priorMessages,
+      turnSequenceStart: seed.currentTurnSequence,
+      maxSteps: 6,
+      maxOutputTokens: 700,
+      stopAfterOperations: ['confirm-why'],
+      additionalInstructions: kind === 'deep'
+        ? 'For this bounded English revision probe, after revise_why returns, visibly name every returned invalidatedArtifactClasses identifier exactly as returned, do not add another class, and do not confirm in that assistant response. Confirmation requires the next explorer message to acknowledge that impact. On that acknowledgment turn, call confirm_why and never revise_why unless the explorer also requests another content change.'
+        : 'For this bounded zero-impact revision probe, after revise_why returns an empty invalidatedArtifactClasses list, present the revision without naming impact classes and ask for ordinary confirmation on a later explorer turn. Do not confirm in the revision response. On that confirmation turn, call confirm_why and never revise_why unless the explorer also requests another content change.',
+      turns: [
+        'Revise my confirmed North Star so it focuses on helping community teams make difficult choices actionable.',
+        acknowledgment,
+      ],
+    }, loader, model).run();
+    const reviseOperations = result.operations.filter((operation) => operation.type === 'revise-why');
+    const confirmOperations = result.operations.filter((operation) => operation.type === 'confirm-why');
+    const proposalText = result.turns[0]?.replyText ?? '';
+
+    assert(
+      reviseOperations.length === 1,
+      `${kind}: expected exactly one revise-why operation; observed ${reviseOperations.length} with operation sequence ${JSON.stringify(result.operations.map(({ type, turnIndex }) => ({ type, turnIndex })))} and reply shapes ${JSON.stringify(result.turns.map(({ replyShape: shape }) => shape))}.`,
+    );
+    assert(confirmOperations.length === 1, `${kind}: expected exactly one later confirm-why operation.`);
+    assert(
+      JSON.stringify(result.operations.map(({ type }) => type)) === JSON.stringify(['revise-why', 'confirm-why']),
+      `${kind}: revision probe performed an unexpected consequential operation.`,
+    );
+    assert(reviseOperations[0].turnIndex === 0, `${kind}: revision did not occur in the proposal turn.`);
+    assert(confirmOperations[0].turnIndex === 1, `${kind}: revision confirmation did not wait for a later explorer turn.`);
+    assert(
+      JSON.stringify(reviseOperations[0].invalidatedArtifactClasses) === JSON.stringify(expectedClasses),
+      `${kind}: revise-why returned the wrong exact artifact classes.`,
+    );
+    assert(
+      result.operations.filter((operation) => operation.turnIndex === 0).every((operation) => operation.type !== 'confirm-why'),
+      `${kind}: revised North Star was confirmed in the presentation response.`,
+    );
+    if (kind === 'deep') {
+      for (const targetKind of expectedClasses) {
+        assert(proposalText.includes(targetKind), `deep: visible proposal omitted the exact ${targetKind} impact class.`);
+      }
+    } else {
+      assert(
+        invalidationTargetOrder.every((targetKind) => !proposalText.includes(targetKind)),
+        'zero: visible proposal named an impact class despite an empty reducer result.',
+      );
+    }
+    const confirmed = result.map.foundation.whyRevisions.findLast((why) => why.status === 'confirmed');
+    assert(confirmed?.id !== `${seed.probeId}-why`, `${kind}: the revised North Star was not confirmed.`);
+
+    reports.push({
+      kind,
+      invalidatedArtifactClasses: [...reviseOperations[0].invalidatedArtifactClasses],
+      operationTurns: result.operations.map(({ type, turnIndex }) => ({ type, turnIndex })),
+      proposalReplyShape: replyShape(proposalText),
+      resultingRevision: result.map.revision,
+      retryCount: 0,
+    });
+  }
+
+  const failedSeed = createNorthStarRevisionSeed('failed-presentation', 2);
+  const failedResult = await createSyntheticHarness({
+    id: failedSeed.probeId,
+    initialMap: failedSeed.map,
+    initialMessages: failedSeed.priorMessages,
+    turnSequenceStart: failedSeed.currentTurnSequence,
+    maxSteps: 6,
+    maxOutputTokens: 700,
+    additionalInstructions: 'The currently suggested North Star revision was committed in a prior assistant turn whose presentation failed before becoming visible. Recover by calling revise_why again for a fresh Suggested revision and re-presenting it. Never confirm the unseen revision.',
+    turns: ['The previous revision never appeared. Please recover and show the revised North Star now.'],
+  }, loader, model).run();
+  assert(failedResult.operations.length === 1, 'failed-presentation: expected exactly one recovery operation.');
+  assert(
+    failedResult.operations[0].type === northStarRevisionFixtures.failedPresentationRecoveryOperation,
+    'failed-presentation: recovery did not reuse revise-why.',
+  );
+  assert(
+    failedResult.map.foundation.whyRevisions.find((why) => why.id === failedSeed.failedSuggestedWhyId)?.status === 'superseded',
+    'failed-presentation: unseen revision was not superseded.',
+  );
+  const recovered = failedResult.map.foundation.whyRevisions.findLast((why) => why.status === 'suggested');
+  assert(recovered && recovered.id !== failedSeed.failedSuggestedWhyId, 'failed-presentation: no fresh Suggested revision was created.');
+  assert(!failedResult.operations.some((operation) => operation.type === 'confirm-why'), 'failed-presentation: unseen revision was confirmed.');
+  assert((failedResult.turns[0]?.replyText ?? '').trim().length > 0, 'failed-presentation: recovered revision was not visibly re-presented.');
+  reports.push({
+    kind: 'failed-presentation',
+    recoveryOperation: failedResult.operations[0].type,
+    priorRevisionSuperseded: true,
+    freshRevisionPresented: true,
+    resultingRevision: failedResult.map.revision,
+    retryCount: 0,
+    proposalReplyShape: replyShape(failedResult.turns[0]?.replyText ?? ''),
+  });
+
+  assert(reports.length === 3, 'Not every U7 North Star revision fixture executed.');
+  assert(reports.every((report) => report.retryCount === 0), 'A U7 North Star revision fixture retried.');
+  return reports;
+}
+
 function createSyntheticHarness(scenario, loader, model) {
-  let map = createCareerMap(`synthetic-${scenario.id}`);
+  let map = scenario.initialMap ?? createCareerMap(`synthetic-${scenario.id}`);
   let operationSequence = 0;
   let currentTurnIndex = -1;
   let currentTurnSequence = 0;
-  let currentUserText = '';
   let previousAssistantText = '';
   let firstProjectAccepted = false;
+  let requestedOperationCompleted = false;
   const operations = [];
   const preparations = [];
   const turns = [];
@@ -442,24 +982,31 @@ function createSyntheticHarness(scenario, loader, model) {
       replacementProjectId: type === 'replace-project-proposal' ? payload.replacement.id : null,
       projectGroundingKind: privacySafeObservation.projectGroundingKind ?? null,
       projectGroundingBasisProvided: privacySafeObservation.projectGroundingBasisProvided ?? false,
+      invalidatedArtifactClasses: result.status === 'committed' || result.status === 'replayed'
+        ? result.effects?.invalidatedArtifactClasses ?? []
+        : [],
       authoritativeRevision: map.revision,
       pathIdsBefore: beforeSet?.paths.map((item) => item.id) ?? [],
       pathIdsAfter: afterSet?.paths.map((item) => item.id) ?? [],
       suggestedProjectCount: map.projects.filter((item) => item.agreementStatus === 'suggested').length,
     });
     assert(result.status !== 'rejected', `${scenario.id}: ${type} was rejected by the U2 reducer.`);
+    if (scenario.stopAfterOperations?.includes(type)) requestedOperationCompleted = true;
     return {
       status: result.status,
       operation: type,
       authoritativeRevision: map.revision,
       derivedModule: after.module,
       pendingDecision: after.pendingDecision?.kind ?? null,
+      invalidatedArtifactClasses: result.status === 'committed' || result.status === 'replayed'
+        ? result.effects?.invalidatedArtifactClasses ?? []
+        : [],
     };
   }
 
   const tools = {
     append_foundation_evidence: tool({
-      description: 'Record one supported Foundation evidence item from the current user message. Do not duplicate evidence already in canonical state.',
+      description: 'Record one supported North Star evidence item from the current user message. Do not duplicate evidence already in canonical state.',
       inputSchema: foundationEvidenceToolInputSchema,
       execute: ({ category, content }, { toolCallId }) => commit('append-foundation-evidence', {
         evidence: { id: nextId('evidence'), revision: 1, category, content, provenance: userEvidence() },
@@ -473,25 +1020,37 @@ function createSyntheticHarness(scenario, loader, model) {
       }, toolCallId),
     }),
     propose_why: tool({
-      description: 'Propose one concise Why I Work only after minimum-sufficient Foundation coverage exists. This does not confirm it.',
+      description: 'Propose one concise North Star only after minimum-sufficient evidence coverage exists. This does not confirm it.',
       inputSchema: whyToolInputSchema,
       execute: (why, { toolCallId }) => commit('propose-why', {
         why: { id: nextId('why'), revision: 1, ...why },
         presentation: presentation(),
       }, toolCallId),
     }),
+    revise_why: tool({
+      description: "Use only when the current explorer message asks to change the North Star's content or recover a failed presentation; never use it for an acknowledgment or confirmation. Suggest the revision and return its exact affected artifact classes.",
+      inputSchema: whyToolInputSchema,
+      execute: (why, { toolCallId }) => {
+        const confirmed = map.foundation.whyRevisions.findLast((item) => item.status === 'confirmed');
+        assert(confirmed, `${scenario.id}: no confirmed North Star is available to revise.`);
+        return commit('revise-why', {
+          why: { id: nextId('why'), revision: 1, ...why },
+          supersedesWhyId: confirmed.id,
+          presentation: presentation(),
+        }, toolCallId);
+      },
+    }),
     confirm_why: tool({
-      description: 'Confirm the one pending Why only when the current user message explicitly confirms that completed prior presentation.',
+      description: 'Confirm the one pending North Star only when the current user message semantically confirms that completed prior presentation.',
       inputSchema: z.object({}).strict(),
       execute: (_input, { toolCallId }) => {
         const why = currentSuggestedWhy();
-        assert(why, `${scenario.id}: no Suggested Why is available to confirm.`);
-        assert(/\b(confirm|confirmed|right|accurate)\b|\b(confirmo|confirmar|representa)\b/i.test(currentUserText), `${scenario.id}: Why confirmation lacked explicit user intent.`);
+        assert(why, `${scenario.id}: no suggested North Star is available to confirm.`);
         return commit('confirm-why', { whyId: why.id, whyRevision: why.revision, action: userAction() }, toolCallId);
       },
     }),
     propose_purpose_paths: tool({
-      description: 'Propose exactly three distinct, equal, unranked Purpose Paths after the Why is confirmed.',
+      description: 'Propose exactly three distinct, equal, unranked Purpose Paths after the North Star is confirmed.',
       inputSchema: z.object({ paths: z.array(pathInputSchema).length(3) }).strict(),
       execute: ({ paths }, { toolCallId }) => commit('propose-purpose-paths', {
         setId: nextId('path-set'),
@@ -553,7 +1112,6 @@ function createSyntheticHarness(scenario, loader, model) {
         const set = currentPathSet();
         const selected = set?.paths.find((item) => item.id === pathId);
         assert(set && selected, `${scenario.id}: selected path is not in the current set.`);
-        assert(/\bchoose\b|\bselect\b|\belijo\b|\bselecciono\b/i.test(currentUserText), `${scenario.id}: path selection lacked explicit user intent.`);
         return commit('select-purpose-path', {
           setId: set.id,
           setRevision: set.revision,
@@ -623,10 +1181,6 @@ function createSyntheticHarness(scenario, loader, model) {
       execute: ({ locale, framingText, acceptancePhrase, acceptanceQuestion }, { toolCallId }) => {
         const project = currentSuggestedProject();
         assert(project, `${scenario.id}: no first project is available for framing.`);
-        assert(/\b(framing|encuadre)\b/i.test(currentUserText), `${scenario.id}: framing lacked an exact current-message request.`);
-        assert(!hasSuggestedOperationVeto(currentUserText, [
-          'frame', 'framing', 'present', 'show', 'share', 'marco', 'encuadre', 'presentes', 'muestres',
-        ]), `${scenario.id}: framing ignored a whole-message veto.`);
         assert(framingText === expectedR22Framing(scenario), `${scenario.id}: framing tool did not persist the locale-correct canonical text.`);
         const expectedAcceptancePhrase = expectedR22Framing(scenario) === R22_CANONICAL_ENGLISH
           ? FIRST_PROJECT_ACCEPTANCE_PHRASE_ENGLISH
@@ -652,7 +1206,6 @@ function createSyntheticHarness(scenario, loader, model) {
         const project = currentSuggestedProject();
         assert(project, `${scenario.id}: no first project is available to accept.`);
         assert(project.acceptanceFraming?.status === 'delivered', `${scenario.id}: project framing was not durably delivered.`);
-        assert(isExactPersistedAcceptance(currentUserText, project.acceptanceFraming.acceptancePhrase), `${scenario.id}: project acceptance did not exact-match the persisted localized phrase.`);
         const expectedFraming = expectedR22Framing(scenario);
         assert(summarizeR22Presentation(previousAssistantText, expectedFraming).valid, `${scenario.id}: project acceptance did not follow the strict locale-correct R22 presentation.`);
         const result = commit('accept-first-project', {
@@ -672,10 +1225,10 @@ function createSyntheticHarness(scenario, loader, model) {
 
   const agent = new ToolLoopAgent({
     model,
-    maxOutputTokens: 1_500,
+    maxOutputTokens: scenario.maxOutputTokens ?? 1_500,
     maxRetries: 0,
     tools,
-    stopWhen: [() => firstProjectAccepted, stepCountIs(20)],
+    stopWhen: [() => firstProjectAccepted || requestedOperationCompleted, stepCountIs(scenario.maxSteps ?? 20)],
     prepareStep: ({ stepNumber }) => {
       const checkpoint = deriveMethodCheckpoint(map);
       const bundle = loader.load(checkpoint);
@@ -695,6 +1248,7 @@ function createSyntheticHarness(scenario, loader, model) {
         stateBriefing(map, checkpoint),
         'Use only active tools. Server-owned metadata, revisions, IDs, confirmation provenance, equal weighting, and numbering are not yours to invent.',
         'Record supported canonical evidence and decisions through tools before summarizing them. Never parse the chat to pretend state changed.',
+        ...(scenario.additionalInstructions ? [scenario.additionalInstructions] : []),
       ].join('\n\n');
       preparations.push({
         turnIndex: currentTurnIndex,
@@ -720,11 +1274,10 @@ function createSyntheticHarness(scenario, loader, model) {
   });
 
   async function run() {
-    const messages = [];
+    const messages = [...(scenario.initialMessages ?? [])];
     for (const [turnIndex, userText] of scenario.turns.entries()) {
       currentTurnIndex = turnIndex;
-      currentTurnSequence = turnIndex * 2 + 1;
-      currentUserText = userText;
+      currentTurnSequence = (scenario.turnSequenceStart ?? 1) + turnIndex * 2;
       messages.push({ role: 'user', content: userText });
       const operationStart = operations.length;
       const preparationStart = preparations.length;
@@ -805,13 +1358,13 @@ function assessScenario(scenario, result) {
   const expectedFraming = expectedR22Framing(scenario);
   const r22Presentation = summarizeR22Presentation(framingTurn?.replyText ?? '', expectedFraming);
 
-  assert(why, `${scenario.id}: no confirmed Why remained in canonical state.`);
-  assert(foundationTrace.minimumSufficient, `${scenario.id}: propose-why preceded minimum-sufficient Foundation coverage (${foundationTrace.missingCoverage.join(', ') || 'propose-why missing'}).`);
+  assert(why, `${scenario.id}: no confirmed North Star remained in canonical state.`);
+  assert(foundationTrace.minimumSufficient, `${scenario.id}: propose-why preceded minimum-sufficient North Star evidence coverage (${foundationTrace.missingCoverage.join(', ') || 'propose-why missing'}).`);
   for (const topic of scenario.foundationExpectations.requiredFirstTurnQuestionTopics) {
-    assert(firstTurnQuestionTopics.includes(topic), `${scenario.id}: first Foundation reply did not ask the required ${topic} follow-up.`);
+    assert(firstTurnQuestionTopics.includes(topic), `${scenario.id}: first North Star reply did not ask the required ${topic} follow-up.`);
   }
   for (const topic of scenario.foundationExpectations.forbiddenFirstTurnQuestionTopics) {
-    assert(!firstTurnQuestionTopics.includes(topic), `${scenario.id}: first Foundation reply re-asked the already answered ${topic} area.`);
+    assert(!firstTurnQuestionTopics.includes(topic), `${scenario.id}: first North Star reply re-asked the already answered ${topic} area.`);
   }
   assert(activeSet, `${scenario.id}: no active Purpose Path set remained in canonical state.`);
   assert(activeSet.paths.length === 3, `${scenario.id}: active Purpose Path set was not exact-three.`);
@@ -822,7 +1375,7 @@ function assessScenario(scenario, result) {
   assert(map.projects.filter((item) => item.agreementStatus === 'accepted').length === 1, `${scenario.id}: more than one first Path Project was accepted.`);
   assert(operations.every((item) => item.status === 'committed' || item.status === 'replayed'), `${scenario.id}: an operation failed to commit.`);
   assert(operations.every((item) => item.suggestedProjectCount <= 1), `${scenario.id}: more than one first-project proposal was current.`);
-  assert(operationTypes.indexOf('propose-purpose-paths') > operationTypes.indexOf('confirm-why'), `${scenario.id}: Purpose Paths appeared before confirmed Why.`);
+  assert(operationTypes.indexOf('propose-purpose-paths') > operationTypes.indexOf('confirm-why'), `${scenario.id}: Purpose Paths appeared before the confirmed North Star.`);
   assert(operationTypes.indexOf('propose-first-project') > operationTypes.indexOf('select-purpose-path'), `${scenario.id}: first project appeared before explicit path selection.`);
   for (const required of scenario.requiredOperations) {
     assert(operationTypes.includes(required), `${scenario.id}: required scenario operation ${required} was not observed.`);
@@ -835,6 +1388,15 @@ function assessScenario(scenario, result) {
   }
   for (const combination of operations.filter((item) => item.type === 'combine-purpose-paths')) {
     assert(combination.pathIdsAfter.length === 3, `${scenario.id}: path combination did not commit a complete three-path set.`);
+  }
+
+  for (const operation of operations.filter((item) => ['propose-purpose-paths', 'replace-purpose-path', 'combine-purpose-paths'].includes(item.type))) {
+    const offer = turns.find((turn) => turn.turnIndex === operation.turnIndex)?.replyText.trim();
+    const expectedOffer = scenario.openingLanguage === 'es'
+      || (scenario.languageChangeTurn !== undefined && operation.turnIndex >= scenario.languageChangeTurn)
+      ? PURPOSE_PATHS_OFFER_SPANISH
+      : PURPOSE_PATHS_OFFER_ENGLISH;
+    assert(offer === expectedOffer, `${scenario.id}: Purpose Paths narration was not the one exact concise localized offer.`);
   }
 
   if (projectReplacement) {
@@ -857,7 +1419,7 @@ function assessScenario(scenario, result) {
   }
 
   const foundationNarrations = turns.filter((turn) => turn.narrationModule === 'form-foundation' && turn.replyShape.characters > 0);
-  assert(foundationNarrations.every((turn) => turn.replyShape.questions <= 1), `${scenario.id}: Foundation narration asked more than one question.`);
+  assert(foundationNarrations.every((turn) => turn.replyShape.questions <= 1), `${scenario.id}: North Star narration asked more than one question.`);
   assert(turns.every((turn) => turn.replyShape.characters < 4_000), `${scenario.id}: a reply violated the concise response bound.`);
   assert(!/(permanent calling|destiny|scientific fit|fit score|ranked best|best path for you|your true calling|vocación definitiva|destino|puntuación de encaje|mejor camino para ti)/i.test(allReplyText), `${scenario.id}: reply used a forbidden identity, fit, destiny, or ranking claim.`);
   assert(!/(I recommend|I would choose|te recomiendo|yo elegiría)/i.test(allReplyText), `${scenario.id}: reply made an unsolicited recommendation.`);
@@ -939,10 +1501,14 @@ async function packageVersion(packageName) {
 
 async function main() {
   proveU2FirstProjectReplacementBoundary();
+  proveU7FixtureCoverage();
+  proveNorthStarRevisionSeedCoverage();
   assert(apiKey, 'OPENAI_API_KEY is required for the live Method evaluation.');
   const loader = await createMethodModuleLoader();
   const openai = createOpenAI({ apiKey });
   const model = openai.responses(modelId);
+  const semanticIntentReports = await runSemanticIntentFixtures(loader, model);
+  const northStarRevisionReports = await runNorthStarRevisionFixtures(loader, model);
   const sampleReports = [];
 
   for (const scenario of scenarios) {
@@ -989,7 +1555,14 @@ async function main() {
     gate: {
       hardSamples: `${sampleReports.filter((sample) => sample.hardInvariantsPassed).length}/3`,
       qualitativeSamples: `${sampleReports.filter((sample) => sample.qualitativePassed).length}/3`,
-      required: 'hard 3/3; qualitative at least 2/3; retries 0',
+      semanticIntentSamples: `${semanticIntentReports.length}/12`,
+      northStarRevisionSamples: `${northStarRevisionReports.length}/3`,
+      required: 'hard 3/3; qualitative at least 2/3; semantic intent 12/12; North Star revision 3/3; retries 0',
+    },
+    u7Fixtures: {
+      semanticPositive: semanticIntentReports.filter(({ kind }) => kind === 'positive'),
+      semanticClarification: semanticIntentReports.filter(({ kind }) => kind === 'clarification'),
+      northStarRevision: northStarRevisionReports,
     },
     samples: sampleReports,
     privacy: 'Retained output excludes synthetic messages, reflection content, operation arguments, canonical values, and provider response text.',

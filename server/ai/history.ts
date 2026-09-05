@@ -48,6 +48,8 @@ export interface ConversationItemsClient {
 export interface NormalizedHistoryMessage {
   id: string;
   role: 'user' | 'assistant';
+  turn?: { turnId: string; status: 'completed' | 'cancelled' | 'failed' };
+  isFinalAssistantItem?: true;
   parts: Array<{ type: 'text'; text: string }>;
   sources?: BrowserSourceUrlPart[];
   citations?: ClaimLinkedCitation[];
@@ -184,7 +186,7 @@ function displayContent(
             version: 1,
             citationId: opaqueCitationId('citation', sourceKey),
             turnId,
-            messageId: turnId,
+            messageId,
             textHash: createHash('sha256').update(text).digest('hex'),
             exactClaim,
             start: messageOffset + claim.start,
@@ -217,6 +219,8 @@ export function normalizeConversationItems(
   allowed?: ReadonlyMap<string, 'user' | 'assistant'>,
   excludedItemIds: ReadonlySet<string> = new Set(),
   turnIdsByMessage: ReadonlyMap<string, string> = new Map(),
+  turnStatusesByMessage: ReadonlyMap<string, 'completed' | 'cancelled' | 'failed'> = new Map(),
+  finalAssistantItemIds: ReadonlySet<string> = new Set(),
 ): NormalizedHistoryMessage[] {
   return items.flatMap((item) => {
     if (!item || typeof item !== 'object') return [];
@@ -225,11 +229,17 @@ export function normalizeConversationItems(
     if (typeof record.id !== 'string' || record.id.length === 0) return [];
     if (excludedItemIds.has(record.id)) return [];
     if (allowed && allowed.get(record.id) !== record.role) return [];
-    const display = displayContent(record.content, record.role, record.id, turnIdsByMessage.get(record.id));
+    const turnId = turnIdsByMessage.get(record.id);
+    const turnStatus = turnStatusesByMessage.get(record.id);
+    const display = displayContent(record.content, record.role, browserSafeMessageId(record.id), turnId);
     if (display.parts.length === 0) return [];
     return [{
       id: record.id,
       role: record.role,
+      ...(turnId && turnStatus ? { turn: { turnId, status: turnStatus } } : {}),
+      ...(record.role === 'assistant' && finalAssistantItemIds.has(record.id)
+        ? { isFinalAssistantItem: true as const }
+        : {}),
       ...display,
     }];
   });
@@ -238,6 +248,11 @@ export function normalizeConversationItems(
 const displayProjectionSchema = z.object({
   userItemId: conversationIdSchema,
   assistantItemIds: z.array(conversationIdSchema).max(8)
+    .refine((ids) => new Set(ids).size === ids.length),
+}).strict();
+
+const assistantDisplayProjectionSchema = z.object({
+  assistantItemIds: z.array(conversationIdSchema).min(1).max(8)
     .refine((ids) => new Set(ids).size === ids.length),
 }).strict();
 
@@ -355,6 +370,46 @@ export function resolveDisplayProjection(
   if (selectedStart < 0) return undefined;
   return displayProjectionSchema.parse({
     userItemId: normalized[userIndex].id,
+    assistantItemIds: assistants.slice(selectedStart).slice(-8).map((message) => message.id),
+  });
+}
+
+/**
+ * Bind the visible reply produced after an authenticated direct action without
+ * inventing a user-authored provider item. The unique server refresh item is
+ * the response boundary but remains excluded from displayed history.
+ */
+export function resolveAssistantDisplayProjection(
+  items: readonly unknown[],
+  assistantText: string,
+  internalContextItemIds: ReadonlySet<string>,
+): { assistantItemIds: string[] } | undefined {
+  if (assistantText.length === 0 || internalContextItemIds.size === 0) return undefined;
+  const normalized = normalizeConversationItems(items);
+  const boundaryIndex = normalized.findLastIndex((message) => (
+    message.role === 'user' && internalContextItemIds.has(message.id)
+  ));
+  if (boundaryIndex < 0) return undefined;
+  const following = normalized.slice(boundaryIndex + 1);
+  const nextUserIndex = following.findIndex((message) => message.role === 'user');
+  const assistants = (nextUserIndex < 0 ? following : following.slice(0, nextUserIndex))
+    .filter((message) => message.role === 'assistant');
+  const assistantTexts = assistants.map(messageText);
+  let selectedStart = -1;
+  let candidateLength = 0;
+  for (let start = assistants.length - 1; start >= 0; start -= 1) {
+    candidateLength += assistantTexts[start].length;
+    if (candidateLength > assistantText.length) break;
+    if (
+      candidateLength === assistantText.length
+      && assistantTexts.slice(start).join('') === assistantText
+    ) {
+      selectedStart = start;
+      break;
+    }
+  }
+  if (selectedStart < 0) return undefined;
+  return assistantDisplayProjectionSchema.parse({
     assistantItemIds: assistants.slice(selectedStart).slice(-8).map((message) => message.id),
   });
 }
@@ -515,13 +570,17 @@ function projectConversationHistory(
   const allowed = new Map<string, 'user' | 'assistant'>();
   const stoppedAssistantIds = new Set<string>();
   const turnIdsByMessage = new Map<string, string>();
+  const turnStatusesByMessage = new Map<string, 'completed' | 'cancelled' | 'failed'>();
+  const finalAssistantItemIds = new Set<string>();
   const claimedUserItemIds = new Set<string>();
+  const claimedAssistantItemIds = new Set<string>();
   const directProjections = new Map<string, z.infer<typeof displayProjectionSchema>>();
+  const assistantProjections = new Map<string, z.infer<typeof assistantDisplayProjectionSchema>>();
   const backfills: Array<{ turnId: string; displayProjection: z.infer<typeof displayProjectionSchema> }> = [];
   // Claim durable provider ids first so an older digest-only recovery can
   // never steal an item already bound explicitly to another completed turn.
   for (const turn of turns) {
-    if (turn.origin !== 'agent-turn' || (turn.status !== 'completed' && turn.status !== 'cancelled')) continue;
+    if (turn.origin !== 'agent-turn' || (turn.status !== 'completed' && turn.status !== 'cancelled' && turn.status !== 'failed')) continue;
     const terminal = turn.terminalResult;
     if (!terminal || terminal.kind !== turn.status) continue;
     const direct = displayProjectionSchema.safeParse(terminal.displayProjection);
@@ -529,19 +588,49 @@ function projectConversationHistory(
       || excludedItemIds.has(direct.data.userItemId)
       || direct.data.assistantItemIds.some((id) => excludedItemIds.has(id))
       || claimedUserItemIds.has(direct.data.userItemId)
+      || direct.data.assistantItemIds.some((id) => claimedAssistantItemIds.has(id))
     ) continue;
     directProjections.set(turn.turnId, direct.data);
     claimedUserItemIds.add(direct.data.userItemId);
+    for (const id of direct.data.assistantItemIds) claimedAssistantItemIds.add(id);
   }
   for (const turn of turns) {
-    if (turn.origin !== 'agent-turn' || (turn.status !== 'completed' && turn.status !== 'cancelled')) continue;
+    if (turn.origin !== 'workspace-action' || (turn.status !== 'completed' && turn.status !== 'cancelled' && turn.status !== 'failed')) continue;
+    const terminal = turn.terminalResult;
+    if (!terminal || (
+      turn.status === 'completed'
+        ? terminal.kind !== 'workspace-result'
+        : terminal.kind !== turn.status
+    )) continue;
+    const direct = assistantDisplayProjectionSchema.safeParse(terminal.assistantDisplayProjection);
+    if (!direct.success || direct.data.assistantItemIds.some((id) => (
+      excludedItemIds.has(id) || claimedAssistantItemIds.has(id)
+    ))) continue;
+    assistantProjections.set(turn.turnId, direct.data);
+    for (const id of direct.data.assistantItemIds) claimedAssistantItemIds.add(id);
+  }
+  for (const turn of turns) {
+    if (turn.origin === 'workspace-action') {
+      const projection = assistantProjections.get(turn.turnId);
+      if (!projection) continue;
+      const finalAssistantItemId = projection.assistantItemIds.at(-1);
+      if (finalAssistantItemId) finalAssistantItemIds.add(finalAssistantItemId);
+      for (const id of projection.assistantItemIds) {
+        allowed.set(id, 'assistant');
+        turnIdsByMessage.set(id, turn.turnId);
+        turnStatusesByMessage.set(id, turn.status as 'completed' | 'cancelled' | 'failed');
+        if (turn.status === 'cancelled') stoppedAssistantIds.add(id);
+      }
+      continue;
+    }
+    if (turn.origin !== 'agent-turn' || (turn.status !== 'completed' && turn.status !== 'cancelled' && turn.status !== 'failed')) continue;
     const terminal = turn.terminalResult;
     if (!terminal || terminal.kind !== turn.status) continue;
     let projection = directProjections.get(turn.turnId);
     if (!projection) {
       const recovery = displayRecoverySchema.safeParse(terminal.displayRecovery);
       if (!recovery.success) continue;
-      if (turn.status === 'completed' && !recovery.data.assistantTextDigest) continue;
+      if ((turn.status === 'completed' || turn.status === 'failed') && !recovery.data.assistantTextDigest) continue;
       if (turn.status === 'cancelled' && recovery.data.assistantTextDigest && !recovery.data.retainPartial) continue;
       projection = resolveRecoveryProjection(items, recovery.data, claimedUserItemIds, excludedItemIds);
       if (!projection) continue;
@@ -554,14 +643,25 @@ function projectConversationHistory(
     claimedUserItemIds.add(projection.userItemId);
     allowed.set(projection.userItemId, 'user');
     turnIdsByMessage.set(projection.userItemId, turn.turnId);
+    turnStatusesByMessage.set(projection.userItemId, turn.status);
+    const finalAssistantItemId = projection.assistantItemIds.at(-1);
+    if (finalAssistantItemId) finalAssistantItemIds.add(finalAssistantItemId);
     for (const id of projection.assistantItemIds) {
       allowed.set(id, 'assistant');
       turnIdsByMessage.set(id, turn.turnId);
+      turnStatusesByMessage.set(id, turn.status);
       if (turn.status === 'cancelled') stoppedAssistantIds.add(id);
     }
   }
   return {
-    messages: normalizeConversationItems(items, allowed, excludedItemIds, turnIdsByMessage).map((message) => (
+    messages: normalizeConversationItems(
+      items,
+      allowed,
+      excludedItemIds,
+      turnIdsByMessage,
+      turnStatusesByMessage,
+      finalAssistantItemIds,
+    ).map((message) => (
       message.role === 'assistant' && stoppedAssistantIds.has(message.id)
         ? { ...message, deliveryStatus: 'stopped' as const }
         : message

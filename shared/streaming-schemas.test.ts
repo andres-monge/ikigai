@@ -11,6 +11,7 @@ import {
   isOperationStatusTransition,
   methodOperationEnvelopeSchema,
   methodWorkspaceResponseSchema,
+  normalizedHistoryMessageSchema,
   operationStatusDataSchema,
   operationStatusStreamPartSchema,
 } from './streaming-schemas.js';
@@ -114,6 +115,38 @@ describe('browser-safe Method stream contracts', () => {
     }).success).toBe(false);
   });
 
+  it('rejects a hydrated citation copied across a turn or final display item', () => {
+    const message = {
+      id: 'message_01HZX', role: 'assistant' as const,
+      turn: { turnId: 'turn_01HZX', status: 'completed' as const },
+      isFinalAssistantItem: true as const,
+      parts: [{ type: 'text' as const, text: 'official media' }],
+      citations: [{
+        version: 1 as const, citationId: 'citation_01HZX', turnId: 'turn_01HZX',
+        messageId: 'message_01HZX', textHash: 'a'.repeat(64), exactClaim: 'official media',
+        start: 0, end: 14, url: 'https://example.com/fact', title: null,
+        support: 'cited-provenance' as const,
+      }],
+    };
+    expect(normalizedHistoryMessageSchema.safeParse(message).success).toBe(true);
+    expect(normalizedHistoryMessageSchema.safeParse({
+      ...message,
+      citations: [{ ...message.citations[0], turnId: 'turn_other' }],
+    }).success).toBe(false);
+    expect(normalizedHistoryMessageSchema.safeParse({
+      ...message,
+      citations: [{ ...message.citations[0], messageId: 'message_other' }],
+    }).success).toBe(false);
+    expect(normalizedHistoryMessageSchema.safeParse({
+      ...message,
+      role: 'user',
+    }).success).toBe(false);
+    expect(normalizedHistoryMessageSchema.safeParse({
+      ...message,
+      turn: undefined,
+    }).success).toBe(false);
+  });
+
   it('fails closed on malformed history and unvalidated workspace state', () => {
     expect(conversationHistoryPageSchema.safeParse({
       status: 'empty', messages: [], olderCursor: 'must-not-exist',
@@ -167,5 +200,26 @@ describe('browser-safe Method stream contracts', () => {
       pendingDecision: { kind: 'side-door-selection', targetId: 'doors-1', targetRevision: 1 },
       errorClass: 'operation-unavailable',
     }).success).toBe(true);
+
+    const whyRevision = {
+      status: 'committed' as const,
+      operation: 'revise-why' as const,
+      authoritativeRevision: 13,
+      derivedModule: 'form-foundation' as const,
+      pendingDecision: { kind: 'why-confirmation' as const, targetId: 'why-2', targetRevision: 1 },
+      invalidatedArtifactClasses: [
+        'path-set', 'project', 'reflection', 'next-move', 'peer-exposure',
+        'commitment', 'proof', 'side-door-set', 'route-outcome',
+      ] as const,
+    };
+    expect(methodOperationEnvelopeSchema.safeParse(whyRevision).success).toBe(true);
+    expect(methodOperationEnvelopeSchema.safeParse({
+      ...whyRevision,
+      invalidatedArtifactClasses: ['path-set', 'path-set'],
+    }).success).toBe(false);
+    expect(methodOperationEnvelopeSchema.safeParse({
+      ...whyRevision,
+      invalidatedArtifactClasses: ['unknown-artifact'],
+    }).success).toBe(false);
   });
 });

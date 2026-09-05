@@ -13,6 +13,7 @@ import {
   listRecentConversationItems,
   loadConversationHistory,
   normalizeConversationItems,
+  resolveAssistantDisplayProjection,
   resolveDisplayProjection,
   resolveInternalContextItemIds,
 } from './history.js';
@@ -29,6 +30,7 @@ function durableTurn(input: {
   assistantItemIds?: string[];
   terminalResult?: Record<string, unknown> | null;
   createdAt?: string;
+  origin?: 'agent-turn' | 'workspace-action';
 }) {
   const status = input.status ?? 'completed';
   const occurredAt = new Date(input.createdAt ?? '2030-01-01T00:00:00.000Z');
@@ -37,7 +39,7 @@ function durableTurn(input: {
     userId: 'explorer-1',
     clientMessageId: `${input.turnId}-message`,
     requestFingerprint: `${input.turnId}-fingerprint`,
-    origin: 'agent-turn' as const,
+    origin: input.origin ?? 'agent-turn' as const,
     leaseId: `${input.turnId}-lease`,
     status,
     terminalResult: input.terminalResult !== undefined
@@ -152,6 +154,62 @@ describe('protected OpenAI Conversation history adapter', () => {
     }));
   });
 
+  it('marks exactly the eighth and final assistant display item across newest and older pages', async () => {
+    const assistants = Array.from({ length: 8 }, (_, index) => ({
+      id: `eight-assistant-${index + 1}`,
+      type: 'message',
+      role: 'assistant',
+      content: [{ type: 'output_text', text: `Display item ${index + 1}` }],
+    }));
+    const turn = durableTurn({
+      turnId: 'eight-items',
+      userItemId: 'eight-user',
+      assistantItemIds: assistants.map((item) => item.id),
+    });
+    const listItems = vi.fn()
+      .mockResolvedValueOnce({
+        data: [...assistants.slice(4)].reverse(),
+        hasMore: true,
+        lastId: 'eight-page-boundary',
+      })
+      .mockResolvedValueOnce({
+        data: [
+          ...assistants.slice(0, 4).reverse(),
+          { id: 'eight-user', type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Show the comparison.' }] },
+        ],
+        hasMore: false,
+      });
+    const storage = {
+      getConversationMapping: vi.fn(async () => 'conversation-server-owned'),
+      listAgentTurns: vi.fn(async () => [turn]),
+    };
+    const cursorCodec = createConversationHistoryCursorCodec('cursor-test-secret-at-least-32-characters');
+
+    const newest = await loadConversationHistory({
+      storage, client: { listItems }, userId: 'explorer-1', pageSize: 4, cursorCodec,
+    });
+    const older = await loadConversationHistory({
+      storage, client: { listItems }, userId: 'explorer-1', pageSize: 5,
+      cursorCodec, cursor: newest.olderCursor,
+    });
+
+    expect(newest.messages.map((message) => message.id)).toEqual([
+      'eight-assistant-5', 'eight-assistant-6', 'eight-assistant-7', 'eight-assistant-8',
+    ]);
+    expect(older.messages.map((message) => message.id)).toEqual([
+      'eight-user', 'eight-assistant-1', 'eight-assistant-2', 'eight-assistant-3', 'eight-assistant-4',
+    ]);
+    const hydrated = [...older.messages, ...newest.messages];
+    expect(hydrated.filter((message) => message.turn?.turnId === 'eight-items')).toHaveLength(9);
+    expect(hydrated.filter((message) => message.isFinalAssistantItem)).toEqual([
+      expect.objectContaining({
+        id: 'eight-assistant-8',
+        role: 'assistant',
+        turn: { turnId: 'eight-items', status: 'completed' },
+      }),
+    ]);
+  });
+
   it('rejects a cursor minted for another Conversation without provider access', async () => {
     const secret = 'cursor-test-secret-at-least-32-characters';
     const cursor = createConversationHistoryCursorCodec(secret)
@@ -242,7 +300,7 @@ describe('protected OpenAI Conversation history adapter', () => {
       userId: 'explorer-1',
     });
 
-    expect(result.messages).toEqual([
+    expect(result.messages).toMatchObject([
       { id: 'safe-user-item', role: 'user', parts: [{ type: 'text', text: 'Safe user' }] },
       { id: 'safe-assistant-item', role: 'assistant', parts: [{ type: 'text', text: 'Safe authoritative narration' }] },
     ]);
@@ -328,7 +386,7 @@ describe('protected OpenAI Conversation history adapter', () => {
       userId: 'explorer-1',
     });
 
-    expect(recovered.messages).toEqual([
+    expect(recovered.messages).toMatchObject([
       { id: 'eventual-user', role: 'user', parts: [{ type: 'text', text: userText }] },
       { id: 'eventual-assistant-a', role: 'assistant', parts: [{ type: 'text', text: 'It may point to work where you can ' }] },
       { id: 'eventual-assistant-b', role: 'assistant', parts: [{ type: 'text', text: 'test an idea in the real world.' }] },
@@ -388,12 +446,17 @@ describe('protected OpenAI Conversation history adapter', () => {
       userId: 'explorer-1',
     });
 
-    expect(result.messages).toEqual([
-      { id: 'cancelled-user', role: 'user', parts: [{ type: 'text', text: userText }] },
+    expect(result.messages).toMatchObject([
+      {
+        id: 'cancelled-user', role: 'user', parts: [{ type: 'text', text: userText }],
+        turn: { turnId: 'cancelled-partial', status: 'cancelled' },
+      },
       {
         id: 'cancelled-safe-partial',
         role: 'assistant',
         parts: [{ type: 'text', text: safePartial }],
+        turn: { turnId: 'cancelled-partial', status: 'cancelled' },
+        isFinalAssistantItem: true,
         deliveryStatus: 'stopped',
       },
     ]);
@@ -459,7 +522,7 @@ describe('protected OpenAI Conversation history adapter', () => {
       userId: 'explorer-1',
     });
 
-    expect(result.messages).toEqual([
+    expect(result.messages).toMatchObject([
       { id: 'first-user', role: 'user', parts: [{ type: 'text', text: repeatedUser }] },
       { id: 'first-assistant', role: 'assistant', parts: [{ type: 'text', text: stoppedPartial }], deliveryStatus: 'stopped' },
       { id: 'second-user', role: 'user', parts: [{ type: 'text', text: repeatedUser }] },
@@ -521,7 +584,7 @@ describe('protected OpenAI Conversation history adapter', () => {
     expect(backfillAgentTurnDisplayProjection).toHaveBeenCalledTimes(2);
   });
 
-  it('recovers only a cancelled user item when no partial is retained and excludes incomplete or aborted turns', async () => {
+  it('recovers failed display items read-only, cancelled user-only turns, and excludes incomplete turns', async () => {
     const pendingText = 'PENDING_USER_TEXT';
     const failedText = 'FAILED_USER_TEXT';
     const completedWithoutAssistant = 'COMPLETED_WITHOUT_ASSISTANT';
@@ -596,16 +659,24 @@ describe('protected OpenAI Conversation history adapter', () => {
       userId: 'explorer-1',
     });
 
-    expect(result.messages).toEqual([
+    expect(result.messages).toMatchObject([
+      { id: 'failed-user', role: 'user', parts: [{ type: 'text', text: failedText }], turn: { turnId: 'aborted-failed', status: 'failed' } },
+      { id: 'failed-assistant', role: 'assistant', parts: [{ type: 'text', text: 'UNSAFE_ABORTED_ASSISTANT' }], turn: { turnId: 'aborted-failed', status: 'failed' }, isFinalAssistantItem: true },
       { id: 'cancelled-user-only', role: 'user', parts: [{ type: 'text', text: cancelledUserText }] },
     ]);
-    expect(backfillAgentTurnDisplayProjection).toHaveBeenCalledTimes(1);
+    expect(backfillAgentTurnDisplayProjection).toHaveBeenCalledTimes(2);
     expect(backfillAgentTurnDisplayProjection).toHaveBeenCalledWith({
       userId: 'explorer-1',
       turnId: 'cancelled-user-only',
       displayProjection: { userItemId: 'cancelled-user-only', assistantItemIds: [] },
     });
-    expect(JSON.stringify(result)).not.toMatch(/PENDING|FAILED|COMPLETED_WITHOUT|UNSAFE/);
+    expect(result.messages.filter((message) => (
+      message.turn?.turnId === 'cancelled-user-only' && message.role === 'assistant'
+    ))).toEqual([]);
+    expect(result.messages.filter((message) => (
+      message.turn?.turnId === 'cancelled-user-only' && message.isFinalAssistantItem
+    ))).toEqual([]);
+    expect(JSON.stringify(result)).not.toMatch(/PENDING|COMPLETED_WITHOUT|UNSAFE_INCOMPLETE|UNSAFE_PRE_TOOL|UNSAFE_UNRETAINED/);
   });
 
   it('matches repeated text only to the latest exact user turn and its exact assistant suffix', () => {
@@ -623,6 +694,56 @@ describe('protected OpenAI Conversation history adapter', () => {
     expect(projection).toEqual({
       userItemId: 'new-user', assistantItemIds: ['new-assistant-a', 'new-assistant-b'],
     });
+  });
+
+  it('projects a direct continuation from its exact internal boundary without exposing a user item', async () => {
+    const assistantText = 'Aquí tienes un primer proyecto concreto.';
+    const items = [
+      { id: 'prior-user', type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Elijo el primer camino.' }] },
+      { id: 'prior-assistant', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Una respuesta anterior.' }] },
+      { id: 'direct-internal', type: 'message', role: 'user', content: [{ type: 'input_text', text: 'SERVER REFRESH CONTEXT — private' }] },
+      { id: 'direct-assistant-a', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Aquí tienes un ' }] },
+      { id: 'direct-assistant-b', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'primer proyecto concreto.' }] },
+    ];
+    const projection = resolveAssistantDisplayProjection(
+      items,
+      assistantText,
+      new Set(['direct-internal']),
+    );
+    expect(projection).toEqual({
+      assistantItemIds: ['direct-assistant-a', 'direct-assistant-b'],
+    });
+
+    const loaded = await loadConversationHistory({
+      storage: {
+        getConversationMapping: vi.fn(async () => 'conversation-server-owned'),
+        listAgentTurns: vi.fn(async () => [durableTurn({
+          turnId: 'direct-workspace-turn',
+          origin: 'workspace-action',
+          terminalResult: {
+            kind: 'workspace-result', refetch: true,
+            internalContextItemIds: ['direct-internal'],
+            assistantDisplayProjection: projection,
+          },
+        })]),
+      },
+      client: {
+        listItems: vi.fn(async () => ({ data: [...items].reverse(), hasMore: false })),
+      },
+      userId: 'explorer-1',
+    });
+
+    expect(loaded.messages).toMatchObject([
+      {
+        id: 'direct-assistant-a', role: 'assistant',
+        turn: { turnId: 'direct-workspace-turn', status: 'completed' },
+      },
+      {
+        id: 'direct-assistant-b', role: 'assistant', isFinalAssistantItem: true,
+        turn: { turnId: 'direct-workspace-turn', status: 'completed' },
+      },
+    ]);
+    expect(JSON.stringify(loaded.messages)).not.toMatch(/prior-|SERVER REFRESH CONTEXT|direct-internal/);
   });
 
   it('excludes developer, system, reasoning, tool, compaction, and non-display content', () => {
@@ -740,7 +861,7 @@ describe('protected OpenAI Conversation history adapter', () => {
       userId: 'explorer-1',
     });
 
-    expect(loaded.messages).toEqual([
+    expect(loaded.messages).toMatchObject([
       { id: 'cancelled-visible-user', role: 'user', parts: [{ type: 'text', text: userText }] },
       {
         id: 'cancelled-safe-partial', role: 'assistant', deliveryStatus: 'stopped',
@@ -884,7 +1005,7 @@ describe('protected OpenAI Conversation history adapter', () => {
       },
       userId: 'explorer-1',
     });
-    expect(result.messages).toEqual([
+    expect(result.messages).toMatchObject([
       { id: 'cited-user', role: 'user', parts: [{ type: 'text', text: 'What is the media type?' }] },
       {
         id: 'cited-assistant',
@@ -900,7 +1021,7 @@ describe('protected OpenAI Conversation history adapter', () => {
           version: 1,
           citationId: expect.stringMatching(/^citation_/),
           turnId: 'cited',
-          messageId: 'cited',
+          messageId: 'cited-assistant',
           textHash: textDigest('The official media type is application/json.'),
           exactClaim: 'application/json',
           start: 27,
@@ -962,6 +1083,8 @@ describe('protected OpenAI Conversation history adapter', () => {
 
     expect(result.messages[1]?.citations).toEqual([
       expect.objectContaining({
+        turnId: 'multipart-cited',
+        messageId: 'multipart-assistant',
         textHash: textDigest(joinedText),
         exactClaim: claim,
         start: prefix.length,
@@ -1046,6 +1169,8 @@ describe('protected OpenAI Conversation history adapter', () => {
     const joinedText = assistant?.parts.map((part) => part.text).join('') ?? '';
     expect(assistant?.citations).toEqual(expect.arrayContaining([
       expect.objectContaining({
+        turnId: 'oversized-provider-history',
+        messageId: assistant.id,
         textHash: textDigest(joinedText),
         exactClaim: claim,
         start: claimStart,
@@ -1085,7 +1210,7 @@ describe('protected OpenAI Conversation history adapter', () => {
 
     expect(result.messages[1]?.citations).toEqual([
       expect.objectContaining({
-        turnId: 'marker-turn', messageId: 'marker-turn', exactClaim: claim,
+        turnId: 'marker-turn', messageId: 'marker-assistant', exactClaim: claim,
         start: 0, end: claim.length,
       }),
     ]);
