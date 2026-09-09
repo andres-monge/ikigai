@@ -7,6 +7,8 @@ This document is the execution plan for the seven-day prospect-discovery experim
 
 This plan does not amend the product or Method. `docs/plans/2026-08-14-claude-feat-revelio-revamp-plan.md` remains the implementation authority for the revamp, and `docs/thesis.md` remains the Method authority.
 
+Amended 2026-09-09 after the matched phase began: Day 3 adds a background-capable Reddit community/semantic-adjacency lane, and ReddAPI.dev enters as a strictly scoped free exploratory route. Neither amendment changes or retroactively supplements the frozen Days 1-2 benchmark.
+
 ## Outcome
 
 Run a seven-day, read-only experiment that identifies:
@@ -67,7 +69,9 @@ The trial is global and English-language. Primary qualifying evidence must have 
 | --- | --- |
 | X | Grok Automations; Energy; SocialCrawl free tier; Codex web-search baseline |
 | LinkedIn | Energy; `mcp-server-linkedin`; SocialCrawl free tier; ScrapeCreators free tier; Codex web-search baseline |
-| Reddit | Energy; ScrapeCreators free tier; SocialCrawl free tier; Codex web-search baseline |
+| Reddit | Energy; ScrapeCreators free tier; SocialCrawl free tier; Codex web-search baseline; ReddAPI.dev free exploratory route from Day 3 only |
+
+ReddAPI.dev was discovered after the matched benchmark began. It is therefore a post-benchmark exploratory route, not a retroactive matched route. Its results may inform tool-native discovery quality and portfolio complementarity, but it is ineligible for Days 1-2 matched comparisons, seven-day saturation claims, or conclusions that require equal exposure across the full week.
 
 Excluded from this trial:
 
@@ -82,6 +86,8 @@ Excluded from this trial:
 - Use CLI file output so complete raw responses bypass the model context and land directly in the private trial folder. Preserve the original compact JSON as canonical; create cleaned derivatives separately.
 - Never pass an API key on the command line. Use the documented login or an environment variable so the key does not enter shell history or process listings.
 - Treat SocialCrawl's hosted MCP and REST interface as the same route. Use whichever can preserve raw output most directly during Day 0; do not benchmark the interfaces against each other.
+- Use SocialCrawl's query-optional subreddit search for a background-capable Reddit community-feed lane beginning on Day 3. Pull public posts from `r/careerguidance` without requiring predicted keywords, preserve the full returned page before ranking, and apply semantic similarity and the frozen qualification contract only in a separate derived stage. Do not automate the logged-out Reddit "Related posts" webpage as the continuing collector; treat those recommendations as the observation that motivated the scalable community/semantic-adjacency test.
+- Treat ReddAPI.dev's UI, REST API, and MCP interface as one exploratory route. Use only its free allowance, keep its vendor-provided relevance or lead score separate from the trial's qualification judgment, and independently verify every counted candidate from the canonical Reddit URL. Do not purchase a plan, earn promotional credits through public posting, or infer a real identity from a Reddit account.
 - Treat MCP as an access mechanism, not a platform, discovery strategy, or experimental category.
 - Record the actual ScrapeCreators and SocialCrawl free-credit balances during setup. Current documentation contains differing free-allowance claims, so the account balance is the operational source of truth.
 
@@ -188,6 +194,7 @@ Days 3-4 may additionally use:
 - High-signal author, thread, community, method, or creator adjacency.
 - Platform-specific semantic search, filters, people search, or thread expansion.
 - Search-result leads that are subsequently verified against the candidate's own first-person evidence.
+- Queryless community-feed retrieval followed by derived semantic comparison with the frozen positive calibration examples.
 
 A trigger, transition, follower relationship, like, or adjacency result remains only a search lead until qualifying evidence is found.
 
@@ -205,6 +212,7 @@ A trigger, transition, follower relationship, like, or adjacency result remains 
 - Keep raw volume separate from precision. Returning many weak records does not outperform returning fewer strong ones.
 - Record access failures, partial responses, exhausted credits, and broken pagination as unavailable evidence, not zero candidate quality.
 - Report only comparisons the experiment structurally supports. A platform-exclusive capability is evaluated as a combined route, not proof that its tool alone caused the result.
+- Label any route added after the matched phase as exploratory. Compare its verified precision, unique qualified yield, evidence integrity, and operating constraints, but do not place it in matched-phase rankings or pretend it received a full seven-day opportunity.
 
 For metered tools, reserve the observed free balance approximately as follows:
 
@@ -272,6 +280,9 @@ Output: a controlled comparison of platform, route, and shared search-strategy p
 - Let each route use its strongest distinctive search capability.
 - Use ScrapeCreators global Reddit post and comment search as separate query lanes within the one ScrapeCreators route.
 - Use SocialCrawl's structured cross-platform search and Reddit thread expansion.
+- Add a SocialCrawl `r/careerguidance` community-feed lane: retrieve public posts without a keyword query, sort by newest, cap and preserve the raw page, enforce the exact primary window after retrieval, then rank the evidence in a derived file against the frozen positive calibration examples. The retrieval call must not see or apply final candidate labels.
+- Run a three-call ReddAPI.dev free-tier scout as a separate exploratory route. Freeze one natural-language target description from the qualification contract, then submit that identical description once through semantic search, once through vector search, and once through lead-intent search. The free allowance exposes at most three results per call. Preserve native ordering without replacement, verify canonical sources independently, and keep vendor relevance and lead scores out of qualification. The comparison tests the three retrieval methods, not portfolio-scale yield.
+  - Frozen target description: `First-person accounts from people who feel uncertain, stuck, or torn about what kind of work or career to pursue next, have not already chosen a specific role, and want help exploring which viable direction would be a good fit; exclude resume, interview, application, salary, or employer-choice questions and complaints where the desired career is already known.`
 - Use Grok for semantic X conversations and relevant replies.
 - Use Energy for native search and conversation adjacency.
 - Use the LinkedIn MCP for native post search.
@@ -283,6 +294,7 @@ Output: a controlled comparison of platform, route, and shared search-strategy p
 - Use verified false-positive patterns from Day 3 to improve retrieval prompts without changing qualification.
 - Assign every change a new prompt or query version.
 - Preserve the original and revised versions so the effect remains interpretable.
+- Repeat or expand the queryless community-feed lane only after recording Day 3's fixed cap and false-positive pattern. If `r/careerguidance` produces useful qualified evidence, use the Day 4 allowance to test one adjacent career-direction community; otherwise revise only the derived semantic-ranking brief and keep the source community fixed.
 
 Output: the strongest candidate pool each route can produce when allowed to exploit its own advantages.
 
@@ -409,6 +421,7 @@ The trial plan is complete when:
 
 - Day 0 setup has frozen the rubric, matched queries, output schema, route matrix, result cap, and free-credit budgets.
 - Every testable route has completed both matched runs, both tool-native runs, and three continued-yield runs, or has an explicit `inconclusive` record explaining why not.
+- Any route added after Day 2 has completed its explicitly scoped exploratory runs and is excluded from full-week completion, matched-ranking, and saturation requirements.
 - Every counted candidate has auditable first-person evidence satisfying all qualification gates.
 - Primary-window and older evidence remain separated.
 - Independent collection occurred before deduplication and all rediscovering routes retain attribution.
@@ -442,3 +455,6 @@ The trial plan is complete when:
 - SocialCrawl X: https://www.socialcrawl.dev/docs/twitter
 - SocialCrawl LinkedIn: https://www.socialcrawl.dev/docs/linkedin
 - SocialCrawl pricing: https://www.socialcrawl.dev/pricing
+- ReddAPI.dev developer documentation: https://reddapi.dev/developers
+- ReddAPI.dev pricing: https://reddapi.dev/pricing
+- ReddAPI.dev terms: https://reddapi.dev/terms
