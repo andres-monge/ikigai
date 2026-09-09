@@ -7,7 +7,7 @@ This document is the execution plan for the seven-day prospect-discovery experim
 
 This plan does not amend the product or Method. `docs/plans/2026-08-14-claude-feat-revelio-revamp-plan.md` remains the implementation authority for the revamp, and `docs/thesis.md` remains the Method authority.
 
-Amended 2026-09-09 after the matched phase began: Day 3 adds a background-capable Reddit community/semantic-adjacency lane, and ReddAPI.dev enters as a strictly scoped free exploratory route. Neither amendment changes or retroactively supplements the frozen Days 1-2 benchmark.
+Amended 2026-09-09 after the matched phase began: Day 3 adds a background-capable Reddit community/semantic-adjacency lane, ReddAPI.dev enters as a strictly scoped free exploratory route, and Codex Computer Use enters as an isolated native-browser route for X and LinkedIn. None of these amendments changes or retroactively supplements the frozen Days 1-2 benchmark.
 
 ## Outcome
 
@@ -67,11 +67,13 @@ The trial is global and English-language. Primary qualifying evidence must have 
 
 | Platform | Routes included |
 | --- | --- |
-| X | Grok Automations; Energy; SocialCrawl free tier; Codex web-search baseline |
-| LinkedIn | Energy; `mcp-server-linkedin`; SocialCrawl free tier; ScrapeCreators free tier; Codex web-search baseline |
+| X | Grok Automations; Energy; SocialCrawl free tier; Codex web-search baseline; Codex Computer Use exploratory route from Day 3 only |
+| LinkedIn | Energy; `mcp-server-linkedin`; SocialCrawl free tier; ScrapeCreators free tier; Codex web-search baseline; Codex Computer Use exploratory route from Day 3 only |
 | Reddit | Energy; ScrapeCreators free tier; SocialCrawl free tier; Codex web-search baseline; ReddAPI.dev free exploratory route from Day 3 only |
 
 ReddAPI.dev was discovered after the matched benchmark began. It is therefore a post-benchmark exploratory route, not a retroactive matched route. Its results may inform tool-native discovery quality and portfolio complementarity, but it is ineligible for Days 1-2 matched comparisons, seven-day saturation claims, or conclusions that require equal exposure across the full week.
+
+Codex Computer Use was added after repeated Energy browser-runtime failures during Day 2. It is a separate end-to-end route, not an Energy retry or replacement result. Energy ends after the matched phase and remains in the record as a historical route with mixed completion; its unavailable cells are never filled by Codex. Codex Computer Use is ineligible for the frozen Days 1-2 ranking.
 
 Excluded from this trial:
 
@@ -88,6 +90,7 @@ Excluded from this trial:
 - Treat SocialCrawl's hosted MCP and REST interface as the same route. Use whichever can preserve raw output most directly during Day 0; do not benchmark the interfaces against each other.
 - Use SocialCrawl's query-optional subreddit search for a background-capable Reddit community-feed lane beginning on Day 3. Pull public posts from `r/careerguidance` without requiring predicted keywords, preserve the full returned page before ranking, and apply semantic similarity and the frozen qualification contract only in a separate derived stage. Do not automate the logged-out Reddit "Related posts" webpage as the continuing collector; treat those recommendations as the observation that motivated the scalable community/semantic-adjacency test.
 - Treat ReddAPI.dev's UI, REST API, and MCP interface as one exploratory route. Use only its free allowance, keep its vendor-provided relevance or lead score separate from the trial's qualification judgment, and independently verify every counted candidate from the canonical Reddit URL. Do not purchase a plan, earn promotional credits through public posting, or infer a real identity from a Reddit account.
+- Run Codex Computer Use in a fresh, self-contained Codex task for each platform and run. Give the collector only the thesis, qualification rubric, output contract, and that platform's tool-native brief; forbid access to prior raw results, normalized ledgers, reviews, reports, the manifest, and candidate identities. Run X and LinkedIn serially because they share one Chrome profile. Record the model, reasoning level, browser/extension version when exposed, Chrome profile, prompt version, time budget, cap, and pagination opportunity. Keep the Mac awake, unlocked, and online, and preflight the output directory and signed-in tab before collection.
 - Treat MCP as an access mechanism, not a platform, discovery strategy, or experimental category.
 - Record the actual ScrapeCreators and SocialCrawl free-credit balances during setup. Current documentation contains differing free-allowance claims, so the account balance is the operational source of truth.
 
@@ -284,7 +287,8 @@ Output: a controlled comparison of platform, route, and shared search-strategy p
 - Run a three-call ReddAPI.dev free-tier scout as a separate exploratory route. Freeze one natural-language target description from the qualification contract, then submit that identical description once through semantic search, once through vector search, and once through lead-intent search. The free allowance exposes at most three results per call. Preserve native ordering without replacement, verify canonical sources independently, and keep vendor relevance and lead scores out of qualification. The comparison tests the three retrieval methods, not portfolio-scale yield.
   - Frozen target description: `First-person accounts from people who feel uncertain, stuck, or torn about what kind of work or career to pursue next, have not already chosen a specific role, and want help exploring which viable direction would be a good fit; exclude resume, interview, application, salary, or employer-choice questions and complaints where the desired career is already known.`
 - Use Grok for semantic X conversations and relevant replies.
-- Use Energy for native search and conversation adjacency.
+- Retire Energy after Day 2 because repeated browser-runtime failures make it unsuitable for the remaining unattended experiment. Preserve its completed runs and failures in all matched-phase and operational reporting.
+- Add isolated Codex Computer Use native-browser runs for X and LinkedIn, with a fixed maximum three searches, ten preserved results per search, the same evidence window, read-only restrictions, and a predeclared pagination opportunity. Record them as `x-codex-computer` and `linkedin-codex-computer`; run them serially and keep them blind to all prior results and judgments.
 - Use the LinkedIn MCP for native post search.
 - Keep Codex web search unchanged as the cross-platform baseline.
 
@@ -294,6 +298,7 @@ Output: a controlled comparison of platform, route, and shared search-strategy p
 - Use verified false-positive patterns from Day 3 to improve retrieval prompts without changing qualification.
 - Assign every change a new prompt or query version.
 - Preserve the original and revised versions so the effect remains interpretable.
+- Run fresh isolated Codex Computer Use tasks for X and LinkedIn using the same fixed opportunity as Day 3 and `v2` prompts derived only from documented false-positive patterns. Do not pass candidate identities or judgments into the collectors.
 - Repeat or expand the queryless community-feed lane only after recording Day 3's fixed cap and false-positive pattern. If `r/careerguidance` produces useful qualified evidence, use the Day 4 allowance to test one adjacent career-direction community; otherwise revise only the derived semantic-ranking brief and keep the source community fixed.
 
 Output: the strongest candidate pool each route can produce when allowed to exploit its own advantages.
@@ -318,6 +323,8 @@ For each run, calculate:
 - Candidates contributed only by that platform.
 - Evidence-verification failures.
 - Remaining free credits and any truncation or access limits.
+
+For Codex Computer Use, start a fresh isolated task for each platform and day, run X and LinkedIn serially, and pass only the frozen prompt plus saved pagination or stopping metadata. Do not pass prior candidate identities or qualification decisions. Energy receives no further collection opportunity; its final disposition is `inconclusive` because runtime failures prevented fair exposure, not `stop` for candidate quality.
 
 #### Day 5
 
