@@ -69,7 +69,7 @@ This plan owns the behavior and boundaries of the Revelio Method. It does not re
 
 ### Actors
 
-- A1. **Explorer** — an employed adult trying to decide what to work on next.
+- A1. **Explorer** — a person trying to decide what work direction to pursue next. Employment status is context, never an eligibility gate.
 - A2. **Revelio agent** — the conversational guide that elicits, proposes, researches, supports action, interprets evidence, and preserves continuity.
 - A3. **Firsthand beneficiary** — the explorer or someone they know directly who wants the outcome of a Path Project.
 - A4. **Peer or field contact** — a person or community whose lived experience can improve a project, a decision, or an entry route.

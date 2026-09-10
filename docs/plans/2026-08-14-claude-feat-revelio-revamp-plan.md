@@ -104,7 +104,7 @@ flowchart TB
 ### Actors
 
 - A1. Founder — solo builder-operator at 10–15 hours/week; also a member of the beachhead and the product's reference user.
-- A2. Pilot explorer — an employed adult asking "what should I work on?"; recruited directly without gatekeepers; uses the agent and runs real Path Projects between sessions.
+- A2. Pilot explorer — a person whose next work direction is genuinely unresolved; recruited directly without gatekeepers; uses the agent and runs real Path Projects between sessions. Employment status is context, never an eligibility gate.
 - A3. The Revelio agent — the rebuilt product: conversational, memory-bearing, guiding the Method lifecycle and learning loop.
 - A4. Field contacts — the Stanford Life Design network and Bill Gurley; Step 4 outreach targets, approached with prototype and pilot evidence in hand.
 

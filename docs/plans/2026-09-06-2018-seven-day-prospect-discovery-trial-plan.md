@@ -391,7 +391,7 @@ Prepare one blinded, randomized packet containing:
 - Borderline candidates.
 - A random sample of rejected records to estimate missed positives.
 
-The founder records `yes`, `maybe`, or `no` plus a short reason. Reveal route and strategy provenance only after the audit. Recalculate route, strategy, platform, archetype, and portfolio findings from the audited labels.
+The founder records `yes`, `maybe`, or `no` plus a short reason. This verdict asks only whether the person is a genuine potential Revelio user; employment status is not a gate. Record outreach timing separately so a strong potential user can be postponed without being rejected. Reveal route and strategy provenance only after the audit. Recalculate route, strategy, platform, archetype, and portfolio findings from the audited labels.
 
 ## Day 7 route decisions
 
@@ -410,7 +410,7 @@ Do not force one universal winner when a complementary portfolio explains the ev
 At trial close, retain:
 
 - The private evidence-backed candidate ledger.
-- At least five founder-confirmed potential pilot candidates, satisfying the current pipeline floor.
+- At least five founder-confirmed potential users, regardless of employment status, satisfying the current pipeline floor.
 - Raw and normalized trial outputs.
 - The final prompt and query versions for every route.
 - Per-route and per-platform cumulative-yield curves.
@@ -433,7 +433,7 @@ The trial plan is complete when:
 - Primary-window and older evidence remain separated.
 - Independent collection occurred before deduplication and all rediscovering routes retain attribution.
 - The founder completed the blinded calibration and final audit.
-- At least five candidates received founder confirmation, or the report states honestly that the pipeline floor was not met.
+- At least five candidates received founder confirmation as genuine potential users, regardless of employment status, or the report states honestly that the pipeline floor was not met.
 - The evaluation distinguishes platform, strategy, route, and portfolio claims without attributing effects the experiment cannot isolate.
 - Continued marginal yield and saturation are reported as observed curves.
 - The anonymized final report contains no candidate names, handles, direct excerpts searchable back to individuals, credentials, or private contact details.
@@ -444,7 +444,7 @@ The trial plan is complete when:
 
 ### Repository
 
-- `docs/plans/2026-08-14-claude-feat-revelio-revamp-plan.md` — active revamp authority, private candidate-list requirement, and five-candidate pipeline floor.
+- `docs/plans/2026-08-14-claude-feat-revelio-revamp-plan.md` — active revamp authority, private candidate-list requirement, and five-potential-user pipeline floor.
 - `docs/thesis.md` — unresolved-work-direction problem and learning-through-action Method.
 - `docs/research/first_users_transcript.txt`
 - `docs/research/first_10_customers_transcript.txt`
