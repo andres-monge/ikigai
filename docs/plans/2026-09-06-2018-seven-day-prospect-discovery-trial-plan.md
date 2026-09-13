@@ -136,6 +136,12 @@ Each manifest row records:
 
 ## Candidate qualification contract
 
+The frozen gates below govern collection and blinded evidence qualification.
+After qualification, use
+[`docs/first-user-prospect-review-rubric.md`](../first-user-prospect-review-rubric.md)
+for the separate founder-calibrated potential-user and first-wave review. That
+guide does not retroactively change the frozen gates or route comparison.
+
 A record qualifies only when all five gates pass:
 
 1. It contains direct, first-person public evidence.
