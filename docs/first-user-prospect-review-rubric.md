@@ -112,6 +112,16 @@ remains unresolved. When a follow-up is removed or ambiguous, make the best
 binary decision from the available evidence and set `founder_review_required`
 to `true`.
 
+### Evidence recency and current recruitment
+
+A post can be an excellent content match but still be too old to support current
+first-user recruitment. When the evidence is stale enough that the unresolved
+problem may reasonably have changed, do not advance the person into the current
+pool unless newer relevant public evidence confirms that the problem persists.
+Do not impose a universal age cutoff: record the evidence age and make the
+current-status judgment explicitly. If the recency judgment is genuinely
+borderline, set `founder_review_required` to `true`.
+
 ### Initial market and portable-problem exception
 
 The initial recruitment focus is the Anglosphere. Do not infer location. When
@@ -201,6 +211,12 @@ than matching surface language.
   any alternative direction, knows the current work is not a long-term fit, and
   asks how others escaped the same trap. Daily entrapment in a known bad fit can
   establish a substantial problem even when the post does not state its duration.
+- **D7-RD-1v741u4 — ShotUnderstanding705 — [evidence](https://www.reddit.com/r/findapath/comments/1v741u4/17_completely_lost_about_what_career_i_should/):**
+  Advance under the portable-problem exception. The author has given the problem
+  enough time and thought to make it substantial and asks unusually specific
+  questions about running career experiments, how long to test them, and how to
+  distinguish beginner difficulty from poor fit. The India context does not make
+  this portable exploration problem institution-dependent.
 
 ### Do-not-advance examples
 
@@ -222,3 +238,13 @@ than matching surface language.
 - **C-0348 — Fantastic_Handle_293 — [evidence](https://www.reddit.com/r/findapath/comments/1wenac3/i_dont_know_what_to_do_anymore_i_was_put_into):** Do not advance. Although two possible occupations are named, the immediate request is primarily about leaving an unwanted college program and communicating with the author's mother amid failing classes and a financial penalty. A situational family or education crisis should not be reinterpreted as openness to work-fit discovery merely because occupations appear in the post.
 - **R22-1wfhu4z — Excellent-Thanks1762 — [evidence](https://www.reddit.com/r/careeradvice/comments/1wfhu4z/academia_and_research):** Do not advance. The author has already chosen teaching and wants industry-specific advice on reaching that destination without completing an intensive research qualification. Discovering that one credential route is unpleasant does not make the underlying work direction unresolved.
 - **R22-1wflml4 — PepperHead41 — [evidence](https://www.reddit.com/r/careerguidance/comments/1wflml4/dropping_cs_for_automotive_tech_am_i_making_the):** Do not advance. The author faces an immediate tuition-refund deadline, has two clearly defined paths, and frames the decision mainly around employment demand and job security. A consequential cross-domain choice is not enough when the person is optimizing between known options rather than seeking purpose or fit.
+- **D7-RD-1q4grr1 — ConsequenceNo9227 — [evidence](https://www.reddit.com/r/LifeAdvice/comments/1q4grr1/ready_to_find_my_path/):**
+  Do not advance into the current recruitment pool. The post itself is a strong
+  content fit: a supposed dream job became a source of dread and the author asks
+  how to find fitting work. But the evidence was already roughly nine months old
+  at review time, so it did not establish that the problem was still current.
+- **D7-RD-1weatop — k6tamine — [evidence](https://www.reddit.com/r/findapath/comments/1weatop/i_dont_know_what_to_do_anymore/):**
+  Do not advance. The immediate problem follows failed Biomedical Sciences
+  credits and is narrowed to choosing between Pharmacy and management/business.
+  This is primarily an education-program decision rather than strong evidence of
+  a broader unresolved work-fit problem.
