@@ -511,7 +511,7 @@ describe('amended Method agent core loop', () => {
 
     await collect(await agent.stream({ prompt: explorerMessage }));
 
-    expect(REVELIO_MAX_AGENT_STEPS).toBe(20);
+    expect(REVELIO_MAX_AGENT_STEPS).toBe(50);
     expect(model.doStreamCalls).toHaveLength(REVELIO_MAX_AGENT_STEPS);
     expect(storage.map.foundation.whyRevisions).toHaveLength(0);
   });

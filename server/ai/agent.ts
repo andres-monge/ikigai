@@ -29,7 +29,8 @@ import {
 export const REVELIO_AGENT_MODEL = 'gpt-5.6-sol';
 export const REVELIO_AGENT_PROVIDER = 'openai-responses';
 export const REVELIO_COMPACT_THRESHOLD = 1_000;
-export const REVELIO_MAX_AGENT_STEPS = 20;
+// Bounds one internal provider/tool loop, not the number of explorer turns.
+export const REVELIO_MAX_AGENT_STEPS = 50;
 export const METHOD_INTERNAL_CONTEXT_MARKER = 'SERVER REFRESH CONTEXT';
 const METHOD_DIRECT_CONTINUATION_SEED = 'SERVER DIRECT CONTINUATION SEED';
 
