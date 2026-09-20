@@ -1246,6 +1246,39 @@ describe('protected OpenAI Conversation history adapter', () => {
     expect(JSON.stringify(failure)).not.toMatch(/provider-private|private-conversation|private-api-key/);
   });
 
+  it('classifies only transport, 429, and 5xx Conversation failures as retryable', () => {
+    expect(new ConversationHistoryProviderError('delete').retryable).toBe(true);
+    expect(new ConversationHistoryProviderError('delete', 429).retryable).toBe(true);
+    expect(new ConversationHistoryProviderError('delete', 503).retryable).toBe(true);
+    expect(new ConversationHistoryProviderError('delete', 401).retryable).toBe(false);
+    expect(new ConversationHistoryProviderError('delete', 408).retryable).toBe(false);
+  });
+
+  it('wraps an internally timed-out cleanup fetch as retryable while preserving caller aborts', async () => {
+    const timeout = AbortSignal.abort(new DOMException('timed out', 'TimeoutError'));
+    const timeoutSpy = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(timeout);
+    const fetchImplementation = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      if (init?.signal?.aborted) throw init.signal.reason;
+      return new Response(JSON.stringify({ data: [], has_more: false }), { status: 200 });
+    }) as unknown as typeof fetch;
+    const client = new OpenAIConversationClient('private-api-key', fetchImplementation);
+    try {
+      await expect(client.deleteConversationItemsAndConversation('conv-timeout')).rejects.toMatchObject({
+        name: 'ConversationHistoryProviderError',
+        retryable: true,
+      });
+    } finally {
+      timeoutSpy.mockRestore();
+    }
+    const callerAbort = AbortSignal.abort(new DOMException('caller stopped', 'AbortError'));
+    await expect(client.listItems({
+      conversationId: 'conv-caller-abort',
+      limit: 1,
+      order: 'asc',
+      abortSignal: callerAbort,
+    })).rejects.toBe(callerAbort.reason);
+  });
+
   it('deletes every Conversation item in reverse order before the Conversation and treats 404 as idempotent', async () => {
     const calls: Array<{ url: string; method: string }> = [];
     const responses = [

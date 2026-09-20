@@ -20,7 +20,7 @@ import { db } from '../../db.js';
 import { assessmentSessions, purposePaths } from '../../../shared/schema.js';
 import type { QuestionnaireResponses } from '../../../shared/schema.js';
 import { assessmentRouter } from './index.js';
-import { storage } from '../../storage.js';
+import { storage } from '../../storage-instance.js';
 
 // Mock the AI chains to ensure they're never called
 vi.mock('../../ai/chains', () => ({

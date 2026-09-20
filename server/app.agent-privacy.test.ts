@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createCareerMap } from '../shared/career-map/index.js';
 import { createApiRequestLogger, createApp } from './app.js';
 import { normalizeMethodRequestPath } from './routes/agent-logging.js';
-import { storage as defaultStorage } from './storage.js';
+import { storage as defaultStorage } from './storage-instance.js';
 
 const { transcribeProtectedAudio } = vi.hoisted(() => {
   // The production provider factory is created during module evaluation; keep

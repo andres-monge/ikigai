@@ -58,9 +58,11 @@ export interface NormalizedHistoryMessage {
 
 export class ConversationHistoryProviderError extends Error {
   readonly code = 'conversation-history-provider-error';
+  readonly retryable: boolean;
   constructor(readonly operation: 'create' | 'delete' | 'list', readonly httpStatus?: number) {
     super('Conversation history is temporarily unavailable.');
     this.name = 'ConversationHistoryProviderError';
+    this.retryable = httpStatus === undefined || httpStatus === 429 || httpStatus >= 500;
   }
 }
 
@@ -813,39 +815,42 @@ export class OpenAIConversationClient implements ConversationItemsClient {
   }
 
   async deleteConversationItemsAndConversation(conversationId: string): Promise<void> {
-    let items: unknown[];
     try {
-      items = await listConversationItems({
+      const items = await listConversationItems({
         client: this,
         conversationId,
         abortSignal: AbortSignal.timeout(10_000),
       });
-    } catch (error) {
-      if (error instanceof ConversationHistoryProviderError && error.httpStatus === 404) return;
-      throw error;
-    }
-    const ids = items.map((item) => (
-      item && typeof item === 'object' ? (item as Record<string, unknown>).id : undefined
-    ));
-    if (ids.some((id) => typeof id !== 'string' || id.length === 0 || id.length > 200)) {
-      throw new ConversationHistoryProviderError('delete');
-    }
-    for (const id of [...ids].reverse() as string[]) {
+      const ids = items.map((item) => (
+        item && typeof item === 'object' ? (item as Record<string, unknown>).id : undefined
+      ));
+      if (ids.some((id) => typeof id !== 'string' || id.length === 0 || id.length > 200)) {
+        throw new ConversationHistoryProviderError('delete');
+      }
+      for (const id of [...ids].reverse() as string[]) {
+        await this.request(
+          `/conversations/${encodeURIComponent(conversationId)}/items/${encodeURIComponent(id)}`,
+          { method: 'DELETE' },
+          'delete',
+          AbortSignal.timeout(5_000),
+          true,
+        );
+      }
       await this.request(
-        `/conversations/${encodeURIComponent(conversationId)}/items/${encodeURIComponent(id)}`,
+        `/conversations/${encodeURIComponent(conversationId)}`,
         { method: 'DELETE' },
         'delete',
         AbortSignal.timeout(5_000),
         true,
       );
+    } catch (error) {
+      if (error instanceof ConversationHistoryProviderError && error.httpStatus === 404) return;
+      const abortName = error && typeof error === 'object' ? (error as { name?: unknown }).name : undefined;
+      if (abortName === 'TimeoutError' || abortName === 'AbortError') {
+        throw new ConversationHistoryProviderError('delete');
+      }
+      throw error;
     }
-    await this.request(
-      `/conversations/${encodeURIComponent(conversationId)}`,
-      { method: 'DELETE' },
-      'delete',
-      AbortSignal.timeout(5_000),
-      true,
-    );
   }
 
   async listItems(input: {

@@ -3,11 +3,14 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import {
   cleanupStorageTestDatabases,
+  storageTestConnectionString,
   storageTestDatabase as db,
+  storageTestPool,
 } from './storage.test-database.js';
 import {
   ConversationMappingConflictError,
   CareerMapRepairRequiredError,
+  DEFAULT_TURN_LEASE_MS,
   createAgentTurnPersistenceContext,
   createWorkspaceActionPersistenceContext,
   MethodErasurePendingError,
@@ -32,6 +35,12 @@ import {
   type PurposePathInput,
   type SideDoorInput,
 } from '../shared/career-map/index.js';
+import { ConversationHistoryProviderError } from './ai/history.js';
+import {
+  createMethodResetDependencies,
+  databaseIdentity,
+  runMethodReset,
+} from '../scripts/reset-method-data.js';
 
 const runId = `u4-${process.pid}-${randomUUID()}`;
 const owners = new Set<string>();
@@ -1771,6 +1780,230 @@ describe('PostgresStorage repair, erasure, and integrity', () => {
     ]);
     expect([history, drafts, turns, leases, mappings, jobs]
       .every((rows) => rows.length === 0)).toBe(true);
+  });
+
+  it('preserves provider HTTP classification for operator retry policy', async () => {
+    const userId = owner('erasure-provider-classification');
+    await storage.getOrCreateCareerMap(userId);
+    const turn = await beginTurn(userId, 'erasure-provider-classification');
+    await storage.setConversationMapping(userId, turn.leaseId, id('classified-conversation'));
+
+    expect(await storage.eraseMethodData(userId, {
+      deleteConversationItemsAndConversation: async () => {
+        throw new ConversationHistoryProviderError('delete', 401);
+      },
+    })).toMatchObject({
+      status: 'pending-provider',
+      errorClass: 'ConversationHistoryProviderError',
+      httpStatus: 401,
+      retryable: false,
+    });
+    const firstGeneration = await storage.getMethodErasureJob(userId);
+    expect(await storage.eraseMethodData(userId, {
+      deleteConversationItemsAndConversation: async () => {
+        throw new ConversationHistoryProviderError('delete', 503);
+      },
+    })).toMatchObject({
+      status: 'pending-provider',
+      errorClass: 'ConversationHistoryProviderError',
+      httpStatus: 503,
+      retryable: true,
+    });
+    const secondGeneration = await storage.getMethodErasureJob(userId);
+    expect(secondGeneration?.jobId).not.toBe(firstGeneration?.jobId);
+    expect(await storage.eraseMethodData(userId, {
+      deleteConversationItemsAndConversation: async () => undefined,
+    })).toEqual({ status: 'complete' });
+  });
+
+  it('runs dry-run and strict active-lease execution through the scoped disposable storage binding', async () => {
+    const userId = owner('reset-dependencies');
+    const email = `${userId}@example.test`;
+    await storage.getOrCreateCareerMap(userId);
+    await beginTurn(userId, 'reset-dependencies-active-lease');
+    await storageTestPool.query('CREATE SCHEMA IF NOT EXISTS auth');
+    await storageTestPool.query(`
+      CREATE TABLE IF NOT EXISTS auth."user" (
+        id text PRIMARY KEY,
+        email text NOT NULL UNIQUE
+      );
+      CREATE TABLE IF NOT EXISTS auth."account" (
+        id text PRIMARY KEY,
+        "providerId" text NOT NULL,
+        "accountId" text NOT NULL,
+        "userId" text NOT NULL REFERENCES auth."user"(id) ON DELETE CASCADE
+      );
+      CREATE TABLE IF NOT EXISTS auth."session" (
+        id text PRIMARY KEY,
+        "userId" text NOT NULL REFERENCES auth."user"(id) ON DELETE CASCADE
+      )
+    `);
+    await storageTestPool.query('INSERT INTO auth."user" (id, email) VALUES ($1, $2)', [userId, email]);
+    await storageTestPool.query(
+      'INSERT INTO auth."account" (id, "providerId", "accountId", "userId") VALUES ($1, $2, $3, $4)',
+      [id('reset-account'), 'google', id('google-account'), userId],
+    );
+    await storageTestPool.query('INSERT INTO auth."session" (id, "userId") VALUES ($1, $2)', [
+      id('reset-session'), userId,
+    ]);
+
+    const resetRuntime = {
+      nodeEnv: 'development',
+      databaseUrl: storageTestConnectionString,
+      authDatabaseUrl: storageTestConnectionString,
+      betterAuthSecret: 't'.repeat(32),
+      openAiApiKey: 'disposable-test-key',
+    };
+    const resources = await createMethodResetDependencies(resetRuntime, {
+      createProvider: () => ({ deleteConversationItemsAndConversation: async () => undefined }),
+    });
+    try {
+      expect(await resources.dependencies.resolveAuthTargets(email)).toEqual([{
+        id: userId,
+        email,
+        accounts: [{ id: id('reset-account'), providerId: 'google', accountId: id('google-account') }],
+        sessionCount: 1,
+      }]);
+      expect(await resources.dependencies.inspectMethodData(userId)).toMatchObject({
+        careerMaps: 1,
+        activeLeases: 1,
+        expiredLeases: 0,
+        erasureJobs: 0,
+      });
+      const expectedDatabase = databaseIdentity(storageTestConnectionString).canonicalEndpoint;
+      const resetOptions = {
+        environment: 'development' as const,
+        email,
+        expectedDatabase,
+        execute: false,
+        retries: 2,
+      };
+      const output: string[] = [];
+      const dependencies = { ...resources.dependencies, write: (line: string) => output.push(line) };
+      expect((await runMethodReset(resetOptions, resetRuntime, dependencies)).exitCode).toBe(0);
+      const confirmation = output.find((line) => line.startsWith('Confirmation token: '))
+        ?.slice('Confirmation token: '.length);
+      expect(confirmation).toBeTruthy();
+      expect((await runMethodReset(
+        { ...resetOptions, execute: true, confirmation }, resetRuntime, dependencies,
+      )).exitCode).toBe(1);
+      expect(output.join('\n')).toContain('unexpired Method lease');
+      expect((await storage.loadCareerMap(userId)).status).toBe('ready');
+      expect(await storage.getMethodErasureJob(userId)).toBeUndefined();
+    } finally {
+      await resources.close();
+      await storageTestPool.query('DELETE FROM auth."user" WHERE id = $1', [userId]);
+    }
+  });
+
+  it('strict reset refuses an unexpired lease under the owner lock but ignores an expired lease', async () => {
+    const userId = owner('strict-reset-active-lease');
+    await storage.getOrCreateCareerMap(userId);
+    const turn = await beginTurn(userId, 'strict-reset-active-lease');
+    let providerCalls = 0;
+    const provider = {
+      deleteConversationItemsAndConversation: async () => { providerCalls += 1; },
+    };
+    const inspected = await storage.inspectMethodDataState(userId);
+
+    expect(await storage.eraseMethodData(userId, provider, {
+      strictReset: true,
+      expectedStateFingerprint: inspected.stateFingerprint,
+    })).toEqual({
+      status: 'active-lease',
+    });
+    expect((await storage.loadCareerMap(userId)).status).toBe('ready');
+    expect(await storage.getAgentTurn(userId, turn.turnId)).toBeDefined();
+    expect(await storage.getMethodErasureJob(userId)).toBeUndefined();
+    expect(providerCalls).toBe(0);
+
+    now = new Date(now.getTime() + DEFAULT_TURN_LEASE_MS + 1);
+    expect(await storage.eraseMethodData(userId, provider, {
+      strictReset: true,
+      expectedStateFingerprint: inspected.stateFingerprint,
+    })).toEqual({
+      status: 'complete',
+    });
+    expect((await storage.loadCareerMap(userId)).status).toBe('not-found');
+  });
+
+  it('holds the owner lock across the strict lease check and local reset', async () => {
+    const userId = owner('strict-reset-race');
+    await storage.getOrCreateCareerMap(userId);
+    let checked!: () => void;
+    let release!: () => void;
+    const strictCheckReached = new Promise<void>((resolve) => { checked = resolve; });
+    const continueReset = new Promise<void>((resolve) => { release = resolve; });
+    const gated = new PostgresStorage({
+      database: db,
+      now: () => now,
+      faultInjector: async (stage) => {
+        if (stage === 'after-strict-reset-lease-check') {
+          checked();
+          await continueReset;
+        }
+      },
+    });
+    const inspected = await storage.inspectMethodDataState(userId);
+
+    const reset = gated.eraseMethodData(userId, {
+      deleteConversationItemsAndConversation: async () => undefined,
+    }, {
+      strictReset: true,
+      expectedStateFingerprint: inspected.stateFingerprint,
+    });
+    await strictCheckReached;
+    const competingTurn = storage.beginAgentTurn({
+      userId,
+      clientMessageId: id('strict-reset-race-message'),
+      requestFingerprint: id('strict-reset-race-fingerprint'),
+      turnId: id('strict-reset-race-turn'),
+      leaseId: id('strict-reset-race-lease'),
+    });
+    let competingSettled = false;
+    void competingTurn.then(() => { competingSettled = true; });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(competingSettled).toBe(false);
+    release();
+
+    expect(await reset).toEqual({ status: 'complete' });
+    expect(await competingTurn).toEqual({ status: 'map-required' });
+    expect(await storage.getTurnLease(userId)).toBeUndefined();
+  });
+
+  it('strict reset detects a same-count full-row mutation before deleting', async () => {
+    const userId = owner('strict-reset-same-count-state');
+    await storage.getOrCreateCareerMap(userId);
+    const inspected = await storage.inspectMethodDataState(userId);
+    await db.update(careerMaps).set({ updatedAt: new Date(now.getTime() + 1_000) })
+      .where(eq(careerMaps.userId, userId));
+
+    expect(await storage.eraseMethodData(userId, undefined, {
+      strictReset: true,
+      expectedStateFingerprint: inspected.stateFingerprint,
+    })).toEqual({ status: 'state-changed' });
+    expect((await storage.loadCareerMap(userId)).status).toBe('ready');
+    expect(await storage.getMethodErasureJob(userId)).toBeUndefined();
+  });
+
+  it('strict reset detects a turn completed between inspection and the locked erase', async () => {
+    const userId = owner('strict-reset-completed-turn');
+    await storage.getOrCreateCareerMap(userId);
+    const turn = await beginTurn(userId, 'strict-reset-completed-turn');
+    const inspected = await storage.inspectMethodDataState(userId);
+    await storage.completeAgentTurn({
+      userId,
+      turnId: turn.turnId,
+      leaseId: turn.leaseId,
+      result: { outcome: 'completed-after-inspection' },
+    });
+
+    expect(await storage.eraseMethodData(userId, undefined, {
+      strictReset: true,
+      expectedStateFingerprint: inspected.stateFingerprint,
+    })).toEqual({ status: 'state-changed' });
+    expect((await storage.loadCareerMap(userId)).status).toBe('ready');
+    expect(await storage.getMethodErasureJob(userId)).toBeUndefined();
   });
 
   it('recovers when provider deletion succeeds before local marker cleanup fails', async () => {

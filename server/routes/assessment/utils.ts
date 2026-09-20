@@ -6,7 +6,8 @@
  */
 
 import type { Response } from 'express';
-import { storage, type HydratedAssessmentSession } from '../../storage.js';
+import { storage } from '../../storage-instance.js';
+import type { HydratedAssessmentSession } from '../../storage.js';
 import type { PurposePath, ActionPlan } from '../../../shared/schema.js';
 import type { IkigaiAlignment, CoreDriversAnalysis } from '../../../shared/types.js';
 import { db } from '../../db.js';

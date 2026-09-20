@@ -10,7 +10,7 @@
  * • Maintains the same IStorage interface for drop-in compatibility
  *
  * @dependencies
- * - server/db.js for the Drizzle client instance
+ * - an injected Drizzle database instance
  * - @shared/schema for table definitions and types
  * - drizzle-orm for query operators
  *
@@ -20,8 +20,7 @@
  * - Leverages foreign key CASCADE for automatic cleanup
  */
 
-import { db } from './db.js';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { and, asc, eq, gt, lte, sql } from 'drizzle-orm';
 import type { Database } from './db.js';
 import {
@@ -210,6 +209,38 @@ export type CareerMapHistoryRecord = typeof careerMapHistory.$inferSelect;
 export type AgentTurnLeaseRecord = typeof agentTurnLeases.$inferSelect;
 export type MethodErasureJobRecord = typeof methodErasureJobs.$inferSelect;
 
+export type MethodErasureResult =
+  | { status: 'complete' }
+  | { status: 'active-lease' }
+  | { status: 'state-changed' }
+  | {
+      status: 'pending-provider';
+      errorClass?: string;
+      httpStatus?: number;
+      retryable: boolean;
+    };
+
+export type MethodErasureOptions =
+  | { strictReset?: false; expectedStateFingerprint?: never }
+  | {
+      /** Refuse deletion unless the locked state exactly matches the operator inspection. */
+      strictReset: true;
+      expectedStateFingerprint: string;
+    };
+
+export interface MethodDataStateSnapshot {
+  careerMaps: number;
+  history: number;
+  drafts: number;
+  turns: number;
+  activeLeases: number;
+  expiredLeases: number;
+  conversationMappings: number;
+  erasureJobs: number;
+  erasureStatus: string | null;
+  stateFingerprint: string;
+}
+
 export interface CareerMapIntegrityAudit {
   totalMaps: number;
   invalidRecords: Array<{ userId: string; reason: RepairReason }>;
@@ -311,10 +342,11 @@ export type StorageFaultStage =
   | 'before-map-update'
   | 'after-map-update-before-history'
   | 'before-commit'
+  | 'after-strict-reset-lease-check'
   | 'before-erasure-marker-delete';
 
 export interface PostgresStorageOptions {
-  database?: Database;
+  database: Database;
   now?: () => Date;
   faultInjector?: (stage: StorageFaultStage) => void | Promise<void>;
 }
@@ -465,7 +497,8 @@ export interface IStorage {
   eraseMethodData(
     userId: string,
     provider?: MethodErasureProvider,
-  ): Promise<{ status: 'complete' | 'pending-provider'; errorClass?: string }>;
+    options?: MethodErasureOptions,
+  ): Promise<MethodErasureResult>;
   getMethodErasureJob(userId: string): Promise<MethodErasureJobRecord | undefined>;
   auditCareerMapIntegrity(): Promise<CareerMapIntegrityAudit>;
 }
@@ -516,6 +549,28 @@ function decodeConversationCleanupIds(value: string | null): string[] {
   } catch {
     return [];
   }
+}
+
+function methodErasureFailure(error: unknown): {
+  errorClass: string;
+  httpStatus?: number;
+  retryable: boolean;
+} {
+  const errorClass = error instanceof Error ? error.constructor.name : 'UnknownError';
+  const record = error && typeof error === 'object' ? error as Record<string, unknown> : {};
+  const providerFailure = record.code === 'conversation-history-provider-error';
+  const httpStatus = providerFailure
+    && typeof record.httpStatus === 'number'
+    && Number.isInteger(record.httpStatus)
+    && record.httpStatus >= 100
+    && record.httpStatus <= 599
+    ? record.httpStatus
+    : undefined;
+  return {
+    errorClass,
+    ...(httpStatus !== undefined ? { httpStatus } : {}),
+    retryable: providerFailure && record.retryable === true,
+  };
 }
 
 function preserveConversationProvisioning(
@@ -885,6 +940,61 @@ function turnLeaseIdentity(userId: string, turnId: string, leaseId: string): str
   return JSON.stringify([userId, turnId, leaseId]);
 }
 
+function canonicalMethodState(value: unknown): unknown {
+  if (value instanceof Date) return value.toISOString();
+  if (Array.isArray(value)) return value.map(canonicalMethodState);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, nested]) => [key, canonicalMethodState(nested)]));
+  }
+  if (typeof value === 'bigint') return value.toString();
+  return value;
+}
+
+function canonicalRows(rows: unknown[]): unknown[] {
+  return rows
+    .map((row) => JSON.stringify(canonicalMethodState(row)))
+    .sort();
+}
+
+async function inspectMethodDataState(
+  transaction: StorageTransaction,
+  userId: string,
+  now: Date,
+): Promise<MethodDataStateSnapshot> {
+  const maps = await transaction.select().from(careerMaps).where(eq(careerMaps.userId, userId));
+  const history = await transaction.select().from(careerMapHistory).where(eq(careerMapHistory.userId, userId));
+  const drafts = await transaction.select().from(careerMapDrafts).where(eq(careerMapDrafts.userId, userId));
+  const turns = await transaction.select().from(agentTurns).where(eq(agentTurns.userId, userId));
+  const leases = await transaction.select().from(agentTurnLeases).where(eq(agentTurnLeases.userId, userId));
+  const mappings = await transaction.select().from(agentConversationMappings)
+    .where(eq(agentConversationMappings.userId, userId));
+  const erasureJobs = await transaction.select().from(methodErasureJobs)
+    .where(eq(methodErasureJobs.userId, userId));
+  const stateFingerprint = createHash('sha256').update(JSON.stringify({
+    maps: canonicalRows(maps),
+    history: canonicalRows(history),
+    drafts: canonicalRows(drafts),
+    turns: canonicalRows(turns),
+    leases: canonicalRows(leases),
+    mappings: canonicalRows(mappings),
+    erasureJobs: canonicalRows(erasureJobs),
+  })).digest('base64url');
+  return {
+    careerMaps: maps.length,
+    history: history.length,
+    drafts: drafts.length,
+    turns: turns.length,
+    activeLeases: leases.filter((lease) => lease.expiresAt > now).length,
+    expiredLeases: leases.filter((lease) => lease.expiresAt <= now).length,
+    conversationMappings: mappings.length,
+    erasureJobs: erasureJobs.length,
+    erasureStatus: erasureJobs[0]?.status ?? null,
+    stateFingerprint,
+  };
+}
+
 /* ------------------------------------------------------------------ */
 /*                         PostgresStorage Implementation             */
 /* ------------------------------------------------------------------ */
@@ -894,8 +1004,8 @@ export class PostgresStorage implements IStorage {
   private readonly now: () => Date;
   private readonly faultInjector?: PostgresStorageOptions['faultInjector'];
 
-  constructor(options: PostgresStorageOptions = {}) {
-    this.database = options.database ?? db;
+  constructor(options: PostgresStorageOptions) {
+    this.database = options.database;
     this.now = options.now ?? (() => new Date());
     this.faultInjector = options.faultInjector;
   }
@@ -2211,14 +2321,31 @@ export class PostgresStorage implements IStorage {
 
   /* ---------------- Retryable full Method erasure ---------------- */
 
+  async inspectMethodDataState(userId: string): Promise<MethodDataStateSnapshot> {
+    return this.database.transaction(async (tx) => {
+      await lockMethodOwner(tx, userId);
+      return inspectMethodDataState(tx, userId, this.now());
+    });
+  }
+
   async eraseMethodData(
     userId: string,
     provider?: MethodErasureProvider,
-  ): Promise<{ status: 'complete' | 'pending-provider'; errorClass?: string }> {
-    const now = this.now();
+    options: MethodErasureOptions = {},
+  ): Promise<MethodErasureResult> {
     const newJobId = randomUUID();
-    const marker = await this.database.transaction(async (tx) => {
+    const resetStart = await this.database.transaction(async (tx) => {
       await lockMethodOwner(tx, userId);
+      const now = this.now();
+      if (options.strictReset) {
+        const state = await inspectMethodDataState(tx, userId, now);
+        if (state.activeLeases > 0) return { kind: 'active-lease' as const };
+        if (!options.expectedStateFingerprint
+          || state.stateFingerprint !== options.expectedStateFingerprint) {
+          return { kind: 'state-changed' as const };
+        }
+        await this.faultInjector?.('after-strict-reset-lease-check');
+      }
       const [existingJob] = await tx
         .select()
         .from(methodErasureJobs)
@@ -2248,7 +2375,7 @@ export class PostgresStorage implements IStorage {
         })
         .onConflictDoUpdate({
           target: methodErasureJobs.userId,
-          set: { status: 'pending-provider', errorClass: null, updatedAt: now },
+          set: { jobId: newJobId, status: 'pending-provider', errorClass: null, updatedAt: now },
         })
         .returning();
 
@@ -2256,8 +2383,12 @@ export class PostgresStorage implements IStorage {
       await tx.delete(agentTurns).where(eq(agentTurns.userId, userId));
       await tx.delete(agentConversationMappings).where(eq(agentConversationMappings.userId, userId));
       await tx.delete(careerMaps).where(eq(careerMaps.userId, userId));
-      return job;
+      return { kind: 'marker' as const, job };
     });
+
+    if (resetStart.kind === 'active-lease') return { status: 'active-lease' };
+    if (resetStart.kind === 'state-changed') return { status: 'state-changed' };
+    const marker = resetStart.job;
 
     const conversationIds = decodeConversationCleanupIds(marker.conversationId);
     if (conversationIds.length === 0) {
@@ -2267,10 +2398,12 @@ export class PostgresStorage implements IStorage {
           eq(methodErasureJobs.jobId, marker.jobId),
         ))
         .returning({ jobId: methodErasureJobs.jobId });
-      if (!deleted && await this.getMethodErasureJob(userId)) return { status: 'pending-provider' };
+      if (!deleted && await this.getMethodErasureJob(userId)) {
+        return { status: 'pending-provider', retryable: true };
+      }
       return { status: 'complete' };
     }
-    if (!provider) return { status: 'pending-provider' };
+    if (!provider) return { status: 'pending-provider', retryable: false };
 
     try {
       for (const conversationId of conversationIds) {
@@ -2283,20 +2416,22 @@ export class PostgresStorage implements IStorage {
           eq(methodErasureJobs.jobId, marker.jobId),
         ))
         .returning({ jobId: methodErasureJobs.jobId });
-      if (!deleted && await this.getMethodErasureJob(userId)) return { status: 'pending-provider' };
+      if (!deleted && await this.getMethodErasureJob(userId)) {
+        return { status: 'pending-provider', retryable: true };
+      }
       return { status: 'complete' };
     } catch (error) {
-      const errorClass = error instanceof Error ? error.constructor.name : 'UnknownError';
+      const failure = methodErasureFailure(error);
       const [updated] = await this.database
         .update(methodErasureJobs)
-        .set({ status: 'failed-provider', errorClass, updatedAt: this.now() })
+        .set({ status: 'failed-provider', errorClass: failure.errorClass, updatedAt: this.now() })
         .where(and(
           eq(methodErasureJobs.userId, userId),
           eq(methodErasureJobs.jobId, marker.jobId),
         ))
         .returning({ jobId: methodErasureJobs.jobId });
       if (!updated && !await this.getMethodErasureJob(userId)) return { status: 'complete' };
-      return { status: 'pending-provider', errorClass };
+      return { status: 'pending-provider', ...failure };
     }
   }
 
@@ -2373,9 +2508,3 @@ export class PostgresStorage implements IStorage {
     }, { isolationLevel: 'repeatable read', accessMode: 'read only' });
   }
 }
-
-/* ------------------------------------------------------------------ */
-/*                         Export Singleton Store                      */
-/* ------------------------------------------------------------------ */
-
-export const storage: IStorage = new PostgresStorage();

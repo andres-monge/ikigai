@@ -21,7 +21,7 @@ import { AddressInfo } from 'node:net';
 import { db } from '../../db.js';
 import { assessmentSessions, purposePaths } from '../../../shared/schema.js';
 import type { QuestionnaireResponses } from '../../../shared/schema.js';
-import { storage } from '../../storage.js';
+import { storage } from '../../storage-instance.js';
 import { createTestApp } from '../../utils/test-app.js';
 import { ERROR_CODES } from '../../utils/errors.js';
 import { waitForSessionAnalysis } from '../../test-utils.js';

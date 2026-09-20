@@ -20,7 +20,7 @@ import request from 'supertest';
 import express from 'express';
 import { eq } from 'drizzle-orm';
 import { db } from '../db.js';
-import { storage } from '../storage.js';
+import { storage } from '../storage-instance.js';
 import { sessionRouter } from './session.js';
 import { assessmentSessions, analyticsEvents } from '../../shared/schema.js';
 import type { QuestionnaireResponses } from '../../shared/schema.js';

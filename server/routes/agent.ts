@@ -17,11 +17,11 @@ import { getProtectedIdentity, requireAuth } from '../auth-middleware.js';
 import {
   MethodOwnerBusyError,
   nextMethodTurnSequence,
-  storage as defaultStorage,
   type AgentTurnRecord,
   type BeginAgentTurnResult,
   type IStorage,
 } from '../storage.js';
+import { storage as defaultStorage } from '../storage-instance.js';
 import {
   REVELIO_AGENT_MODEL,
   REVELIO_AGENT_PROVIDER,

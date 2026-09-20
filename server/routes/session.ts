@@ -14,7 +14,7 @@
  */
 
 import { Router } from 'express';
-import { storage } from '../storage.js';
+import { storage } from '../storage-instance.js';
 import { startOverRequestSchema } from '../../shared/schema.js';
 
 export const sessionRouter = Router();

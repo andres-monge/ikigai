@@ -12,7 +12,7 @@
 
 import { Router } from 'express';
 import { z } from 'zod';
-import { storage } from '../storage.js';
+import { storage } from '../storage-instance.js';
 import { ANALYTICS_EVENT_TYPES } from '../../shared/schema.js';
 
 export const analyticsRouter = Router();

@@ -166,3 +166,4 @@ const primaryHarness = await provisionStorageTestDatabase('primary');
 
 export const storageTestPool = primaryHarness.pool;
 export const storageTestDatabase = primaryHarness.database;
+export const storageTestConnectionString = primaryHarness.connectionString;

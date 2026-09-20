@@ -4,8 +4,19 @@ import { betterAuth, type BetterAuthOptions } from 'better-auth';
 import { createAuthMiddleware } from 'better-auth/api';
 import { Pool, type PoolConfig } from 'pg';
 import { env, type Env } from './env.js';
+import {
+  AuthDatabaseConfigurationError,
+  buildAuthDatabasePoolOptions,
+} from './auth-database.js';
 
-export const AUTH_SCHEMA = 'auth';
+export {
+  AUTH_DATABASE_CONNECTION_TIMEOUT_MS,
+  AUTH_DATABASE_POOL_OPTIONS,
+  AUTH_SCHEMA,
+  buildAuthDatabasePoolOptions,
+  withAuthSchemaSearchPath,
+} from './auth-database.js';
+
 export const INTERNAL_CLIENT_IP_HEADER = 'x-revelio-client-ip';
 export const GOOGLE_IDENTITY_SCOPES = ['openid', 'email', 'profile'] as const;
 
@@ -38,41 +49,18 @@ function normalizeBaseUrl(value: string): string {
  * Better Auth owns a dedicated PostgreSQL schema. Drizzle never uses this
  * connection and remains scoped to public through drizzle.config.ts.
  */
-export function withAuthSchemaSearchPath(databaseUrl: string): string {
-  const url = new URL(databaseUrl);
-  url.searchParams.set('options', `-c search_path=${AUTH_SCHEMA}`);
-  return url.toString();
-}
-
-function isNeonPooledHostname(hostname: string): boolean {
-  return hostname.endsWith('.neon.tech') && /-pooler(?:\.|$)/.test(hostname);
-}
-
 /**
  * Better Auth must never borrow the application's pooled DATABASE_URL. Neon
  * poolers reject the startup option used to isolate the auth schema, so an
  * absent, malformed, or explicitly pooled auth URL leaves auth unavailable.
  */
 export function buildAuthPoolOptions(runtimeEnv: AuthRuntimeEnv): PoolConfig {
-  let databaseUrl: URL;
   try {
-    databaseUrl = new URL(runtimeEnv.BETTER_AUTH_DATABASE_URL);
-  } catch {
-    throw new AuthConfigurationError();
+    return buildAuthDatabasePoolOptions(runtimeEnv.BETTER_AUTH_DATABASE_URL);
+  } catch (error) {
+    if (error instanceof AuthDatabaseConfigurationError) throw new AuthConfigurationError();
+    throw error;
   }
-
-  if (
-    databaseUrl.protocol !== 'postgresql:' ||
-    !databaseUrl.hostname ||
-    isNeonPooledHostname(databaseUrl.hostname.toLowerCase())
-  ) {
-    throw new AuthConfigurationError();
-  }
-
-  return {
-    connectionString: withAuthSchemaSearchPath(databaseUrl.toString()),
-    connectionTimeoutMillis: 5_000,
-  };
 }
 
 function expectedAuthUrl(nodeEnv: AuthRuntimeEnv['NODE_ENV']): string {

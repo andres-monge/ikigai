@@ -21,6 +21,7 @@ import {
   GOOGLE_IDENTITY_SCOPES,
   INTERNAL_CLIENT_IP_HEADER,
   buildAuthOptions,
+  buildAuthDatabasePoolOptions,
   buildAuthPoolOptions,
   resolveTrustedClientIp,
 } from './auth.js';
@@ -116,6 +117,9 @@ describe('I2 Better Auth configuration', () => {
     expect(result.searchParams.get('options')).toBe('-c search_path=auth');
     expect(poolOptions.connectionString).not.toContain('ep-app-pooler');
     expect(poolOptions.connectionTimeoutMillis).toBe(5_000);
+    expect(poolOptions.query_timeout).toBeUndefined();
+    expect(poolOptions.statement_timeout).toBeUndefined();
+    expect(poolOptions.lock_timeout).toBeUndefined();
   });
 
   it('discards caller-supplied Google scopes before OAuth dispatch', async () => {
@@ -144,6 +148,17 @@ describe('I2 Better Auth configuration', () => {
         BETTER_AUTH_DATABASE_URL: value,
       }),
     ).toThrow(AuthConfigurationError);
+  });
+
+  it('exposes the same direct auth pool contract to bounded operator tooling', () => {
+    const poolOptions = buildAuthDatabasePoolOptions(configuredEnv.BETTER_AUTH_DATABASE_URL);
+    const target = new URL(poolOptions.connectionString as string);
+
+    expect(target.searchParams.get('options')).toBe('-c search_path=auth');
+    expect(poolOptions.connectionTimeoutMillis).toBe(5_000);
+    expect(() => buildAuthDatabasePoolOptions(
+      'postgresql://user:pass@ep-auth-pooler.us-east-2.aws.neon.tech/revelio',
+    )).toThrow('Authentication database is not configured');
   });
 
   it('keeps application and Drizzle traffic on pooled DATABASE_URL', async () => {
