@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createCareerMap, type CareerMap } from '@shared/career-map';
 import type { NormalizedHistoryMessage } from '@/components/explore/explore-state';
+import { _resetBrowserSupportCache } from '@/hooks/use-speech-to-text';
 import { attachPurposePathSets, Explore } from './explore';
 
 function jsonResponse(body: unknown, status = 200) {
@@ -94,6 +95,7 @@ function props() {
 
 describe('Explore U6 conversation-first workspace', () => {
   beforeEach(() => {
+    _resetBrowserSupportCache();
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes('/history')) return jsonResponse({ status: 'empty', messages: [] });
@@ -104,6 +106,7 @@ describe('Explore U6 conversation-first workspace', () => {
 
   afterEach(() => {
     cleanup();
+    _resetBrowserSupportCache();
     vi.useRealTimers();
     vi.unstubAllGlobals();
   });
@@ -143,6 +146,127 @@ describe('Explore U6 conversation-first workspace', () => {
     expect(within(mapPanel).queryByRole('button')).toBeNull();
   });
 
+  it('keeps the Revelio opening at the oldest boundary after the first reply', async () => {
+    const turnResponse = deferred<Response>();
+    let historyReads = 0;
+    vi.mocked(fetch).mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/agent/history') {
+        historyReads += 1;
+        return historyReads === 1
+          ? jsonResponse({ status: 'empty', messages: [] })
+          : jsonResponse({ status: 'ready', messages: [
+            { id: 'history-user', role: 'user', parts: [{ type: 'text', text: 'Building useful tools.' }] },
+            { id: 'history-assistant', role: 'assistant', turn: { turnId: 'turn-1', status: 'completed' }, isFinalAssistantItem: true, parts: [{ type: 'text', text: 'Follow-up question.' }] },
+          ] });
+      }
+      if (url === '/api/agent/workspace') {
+        return jsonResponse({ status: 'ready', map: createCareerMap('explorer-1') });
+      }
+      if (url === '/api/agent') return turnResponse.promise;
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<Explore {...props()} />);
+    const opening = await screen.findByText('What activities pull you in so much that you lose track of time?');
+    const openingArticle = opening.closest('article')!;
+    expect(openingArticle.classList.contains('mx-auto')).toBe(true);
+    expect(openingArticle.classList.contains('w-full')).toBe(true);
+    expect(openingArticle.classList.contains('max-w-[38rem]')).toBe(true);
+    const textbox = screen.getByRole('textbox', { name: 'Message Revelio' });
+    fireEvent.change(textbox, { target: { value: 'Building useful tools.' } });
+    const send = screen.getByRole('button', { name: 'Send' });
+    await waitFor(() => expect((send as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(send);
+
+    const optimisticUser = await screen.findByRole('article', { name: 'You' });
+    expect(screen.getByText('What activities pull you in so much that you lose track of time?')).toBe(opening);
+    expect(openingArticle.compareDocumentPosition(optimisticUser) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    await act(async () => {
+      turnResponse.resolve(streamResponse([
+        { type: 'text-start', id: 'assistant-live' },
+        { type: 'text-delta', id: 'assistant-live', delta: 'Follow-up question.' },
+        { type: 'text-end', id: 'assistant-live' },
+        { type: 'finish', finishReason: 'stop' },
+      ]));
+    });
+
+    await screen.findByText('Follow-up question.');
+    await waitFor(() => expect(historyReads).toBeGreaterThan(1));
+    expect(screen.getAllByText('What activities pull you in so much that you lose track of time?')).toHaveLength(1);
+    const historicalUser = screen.getByRole('article', { name: 'You' });
+    expect(openingArticle.compareDocumentPosition(historicalUser) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('withholds the opening until paginated history reaches the oldest boundary', async () => {
+    vi.mocked(fetch).mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/agent/history') {
+        return jsonResponse({ status: 'ready', messages: historyMessages(), olderCursor: 'older-page' });
+      }
+      if (url === '/api/agent/workspace') {
+        return jsonResponse({ status: 'ready', map: suggestedPathsMap() });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<Explore {...props()} />);
+
+    expect(await screen.findByRole('button', { name: 'Load older messages' })).toBeTruthy();
+    expect(screen.queryByText('What activities pull you in so much that you lose track of time?')).toBeNull();
+  });
+
+  it('shows transcript-level thinking until the first assistant text arrives', async () => {
+    let streamController: ReadableStreamDefaultController<Uint8Array> | undefined;
+    const encoder = new TextEncoder();
+    vi.mocked(fetch).mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/agent/history') return jsonResponse({ status: 'empty', messages: [] });
+      if (url === '/api/agent/workspace') {
+        return jsonResponse({ status: 'ready', map: createCareerMap('explorer-1') });
+      }
+      if (url === '/api/agent') {
+        return new Response(new ReadableStream({ start(controller) { streamController = controller; } }), {
+          status: 200,
+          headers: { 'content-type': 'text/event-stream' },
+        });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<Explore {...props()} />);
+    const textbox = await screen.findByRole('textbox', { name: 'Message Revelio' });
+    fireEvent.change(textbox, { target: { value: 'Here is my answer.' } });
+    const send = screen.getByRole('button', { name: 'Send' });
+    await waitFor(() => expect((send as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(send);
+
+    await waitFor(() => expect(streamController).toBeTruthy());
+    expect((await screen.findByText('Thinking…')).getAttribute('role')).toBe('status');
+
+    await act(async () => {
+      streamController!.enqueue(encoder.encode([
+        `data: ${JSON.stringify({ type: 'text-start', id: 'assistant-live' })}`,
+        `data: ${JSON.stringify({ type: 'text-delta', id: 'assistant-live', delta: 'First response token.' })}`,
+        '',
+      ].join('\n')));
+    });
+
+    expect(await screen.findByText('First response token.')).toBeTruthy();
+    expect(screen.queryByText('Thinking…')).toBeNull();
+
+    await act(async () => {
+      streamController!.enqueue(encoder.encode([
+        `data: ${JSON.stringify({ type: 'text-end', id: 'assistant-live' })}`,
+        `data: ${JSON.stringify({ type: 'finish', finishReason: 'stop' })}`,
+        'data: [DONE]',
+        '',
+      ].join('\n')));
+      streamController!.close();
+    });
+  });
+
   it('preserves tab draft, microphone, and Stop behavior', async () => {
     vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -167,6 +291,63 @@ describe('Explore U6 conversation-first workspace', () => {
     fireEvent.click(send);
     fireEvent.click(await screen.findByRole('button', { name: 'Stop' }));
     await waitFor(() => expect((textbox as HTMLTextAreaElement).value).toBe('Keep this draft'));
+  });
+
+  it('shows recording and transcription progress before adding speech to the editable draft', async () => {
+    const transcription = deferred<Response>();
+    const originalMediaDevices = Object.getOwnPropertyDescriptor(global.navigator, 'mediaDevices');
+    class MockMediaRecorder {
+      static isTypeSupported() { return true; }
+      state: 'inactive' | 'recording' = 'inactive';
+      ondataavailable: ((event: { data: Blob }) => void) | null = null;
+      onstop: (() => void) | null = null;
+
+      start() { this.state = 'recording'; }
+      stop() {
+        this.state = 'inactive';
+        this.ondataavailable?.({ data: new Blob(['voice'], { type: 'audio/webm' }) });
+        this.onstop?.();
+      }
+    }
+    vi.stubGlobal('MediaRecorder', MockMediaRecorder);
+    Object.defineProperty(global.navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop: vi.fn() }] }),
+      },
+    });
+    _resetBrowserSupportCache();
+    vi.mocked(fetch).mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/agent/history') return jsonResponse({ status: 'empty', messages: [] });
+      if (url === '/api/agent/workspace') return jsonResponse({ status: 'ready', map: createCareerMap('explorer-1') });
+      if (url.startsWith('/api/agent/audio/transcribe')) return transcription.promise;
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    try {
+      render(<Explore {...props()} />);
+      const textbox = await screen.findByRole('textbox', { name: 'Message Revelio' });
+      fireEvent.click(screen.getByRole('button', { name: 'Record a message' }));
+
+      expect(await screen.findByText('Recording… Tap stop when you’re done.')).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Stop recording' }));
+      expect(await screen.findByText('Transcribing… Your words will be added to the draft for review.')).toBeTruthy();
+
+      await act(async () => {
+        transcription.resolve(jsonResponse({ text: 'Speech stays editable.' }));
+      });
+      await waitFor(() => expect((textbox as HTMLTextAreaElement).value).toBe('Speech stays editable.'));
+      expect(screen.getByRole('button', { name: 'Send' })).toBeTruthy();
+      expect(vi.mocked(fetch).mock.calls.filter(([input]) => String(input) === '/api/agent')).toHaveLength(0);
+    } finally {
+      if (originalMediaDevices) {
+        Object.defineProperty(global.navigator, 'mediaDevices', originalMediaDevices);
+      } else {
+        Reflect.deleteProperty(global.navigator, 'mediaDevices');
+      }
+      _resetBrowserSupportCache();
+    }
   });
 
   it('keeps historical and failed presentations read-only and never attaches streaming text', async () => {
@@ -235,6 +416,39 @@ describe('Explore U6 conversation-first workspace', () => {
     });
     expect(screen.queryByText('Saved')).toBeNull();
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('shows transcript-level thinking while a direct Start operation is pending', async () => {
+    const operationResponse = deferred<Response>();
+    vi.mocked(fetch).mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/agent/history') {
+        return jsonResponse({ status: 'ready', messages: historyMessages() });
+      }
+      if (url === '/api/agent/workspace') {
+        return jsonResponse({ status: 'ready', map: suggestedPathsMap() });
+      }
+      if (url === '/api/agent/workspace/operations') return operationResponse.promise;
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<Explore {...props()} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Start path 1: Path 1' }));
+
+    expect((await screen.findByText('Thinking…')).getAttribute('role')).toBe('status');
+
+    await act(async () => {
+      operationResponse.resolve(jsonResponse({
+        status: 'rejected',
+        operation: 'select-purpose-path',
+        authoritativeRevision: 0,
+        derivedModule: 'create-purpose-paths',
+        pendingDecision: { kind: 'path-selection', targetId: 'set-1', targetRevision: 1 },
+        errorClass: 'operation-unavailable',
+        retryable: false,
+      }, 409));
+    });
+    await waitFor(() => expect(screen.queryByText('Thinking…')).toBeNull());
   });
 
   it('uses the revision-confirmation operation for a revised Purpose Path set', async () => {

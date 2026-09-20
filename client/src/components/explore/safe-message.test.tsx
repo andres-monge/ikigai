@@ -30,6 +30,24 @@ function citation(overrides: Partial<ClaimLinkedCitation> = {}): ClaimLinkedCita
 }
 
 describe('SafeMessage', () => {
+  it('right-aligns short user bubbles inside the shared conversation column', () => {
+    const { rerender } = render(<SafeMessage message={{
+      id: 'user-short', role: 'user', parts: [{ type: 'text', text: 'Short reply' }],
+    }} />);
+    const userArticle = screen.getByRole('article', { name: 'You' });
+    expect(userArticle.className.split(' ')).toEqual(expect.arrayContaining(['ml-auto', 'w-fit']));
+    expect(userArticle.className.split(' ')).not.toContain('mx-auto');
+    expect(userArticle.parentElement?.className.split(' ')).toEqual(expect.arrayContaining([
+      'mx-auto', 'w-full', 'max-w-[38rem]',
+    ]));
+
+    rerender(<SafeMessage message={assistant([], 'Assistant reply')} />);
+    const assistantArticle = screen.getByRole('article', { name: 'Revelio' });
+    expect(assistantArticle.parentElement?.className.split(' ')).toEqual(expect.arrayContaining([
+      'mx-auto', 'w-full', 'max-w-[38rem]',
+    ]));
+  });
+
   it('renders only the supported assistant Markdown structures and keeps user text literal', () => {
     const markdown = '## Heading\n\nA **strong** idea with *care*.\n\n- One\n- Two';
     const { rerender } = render(<SafeMessage message={assistant([], markdown)} />);

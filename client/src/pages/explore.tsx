@@ -767,8 +767,8 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
                   <button type="button" className="mt-3 min-h-11 font-bold underline" onClick={() => void refreshNewestAndValidate()}>Try again</button>
                 </div>
               ) : null}
-              {historyState === 'empty' && displayedMessages.length === 0 ? (
-                <article aria-label="Revelio" className="max-w-none">
+              {(historyState === 'empty' || historyState === 'ready') && !olderCursor ? (
+                <article aria-label="Revelio" className="mx-auto w-full max-w-[38rem]">
                   <p className="text-[1.0625rem] font-medium leading-7">
                     Hey! I’m here to help you figure out what to work on next, so I’ll ask a few questions to get
                     to know you first.
@@ -808,6 +808,15 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
                   })}
                 </div>
               ))}
+              {turnBusy && !streamedText ? (
+                <p
+                  role="status"
+                  aria-live="polite"
+                  className="mx-auto w-full max-w-[38rem] text-sm font-bold text-stone-600 motion-safe:animate-pulse"
+                >
+                  Thinking…
+                </p>
+              ) : null}
             </div>
           </div>
           <div className="shrink-0 px-4 pb-4 pt-2 sm:px-6">
@@ -849,6 +858,11 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
               ) : null}
               {turnNotice ? <p role="status" aria-live="polite" className="text-xs font-bold text-stone-700">{turnNotice}</p> : null}
               {micNotice ? <p role="status" aria-live="polite" className="text-xs text-stone-600">{micNotice}</p> : null}
+              {speech.recordingState === 'recording' ? (
+                <p role="status" aria-live="polite" className="text-xs font-bold text-stone-700">Recording… Tap stop when you’re done.</p>
+              ) : speech.recordingState === 'processing' ? (
+                <p role="status" aria-live="polite" className="text-xs font-bold text-stone-700">Transcribing… Your words will be added to the draft for review.</p>
+              ) : null}
               <label htmlFor="revelio-draft" className="sr-only">Message Revelio</label>
               <div className="flex items-end gap-1 border-2 border-black bg-white p-2 shadow-[3px_3px_0_rgba(0,0,0,0.65)] transition-[border-color,box-shadow] focus-within:border-ikigai-teal">
                 <textarea

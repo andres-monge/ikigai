@@ -182,34 +182,36 @@ export const SafeMessage = memo(function SafeMessage({ message }: { message: Nor
   const citations = eligibleCitations(message, text);
   const citationByUrl = new Map(citations.map((citation) => [`revelio-citation:${citation.citationId}`, citation]));
   const articleClass = message.role === 'assistant'
-    ? 'mx-auto max-w-[38rem]'
-    : 'mx-auto ml-auto w-fit max-w-[min(38rem,85%)] border-2 border-black bg-ikigai-cream px-4 py-3';
+    ? 'max-w-none'
+    : 'ml-auto w-fit max-w-[85%] border-2 border-black bg-ikigai-cream px-4 py-3';
   return (
-    <article aria-label={message.role === 'assistant' ? 'Revelio' : 'You'} className={articleClass}>
-      {message.role === 'assistant' ? (
-        <div className="safe-message break-words text-[1.0625rem] font-medium leading-7 [unicode-bidi:plaintext]">
-          <ReactMarkdown
-            allowedElements={['p', 'h2', 'h3', 'h4', 'strong', 'em', 'ol', 'ul', 'li', 'a']}
-            unwrapDisallowed
-            remarkPlugins={[citationRemarkPlugin(citations)]}
-            urlTransform={(url) => url.startsWith('revelio-citation:') ? url : ''}
-            components={{
-              a: ({ href, children, node }) => {
-                const marker = node?.properties?.['data-revelio-citation'];
-                const citation = typeof marker === 'string' && href ? citationByUrl.get(href) : undefined;
-                return citation ? citationLink(citation) : <>{children}</>;
-              },
-            }}
-          >
-            {text}
-          </ReactMarkdown>
-        </div>
-      ) : (
-        <p className="whitespace-pre-wrap break-words text-[1.0625rem] font-medium leading-7 [unicode-bidi:plaintext]">{text}</p>
-      )}
-      {message.deliveryStatus === 'stopped' ? (
-        <span className="mt-2 inline-block text-xs font-bold text-stone-600">Stopped</span>
-      ) : null}
-    </article>
+    <div className="mx-auto w-full max-w-[38rem]">
+      <article aria-label={message.role === 'assistant' ? 'Revelio' : 'You'} className={articleClass}>
+        {message.role === 'assistant' ? (
+          <div className="safe-message break-words text-[1.0625rem] font-medium leading-7 [unicode-bidi:plaintext]">
+            <ReactMarkdown
+              allowedElements={['p', 'h2', 'h3', 'h4', 'strong', 'em', 'ol', 'ul', 'li', 'a']}
+              unwrapDisallowed
+              remarkPlugins={[citationRemarkPlugin(citations)]}
+              urlTransform={(url) => url.startsWith('revelio-citation:') ? url : ''}
+              components={{
+                a: ({ href, children, node }) => {
+                  const marker = node?.properties?.['data-revelio-citation'];
+                  const citation = typeof marker === 'string' && href ? citationByUrl.get(href) : undefined;
+                  return citation ? citationLink(citation) : <>{children}</>;
+                },
+              }}
+            >
+              {text}
+            </ReactMarkdown>
+          </div>
+        ) : (
+          <p className="whitespace-pre-wrap break-words text-[1.0625rem] font-medium leading-7 [unicode-bidi:plaintext]">{text}</p>
+        )}
+        {message.deliveryStatus === 'stopped' ? (
+          <span className="mt-2 inline-block text-xs font-bold text-stone-600">Stopped</span>
+        ) : null}
+      </article>
+    </div>
   );
 });
