@@ -81,6 +81,10 @@ the person has tried.
 - When supplied and material, inspect relevant public follow-ups by the same
   author. Do not inspect unrelated history or seek private information.
 - Treat missing evidence as unknown, not as proof that the problem is weak.
+- When the full post body is missing, set `missing_post_body: true`, return
+  `do_not_advance` for the current run, and keep
+  `founder_review_required: false`. A missing post body is a collection problem,
+  not a founder decision. The collector may try again later.
 - Emotional language can support substantial pain, but it cannot replace clear
   evidence that work direction or fit remains unresolved.
 - Do not call anyone a proven desperate customer from a social post. Public
@@ -139,10 +143,20 @@ method could apply. Record the exception in the reasoning.
 
 Return `founder_review_required: true` separately when:
 
-- material evidence is ambiguous or incomplete enough that a reasonable binary
-  decision could change;
-- current status or a portable-problem exception needs founder judgment; or
-- independent reviewers disagree.
+- the full post body is available;
+- the primary reviewer, independent reviewer, and automated adjudicator have
+  all completed their reads when applicable; and
+- a material current-status, initial-market, or fit-versus-tactical boundary
+  remains genuinely unresolved and could change the binary decision.
+
+Do **not** request founder review merely because:
+
+- the post body is missing or incomplete;
+- a reviewer lacks confidence but can still apply the binary rubric;
+- two reviewers initially disagree; send that case to automated adjudication
+  first; or
+- the decision is `do_not_advance`. Non-advances may be sampled for quality
+  control, but they do not enter the routine founder queue.
 
 Otherwise return `founder_review_required: false`.
 
@@ -165,10 +179,11 @@ For each candidate, include:
    - current status when relevant evidence exists;
    - evidence limitations.
 4. `screening_decision`: `advance` or `do_not_advance`.
-5. `founder_review_required`: `true` or `false`.
-6. `founder_review_reason`: a short reason when review is required, otherwise
+5. `missing_post_body`: `true` or `false`.
+6. `founder_review_required`: `true` or `false`.
+7. `founder_review_reason`: a short reason when review is required, otherwise
    `null`.
-7. `my_read`: one concrete plain-English reason for the binary decision.
+8. `my_read`: one concrete plain-English reason for the binary decision.
 
 Present founder calibration cases in small batches so corrections can be given
 quickly. Keep model estimates, founder-approved decisions, outreach timing, and
