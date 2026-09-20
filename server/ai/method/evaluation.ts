@@ -23,6 +23,8 @@ export interface PrivacySafeFoundationOperation {
 
 export interface FoundationTraceSummary {
   readonly proposeWhyTurn: number | null;
+  readonly firstSufficientTurn: number | null;
+  readonly proposedAtFirstSufficientTurn: boolean;
   readonly evidenceCategories: string[];
   readonly constraintKinds: string[];
   readonly missingCoverage: string[];
@@ -60,13 +62,6 @@ export interface R22PresentationSummary {
   readonly shortQuestion: boolean;
   readonly valid: boolean;
 }
-
-const requiredEvidenceCategories = [
-  'fascination',
-  'importance',
-  'point-of-view',
-  'starting-asset',
-] as const;
 
 const spanishTokens = new Set([
   'ahora', 'al', 'aunque', 'aqui', 'asi', 'cada', 'camino', 'claro', 'como', 'con', 'cual', 'cuales',
@@ -117,11 +112,28 @@ export function summarizeFoundationTrace(
   ));
   const evidenceCategories = unique(committedBeforeWhy.map((operation) => operation.evidenceCategory));
   const constraintKinds = unique(committedBeforeWhy.map((operation) => operation.constraintKind));
-  const missingCoverage: string[] = requiredEvidenceCategories.filter((category) => !evidenceCategories.includes(category));
+  const missingCoverage: string[] = minimumSufficientFoundationCategories.filter((category) => !evidenceCategories.includes(category));
   if (constraintKinds.length === 0) missingCoverage.push('reality-boundary');
+  const progressiveEvidence = new Set<string>();
+  const progressiveConstraints = new Set<string>();
+  let firstSufficientTurn: number | null = null;
+  for (const operation of committedBeforeWhy) {
+    if (operation.evidenceCategory) progressiveEvidence.add(operation.evidenceCategory);
+    if (operation.constraintKind) progressiveConstraints.add(operation.constraintKind);
+    if (
+      firstSufficientTurn === null
+      && minimumSufficientFoundationCategories.every((category) => progressiveEvidence.has(category))
+      && progressiveConstraints.size > 0
+    ) {
+      firstSufficientTurn = operation.turnIndex;
+    }
+  }
+  const proposeWhyTurn = whyIndex === -1 ? null : operations[whyIndex].turnIndex;
 
   return {
-    proposeWhyTurn: whyIndex === -1 ? null : operations[whyIndex].turnIndex,
+    proposeWhyTurn,
+    firstSufficientTurn,
+    proposedAtFirstSufficientTurn: proposeWhyTurn !== null && proposeWhyTurn === firstSufficientTurn,
     evidenceCategories,
     constraintKinds,
     missingCoverage,
@@ -276,3 +288,4 @@ export function summarizeR22Presentation(
     valid: framingOccurrences === 1 && framingIsFirstParagraph && shortQuestion,
   };
 }
+import { minimumSufficientFoundationCategories } from '../../../shared/career-map/index.js';

@@ -45,6 +45,11 @@ describe('Method evaluation assertions', () => {
     expect(source).not.toMatch(/revisionImpactClassCount: northStarRevisionFixtures\./);
     expect(source).not.toMatch(/failedPresentationRecoveryOperation: northStarRevisionFixtures\./);
     expect(source).toMatch(/revise_why: tool\([\s\S]*?current explorer message asks to change[\s\S]*?never use it for an acknowledgment or confirmation/i);
+    expect(source).toMatch(/currentUserText\.includes\(value\)/);
+    expect(source).toMatch(/evidenceAuthorityViolations\.length === 0/);
+    expect(source).toMatch(/retryCount: result\.evidenceAuthorityViolations\.length/);
+    expect(source).toMatch(/activeFoundationNarrations\.every\(\(turn\) => turn\.replyShape\.questions === 1\)/);
+    expect(source).toMatch(/pausedFoundationNarrations\.every\([\s\S]*?turn\.replyShape\.questions === 0[\s\S]*?turn\.operations\.length === 0/);
   });
 
   it('requires minimum-sufficient privacy-safe Foundation coverage before propose-why', () => {
@@ -60,6 +65,8 @@ describe('Method evaluation assertions', () => {
 
     expect(summary).toEqual({
       proposeWhyTurn: 0,
+      firstSufficientTurn: 0,
+      proposedAtFirstSufficientTurn: true,
       evidenceCategories: ['fascination', 'importance', 'point-of-view', 'starting-asset'],
       constraintKinds: ['income', 'time'],
       missingCoverage: [],
@@ -71,8 +78,24 @@ describe('Method evaluation assertions', () => {
       { turnIndex: 0, type: 'append-foundation-evidence', evidenceCategory: 'point-of-view' },
       { turnIndex: 0, type: 'propose-why' },
     ])).toMatchObject({
+      firstSufficientTurn: null,
+      proposedAtFirstSufficientTurn: false,
       missingCoverage: ['fascination', 'starting-asset', 'reality-boundary'],
       minimumSufficient: false,
+    });
+
+    expect(summarizeFoundationTrace([
+      { turnIndex: 0, type: 'append-foundation-evidence', evidenceCategory: 'fascination' },
+      { turnIndex: 0, type: 'append-foundation-evidence', evidenceCategory: 'importance' },
+      { turnIndex: 1, type: 'append-foundation-evidence', evidenceCategory: 'point-of-view' },
+      { turnIndex: 1, type: 'append-foundation-evidence', evidenceCategory: 'starting-asset' },
+      { turnIndex: 1, type: 'record-reality-constraint', constraintKind: 'time' },
+      { turnIndex: 2, type: 'propose-why' },
+    ])).toMatchObject({
+      firstSufficientTurn: 1,
+      proposeWhyTurn: 2,
+      proposedAtFirstSufficientTurn: false,
+      minimumSufficient: true,
     });
   });
 

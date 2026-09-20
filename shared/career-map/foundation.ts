@@ -69,3 +69,18 @@ export function selectCurrentRealityConstraints(
   )));
   return foundation.constraints.filter((item) => !supersededIds.has(item.id));
 }
+
+export const minimumSufficientFoundationCategories = [
+  'fascination',
+  'importance',
+  'point-of-view',
+  'starting-asset',
+] as const;
+
+export function hasMinimumSufficientFoundation(foundation: FoundationState): boolean {
+  const currentCategories = new Set(
+    selectCurrentFoundationEvidence(foundation).map((item) => item.category),
+  );
+  return minimumSufficientFoundationCategories.every((category) => currentCategories.has(category))
+    && selectCurrentRealityConstraints(foundation).length > 0;
+}

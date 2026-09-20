@@ -1,4 +1,5 @@
 import {
+  stepCountIs,
   ToolLoopAgent,
   type LanguageModel,
   type ModelMessage,
@@ -28,6 +29,7 @@ import {
 export const REVELIO_AGENT_MODEL = 'gpt-5.6-sol';
 export const REVELIO_AGENT_PROVIDER = 'openai-responses';
 export const REVELIO_COMPACT_THRESHOLD = 1_000;
+export const REVELIO_MAX_AGENT_STEPS = 20;
 export const METHOD_INTERNAL_CONTEXT_MARKER = 'SERVER REFRESH CONTEXT';
 const METHOD_DIRECT_CONTINUATION_SEED = 'SERVER DIRECT CONTINUATION SEED';
 
@@ -426,7 +428,7 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
     // U7 deliberately ends at first-project acceptance. A committed
     // acceptance derives guide-path-project, whose module is owned by U8 and
     // is intentionally not registered in this three-module build.
-    stopWhen: () => firstProjectAccepted,
+    stopWhen: [() => firstProjectAccepted, stepCountIs(REVELIO_MAX_AGENT_STEPS)],
     prepareStep: async ({ stepNumber, messages }) => {
       throwIfAborted(requestAbortSignal);
       const state = await refreshMethodState(options.storage, options.loader, options.userId);

@@ -157,7 +157,11 @@ describe('repository-owned Method module loader', () => {
     expect(BASE_METHOD_INSTRUCTIONS).toMatch(/cards are application-owned/i);
     expect(BASE_METHOD_INSTRUCTIONS).toMatch(/main agent.*current explorer message.*language/is);
     expect(BASE_METHOD_INSTRUCTIONS).toMatch(/hedges, quotations, questions, conditionals, ambiguity, generic assent.*multiple.*multi-target/is);
+    expect(BASE_METHOD_INSTRUCTIONS).toMatch(/does not authorize.*pending decision.*end.*exactly one.*question/is);
     expect(BASE_METHOD_INSTRUCTIONS).toMatch(/bare ordinal.*exact current path/i);
+    expect(BASE_METHOD_INSTRUCTIONS).toMatch(/match the explorer's conversational register/i);
+    expect(BASE_METHOD_INSTRUCTIONS).toMatch(/recognition over praise/i);
+    expect(BASE_METHOD_INSTRUCTIONS).toMatch(/never add generic praise/i);
     expect(BASE_METHOD_INSTRUCTIONS).not.toMatch(/Why I Work|confirmed Why|Suggested Why/i);
     expect(PURPOSE_PATHS_OFFER_ENGLISH).toBe('Here are three ways to serve your North Star.');
     expect(PURPOSE_PATHS_OFFER_SPANISH).toBe('Aquí tienes tres formas de servir a tu Estrella Polar.');
@@ -176,7 +180,16 @@ describe('repository-owned Method module loader', () => {
     expect(foundation).toContain('What activities pull you in so much that you lose track of time?');
     expect(foundation).toMatch(/watching, reading, or thinking.*only/i);
     expect(foundation).toMatch(/explicitly says.*cannot name.*absorbing.*next question.*watching, reading, or thinking/i);
+    expect(foundation).toMatch(/never store.*cannot name.*fascination.*fallback question/is);
     expect(foundation).toMatch(/ten-year.*only when/i);
+    expect(foundation).toContain('If you could fast-forward ten years, what meaningful change would you be proud to have contributed to?');
+    expect(foundation).toContain('Your North Star is a direction for what you want your work to serve, and it can evolve as you learn by doing.');
+    expect(foundation).toMatch(/never label.*provisional.*user-facing/i);
+    expect(foundation).toMatch(/record every supported evidence item and current constraint.*latest message/is);
+    expect(foundation).toMatch(/minimum coverage does not make the rest of that message irrelevant/i);
+    expect(foundation).toMatch(/asks to pause.*only correcting existing evidence.*instead of proposing automatically/is);
+    expect(foundation).toMatch(/coverage is insufficient.*end.*one next.*question/is);
+    expect(foundation).toMatch(/coverage is sufficient.*refine-or-confirm invitation/is);
     expect(foundation).toMatch(/one short question per turn/i);
     expect(foundation).toMatch(/do not propose Purpose Paths until.*confirmed/i);
     expect(foundation).toMatch(/never switch to English.*example is written in English/i);

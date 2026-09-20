@@ -75,8 +75,25 @@ if (!Number.isSafeInteger(requestTimeoutMs) || requestTimeoutMs <= 0) {
 
 const pathInputSchema = purposePathInputSchema.omit({ id: true, revision: true, sources: true });
 const projectInputSchema = pathProjectInputSchema.omit({ id: true, revision: true, sources: true });
-const foundationEvidenceToolInputSchema = foundationEvidenceSchema.pick({ category: true, content: true });
-const realityConstraintToolInputSchema = realityConstraintSchema.pick({ kind: true, description: true });
+const foundationEvidenceToolInputSchema = foundationEvidenceSchema
+  .pick({ category: true, content: true })
+  .extend({
+    category: foundationEvidenceSchema.shape.category.describe(
+      'Use fascination only for a specific activity or topic that actually pulls the explorer in. Never classify a statement that they cannot name one as fascination.',
+    ),
+    content: foundationEvidenceSchema.shape.content.describe(
+      'Copy verbatim as one exact substring from the current explorer message. Never summarize or paraphrase it.',
+    ),
+  })
+  .strict();
+const realityConstraintToolInputSchema = realityConstraintSchema
+  .pick({ kind: true, description: true })
+  .extend({
+    description: realityConstraintSchema.shape.description.describe(
+      'Copy verbatim as one exact substring from the current explorer message. Never summarize or paraphrase it.',
+    ),
+  })
+  .strict();
 const whyToolInputSchema = whyInputSchema.omit({ id: true, revision: true });
 
 const projectGroundingSchema = z.discriminatedUnion('kind', [
@@ -147,6 +164,7 @@ function proveU7FixtureCoverage() {
   assert(JSON.stringify(northStarRevisionFixtures.deepImpactClasses) === JSON.stringify(invalidationTargetOrder), 'U7 deep-revision fixture must name the reducer-owned exact artifact classes in order.');
   assert(northStarRevisionFixtures.acknowledgmentTiming === 'later-user-turn', 'U7 revision acknowledgment must be later-turn.');
   assert(northStarRevisionFixtures.failedPresentationRecoveryOperation === 'revise-why', 'U7 failed revision presentation must reuse revise-why.');
+  assert(scenarios.some((scenario) => (scenario.foundationExpectations.pauseTurns ?? []).length > 0), 'U7 Foundation fixtures must exercise an explicit pause.');
 }
 
 const scenarios = [
@@ -205,15 +223,17 @@ const scenarios = [
   {
     id: 'explicit-language-change',
     openingLanguage: 'en',
-    languageChangeTurn: 4,
+    languageChangeTurn: 5,
     foundationExpectations: {
       requiredFirstTurnQuestionTopics: ['ten-year-meaning'],
       forbiddenFirstTurnQuestionTopics: [],
+      pauseTurns: [1],
     },
-    pathOperationExpectation: { kind: 'replacement', turnIndex: 3, targetIndex: 1 },
+    pathOperationExpectation: { kind: 'replacement', turnIndex: 4, targetIndex: 1 },
     requiredOperations: ['replace-purpose-path'],
     turns: [
       'I get absorbed building small tools that turn confusing information into a useful choice. People rely on me for synthesis and I have shipped internal prototypes. I can make five hours a week and must keep my current job, but I am not yet sure what meaningful ten-year change this should serve.',
+      'I want to pause here and come back to this tomorrow.',
       'In ten years I would be proud to have helped ordinary teams make consequential choices without depending on experts. I think good systems should transfer agency rather than create dependence.',
       'That North Star is accurate. I want to confirm it.',
       'The second path appeals mainly because its title sounds prestigious. Investigate that distortion and replace or revise it without ranking the alternatives.',
@@ -897,12 +917,14 @@ function createSyntheticHarness(scenario, loader, model) {
   let operationSequence = 0;
   let currentTurnIndex = -1;
   let currentTurnSequence = 0;
+  let currentUserText = '';
   let previousAssistantText = '';
   let firstProjectAccepted = false;
   let requestedOperationCompleted = false;
   const operations = [];
   const preparations = [];
   const turns = [];
+  const evidenceAuthorityViolations = [];
 
   function nextId(kind) {
     operationSequence += 1;
@@ -931,6 +953,26 @@ function createSyntheticHarness(scenario, loader, model) {
 
   function userEvidence() {
     return userAction();
+  }
+
+  function rejectNonVerbatimEvidence(operation, field, value) {
+    if (currentUserText && value && currentUserText.includes(value)) return null;
+    evidenceAuthorityViolations.push({
+      turnIndex: currentTurnIndex,
+      operation,
+      field,
+      reason: 'UserEvidenceAssociationError',
+    });
+    const checkpoint = deriveMethodCheckpoint(map);
+    return {
+      status: 'rejected',
+      operation,
+      authoritativeRevision: map.revision,
+      derivedModule: checkpoint.module,
+      pendingDecision: checkpoint.pendingDecision?.kind ?? null,
+      errorClass: 'UserEvidenceAssociationError',
+      retryable: true,
+    };
   }
 
   function currentSuggestedWhy() {
@@ -1006,18 +1048,26 @@ function createSyntheticHarness(scenario, loader, model) {
 
   const tools = {
     append_foundation_evidence: tool({
-      description: 'Record one supported North Star evidence item from the current user message. Do not duplicate evidence already in canonical state.',
+      description: 'Record one supported North Star evidence item. The content must be copied verbatim as one exact substring from the current explorer message; never summarize or paraphrase it. Never store a statement that the explorer cannot name an absorbing activity as fascination evidence.',
       inputSchema: foundationEvidenceToolInputSchema,
-      execute: ({ category, content }, { toolCallId }) => commit('append-foundation-evidence', {
-        evidence: { id: nextId('evidence'), revision: 1, category, content, provenance: userEvidence() },
-      }, toolCallId),
+      execute: ({ category, content }, { toolCallId }) => {
+        const rejection = rejectNonVerbatimEvidence('append-foundation-evidence', 'content', content);
+        if (rejection) return rejection;
+        return commit('append-foundation-evidence', {
+          evidence: { id: nextId('evidence'), revision: 1, category, content, provenance: userEvidence() },
+        }, toolCallId);
+      },
     }),
     record_reality_constraint: tool({
-      description: 'Record one current practical reality constraint, including an explicit absence of constraints.',
+      description: 'Record one current practical reality constraint, including an explicit absence of constraints. The description must be copied verbatim as one exact substring from the current explorer message; never summarize or paraphrase it.',
       inputSchema: realityConstraintToolInputSchema,
-      execute: ({ kind, description }, { toolCallId }) => commit('record-reality-constraint', {
-        constraint: { id: nextId('constraint'), revision: 1, kind, description, provenance: userEvidence() },
-      }, toolCallId),
+      execute: ({ kind, description }, { toolCallId }) => {
+        const rejection = rejectNonVerbatimEvidence('record-reality-constraint', 'description', description);
+        if (rejection) return rejection;
+        return commit('record-reality-constraint', {
+          constraint: { id: nextId('constraint'), revision: 1, kind, description, provenance: userEvidence() },
+        }, toolCallId);
+      },
     }),
     propose_why: tool({
       description: 'Propose one concise North Star only after minimum-sufficient evidence coverage exists. This does not confirm it.',
@@ -1278,6 +1328,7 @@ function createSyntheticHarness(scenario, loader, model) {
     for (const [turnIndex, userText] of scenario.turns.entries()) {
       currentTurnIndex = turnIndex;
       currentTurnSequence = (scenario.turnSequenceStart ?? 1) + turnIndex * 2;
+      currentUserText = userText;
       messages.push({ role: 'user', content: userText });
       const operationStart = operations.length;
       const preparationStart = preparations.length;
@@ -1333,14 +1384,14 @@ function createSyntheticHarness(scenario, loader, model) {
       });
       previousAssistantText = text;
     }
-    return { map, operations, preparations, turns };
+    return { map, operations, preparations, turns, evidenceAuthorityViolations };
   }
 
   return { run };
 }
 
 function assessScenario(scenario, result) {
-  const { map, operations, turns } = result;
+  const { map, operations, turns, evidenceAuthorityViolations } = result;
   const operationTypes = operations.map((item) => item.type);
   const why = map.foundation.whyRevisions.findLast((item) => item.status === 'confirmed');
   const activeSet = map.pathSets.findLast((item) => item.status === 'active');
@@ -1358,8 +1409,10 @@ function assessScenario(scenario, result) {
   const expectedFraming = expectedR22Framing(scenario);
   const r22Presentation = summarizeR22Presentation(framingTurn?.replyText ?? '', expectedFraming);
 
+  assert(evidenceAuthorityViolations.length === 0, `${scenario.id}: model attempted ${evidenceAuthorityViolations.length} non-verbatim Foundation write(s).`);
   assert(why, `${scenario.id}: no confirmed North Star remained in canonical state.`);
   assert(foundationTrace.minimumSufficient, `${scenario.id}: propose-why preceded minimum-sufficient North Star evidence coverage (${foundationTrace.missingCoverage.join(', ') || 'propose-why missing'}).`);
+  assert(foundationTrace.proposedAtFirstSufficientTurn, `${scenario.id}: the North Star was not proposed in the first turn with minimum-sufficient coverage.`);
   for (const topic of scenario.foundationExpectations.requiredFirstTurnQuestionTopics) {
     assert(firstTurnQuestionTopics.includes(topic), `${scenario.id}: first North Star reply did not ask the required ${topic} follow-up.`);
   }
@@ -1419,7 +1472,11 @@ function assessScenario(scenario, result) {
   }
 
   const foundationNarrations = turns.filter((turn) => turn.narrationModule === 'form-foundation' && turn.replyShape.characters > 0);
-  assert(foundationNarrations.every((turn) => turn.replyShape.questions <= 1), `${scenario.id}: North Star narration asked more than one question.`);
+  const pauseTurns = new Set(scenario.foundationExpectations.pauseTurns ?? []);
+  const activeFoundationNarrations = foundationNarrations.filter((turn) => !pauseTurns.has(turn.turnIndex));
+  const pausedFoundationNarrations = foundationNarrations.filter((turn) => pauseTurns.has(turn.turnIndex));
+  assert(activeFoundationNarrations.every((turn) => turn.replyShape.questions === 1), `${scenario.id}: every active North Star narration must end with exactly one forward-moving question.`);
+  assert(pausedFoundationNarrations.every((turn) => turn.replyShape.questions === 0 && turn.operations.length === 0), `${scenario.id}: an explicit Foundation pause asked a question or mutated canonical state.`);
   assert(turns.every((turn) => turn.replyShape.characters < 4_000), `${scenario.id}: a reply violated the concise response bound.`);
   assert(!/(permanent calling|destiny|scientific fit|fit score|ranked best|best path for you|your true calling|vocación definitiva|destino|puntuación de encaje|mejor camino para ti)/i.test(allReplyText), `${scenario.id}: reply used a forbidden identity, fit, destiny, or ranking claim.`);
   assert(!/(I recommend|I would choose|te recomiendo|yo elegiría)/i.test(allReplyText), `${scenario.id}: reply made an unsolicited recommendation.`);
@@ -1430,7 +1487,8 @@ function assessScenario(scenario, result) {
     const rightWords = normalizeWords(`${right.name} ${right.servesWhy}`);
     return jaccard(leftWords, rightWords) < 0.8;
   });
-  const oneQuestionBrevity = foundationNarrations.every((turn) => turn.replyShape.questions <= 1 && turn.replyShape.characters < 1_200);
+  const oneQuestionBrevity = activeFoundationNarrations.every((turn) => turn.replyShape.questions === 1 && turn.replyShape.characters < 1_200)
+    && pausedFoundationNarrations.every((turn) => turn.replyShape.questions === 0 && turn.replyShape.characters < 1_200);
   const tone = turns.every((turn) => turn.replyShape.characters < 2_000);
   const qualitative = { tone, oneQuestionBrevity, semanticDistinctness };
 
@@ -1473,6 +1531,7 @@ function retainedDiagnostic(scenario, result) {
     module: checkpoint.module,
     pendingDecision: checkpoint.pendingDecision?.kind ?? null,
     operationTypes: result.operations.map((item) => `${item.type}:${item.status}`),
+    evidenceAuthorityViolations: result.evidenceAuthorityViolations,
     foundation: {
       ...foundationTrace,
       firstTurnQuestionTopics: classifyFoundationQuestionTopics(result.turns[0]?.replyText ?? ''),
@@ -1515,7 +1574,7 @@ async function main() {
     const harness = createSyntheticHarness(scenario, loader, model);
     const result = await harness.run();
     try {
-      sampleReports.push({ id: scenario.id, retryCount: 0, ...assessScenario(scenario, result) });
+      sampleReports.push({ id: scenario.id, retryCount: result.evidenceAuthorityViolations.length, ...assessScenario(scenario, result) });
     } catch (error) {
       console.error(JSON.stringify({ status: 'sample-failed', diagnostic: retainedDiagnostic(scenario, result) }));
       throw error;

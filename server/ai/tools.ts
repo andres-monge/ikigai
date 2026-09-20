@@ -13,7 +13,6 @@ import {
   purposePathInputSchema,
   realityConstraintSchema,
   revisionSchema,
-  normalizeAuthorityMessage,
   whyInputSchema,
   type CareerMap,
   type CareerMapOperation,
@@ -123,8 +122,25 @@ export type MethodToolRuntime = Omit<MethodOperationExecutorOptions, 'sourceId' 
 
 const pathToolInputSchema = purposePathInputSchema;
 const projectToolInputSchema = pathProjectInputSchema;
-const evidenceToolInputSchema = foundationEvidenceSchema.omit({ provenance: true, supersedesEvidenceId: true });
-const constraintToolInputSchema = realityConstraintSchema.omit({ provenance: true, supersedesConstraintId: true });
+const evidenceToolInputSchema = foundationEvidenceSchema
+  .omit({ provenance: true, supersedesEvidenceId: true })
+  .extend({
+    category: foundationEvidenceSchema.shape.category.describe(
+      'Use fascination only for a specific activity or topic that actually pulls the explorer in. Never classify a statement that they cannot name one as fascination.',
+    ),
+    content: foundationEvidenceSchema.shape.content.describe(
+      'Copy verbatim as one exact substring from the current explorer message. Never summarize or paraphrase it.',
+    ),
+  })
+  .strict();
+const constraintToolInputSchema = realityConstraintSchema
+  .omit({ provenance: true, supersedesConstraintId: true })
+  .extend({
+    description: realityConstraintSchema.shape.description.describe(
+      'Copy verbatim as one exact substring from the current explorer message. Never summarize or paraphrase it.',
+    ),
+  })
+  .strict();
 
 const confirmationTargetSchema = z.object({
   targetId: entityIdSchema,
@@ -272,8 +288,6 @@ export async function executeMethodOperation(
   return envelopeFromState(options.operationType, before, normalized.status, normalized.errorClass, normalized.retryable);
 }
 
-const normalizedMessage = normalizeAuthorityMessage;
-
 function confirmationPayload(
   runtime: MethodToolRuntime,
   input: z.infer<typeof confirmationTargetSchema>,
@@ -335,9 +349,8 @@ function assertExactPendingTarget(input: {
 
 function assertUserAuthoredValue(runtime: MethodToolRuntime, value: string): void {
   if (runtime.surface !== 'agent-turn') return;
-  const message = normalizedMessage(runtime.currentMessage ?? '');
-  const exactValue = normalizedMessage(value);
-  if (message && exactValue && message.includes(exactValue)) return;
+  const message = runtime.currentMessage ?? '';
+  if (message.length > 0 && value.length > 0 && message.includes(value)) return;
   const error = new Error('Explorer-authored evidence must be an exact value from the current message.');
   error.name = 'UserEvidenceAssociationError';
   throw error;
@@ -512,7 +525,7 @@ export function createMethodTools(runtime: MethodToolRuntime): ToolSet {
     sourceMessageId: entityIdSchema,
   }).strict();
   return {
-    append_foundation_evidence: operationTool(runtime, 'append-foundation-evidence', 'Record one explorer-authored North Star evidence item from the current message.', evidenceToolInputSchema, (input) => {
+    append_foundation_evidence: operationTool(runtime, 'append-foundation-evidence', 'Record one explorer-authored North Star evidence item. The content must be copied verbatim as one exact substring from the current explorer message; never summarize or paraphrase it. Never store a statement that the explorer cannot name an absorbing activity as fascination evidence.', evidenceToolInputSchema, (input) => {
       assertUserAuthoredValue(runtime, input.content);
       return { evidence: { ...input, provenance: context().action } };
     }),
@@ -520,7 +533,7 @@ export function createMethodTools(runtime: MethodToolRuntime): ToolSet {
       assertUserAuthoredValue(runtime, evidence.content);
       return { supersedesEvidenceId, evidence: { ...evidence, supersedesEvidenceId, provenance: context().action } };
     }),
-    record_reality_constraint: operationTool(runtime, 'record-reality-constraint', 'Record one practical reality constraint outside Your North Star.', constraintToolInputSchema, (input) => {
+    record_reality_constraint: operationTool(runtime, 'record-reality-constraint', 'Record one practical reality constraint outside Your North Star. The description must be copied verbatim as one exact substring from the current explorer message; never summarize or paraphrase it.', constraintToolInputSchema, (input) => {
       assertUserAuthoredValue(runtime, input.description);
       return { constraint: { ...input, provenance: context().action } };
     }),

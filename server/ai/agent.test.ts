@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   applyCareerMapOperation,
   createCareerMap,
+  minimumSufficientFoundationCategories,
   type CareerMap,
   type CareerMapOperation,
 } from '../../shared/career-map/index.js';
@@ -13,6 +14,7 @@ import type { IStorage, PersistCareerMapResult } from '../storage.js';
 import {
   createMethodAgent,
   METHOD_INTERNAL_CONTEXT_MARKER,
+  REVELIO_MAX_AGENT_STEPS,
   REVELIO_AGENT_MODEL,
   type MethodAgentTurnStreamResult,
 } from './agent.js';
@@ -143,6 +145,69 @@ class InMemoryMethodStorage {
     if (result.status === 'committed' || result.status === 'replayed') this.map = result.map;
     return result;
   }
+}
+
+function minimumEvidenceFoundationMap(): CareerMap {
+  let map = createCareerMap('explorer-1');
+  const provenance = {
+    kind: 'user-message' as const,
+    actionId: 'foundation-message',
+    turnId: 'foundation-turn',
+    turnSequence: 1,
+    occurredAt: timestamp,
+  };
+  const commit = (operation: CareerMapOperation) => {
+    const result = applyCareerMapOperation(map, operation);
+    if (result.status !== 'committed') throw new Error(`${operation.type} fixture failed.`);
+    map = result.map;
+  };
+  for (const [index, category] of minimumSufficientFoundationCategories.entries()) {
+    commit({
+      type: 'append-foundation-evidence',
+      sourceId: `foundation-evidence-${index}`,
+      expectedRevision: map.revision,
+      occurredAt: timestamp,
+      payload: {
+        evidence: {
+          id: `foundation-evidence-${index}`,
+          revision: 1,
+          category,
+          content: explorerMessage,
+          provenance,
+        },
+      },
+    });
+  }
+  return map;
+}
+
+function sufficientFoundationMap(): CareerMap {
+  let map = minimumEvidenceFoundationMap();
+  const provenance = {
+    kind: 'user-message' as const,
+    actionId: 'foundation-message',
+    turnId: 'foundation-turn',
+    turnSequence: 1,
+    occurredAt: timestamp,
+  };
+  const commit = (operation: CareerMapOperation) => {
+    const result = applyCareerMapOperation(map, operation);
+    if (result.status !== 'committed') throw new Error(`${operation.type} fixture failed.`);
+    map = result.map;
+  };
+  commit({
+    type: 'record-reality-constraint',
+    sourceId: 'foundation-constraint',
+    expectedRevision: map.revision,
+    occurredAt: timestamp,
+    payload: {
+      constraint: {
+        id: 'foundation-constraint', revision: 1, kind: 'time',
+        description: explorerMessage, provenance,
+      },
+    },
+  });
+  return map;
 }
 
 function pendingWhyMap(): CareerMap {
@@ -341,12 +406,12 @@ describe('amended Method agent core loop', () => {
   });
 
   it('uses one automatic-choice call for natural conversation with no status or mutation', async () => {
-    const model = streamModel([textChunks('Small experiments turn uncertainty into evidence.')]);
+    const model = streamModel([textChunks('Small experiments turn uncertainty into evidence. What would you like to make useful next?')]);
     const statuses = vi.fn();
     const { agent, storage } = await makeAgent({ model, onOperationStatus: statuses });
     const output = await collect(await agent.stream({ prompt: explorerMessage }));
 
-    expect(JSON.stringify(output)).toContain('Small experiments turn uncertainty into evidence.');
+    expect(JSON.stringify(output)).toContain('What would you like to make useful next?');
     expect(model.doStreamCalls).toHaveLength(1);
     expect(statuses).not.toHaveBeenCalled();
     expect(storage.map.revision).toBe(0);
@@ -357,6 +422,98 @@ describe('amended Method agent core loop', () => {
       parallelToolCalls: false, reasoningEffort: 'low',
     });
     expect(model.doStreamCalls[0]?.providerOptions?.openai).not.toHaveProperty('include');
+  });
+
+  it('captures remaining evidence from the same message before proposing on the first sufficient turn', async () => {
+    const currentMessage = 'I can make five hours a week and must stay in Madrid.';
+    const model = streamModel([
+      operationChunks({
+        callId: 'time-constraint',
+        toolName: 'record_reality_constraint',
+        toolInput: {
+          id: 'time-constraint', revision: 1, kind: 'time',
+          description: 'five hours a week',
+        },
+      }),
+      operationChunks({
+        callId: 'location-constraint',
+        toolName: 'record_reality_constraint',
+        toolInput: {
+          id: 'location-constraint', revision: 1, kind: 'location',
+          description: 'stay in Madrid',
+        },
+      }),
+      operationChunks({
+        callId: 'why-at-first-sufficient-step',
+        toolName: 'propose_why',
+        toolInput: {
+          id: 'why-first-sufficient', revision: 1,
+          statement: 'Make complex information useful.',
+          serves: 'People facing difficult choices',
+          pointOfView: 'Clarity should transfer agency.',
+        },
+      }),
+      textChunks('Your North Star is ready to refine or confirm. Does this direction feel right?'),
+    ]);
+    const storage = new InMemoryMethodStorage(minimumEvidenceFoundationMap());
+    const { agent } = await makeAgent({ model, storage, currentMessage });
+
+    await collect(await agent.stream({ prompt: currentMessage }));
+
+    expect(model.doStreamCalls.map((call) => call.toolChoice)).toEqual([
+      { type: 'auto' },
+      { type: 'auto' },
+      { type: 'auto' },
+      { type: 'auto' },
+    ]);
+    expect(storage.map.operationHistory.slice(-3).map((receipt) => receipt.operationType)).toEqual([
+      'record-reality-constraint',
+      'record-reality-constraint',
+      'propose-why',
+    ]);
+    expect(storage.map.foundation.constraints.map((constraint) => constraint.kind)).toEqual([
+      'time',
+      'location',
+    ]);
+    expect(storage.map.foundation.whyRevisions).toHaveLength(1);
+  });
+
+  it('leaves a sufficient Foundation turn on automatic choice so the model can honor a pause', async () => {
+    const currentMessage = 'Pause here. I want to come back to this later.';
+    const model = streamModel([textChunks('We can pause here and pick this up when you are ready.')]);
+    const storage = new InMemoryMethodStorage(sufficientFoundationMap());
+    const { agent } = await makeAgent({ model, storage, currentMessage });
+
+    await collect(await agent.stream({ prompt: currentMessage }));
+
+    expect(model.doStreamCalls[0]?.toolChoice).toEqual({ type: 'auto' });
+    expect(storage.map.foundation.whyRevisions).toHaveLength(0);
+  });
+
+  it('stops after the bounded production step ceiling when a North Star proposal keeps rejecting', async () => {
+    const model = streamModel((index) => operationChunks({
+      callId: `rejected-why-${index}`,
+      toolName: 'propose_why',
+      toolInput: {
+        id: `rejected-why-${index}`, revision: 1,
+        statement: 'Make complex information useful.',
+        serves: 'People facing difficult choices',
+        pointOfView: 'Clarity should transfer agency.',
+      },
+    }));
+    const storage = new InMemoryMethodStorage(sufficientFoundationMap());
+    storage.persistCareerMapOperation = vi.fn(async () => ({
+      status: 'rejected' as const,
+      map: storage.map,
+      error: { code: 'illegal-transition' as const, message: 'synthetic' },
+    })) as never;
+    const { agent } = await makeAgent({ model, storage });
+
+    await collect(await agent.stream({ prompt: explorerMessage }));
+
+    expect(REVELIO_MAX_AGENT_STEPS).toBe(20);
+    expect(model.doStreamCalls).toHaveLength(REVELIO_MAX_AGENT_STEPS);
+    expect(storage.map.foundation.whyRevisions).toHaveLength(0);
   });
 
   it('continues a direct selection without sending fabricated explorer text and keeps ui-action provenance', async () => {

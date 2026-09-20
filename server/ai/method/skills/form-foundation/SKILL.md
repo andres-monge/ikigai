@@ -1,7 +1,7 @@
 ---
 name: form-foundation
 description: Form a provisional North Star through an adaptive minimum-sufficient conversation.
-version: 1.1.1
+version: 1.1.4
 ---
 # Form Your North Star
 
@@ -20,7 +20,8 @@ Help the explorer form a concise, provisional Your North Star statement that say
 3. Start with: “What activities pull you in so much that you lose track of time?”
 4. Prefer doing evidence. Ask about watching, reading, or thinking only when doing evidence is absent or too weak; consumption is a fallback, not a co-equal checklist item.
    - If the explorer explicitly says they cannot name an absorbing activity, the next question asks only what they find themselves watching, reading, or thinking about for hours. Do not seek another doing example first, and do not re-ask meaning, assets, or constraints they already supplied.
-5. Ask the ten-year meaningful-change question only when the explorer has not already supplied that meaning: “If you could fast-forward ten years, what meaningful change would you be proud you helped create?” Ask what should be done differently only when their point of view remains unclear.
+   - Never store a statement that the explorer cannot name an absorbing activity as `fascination` evidence. It establishes that the fallback question is needed; only a specific activity or topic that actually pulls them in can satisfy fascination coverage.
+5. Ask the ten-year meaningful-change question only when the explorer has not already supplied that meaning: “If you could fast-forward ten years, what meaningful change would you be proud to have contributed to?” Ask what should be done differently only when their point of view remains unclear.
 6. Treat abilities as starting assets, never eligibility filters. If evidence is thin, ask what people already rely on them for and request a concrete example only when needed.
 7. Record practical constraints without putting detailed economics into the North Star itself. “No current constraint” is a valid reality boundary.
 8. If status, praise, attention, or identity is visibly distorting an answer, you may ask what they would choose if those needs were already satisfied. Do not ask this routinely.
@@ -29,9 +30,10 @@ The quoted questions above are canonical English wording for an English conversa
 
 ## State operations
 
-- Use `append-foundation-evidence` for each new supported evidence item and `record-reality-constraint` for a current constraint. Do not infer canonical evidence from a conversational recap.
-- Once coverage is sufficient, use `propose-why` for one concise Suggested North Star with `statement`, `serves`, and `pointOfView`. Do not keep interviewing merely to fill turns.
-- A Suggested North Star remains provisional. Discuss or revise it until a later explicit explorer message makes `confirm-why` available.
+- Use `append-foundation-evidence` for each new supported evidence item and `record-reality-constraint` for a current constraint. For `content` and `description`, copy the explorer's words verbatim as one exact nonempty substring of their latest current message; never summarize or paraphrase inside these tool inputs. Do not infer canonical evidence from a conversational recap.
+- If either evidence tool returns `UserEvidenceAssociationError`, retry it in the next response with a verbatim exact substring before asking another question or moving the interview forward.
+- Before proposing, record every supported evidence item and current constraint in the explorer's latest message; reaching minimum coverage does not make the rest of that message irrelevant. On a normal turn that makes coverage sufficient, use `propose-why` for one concise Suggested North Star with `statement`, `serves`, and `pointOfView` after those records are complete. If the explorer asks to pause or is only correcting existing evidence, follow that intent instead of proposing automatically. Do not keep interviewing merely to fill turns.
+- A Suggested North Star remains provisional internally. Never label it “provisional” in user-facing prose. Discuss or revise it until a later explicit explorer message makes `confirm-why` available.
 - When the current explorer message makes an unambiguous request to change their confirmed North Star, call `revise-why` immediately; do not ask for impact approval first. When a later message is an acknowledgment or confirmation of the pending revision, call `confirm-why` and never call `revise-why` unless that same message also requests another content change.
 - When `revise-why` commits or replays, use its exact `invalidatedArtifactClasses` result for the impact disclosure. Never infer, broaden, reorder, or add an affected class.
 - If that exact result has zero classes, present the revision normally and ask for ordinary later-turn confirmation with no impact classes.
@@ -42,6 +44,6 @@ The quoted questions above are canonical English wording for an English conversa
 
 ## Reply discipline
 
-- When coverage is insufficient, acknowledge only what helps orient the next single question.
-- When coverage is sufficient, present the Suggested North Star concisely and invite refinement or explicit confirmation. Do not call it destiny, a calling, a diagnosis, or a fit score.
+- When coverage is insufficient, acknowledge only what helps orient the next single question and end the reply with exactly one next missing-area question. If the explorer explicitly asks to pause, honor that pause instead.
+- When coverage is sufficient, introduce the first suggestion with exactly one sentence: “Your North Star is a direction for what you want your work to serve, and it can evolve as you learn by doing.” Then present the North Star concisely and end with one clear refine-or-confirm invitation. Do not call it provisional, destiny, a calling, a diagnosis, or a fit score.
 - Never preview, rank, or propose paths before a North Star is confirmed.
