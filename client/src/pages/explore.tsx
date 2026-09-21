@@ -20,6 +20,7 @@ import { PurposePathCard } from '@/components/explore/purpose-path-card';
 type LoadState = 'loading' | 'empty' | 'ready' | 'error';
 type WorkspaceLoadState = LoadState | 'repair-required';
 type Panel = 'chat' | 'map';
+type TurnPhase = 'idle' | 'active' | 'finishing';
 type DirectOperationType = 'select-purpose-path' | 'confirm-purpose-path-revision';
 
 interface DeterministicOperationRequest {
@@ -63,9 +64,32 @@ const requestHeaders = {
   'Content-Type': 'application/json',
   'X-Revelio-Request': '1',
 };
+const HISTORY_READ_TIMEOUT_MS = 15_000;
+const WORKSPACE_READ_TIMEOUT_MS = 5_000;
 
 function newOpaqueId(prefix: string): string {
   return `${prefix}_${crypto.randomUUID()}`;
+}
+
+function RefreshRetryButton({
+  busy,
+  disabled,
+  onRetry,
+}: {
+  busy: boolean;
+  disabled: boolean;
+  onRetry: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      className="mt-3 min-h-11 font-bold underline disabled:cursor-wait disabled:opacity-60"
+      onClick={onRetry}
+    >
+      {busy ? 'Trying again…' : 'Try again'}
+    </button>
+  );
 }
 
 function dedupeMessages(messages: readonly NormalizedHistoryMessage[]): NormalizedHistoryMessage[] {
@@ -118,7 +142,8 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
   const [persistenceError, setPersistenceErrorState] = useState<PersistenceError | null>(null);
   const [unseenChatError, setUnseenChatError] = useState(false);
   const [terminalValidated, setTerminalValidated] = useState(false);
-  const [turnBusy, setTurnBusy] = useState(false);
+  const [turnPhase, setTurnPhase] = useState<TurnPhase>('idle');
+  const [refreshBusy, setRefreshBusy] = useState(false);
   const [olderBusy, setOlderBusy] = useState(false);
   const [turnNotice, setTurnNotice] = useState<string | null>(null);
   const [activePanel, setActivePanel] = useState<Panel>('chat');
@@ -143,6 +168,9 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
   const savingTimersRef = useRef(new Map<string, number>());
   const matureSavingAttemptsRef = useRef(new Set<string>());
   const activePanelRef = useRef<Panel>('chat');
+  const turnBusy = turnPhase !== 'idle';
+  const turnCanStop = turnPhase === 'active';
+  const refreshDisabled = refreshBusy || turnBusy;
   const bootstrapPending = historyState === 'loading' || workspaceState === 'loading';
 
   const setPersistenceError = useCallback((error: PersistenceError | null) => {
@@ -188,7 +216,7 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
 
   const withReadTimeout = useCallback(async <T,>(
     load: (signal: AbortSignal) => Promise<T>,
-    timeoutMs = 5_000,
+    timeoutMs: number,
   ): Promise<T> => {
     const controller = new AbortController();
     readControllersRef.current.add(controller);
@@ -225,39 +253,59 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
 
   const refreshNewest = useCallback(async () => {
     const generation = ++refreshGenerationRef.current;
-    const [historyResult, workspaceResult] = await Promise.allSettled([
-      withReadTimeout((signal) => loadHistory(undefined, signal)),
-      withReadTimeout((signal) => loadWorkspace(signal)),
-    ]);
-    if (!mountedRef.current || generation !== refreshGenerationRef.current) {
-      return { history: undefined, workspace: undefined };
-    }
-    if (historyResult.status === 'fulfilled') {
-      setMessages((current) => dedupeMessages([
-        ...current.filter((message) => loadedOlderMessageIdsRef.current.has(message.id)),
-        ...historyResult.value.messages,
-      ]));
-      if (!loadedOlderHistoryRef.current) setOlderCursor(historyResult.value.olderCursor);
-      setHistoryState(historyResult.value.status);
-      streamStateRef.current = { ...streamStateRef.current, text: '', citations: [] };
-      setStreamedText('');
-    } else {
-      setHistoryState('error');
-    }
-    if (workspaceResult.status === 'fulfilled') {
-      if (workspaceResult.value.status === 'ready') {
-        setMap(workspaceResult.value.map);
-        setWorkspaceState('ready');
-      } else if (workspaceResult.value.status === 'repair-required') {
-        setMap(null);
-        setWorkspaceState('repair-required');
-      } else {
-        setMap(null);
-        setWorkspaceState('empty');
+    setRefreshBusy(true);
+    const isCurrent = () => mountedRef.current && generation === refreshGenerationRef.current;
+    const historyRead = withReadTimeout(
+      (signal) => loadHistory(undefined, signal),
+      HISTORY_READ_TIMEOUT_MS,
+    ).then((value) => {
+      if (isCurrent()) {
+        setMessages((current) => dedupeMessages([
+          ...current.filter((message) => loadedOlderMessageIdsRef.current.has(message.id)),
+          ...value.messages,
+        ]));
+        if (!loadedOlderHistoryRef.current) setOlderCursor(value.olderCursor);
+        setHistoryState(value.status);
+        const liveText = streamStateRef.current.text;
+        const authoritativeAssistantText = value.messages
+          .filter((message) => message.role === 'assistant')
+          .flatMap((message) => message.parts.flatMap((part) => part.type === 'text' ? [part.text] : []))
+          .join('');
+        const historyContainsLiveText = liveText.length > 0 && authoritativeAssistantText.endsWith(liveText);
+        if (!liveText || historyContainsLiveText) {
+          streamStateRef.current = { ...streamStateRef.current, text: '', citations: [] };
+          setStreamedText('');
+        }
       }
-    } else {
-      setWorkspaceState('error');
-    }
+      return { status: 'fulfilled' as const, value };
+    }, (reason: unknown) => {
+      if (isCurrent()) setHistoryState('error');
+      return { status: 'rejected' as const, reason };
+    });
+    const workspaceRead = withReadTimeout(
+      (signal) => loadWorkspace(signal),
+      WORKSPACE_READ_TIMEOUT_MS,
+    ).then((value) => {
+      if (isCurrent()) {
+        if (value.status === 'ready') {
+          setMap(value.map);
+          setWorkspaceState('ready');
+        } else if (value.status === 'repair-required') {
+          setMap(null);
+          setWorkspaceState('repair-required');
+        } else {
+          setMap(null);
+          setWorkspaceState('empty');
+        }
+      }
+      return { status: 'fulfilled' as const, value };
+    }, (reason: unknown) => {
+      if (isCurrent()) setWorkspaceState('error');
+      return { status: 'rejected' as const, reason };
+    });
+    const [historyResult, workspaceResult] = await Promise.all([historyRead, workspaceRead]);
+    if (!isCurrent()) return { history: undefined, workspace: undefined };
+    setRefreshBusy(false);
     return {
       history: historyResult.status === 'fulfilled' ? historyResult.value : undefined,
       workspace: workspaceResult.status === 'fulfilled' ? workspaceResult.value : undefined,
@@ -320,7 +368,10 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
     setOlderBusy(true);
     setTurnNotice(null);
     try {
-      const page = await withReadTimeout((signal) => loadHistory(olderCursor, signal));
+      const page = await withReadTimeout(
+        (signal) => loadHistory(olderCursor, signal),
+        HISTORY_READ_TIMEOUT_MS,
+      );
       if (!mountedRef.current) return;
       loadedOlderHistoryRef.current = true;
       for (const message of page.messages) loadedOlderMessageIdsRef.current.add(message.id);
@@ -448,6 +499,14 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
     if (nextError) setPersistenceError(nextError);
   }
 
+  function beginFinishing(): boolean {
+    if (!mountedRef.current) return false;
+    setTurnPhase('finishing');
+    return true;
+  }
+
+  const retryNewest = () => { void refreshNewestAndValidate(); };
+
   async function submitMessage() {
     const message = draft.trim();
     if (!message || turnBusy || bootstrapPending) return;
@@ -456,7 +515,7 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
     const controller = new AbortController();
     abortRef.current = controller;
     pinnedToBottomRef.current = true;
-    setTurnBusy(true);
+    setTurnPhase('active');
     setTerminalValidated(false);
     setTurnNotice(null);
     setSubmittedDraft(message);
@@ -522,6 +581,7 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
       }
     } finally {
       if (abortRef.current === controller) abortRef.current = null;
+      if (!beginFinishing()) return;
       const snapshot = await refreshNewest();
       if (mountedRef.current) {
         reconcileAttempts(snapshot, {
@@ -529,7 +589,7 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
           cancelled: controller.signal.aborted,
         });
         setTerminalValidated(Boolean(snapshot.history && snapshot.workspace));
-        setTurnBusy(false);
+        setTurnPhase('idle');
         setSubmittedDraft(null);
         scheduleFocus(() => draftRef.current);
       }
@@ -552,7 +612,7 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
       startedAt: Date.now(),
       directOperation: operation,
     };
-    setTurnBusy(true);
+    setTurnPhase('active');
     setTerminalValidated(false);
     abortRef.current = controller;
     setTurnNotice(null);
@@ -606,6 +666,7 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
       replyFailed = !controller.signal.aborted;
     } finally {
       if (abortRef.current === controller) abortRef.current = null;
+      if (!beginFinishing()) return;
       const snapshot = await refreshNewest();
       if (mountedRef.current) {
         reconcileAttempts(snapshot, {
@@ -613,7 +674,7 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
           cancelled: controller.signal.aborted,
         });
         setTerminalValidated(Boolean(snapshot.history && snapshot.workspace));
-        setTurnBusy(false);
+        setTurnPhase('idle');
         if (activePanelRef.current === 'chat') scheduleFocus(() => draftRef.current);
       }
     }
@@ -764,7 +825,11 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
               {historyState === 'error' ? (
                 <div role="alert" className="border-2 border-red-800 bg-red-50 p-4 text-sm">
                   <p className="font-bold">Your conversation could not be loaded.</p>
-                  <button type="button" className="mt-3 min-h-11 font-bold underline" onClick={() => void refreshNewestAndValidate()}>Try again</button>
+                  <RefreshRetryButton
+                    busy={refreshBusy}
+                    disabled={refreshDisabled}
+                    onRetry={retryNewest}
+                  />
                 </div>
               ) : null}
               {(historyState === 'empty' || historyState === 'ready') && !olderCursor ? (
@@ -827,7 +892,8 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
                   <p className="font-bold">{persistenceError.message}</p>
                   <button
                     type="button"
-                    className="mt-2 min-h-9 font-bold underline"
+                    disabled={persistenceError.action === 'refresh' && refreshDisabled}
+                    className="mt-2 min-h-9 font-bold underline disabled:cursor-wait disabled:opacity-60"
                     onClick={() => {
                       if (persistenceError.action === 'retry' && persistenceError.retryOperation) {
                         setPersistenceError(null);
@@ -852,7 +918,11 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
                       }
                     }}
                   >
-                    {persistenceError.action === 'retry' ? 'Try again' : persistenceError.action === 'continue' ? 'Continue in Chat' : 'Refresh'}
+                    {persistenceError.action === 'retry'
+                      ? 'Try again'
+                      : persistenceError.action === 'continue'
+                        ? 'Continue in Chat'
+                        : refreshBusy ? 'Refreshing…' : 'Refresh'}
                   </button>
                 </div>
               ) : null}
@@ -899,7 +969,7 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
                       ? <Square aria-hidden="true" className="h-4 w-4 fill-current" />
                       : <Mic aria-hidden="true" className="h-5 w-5" strokeWidth={2.25} />}
                 </button>
-                {turnBusy ? (
+                {turnBusy && turnCanStop ? (
                   <button
                     type="button"
                     aria-label="Stop"
@@ -908,6 +978,16 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
                     className="grid h-11 w-11 shrink-0 place-items-center border-2 border-black bg-white text-black shadow-[2px_2px_0_rgba(0,0,0,0.65)] transition-[transform,box-shadow] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black active:translate-x-0.5 active:translate-y-0.5 active:shadow-none"
                   >
                     <Square aria-hidden="true" className="h-4 w-4 fill-current" />
+                  </button>
+                ) : turnBusy ? (
+                  <button
+                    type="button"
+                    disabled
+                    aria-label="Finishing up"
+                    title="Finishing up"
+                    className="grid h-11 w-11 shrink-0 cursor-wait place-items-center border-2 border-black bg-white text-black opacity-60"
+                  >
+                    <Loader2 aria-hidden="true" className="h-5 w-5 motion-safe:animate-spin" />
                   </button>
                 ) : (
                   <button
@@ -936,7 +1016,11 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
             {workspaceState === 'error' ? (
               <div role="alert" className="border-2 border-red-800 bg-red-50 p-5">
                 <p className="font-bold">Your map could not be loaded.</p>
-                <button type="button" className="mt-3 min-h-11 font-bold underline" onClick={() => void refreshNewestAndValidate()}>Try again</button>
+                <RefreshRetryButton
+                  busy={refreshBusy}
+                  disabled={refreshDisabled}
+                  onRetry={retryNewest}
+                />
               </div>
             ) : null}
             {workspaceState === 'repair-required' ? (

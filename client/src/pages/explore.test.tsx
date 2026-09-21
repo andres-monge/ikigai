@@ -24,6 +24,18 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
+function abortable<T>(promise: Promise<T>, signal?: AbortSignal | null): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const abort = () => reject(signal?.reason ?? new DOMException('Aborted', 'AbortError'));
+    if (signal?.aborted) {
+      abort();
+      return;
+    }
+    signal?.addEventListener('abort', abort, { once: true });
+    promise.then(resolve, reject);
+  });
+}
+
 const presentation = {
   kind: 'model-presentation' as const, assistantTurnId: 'turn-paths', turnSequence: 3,
   completed: true as const, presentedAt: '2030-01-01T00:00:02.000Z',
@@ -525,6 +537,328 @@ describe('Explore U6 conversation-first workspace', () => {
     await waitFor(() => expect((start as HTMLButtonElement).disabled).toBe(false));
   });
 
+  it('keeps a retry from being submitted again while its refresh is in flight', async () => {
+    const retryHistory = deferred<Response>();
+    let historyReads = 0;
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/agent/history') {
+        historyReads += 1;
+        return historyReads === 1
+          ? Promise.reject(new Error('initial history unavailable'))
+          : retryHistory.promise;
+      }
+      if (url === '/api/agent/workspace') {
+        return Promise.resolve(jsonResponse({ status: 'ready', map: suggestedPathsMap() }));
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<Explore {...props()} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Try again' }));
+
+    const retrying = await screen.findByRole('button', { name: 'Trying again…' });
+    expect((retrying as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(retrying);
+    expect(historyReads).toBe(2);
+
+    await act(async () => {
+      retryHistory.resolve(jsonResponse({ status: 'ready', messages: historyMessages() }));
+      await retryHistory.promise;
+    });
+    expect(await screen.findByText('Compare them below.')).toBeTruthy();
+  });
+
+  it('allows a valid cold history read to finish after five seconds', async () => {
+    vi.useFakeTimers();
+    const historyResponse = deferred<Response>();
+    let historySignal: AbortSignal | null | undefined;
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === '/api/agent/history') {
+        historySignal = init?.signal;
+        return abortable(historyResponse.promise, historySignal);
+      }
+      if (url === '/api/agent/workspace') {
+        return Promise.resolve(jsonResponse({ status: 'ready', map: suggestedPathsMap() }));
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<Explore {...props()} />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(5_100); });
+
+    expect(historySignal?.aborted).toBe(false);
+    expect(screen.queryByText('Your conversation could not be loaded.')).toBeNull();
+
+    await act(async () => {
+      historyResponse.resolve(jsonResponse({ status: 'ready', messages: historyMessages() }));
+      await historyResponse.promise;
+    });
+    expect(screen.getByText('Compare them below.')).toBeTruthy();
+  });
+
+  it('still aborts a hung history read after the extended budget', async () => {
+    vi.useFakeTimers();
+    let historySignal: AbortSignal | null | undefined;
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === '/api/agent/history') {
+        historySignal = init?.signal;
+        return abortable(new Promise<Response>(() => undefined), historySignal);
+      }
+      if (url === '/api/agent/workspace') {
+        return Promise.resolve(jsonResponse({ status: 'ready', map: suggestedPathsMap() }));
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<Explore {...props()} />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(14_900); });
+    expect(historySignal?.aborted).toBe(false);
+    expect(screen.queryByText('Your conversation could not be loaded.')).toBeNull();
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(200); });
+
+    expect(historySignal?.aborted).toBe(true);
+    expect(screen.getByText('Your conversation could not be loaded.')).toBeTruthy();
+  });
+
+  it('uses the extended budget for older history without replacing the current transcript', async () => {
+    let historyReads = 0;
+    let olderSignal: AbortSignal | null | undefined;
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === '/api/agent/history') {
+        historyReads += 1;
+        return Promise.resolve(jsonResponse({
+          status: 'ready',
+          messages: historyMessages(),
+          olderCursor: 'older-page',
+        }));
+      }
+      if (url === '/api/agent/history?cursor=older-page') {
+        olderSignal = init?.signal;
+        return abortable(new Promise<Response>(() => undefined), olderSignal);
+      }
+      if (url === '/api/agent/workspace') {
+        return Promise.resolve(jsonResponse({ status: 'ready', map: suggestedPathsMap() }));
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<Explore {...props()} />);
+    const loadOlder = await screen.findByRole('button', { name: 'Load older messages' });
+    vi.useFakeTimers();
+    fireEvent.click(loadOlder);
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(5_100); });
+    expect(olderSignal?.aborted).toBe(false);
+    expect(screen.getByText('Compare them below.')).toBeTruthy();
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+    expect(olderSignal?.aborted).toBe(true);
+    expect(screen.getByText('Older messages could not be loaded. Your current conversation is unchanged.')).toBeTruthy();
+    expect(screen.getByText('Compare them below.')).toBeTruthy();
+    expect(historyReads).toBe(1);
+  });
+
+  it('retains the five-second deadline for a hung workspace read', async () => {
+    vi.useFakeTimers();
+    let historySignal: AbortSignal | null | undefined;
+    let workspaceSignal: AbortSignal | null | undefined;
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === '/api/agent/history') {
+        historySignal = init?.signal;
+        return abortable(new Promise<Response>(() => undefined), historySignal);
+      }
+      if (url === '/api/agent/workspace') {
+        workspaceSignal = init?.signal;
+        return abortable(new Promise<Response>(() => undefined), workspaceSignal);
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<Explore {...props()} />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(4_900); });
+    expect(workspaceSignal?.aborted).toBe(false);
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(200); });
+    expect(workspaceSignal?.aborted).toBe(true);
+    expect(historySignal?.aborted).toBe(false);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Your Map' }));
+    expect(screen.getByText('Your map could not be loaded.')).toBeTruthy();
+  });
+
+  it('replaces Stop with a truthful finishing state during terminal refresh', async () => {
+    const terminalHistory = deferred<Response>();
+    let historyReads = 0;
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/agent/history') {
+        historyReads += 1;
+        return historyReads === 1
+          ? Promise.resolve(jsonResponse({ status: 'empty', messages: [] }))
+          : terminalHistory.promise;
+      }
+      if (url === '/api/agent/workspace') {
+        return Promise.resolve(jsonResponse({ status: 'ready', map: createCareerMap('explorer-1') }));
+      }
+      if (url === '/api/agent') {
+        return Promise.resolve(streamResponse([
+          { type: 'text-start', id: 'assistant-live' },
+          { type: 'text-delta', id: 'assistant-live', delta: 'Reply complete.' },
+          { type: 'text-end', id: 'assistant-live' },
+          { type: 'finish', finishReason: 'stop' },
+        ]));
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<Explore {...props()} />);
+    const textbox = await screen.findByRole('textbox', { name: 'Message Revelio' });
+    fireEvent.change(textbox, { target: { value: 'Complete this turn.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    expect(await screen.findByRole('button', { name: 'Finishing up' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull();
+
+    await act(async () => {
+      terminalHistory.resolve(jsonResponse({ status: 'ready', messages: historyMessages() }));
+      await terminalHistory.promise;
+    });
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Finishing up' })).toBeNull());
+  });
+
+  it('reconciles a multi-item live reply against the matching history sequence without duplication', async () => {
+    let historyReads = 0;
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/agent/history') {
+        historyReads += 1;
+        return Promise.resolve(historyReads === 1
+          ? jsonResponse({ status: 'empty', messages: [] })
+          : jsonResponse({ status: 'ready', messages: [
+              {
+                id: 'assistant-step-1', role: 'assistant',
+                turn: { turnId: 'turn-multi', status: 'completed' },
+                parts: [{ type: 'text', text: 'First part. ' }],
+              },
+              {
+                id: 'assistant-step-2', role: 'assistant', isFinalAssistantItem: true,
+                turn: { turnId: 'turn-multi', status: 'completed' },
+                parts: [{ type: 'text', text: 'Second part.' }],
+              },
+            ] }));
+      }
+      if (url === '/api/agent/workspace') {
+        return Promise.resolve(jsonResponse({ status: 'ready', map: createCareerMap('explorer-1') }));
+      }
+      if (url === '/api/agent') {
+        return Promise.resolve(streamResponse([
+          { type: 'text-start', id: 'assistant-step-1' },
+          { type: 'text-delta', id: 'assistant-step-1', delta: 'First part. ' },
+          { type: 'text-end', id: 'assistant-step-1' },
+          { type: 'text-start', id: 'assistant-step-2' },
+          { type: 'text-delta', id: 'assistant-step-2', delta: 'Second part.' },
+          { type: 'text-end', id: 'assistant-step-2' },
+          { type: 'finish', finishReason: 'stop' },
+        ]));
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<Explore {...props()} />);
+    const textbox = await screen.findByRole('textbox', { name: 'Message Revelio' });
+    fireEvent.change(textbox, { target: { value: 'Give me a multi-step reply.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() => expect(historyReads).toBe(2));
+    await waitFor(() => expect(screen.queryByText('First part. Second part.')).toBeNull());
+    expect(screen.getByText('First part.')).toBeTruthy();
+    expect(screen.getByText('Second part.')).toBeTruthy();
+  });
+
+  it('disables conversation retry while a turn is active and finishing', async () => {
+    const terminalHistory = deferred<Response>();
+    let historyReads = 0;
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/agent/history') {
+        historyReads += 1;
+        return historyReads === 1
+          ? Promise.reject(new Error('initial history unavailable'))
+          : terminalHistory.promise;
+      }
+      if (url === '/api/agent/workspace') {
+        return Promise.resolve(jsonResponse({ status: 'ready', map: createCareerMap('explorer-1') }));
+      }
+      if (url === '/api/agent') {
+        return Promise.resolve(streamResponse([
+          { type: 'text-start', id: 'assistant-live' },
+          { type: 'text-delta', id: 'assistant-live', delta: 'Reply complete.' },
+          { type: 'text-end', id: 'assistant-live' },
+          { type: 'finish', finishReason: 'stop' },
+        ]));
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<Explore {...props()} />);
+    const textbox = await screen.findByRole('textbox', { name: 'Message Revelio' });
+    fireEvent.change(textbox, { target: { value: 'Continue despite the failed history.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    const retrying = await screen.findByRole('button', { name: 'Trying again…' });
+    expect((retrying as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(retrying);
+    expect(historyReads).toBe(2);
+
+    await act(async () => {
+      terminalHistory.resolve(jsonResponse({ status: 'ready', messages: historyMessages() }));
+      await terminalHistory.promise;
+    });
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Finishing up' })).toBeNull());
+  });
+
+  it('does not start terminal reads after an active turn is unmounted', async () => {
+    let historyReads = 0;
+    let workspaceReads = 0;
+    let markAgentSettled!: () => void;
+    const agentSettled = new Promise<void>((resolve) => { markAgentSettled = resolve; });
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === '/api/agent/history') {
+        historyReads += 1;
+        return Promise.resolve(jsonResponse({ status: 'empty', messages: [] }));
+      }
+      if (url === '/api/agent/workspace') {
+        workspaceReads += 1;
+        return Promise.resolve(jsonResponse({ status: 'ready', map: createCareerMap('explorer-1') }));
+      }
+      if (url === '/api/agent') {
+        return abortable(new Promise<Response>(() => undefined), init?.signal)
+          .finally(markAgentSettled);
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    const view = render(<Explore {...props()} />);
+    const textbox = await screen.findByRole('textbox', { name: 'Message Revelio' });
+    fireEvent.change(textbox, { target: { value: 'Leave during this turn.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await screen.findByRole('button', { name: 'Stop' });
+
+    view.unmount();
+    await agentSettled;
+    await act(async () => { await Promise.resolve(); });
+
+    expect(historyReads).toBe(1);
+    expect(workspaceReads).toBe(1);
+  });
+
   it('shows delayed Saving, clears success silently, and reconciles only the exact receipt', async () => {
     let streamController: ReadableStreamDefaultController<Uint8Array> | undefined;
     let historyReads = 0;
@@ -743,21 +1077,23 @@ describe('Explore U6 conversation-first workspace', () => {
   });
 
   it('shows unknown after cancellation when the terminal history and workspace reads fail', async () => {
+    const refreshHistory = deferred<Response>();
+    const refreshWorkspace = deferred<Response>();
     let historyReads = 0;
     let workspaceReads = 0;
     vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url === '/api/agent/history') {
         historyReads += 1;
-        return historyReads === 1
-          ? Promise.resolve(jsonResponse({ status: 'ready', messages: historyMessages() }))
-          : Promise.reject(new Error('history unavailable'));
+        if (historyReads === 1) return Promise.resolve(jsonResponse({ status: 'ready', messages: historyMessages() }));
+        if (historyReads === 2) return Promise.reject(new Error('history unavailable'));
+        return refreshHistory.promise;
       }
       if (url === '/api/agent/workspace') {
         workspaceReads += 1;
-        return workspaceReads === 1
-          ? Promise.resolve(jsonResponse({ status: 'ready', map: suggestedPathsMap() }))
-          : Promise.reject(new Error('workspace unavailable'));
+        if (workspaceReads === 1) return Promise.resolve(jsonResponse({ status: 'ready', map: suggestedPathsMap() }));
+        if (workspaceReads === 2) return Promise.reject(new Error('workspace unavailable'));
+        return refreshWorkspace.promise;
       }
       if (url === '/api/agent/workspace/operations') {
         return new Promise<Response>((_resolve, reject) => {
@@ -772,6 +1108,20 @@ describe('Explore U6 conversation-first workspace', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Stop' }));
 
     expect(await screen.findByText('Revelio could not confirm whether your map was updated. Refresh before trying again.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+
+    const refreshing = await screen.findByRole('button', { name: 'Refreshing…' });
+    expect((refreshing as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(refreshing);
+    expect(historyReads).toBe(3);
+    expect(workspaceReads).toBe(3);
+
+    await act(async () => {
+      refreshHistory.resolve(jsonResponse({ status: 'ready', messages: historyMessages() }));
+      refreshWorkspace.resolve(jsonResponse({ status: 'ready', map: suggestedPathsMap() }));
+      await Promise.all([refreshHistory.promise, refreshWorkspace.promise]);
+    });
+    await waitFor(() => expect(screen.queryByText('Revelio could not confirm whether your map was updated. Refresh before trying again.')).toBeNull());
   });
 
   it('does not let a stale refresh erase a new optimistic message or live reply', async () => {
