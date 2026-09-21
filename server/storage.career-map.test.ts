@@ -193,7 +193,46 @@ async function persist(userId: string, leaseId: string, operation: CareerMapOper
   }));
 }
 
-async function seedPendingFirstProject(userId: string, leaseId: string, suffix: string) {
+async function persistCompletedSequence(
+  userId: string,
+  suffix: string,
+  operations: CareerMapOperation[],
+): Promise<AgentTurnRecord[]> {
+  const turns: AgentTurnRecord[] = [];
+  for (let index = 0; index < operations.length; index += 1) {
+    const operation = operations[index]!;
+    const turn = await beginTurn(userId, `${suffix}-${index + 1}`, 'agent-turn');
+    const result = await persist(userId, turn.leaseId, operation);
+    expect(result.status, `${operation.type} fixture failed`).toBe('committed');
+
+    const delivery = operations[index + 1];
+    const framingDelivery = operation.type === 'present-first-project-framing'
+      && delivery?.type === 'deliver-first-project-framing'
+      ? delivery
+      : undefined;
+    const completed = await storage.completeAgentTurn({
+      userId,
+      turnId: turn.turnId,
+      leaseId: turn.leaseId,
+      ...(framingDelivery ? { assistantText: framingDelivery.payload.assistantText } : {}),
+    });
+    expect(completed?.status, `${operation.type} turn completion failed`).toBe('completed');
+    if (!completed || completed.status !== 'completed') {
+      throw new Error(`${operation.type} fixture turn did not complete.`);
+    }
+    if (framingDelivery) {
+      expect(completed.terminalResult, 'framing delivery did not commit').toMatchObject({
+        operationCommitted: true,
+        revision: framingDelivery.expectedRevision + 1,
+      });
+    }
+    turns.push(completed);
+    if (framingDelivery) index += 1;
+  }
+  return turns;
+}
+
+async function seedPendingFirstProject(userId: string, suffix: string) {
   const projectId = id(`${suffix}-project`);
   const operations: CareerMapOperation[] = [
     { type: 'propose-why', sourceId: id(`${suffix}-why-propose`), expectedRevision: 0, occurredAt: at(1), payload: { why: { id: id(`${suffix}-why`), revision: 1, statement: 'Make useful decisions easier.', serves: 'People facing complex choices', pointOfView: 'Actionable clarity creates agency.' }, presentation: presentation(1) } },
@@ -202,9 +241,7 @@ async function seedPendingFirstProject(userId: string, leaseId: string, suffix: 
     { type: 'select-purpose-path', sourceId: id(`${suffix}-path-select`), expectedRevision: 3, occurredAt: at(4), payload: { setId: id(`${suffix}-path-set`), setRevision: 1, pathId: id('path-1'), pathRevision: 1, action: action(4) } },
     { type: 'propose-first-project', sourceId: id(`${suffix}-project-propose`), expectedRevision: 4, occurredAt: at(5), payload: { project: project(projectId), presentation: presentation(5) } },
   ];
-  for (const operation of operations) {
-    expect((await persist(userId, leaseId, operation)).status, `${operation.type} fixture failed`).toBe('committed');
-  }
+  await persistCompletedSequence(userId, `${suffix}-setup`, operations);
   return projectId;
 }
 
@@ -289,7 +326,9 @@ async function boundPersistenceInput(input: {
     eq(agentTurns.leaseId, input.leaseId),
   ));
   if (!turn) throw new Error('Test fixture is missing its durable turn.');
-  const context = createWorkspaceActionPersistenceContext(turn, provenanceTiming(input.operation));
+  const context = turn.origin === 'agent-turn'
+    ? createAgentTurnPersistenceContext(turn, provenanceTiming(input.operation))
+    : createWorkspaceActionPersistenceContext(turn, provenanceTiming(input.operation));
   return {
     ...input,
     context,
@@ -681,7 +720,6 @@ describe('PostgresStorage Method map, history, and ownership', () => {
   it('persists downstream invalidation and sibling selection as one validated document', async () => {
     const userId = owner('lineage');
     await storage.getOrCreateCareerMap(userId);
-    const turn = await beginTurn(userId, 'lineage');
     const operations: CareerMapOperation[] = [
       { type: 'propose-why', sourceId: id('l-why-1'), expectedRevision: 0, occurredAt: at(1), payload: { why: { id: id('l-why'), revision: 1, statement: 'Serve useful learning.', serves: 'Career explorers', pointOfView: 'Action creates knowledge.' }, presentation: presentation(1) } },
       { type: 'confirm-why', sourceId: id('l-why-2'), expectedRevision: 1, occurredAt: at(2), payload: { whyId: id('l-why'), whyRevision: 1, action: action(2) } },
@@ -690,7 +728,7 @@ describe('PostgresStorage Method map, history, and ownership', () => {
       { type: 'revise-why', sourceId: id('l-why-3'), expectedRevision: 4, occurredAt: at(5), payload: { why: { id: id('l-why-2'), revision: 1, statement: 'Serve useful action.', serves: 'Career explorers', pointOfView: 'Evidence should create agency.' }, supersedesWhyId: id('l-why'), presentation: presentation(5) } },
       { type: 'confirm-why', sourceId: id('l-why-4'), expectedRevision: 5, occurredAt: at(6), payload: { whyId: id('l-why-2'), whyRevision: 1, action: action(6) } },
     ];
-    for (const operation of operations) expect((await persist(userId, turn.leaseId, operation)).status).toBe('committed');
+    await persistCompletedSequence(userId, 'lineage', operations);
     const loaded = await storage.loadCareerMap(userId);
     expect(loaded.status).toBe('ready');
     if (loaded.status === 'ready') {
@@ -702,7 +740,6 @@ describe('PostgresStorage Method map, history, and ownership', () => {
   it('persists project-proposal replacement as one revision and one history result', async () => {
     const userId = owner('project-replacement');
     await storage.getOrCreateCareerMap(userId);
-    const turn = await beginTurn(userId, 'project-replacement');
     const firstProjectId = id('project-original');
     const replacementProjectId = id('project-replacement');
     const operations: CareerMapOperation[] = [
@@ -713,7 +750,7 @@ describe('PostgresStorage Method map, history, and ownership', () => {
       { type: 'propose-first-project', sourceId: id('pr-project-propose'), expectedRevision: 4, occurredAt: at(5), payload: { project: project(firstProjectId), presentation: presentation(5) } },
       { type: 'replace-project-proposal', sourceId: id('pr-project-replace'), expectedRevision: 5, occurredAt: at(6), payload: { projectId: firstProjectId, projectRevision: 1, replacement: project(replacementProjectId), presentation: presentation(6) } },
     ];
-    for (const operation of operations) expect((await persist(userId, turn.leaseId, operation)).status).toBe('committed');
+    await persistCompletedSequence(userId, 'project-replacement', operations);
     const loaded = await storage.loadCareerMap(userId);
     expect(loaded.status).toBe('ready');
     if (loaded.status === 'ready') {
@@ -727,9 +764,7 @@ describe('PostgresStorage Method map, history, and ownership', () => {
   it('delivers first-project framing atomically with the exact completed assistant turn', async () => {
     const userId = owner('framing-delivery');
     await storage.getOrCreateCareerMap(userId);
-    const setupTurn = await beginTurn(userId, 'framing-delivery-setup');
-    const projectId = await seedPendingFirstProject(userId, setupTurn.leaseId, 'framing-delivery');
-    await storage.completeAgentTurn({ userId, turnId: setupTurn.turnId, leaseId: setupTurn.leaseId });
+    const projectId = await seedPendingFirstProject(userId, 'framing-delivery');
     const framingTurn = await beginTurn(userId, 'framing-delivery-turn', 'agent-turn');
     await persistPendingFraming(userId, framingTurn, projectId, 'framing-delivery');
 
@@ -770,9 +805,7 @@ describe('PostgresStorage Method map, history, and ownership', () => {
     async (terminal) => {
       const userId = owner(`framing-${terminal}`);
       await storage.getOrCreateCareerMap(userId);
-      const setupTurn = await beginTurn(userId, `framing-${terminal}-setup`);
-      const projectId = await seedPendingFirstProject(userId, setupTurn.leaseId, `framing-${terminal}`);
-      await storage.completeAgentTurn({ userId, turnId: setupTurn.turnId, leaseId: setupTurn.leaseId });
+      const projectId = await seedPendingFirstProject(userId, `framing-${terminal}`);
       const framingTurn = await beginTurn(userId, `framing-${terminal}-turn`, 'agent-turn');
       await persistPendingFraming(userId, framingTurn, projectId, `framing-${terminal}`);
 
@@ -797,9 +830,7 @@ describe('PostgresStorage Method map, history, and ownership', () => {
   it('rolls back malformed framing delivery and leaves the project safely re-framable after failure cleanup', async () => {
     const userId = owner('framing-malformed');
     await storage.getOrCreateCareerMap(userId);
-    const setupTurn = await beginTurn(userId, 'framing-malformed-setup');
-    const projectId = await seedPendingFirstProject(userId, setupTurn.leaseId, 'framing-malformed');
-    await storage.completeAgentTurn({ userId, turnId: setupTurn.turnId, leaseId: setupTurn.leaseId });
+    const projectId = await seedPendingFirstProject(userId, 'framing-malformed');
     const framingTurn = await beginTurn(userId, 'framing-malformed-turn', 'agent-turn');
     await persistPendingFraming(userId, framingTurn, projectId, 'framing-malformed');
 
@@ -827,9 +858,7 @@ describe('PostgresStorage Method map, history, and ownership', () => {
   it('fails closed instead of completing first-project framing on a repair-required map', async () => {
     const userId = owner('framing-repair-completion');
     await storage.getOrCreateCareerMap(userId);
-    const setupTurn = await beginTurn(userId, 'framing-repair-completion-setup');
-    const projectId = await seedPendingFirstProject(userId, setupTurn.leaseId, 'framing-repair-completion');
-    await storage.completeAgentTurn({ userId, turnId: setupTurn.turnId, leaseId: setupTurn.leaseId });
+    const projectId = await seedPendingFirstProject(userId, 'framing-repair-completion');
     const framingTurn = await beginTurn(userId, 'framing-repair-completion-turn', 'agent-turn');
     await persistPendingFraming(userId, framingTurn, projectId, 'framing-repair-completion');
     await db.update(careerMaps).set({ repairRequired: true }).where(eq(careerMaps.userId, userId));
@@ -859,9 +888,7 @@ describe('PostgresStorage Method map, history, and ownership', () => {
   it('cancels a pending framing turn without mutating a repair-required map', async () => {
     const userId = owner('framing-repair-cancellation');
     await storage.getOrCreateCareerMap(userId);
-    const setupTurn = await beginTurn(userId, 'framing-repair-cancellation-setup');
-    const projectId = await seedPendingFirstProject(userId, setupTurn.leaseId, 'framing-repair-cancellation');
-    await storage.completeAgentTurn({ userId, turnId: setupTurn.turnId, leaseId: setupTurn.leaseId });
+    const projectId = await seedPendingFirstProject(userId, 'framing-repair-cancellation');
     const framingTurn = await beginTurn(userId, 'framing-repair-cancellation-turn', 'agent-turn');
     await persistPendingFraming(userId, framingTurn, projectId, 'framing-repair-cancellation');
     await db.update(careerMaps).set({ repairRequired: true }).where(eq(careerMaps.userId, userId));
@@ -883,9 +910,7 @@ describe('PostgresStorage Method map, history, and ownership', () => {
   it('loads a pre-U7 schema-version-2 accepted first project without acceptance framing', async () => {
     const userId = owner('legacy-accepted-project');
     await storage.getOrCreateCareerMap(userId);
-    const setupTurn = await beginTurn(userId, 'legacy-accepted-setup');
-    const projectId = await seedPendingFirstProject(userId, setupTurn.leaseId, 'legacy-accepted');
-    await storage.completeAgentTurn({ userId, turnId: setupTurn.turnId, leaseId: setupTurn.leaseId });
+    const projectId = await seedPendingFirstProject(userId, 'legacy-accepted');
     const framingTurn = await beginTurn(userId, 'legacy-accepted-framing', 'agent-turn');
     await persistPendingFraming(userId, framingTurn, projectId, 'legacy-accepted');
     await storage.completeAgentTurn({
@@ -932,7 +957,6 @@ describe('PostgresStorage Method map, history, and ownership', () => {
   it('persists Side Door selection with one active and two parked siblings atomically', async () => {
     const userId = owner('side-door-selection');
     await storage.getOrCreateCareerMap(userId);
-    const turn = await beginTurn(userId, 'side-door-selection');
     const projectId = id('sd-project');
     const operations: CareerMapOperation[] = [
       { type: 'propose-why', sourceId: id('sd-1'), expectedRevision: 0, occurredAt: at(1), payload: { why: { id: id('sd-why'), revision: 1, statement: 'Make complex work more useful.', serves: 'People doing consequential work', pointOfView: 'Evidence should change action.' }, presentation: presentation(1) } },
@@ -956,10 +980,7 @@ describe('PostgresStorage Method map, history, and ownership', () => {
       { type: 'propose-side-doors', sourceId: id('sd-19'), expectedRevision: 18, occurredAt: at(19), payload: { setId: id('sd-door-set'), setRevision: 1, doors: sideDoors(), presentation: presentation(19) } },
       { type: 'select-side-door', sourceId: id('sd-20'), expectedRevision: 19, occurredAt: at(20), payload: { setId: id('sd-door-set'), setRevision: 1, doorId: id('door-2'), doorRevision: 1, action: action(20) } },
     ];
-    for (const operation of operations) {
-      const result = await persist(userId, turn.leaseId, operation);
-      expect(result.status, `${operation.type} failed`).toBe('committed');
-    }
+    await persistCompletedSequence(userId, 'side-door-selection', operations);
     const loaded = await storage.loadCareerMap(userId);
     expect(loaded.status).toBe('ready');
     if (loaded.status === 'ready') {
@@ -1236,9 +1257,7 @@ describe('PostgresStorage lease and client-message turns', () => {
   it('clears pending first-project framing exactly once when a new turn reclaims its expired lease', async () => {
     const userId = owner('framing-expired-reclaim');
     await storage.getOrCreateCareerMap(userId);
-    const setupTurn = await beginTurn(userId, 'framing-expired-reclaim-setup');
-    const projectId = await seedPendingFirstProject(userId, setupTurn.leaseId, 'framing-expired-reclaim');
-    await storage.completeAgentTurn({ userId, turnId: setupTurn.turnId, leaseId: setupTurn.leaseId });
+    const projectId = await seedPendingFirstProject(userId, 'framing-expired-reclaim');
     const framingTurn = await beginTurn(userId, 'framing-expired-reclaim-turn', 'agent-turn');
     await persistPendingFraming(userId, framingTurn, projectId, 'framing-expired-reclaim');
     now = new Date(now.getTime() + 400_000);
@@ -1583,14 +1602,13 @@ describe('PostgresStorage repair, erasure, and integrity', () => {
     async (scenario) => {
       const userId = owner(`repair-${scenario}`);
       await storage.getOrCreateCareerMap(userId);
-      const turn = await beginTurn(userId, `repair-${scenario}`);
       const operations: CareerMapOperation[] = [
         { type: 'propose-why', sourceId: id(`${scenario}-1`), expectedRevision: 0, occurredAt: at(1), payload: { why: { id: id(`${scenario}-why`), revision: 1, statement: 'Make evidence useful.', serves: 'People facing choices', pointOfView: 'Evidence should create agency.' }, presentation: presentation(1) } },
         { type: 'confirm-why', sourceId: id(`${scenario}-2`), expectedRevision: 1, occurredAt: at(2), payload: { whyId: id(`${scenario}-why`), whyRevision: 1, action: action(2) } },
         { type: 'propose-purpose-paths', sourceId: id(`${scenario}-3`), expectedRevision: 2, occurredAt: at(3), payload: { setId: id(`${scenario}-set`), setRevision: 1, paths: paths(), presentation: presentation(3) } },
         { type: 'select-purpose-path', sourceId: id(`${scenario}-4`), expectedRevision: 3, occurredAt: at(4), payload: { setId: id(`${scenario}-set`), setRevision: 1, pathId: id('path-1'), pathRevision: 1, action: action(4) } },
       ];
-      for (const operation of operations) expect((await persist(userId, turn.leaseId, operation)).status).toBe('committed');
+      await persistCompletedSequence(userId, `repair-${scenario}`, operations);
       const loaded = await storage.loadCareerMap(userId);
       expect(loaded.status).toBe('ready');
       if (loaded.status !== 'ready') return;
@@ -1642,40 +1660,42 @@ describe('PostgresStorage repair, erasure, and integrity', () => {
   it('fails closed when valid history provenance differs from the map receipt', async () => {
     const userId = owner('repair-provenance');
     await storage.getOrCreateCareerMap(userId);
-    const turn = await beginTurn(userId, 'repair-provenance');
-    expect((await persist(userId, turn.leaseId, {
-      type: 'propose-why',
-      sourceId: id('repair-provenance-propose'),
-      expectedRevision: 0,
-      occurredAt: at(1),
-      payload: {
-        why: {
-          id: id('repair-provenance-why'),
-          revision: 1,
-          statement: 'Make useful choices easier.',
-          serves: 'People facing consequential choices',
-          pointOfView: 'Evidence should create agency.',
+    const [, confirmationTurn] = await persistCompletedSequence(userId, 'repair-provenance', [
+      {
+        type: 'propose-why',
+        sourceId: id('repair-provenance-propose'),
+        expectedRevision: 0,
+        occurredAt: at(1),
+        payload: {
+          why: {
+            id: id('repair-provenance-why'),
+            revision: 1,
+            statement: 'Make useful choices easier.',
+            serves: 'People facing consequential choices',
+            pointOfView: 'Evidence should create agency.',
+          },
+          presentation: presentation(1),
         },
-        presentation: presentation(1),
       },
-    })).status).toBe('committed');
-    expect((await persist(userId, turn.leaseId, {
-      type: 'confirm-why',
-      sourceId: id('repair-provenance-confirm'),
-      expectedRevision: 1,
-      occurredAt: at(2),
-      payload: {
-        whyId: id('repair-provenance-why'),
-        whyRevision: 1,
-        action: action(2),
+      {
+        type: 'confirm-why',
+        sourceId: id('repair-provenance-confirm'),
+        expectedRevision: 1,
+        occurredAt: at(2),
+        payload: {
+          whyId: id('repair-provenance-why'),
+          whyRevision: 1,
+          action: action(2),
+        },
       },
-    })).status).toBe('committed');
+    ]);
+    if (!confirmationTurn) throw new Error('Confirmation fixture turn is missing.');
     await db.update(careerMapHistory)
       .set({
         confirmationProvenance: {
-          kind: 'ui-action',
+          kind: 'user-message',
           actionId: id('different-valid-action'),
-          turnId: turn.turnId,
+          turnId: confirmationTurn.turnId,
           turnSequence: 2,
           occurredAt: at(2),
         },
@@ -1715,15 +1735,17 @@ describe('PostgresStorage repair, erasure, and integrity', () => {
   it('retries provider erasure from a non-content-bearing marker and leaves no Method orphan', async () => {
     const userId = owner('erasure');
     await storage.getOrCreateCareerMap(userId);
-    const turn = await beginTurn(userId, 'erasure');
-    expect((await persist(userId, turn.leaseId, {
-      type: 'propose-why', sourceId: id('erasure-why-propose'), expectedRevision: 0, occurredAt: at(1),
-      payload: { why: { id: id('erasure-why'), revision: 1, statement: 'Erase Method data completely.', serves: 'Explorers leaving the pilot', pointOfView: 'Deletion must include exact evidence links.' }, presentation: presentation(1) },
-    })).status).toBe('committed');
-    expect((await persist(userId, turn.leaseId, {
-      type: 'confirm-why', sourceId: id('erasure-why-confirm'), expectedRevision: 1, occurredAt: at(2),
-      payload: { whyId: id('erasure-why'), whyRevision: 1, action: action(2) },
-    })).status).toBe('committed');
+    await persistCompletedSequence(userId, 'erasure-map', [
+      {
+        type: 'propose-why', sourceId: id('erasure-why-propose'), expectedRevision: 0, occurredAt: at(1),
+        payload: { why: { id: id('erasure-why'), revision: 1, statement: 'Erase Method data completely.', serves: 'Explorers leaving the pilot', pointOfView: 'Deletion must include exact evidence links.' }, presentation: presentation(1) },
+      },
+      {
+        type: 'confirm-why', sourceId: id('erasure-why-confirm'), expectedRevision: 1, occurredAt: at(2),
+        payload: { whyId: id('erasure-why'), whyRevision: 1, action: action(2) },
+      },
+    ]);
+    const turn = await beginTurn(userId, 'erasure-auxiliary');
     await storage.saveCareerMapDraft({ userId, leaseId: turn.leaseId, id: id('draft'), kind: 'outreach', content: { text: 'private draft' } });
     await storage.setConversationMapping(userId, turn.leaseId, id('conversation'));
     await storage.setConversationMapping(userId, turn.leaseId, id('conversation'));
@@ -1738,7 +1760,8 @@ describe('PostgresStorage repair, erasure, and integrity', () => {
     } };
     expect((await storage.eraseMethodData(userId, provider)).status).toBe('pending-provider');
     expect(await storage.loadCareerMap(userId)).toEqual({ status: 'not-found' });
-    expect(await storage.getAgentTurn(userId, id('message-erasure'))).toBeUndefined();
+    expect(await storage.getAgentTurn(userId, turn.clientMessageId)).toBeUndefined();
+    expect(await db.select().from(agentTurns).where(eq(agentTurns.userId, userId))).toHaveLength(0);
     expect(await storage.getTurnLease(userId)).toBeUndefined();
     expect(await storage.getConversationMapping(userId)).toBeUndefined();
     expect(await storage.getMethodErasureJob(userId)).toMatchObject({ status: 'failed-provider' });
@@ -1913,7 +1936,7 @@ describe('PostgresStorage repair, erasure, and integrity', () => {
       status: 'active-lease',
     });
     expect((await storage.loadCareerMap(userId)).status).toBe('ready');
-    expect(await storage.getAgentTurn(userId, turn.turnId)).toBeDefined();
+    expect(await storage.getAgentTurn(userId, turn.clientMessageId)).toBeDefined();
     expect(await storage.getMethodErasureJob(userId)).toBeUndefined();
     expect(providerCalls).toBe(0);
 
