@@ -293,13 +293,11 @@ describe('compileCareerMapBriefing', () => {
       targetId: 'briefing-why-revision',
       targetRevision: 1,
     });
-    expect(briefing.markdown).toContain('Confirmed Your North Star');
+    expect(briefing.markdown.match(/^## Your North Star$/gm)).toHaveLength(2);
     expect(briefing.markdown).toContain('Make complex choices more humane.');
-    expect(briefing.markdown).toContain('Suggested Your North Star — pending confirmation');
-    expect(briefing.markdown).toContain('briefing-why-revision@1; suggested');
-    expect(briefing.markdown).toContain('Help people turn complex choices into humane action.');
-    expect(briefing.markdown).toContain('Serves: People stalled by consequential choices');
-    expect(briefing.markdown).toContain('Point of view: Evidence becomes useful when it changes the next action.');
+    expect(briefing.markdown).toContain('briefing-why-revision@1');
+    expect(briefing.markdown).toContain('Content to express as one direction: Help people turn complex choices into humane action. — People stalled by consequential choices — Evidence becomes useful when it changes the next action.');
+    expect(briefing.modelMarkdown).not.toMatch(/Suggested Your North Star|Confirmed Your North Star|^Serves:|^Point of view:/m);
     expect(briefing.markdown).toContain('exact revise-why result classes');
     expect(briefing.markdown).toContain('after a failed presentation, use revise-why again');
   });
@@ -384,7 +382,7 @@ describe('compileCareerMapBriefing', () => {
     expect(briefing.markdown).toContain('Help people act on complex choices.');
     expect(briefing.markdown).toContain('Direct North Star basis: briefing-why@1 — Make complex choices more humane.');
     expect(briefing.markdown.indexOf('Direct North Star basis: briefing-why@1'))
-      .toBeLessThan(briefing.markdown.indexOf('## Confirmed Your North Star'));
+      .toBeLessThan(briefing.markdown.indexOf('## Your North Star'));
     expect(briefing.markdown).toContain('Canonical state below outranks conflicting or stale transcript text.');
   });
 

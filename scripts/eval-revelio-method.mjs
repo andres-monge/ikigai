@@ -165,6 +165,50 @@ function proveU7FixtureCoverage() {
   assert(northStarRevisionFixtures.acknowledgmentTiming === 'later-user-turn', 'U7 revision acknowledgment must be later-turn.');
   assert(northStarRevisionFixtures.failedPresentationRecoveryOperation === 'revise-why', 'U7 failed revision presentation must reuse revise-why.');
   assert(scenarios.some((scenario) => (scenario.foundationExpectations.pauseTurns ?? []).length > 0), 'U7 Foundation fixtures must exercise an explicit pause.');
+  for (const splitPresentation of [
+    'Statement: One direction',
+    '- **Serves:** People facing difficult choices',
+    '### Point of view: Clarity should transfer agency',
+    '*Statement:* One direction',
+    '_Serves:_ People facing difficult choices',
+    '### *Point of view:* Clarity should transfer agency',
+    '### Statement',
+    '### Serves',
+    '### Point of view',
+    'pointOfView: Clarity should transfer agency',
+    '### pointOfView',
+    'point-of-view: Clarity should transfer agency',
+    '1) **Statement:** One direction',
+    '2) Serves: People facing difficult choices',
+    '3) pointOfView: Clarity should transfer agency',
+    '### Statement ###',
+    '### Serves ###',
+    '### pointOfView ###',
+  ]) {
+    assert(exposesSplitNorthStarField(splitPresentation), `U7 split-field guard missed ${JSON.stringify(splitPresentation)}.`);
+  }
+  assert(!exposesSplitNorthStarField('## Your North Star\nOne concise direction.'), 'U7 split-field guard rejected a valid North Star presentation.');
+  for (const qualifiedPresentation of [
+    '**Suggested** North Star',
+    'Suggested **North Star**',
+    'Your *suggested* North Star',
+  ]) {
+    assert(exposesQualifiedNorthStarLabel(qualifiedPresentation), `U7 qualified-label guard missed ${JSON.stringify(qualifiedPresentation)}.`);
+  }
+  for (const invalidHeading of [
+    '## Working North Star',
+    'Working North Star\n---',
+    '- ## Working North Star',
+  ]) {
+    assert(!hasOnlyCanonicalEnglishNorthStarHeadings(invalidHeading), `U7 heading guard missed ${JSON.stringify(invalidHeading)}.`);
+  }
+  for (const validHeading of [
+    '## Your North Star',
+    '## Your North Star ##',
+    'Your North Star\n---',
+  ]) {
+    assert(hasOnlyCanonicalEnglishNorthStarHeadings(validHeading), `U7 heading guard rejected ${JSON.stringify(validHeading)}.`);
+  }
 }
 
 const scenarios = [
@@ -281,6 +325,53 @@ function replyShape(text) {
     paragraphs: text.trim() ? text.trim().split(/\n\s*\n/).length : 0,
     questions: (text.match(/\?/g) || []).length,
   };
+}
+
+function normalizeNorthStarPresentationLine(line) {
+  return line
+    .trim()
+    .replace(/^(?:[-*+]|\d+[.)])\s+/, '')
+    .trim()
+    .replace(/^#{2,4}\s+/, '')
+    .replace(/\s+#+\s*$/, '')
+    .replace(/\*+|_+/g, '')
+    .trim();
+}
+
+function exposesSplitNorthStarField(text) {
+  return /\bunderlying view\b/i.test(text)
+    || text.split('\n').some((line) => /^(?:statement|serves|point[\s-]*of[\s-]*view)\s*(?::|$)/i.test(
+      normalizeNorthStarPresentationLine(line),
+    ));
+}
+
+function extractEnglishNorthStarHeadings(text) {
+  const lines = text.split(/\r?\n/);
+  const headings = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index].trim().replace(/^(?:[-*+]|\d+[.)])\s+/, '').trim();
+    const atxHeading = line.match(/^#{2,4}\s+(.+?)\s*$/);
+    if (atxHeading) {
+      const label = normalizeNorthStarPresentationLine(atxHeading[0]);
+      if (/\bnorth star\b/i.test(label)) headings.push(label);
+      continue;
+    }
+    const nextLine = lines[index + 1]?.trim() ?? '';
+    if (line && /^(?:=+|-+)$/.test(nextLine)) {
+      const label = normalizeNorthStarPresentationLine(line);
+      if (/\bnorth star\b/i.test(label)) headings.push(label);
+    }
+  }
+  return headings;
+}
+
+function hasOnlyCanonicalEnglishNorthStarHeadings(text) {
+  return extractEnglishNorthStarHeadings(text).every((heading) => /^Your North Star$/i.test(heading));
+}
+
+function exposesQualifiedNorthStarLabel(text) {
+  const emphasisNormalized = text.replace(/\*+|_+/g, '');
+  return /\b(?:suggested\s+(?:your\s+)?north star|your\s+suggested\s+north star)\b/i.test(emphasisNormalized);
 }
 
 function visibleAssistantText(result) {
@@ -462,7 +553,7 @@ function createSemanticIntentSeed(fixture, fixtureIndex) {
         { role: 'user', content: 'Help me articulate the direction my work should serve.' },
         {
           role: 'assistant',
-          content: 'Your provisional North Star is: Help small teams turn difficult choices into clear action, because clarity should transfer agency. Does that feel accurate?',
+          content: 'Your North Star is: Help small teams turn difficult choices into clear action, because clarity should transfer agency. Does that feel accurate?',
         },
       ],
     };
@@ -1413,6 +1504,25 @@ function assessScenario(scenario, result) {
   assert(why, `${scenario.id}: no confirmed North Star remained in canonical state.`);
   assert(foundationTrace.minimumSufficient, `${scenario.id}: propose-why preceded minimum-sufficient North Star evidence coverage (${foundationTrace.missingCoverage.join(', ') || 'propose-why missing'}).`);
   assert(foundationTrace.proposedAtFirstSufficientTurn, `${scenario.id}: the North Star was not proposed in the first turn with minimum-sufficient coverage.`);
+  const foundationNarrations = turns.filter((turn) => turn.narrationModule === 'form-foundation' && turn.replyShape.characters > 0);
+  const pauseTurns = new Set(scenario.foundationExpectations.pauseTurns ?? []);
+  const activeFoundationNarrations = foundationNarrations.filter((turn) => !pauseTurns.has(turn.turnIndex));
+  const pausedFoundationNarrations = foundationNarrations.filter((turn) => pauseTurns.has(turn.turnIndex));
+  const proposalTurnIndex = operations.find((item) => item.type === 'propose-why')?.turnIndex;
+  const proposalNarration = turns.find((turn) => turn.turnIndex === proposalTurnIndex)?.replyText.trim() ?? '';
+  const proposalIsEnglish = scenario.openingLanguage === 'en'
+    && (scenario.languageChangeTurn === undefined || proposalTurnIndex < scenario.languageChangeTurn);
+  assert(activeFoundationNarrations.every((turn) => turn.replyShape.questions === 1), `${scenario.id}: every active North Star narration must end with exactly one forward-moving question.`);
+  assert(pausedFoundationNarrations.every((turn) => turn.replyShape.questions === 0 && turn.operations.length === 0), `${scenario.id}: an explicit Foundation pause asked a question or mutated canonical state.`);
+  const foundationReplyText = foundationNarrations.map((turn) => turn.replyText).join('\n');
+  assert(!/\bprovisional\b/i.test(foundationReplyText), `${scenario.id}: a Foundation reply exposed the internal North Star lifecycle label.`);
+  if (proposalIsEnglish) {
+    assert(proposalNarration.includes('Your North Star is a direction for what you want your work to serve, and it can evolve as you learn by doing.'), `${scenario.id}: the first North Star suggestion omitted the canonical introduction.`);
+    assert(proposalNarration.endsWith('Does this direction feel right to you, or what would you change?'), `${scenario.id}: the first North Star suggestion omitted the canonical decision question.`);
+    assert(hasOnlyCanonicalEnglishNorthStarHeadings(proposalNarration), `${scenario.id}: an English North Star heading used a qualified or alternate label.`);
+    assert(!exposesQualifiedNorthStarLabel(proposalNarration), `${scenario.id}: an English reply exposed a qualified North Star label.`);
+    assert(!exposesSplitNorthStarField(proposalNarration), `${scenario.id}: the North Star suggestion exposed split internal fields instead of one direction.`);
+  }
   for (const topic of scenario.foundationExpectations.requiredFirstTurnQuestionTopics) {
     assert(firstTurnQuestionTopics.includes(topic), `${scenario.id}: first North Star reply did not ask the required ${topic} follow-up.`);
   }
@@ -1471,12 +1581,6 @@ function assessScenario(scenario, result) {
     assert(turns[scenario.languageChangeTurn]?.replyLooksSpanish === true, `${scenario.id}: explicit language change was not mirrored on the next reply.`);
   }
 
-  const foundationNarrations = turns.filter((turn) => turn.narrationModule === 'form-foundation' && turn.replyShape.characters > 0);
-  const pauseTurns = new Set(scenario.foundationExpectations.pauseTurns ?? []);
-  const activeFoundationNarrations = foundationNarrations.filter((turn) => !pauseTurns.has(turn.turnIndex));
-  const pausedFoundationNarrations = foundationNarrations.filter((turn) => pauseTurns.has(turn.turnIndex));
-  assert(activeFoundationNarrations.every((turn) => turn.replyShape.questions === 1), `${scenario.id}: every active North Star narration must end with exactly one forward-moving question.`);
-  assert(pausedFoundationNarrations.every((turn) => turn.replyShape.questions === 0 && turn.operations.length === 0), `${scenario.id}: an explicit Foundation pause asked a question or mutated canonical state.`);
   assert(turns.every((turn) => turn.replyShape.characters < 4_000), `${scenario.id}: a reply violated the concise response bound.`);
   assert(!/(permanent calling|destiny|scientific fit|fit score|ranked best|best path for you|your true calling|vocación definitiva|destino|puntuación de encaje|mejor camino para ti)/i.test(allReplyText), `${scenario.id}: reply used a forbidden identity, fit, destiny, or ranking claim.`);
   assert(!/(I recommend|I would choose|te recomiendo|yo elegiría)/i.test(allReplyText), `${scenario.id}: reply made an unsolicited recommendation.`);

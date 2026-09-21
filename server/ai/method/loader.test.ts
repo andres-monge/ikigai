@@ -184,12 +184,15 @@ describe('repository-owned Method module loader', () => {
     expect(foundation).toMatch(/ten-year.*only when/i);
     expect(foundation).toContain('If you could fast-forward ten years, what meaningful change would you be proud to have contributed to?');
     expect(foundation).toContain('Your North Star is a direction for what you want your work to serve, and it can evolve as you learn by doing.');
-    expect(foundation).toMatch(/never label.*provisional.*user-facing/i);
+    expect(foundation).toContain('its exact text is “Your North Star”');
+    expect(foundation).toContain('Does this direction feel right to you, or what would you change?');
+    expect(foundation).toMatch(/one concise North Star statement.*do not expose.*statement.*serves.*pointOfView/is);
+    expect(foundation).not.toMatch(/\bprovisional\b/i);
     expect(foundation).toMatch(/record every supported evidence item and current constraint.*latest message/is);
     expect(foundation).toMatch(/minimum coverage does not make the rest of that message irrelevant/i);
     expect(foundation).toMatch(/asks to pause.*only correcting existing evidence.*instead of proposing automatically/is);
     expect(foundation).toMatch(/coverage is insufficient.*end.*one next.*question/is);
-    expect(foundation).toMatch(/coverage is sufficient.*refine-or-confirm invitation/is);
+    expect(foundation).toMatch(/coverage is sufficient.*exactly one clear decision question/is);
     expect(foundation).toMatch(/one short question per turn/i);
     expect(foundation).toMatch(/do not propose Purpose Paths until.*confirmed/i);
     expect(foundation).toMatch(/never switch to English.*example is written in English/i);

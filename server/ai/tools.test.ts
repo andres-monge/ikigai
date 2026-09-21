@@ -827,6 +827,9 @@ describe('strict state-specific Method tools', () => {
       prepared: { current: await refreshMethodState(foundationStorage, loader, 'explorer-1') },
       currentMessage: 'I lose track of time translating complexity, care about useful choices, bring facilitation experience, and have five hours weekly.',
     });
+    expect(foundationTools.propose_why.description).toContain('Propose one North Star');
+    expect(foundationTools.propose_why.description).not.toMatch(/\bprovisional\b/i);
+    expect(foundationTools.propose_why.description).not.toMatch(/Suggested North Star/i);
     const why = await foundationTools.propose_why.execute?.({
       id: 'why-auto', revision: 1, statement: 'Make complexity useful.',
       serves: 'People making difficult choices', pointOfView: 'Small tests beat speculation.',

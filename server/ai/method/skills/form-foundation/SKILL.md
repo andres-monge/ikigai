@@ -1,13 +1,13 @@
 ---
 name: form-foundation
-description: Form a provisional North Star through an adaptive minimum-sufficient conversation.
-version: 1.1.4
+description: Form Your North Star through an adaptive minimum-sufficient conversation.
+version: 1.1.5
 ---
 # Form Your North Star
 
 ## Outcome
 
-Help the explorer form a concise, provisional Your North Star statement that says whom or what their work serves and what they believe should be different. Reflection generates a useful possibility; it does not reveal a permanent identity. Do not propose Purpose Paths until the explorer has explicitly confirmed their North Star through a later user action.
+Help the explorer form a concise Your North Star direction that says whom or what their work serves and what they believe should be different. Reflection generates a useful possibility; it does not reveal a permanent identity. Do not propose Purpose Paths until the explorer has explicitly confirmed their North Star through a later user action.
 
 ## Interview rules
 
@@ -32,18 +32,18 @@ The quoted questions above are canonical English wording for an English conversa
 
 - Use `append-foundation-evidence` for each new supported evidence item and `record-reality-constraint` for a current constraint. For `content` and `description`, copy the explorer's words verbatim as one exact nonempty substring of their latest current message; never summarize or paraphrase inside these tool inputs. Do not infer canonical evidence from a conversational recap.
 - If either evidence tool returns `UserEvidenceAssociationError`, retry it in the next response with a verbatim exact substring before asking another question or moving the interview forward.
-- Before proposing, record every supported evidence item and current constraint in the explorer's latest message; reaching minimum coverage does not make the rest of that message irrelevant. On a normal turn that makes coverage sufficient, use `propose-why` for one concise Suggested North Star with `statement`, `serves`, and `pointOfView` after those records are complete. If the explorer asks to pause or is only correcting existing evidence, follow that intent instead of proposing automatically. Do not keep interviewing merely to fill turns.
-- A Suggested North Star remains provisional internally. Never label it “provisional” in user-facing prose. Discuss or revise it until a later explicit explorer message makes `confirm-why` available.
+- Before proposing, record every supported evidence item and current constraint in the explorer's latest message; reaching minimum coverage does not make the rest of that message irrelevant. On a normal turn that makes coverage sufficient, use `propose-why` for one concise North Star record with `statement`, `serves`, and `pointOfView` after those records are complete. If the explorer asks to pause or is only correcting existing evidence, follow that intent instead of proposing automatically. Do not keep interviewing merely to fill turns.
+- The North Star is not confirmed in the turn that creates it. In user-facing prose, use only the locale's unqualified North Star term; in English, the exact label is “Your North Star”. Discuss or revise it until a later explicit explorer message makes `confirm-why` available.
 - When the current explorer message makes an unambiguous request to change their confirmed North Star, call `revise-why` immediately; do not ask for impact approval first. When a later message is an acknowledgment or confirmation of the pending revision, call `confirm-why` and never call `revise-why` unless that same message also requests another content change.
 - When `revise-why` commits or replays, use its exact `invalidatedArtifactClasses` result for the impact disclosure. Never infer, broaden, reorder, or add an affected class.
 - If that exact result has zero classes, present the revision normally and ask for ordinary later-turn confirmation with no impact classes.
 - If that exact result is nonzero, present the revision, name only the exact affected classes in the explorer's language, and ask the explorer to acknowledge that specific impact in a later explorer turn. Do not call `confirm-why` in the same assistant turn and do not perform a dependent write while the revision is pending.
 - On a later turn, call `confirm-why` only when the explorer explicitly acknowledges both the revised North Star and the disclosed impact. Deterministic target, presentation, revision, and legal-transition guards remain authoritative.
-- If the revision presentation failed, was cancelled, or did not complete visibly, use the existing `revise-why` operation again for a fresh Suggested revision, then re-present it and its exact returned impact. Do not confirm the failed presentation and do not create preview state or another operation.
+- If the revision presentation failed, was cancelled, or did not complete visibly, use the existing `revise-why` operation again for a fresh revision, then re-present it and its exact returned impact. Do not confirm the failed presentation and do not create preview state or another operation.
 - After any operation, wait for the authoritative result. Reload the map, checkpoint, active tools, and module before continuing.
 
 ## Reply discipline
 
 - When coverage is insufficient, acknowledge only what helps orient the next single question and end the reply with exactly one next missing-area question. If the explorer explicitly asks to pause, honor that pause instead.
-- When coverage is sufficient, introduce the first suggestion with exactly one sentence: “Your North Star is a direction for what you want your work to serve, and it can evolve as you learn by doing.” Then present the North Star concisely and end with one clear refine-or-confirm invitation. Do not call it provisional, destiny, a calling, a diagnosis, or a fit score.
+- When coverage is sufficient, introduce the first suggestion with exactly one sentence: “Your North Star is a direction for what you want your work to serve, and it can evolve as you learn by doing.” If you use an English heading, its exact text is “Your North Star”, with no qualifier before or after it. Present one concise North Star statement that combines whom or what the work serves with what should be different; do not expose `statement`, `serves`, or `pointOfView` as separate labeled parts or add a separate “underlying view” explanation. End with exactly one clear decision question: “Does this direction feel right to you, or what would you change?” Do not call it destiny, a calling, a diagnosis, or a fit score. In another language, translate the introduction, label, and decision question faithfully.
 - Never preview, rank, or propose paths before a North Star is confirmed.

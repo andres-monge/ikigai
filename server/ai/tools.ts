@@ -537,7 +537,7 @@ export function createMethodTools(runtime: MethodToolRuntime): ToolSet {
       assertUserAuthoredValue(runtime, input.description);
       return { constraint: { ...input, provenance: context().action } };
     }),
-    propose_why: operationTool(runtime, 'propose-why', 'Suggest one provisional North Star. It cannot be confirmed in this assistant turn.', whyInputSchema, (why) => {
+    propose_why: operationTool(runtime, 'propose-why', 'Propose one North Star for the explorer to consider. It cannot be confirmed in this assistant turn.', whyInputSchema, (why) => {
       return { why, presentation: context().presentation };
     }),
     revise_why: operationTool(runtime, 'revise-why', "Use only when the current explorer message asks to change the North Star's content or recover a failed presentation; never use it for an acknowledgment or confirmation. Suggest the revision and return its exact affected artifact classes.", z.object({ supersedesWhyId: entityIdSchema, why: whyInputSchema }).strict(), ({ supersedesWhyId, why }) => {

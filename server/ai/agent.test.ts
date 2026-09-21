@@ -476,6 +476,10 @@ describe('amended Method agent core loop', () => {
       'location',
     ]);
     expect(storage.map.foundation.whyRevisions).toHaveLength(1);
+    const postProposalPrompt = JSON.stringify(model.doStreamCalls.at(-1)?.prompt);
+    expect(postProposalPrompt).toContain('## Your North Star');
+    expect(postProposalPrompt).toContain('Content to express as one direction:');
+    expect(postProposalPrompt).not.toMatch(/Suggested Your North Star|Serves:|Point of view:/);
   });
 
   it('leaves a sufficient Foundation turn on automatic choice so the model can honor a pause', async () => {

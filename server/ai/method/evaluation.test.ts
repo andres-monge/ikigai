@@ -100,7 +100,7 @@ describe('Method evaluation assertions', () => {
   });
 
   it('distinguishes adaptive follow-up topics from an ordinary Why confirmation question', () => {
-    expect(classifyFoundationQuestionTopics('Does this provisional North Star feel accurate to you?')).toEqual([]);
+    expect(classifyFoundationQuestionTopics('Does this North Star feel accurate to you?')).toEqual([]);
     expect(classifyFoundationQuestionTopics(
       'What activities make you lose track of time? In ten years, what meaningful change would make you proud? What do people rely on you for? What must a new direction fit around now?',
     )).toEqual([

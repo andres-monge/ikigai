@@ -31,19 +31,15 @@ export interface CareerMapBriefing {
 function appendWhy(lines: string[], map: CareerMap): void {
   const confirmed = map.foundation.whyRevisions.findLast((item) => item.status === 'confirmed');
   if (confirmed) {
-    lines.push('## Confirmed Your North Star');
+    lines.push('## Your North Star');
     lines.push(`Basis: ${confirmed.id}@${confirmed.revision}`);
-    lines.push(confirmed.statement);
-    lines.push(`Serves: ${confirmed.serves}`);
-    lines.push(`Point of view: ${confirmed.pointOfView}`);
+    lines.push(`Content to express as one direction: ${confirmed.statement} — ${confirmed.serves} — ${confirmed.pointOfView}`);
   }
   const suggested = map.foundation.whyRevisions.findLast((item) => item.status === 'suggested');
   if (suggested) {
-    lines.push('## Suggested Your North Star — pending confirmation');
-    lines.push(`Basis: ${suggested.id}@${suggested.revision}; ${suggested.status}`);
-    lines.push(suggested.statement);
-    lines.push(`Serves: ${suggested.serves}`);
-    lines.push(`Point of view: ${suggested.pointOfView}`);
+    lines.push('## Your North Star');
+    lines.push(`Basis: ${suggested.id}@${suggested.revision}`);
+    lines.push(`Content to express as one direction: ${suggested.statement} — ${suggested.serves} — ${suggested.pointOfView}`);
     if (suggested.supersedesWhyId) {
       lines.push('Confirm only after a completed presentation disclosed the exact revise-why result classes and a later explorer message acknowledges that impact. Never infer classes from this briefing; after a failed presentation, use revise-why again.');
     }
