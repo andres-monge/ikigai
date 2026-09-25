@@ -35,6 +35,7 @@ import {
 import { env } from './env.js';
 import { log } from './utils/log.js';
 import { methodRouteLabel, normalizeMethodRequestPath } from './routes/agent-logging.js';
+import { createAudioTranscriptionMetadataGuard } from './routes/agent.js';
 
 /**
  * Regex to match asset file extensions (with optional query parameters).
@@ -146,6 +147,20 @@ export function createApp(): Express {
     } catch (error) {
       respondToAuthFailure(error);
     }
+  });
+
+  // Reject invalid paid audio requests before any global body parser or API
+  // logger can read or observe their payload. The router repeats this pure
+  // metadata guard so direct mounts retain the same boundary in tests/tools.
+  const audioTranscriptionMetadataGuard = createAudioTranscriptionMetadataGuard(
+    env.BETTER_AUTH_URL,
+  );
+  app.use((req, res, next) => {
+    if (normalizeMethodRequestPath(req.path) !== '/audio/transcribe') {
+      next();
+      return;
+    }
+    audioTranscriptionMetadataGuard(req, res, next);
   });
 
   app.use(express.json());

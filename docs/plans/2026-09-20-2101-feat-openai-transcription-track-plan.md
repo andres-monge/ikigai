@@ -18,7 +18,7 @@ execution: code
 
 **Authority hierarchy:** Current code and tests define existing behavior. `docs/plans/2026-08-14-claude-feat-revelio-revamp-plan.md` governs revamp integration, and `docs/thesis.md` governs the Method agent. This plan governs only the authenticated voice-transcription track.
 
-**Stop conditions:** Do not introduce realtime transport, partial transcripts, automatic transcript submission, or provider-selection infrastructure. Stop and re-plan if `gpt-transcribe` cannot serve the existing completed-file boundary, if the attended speech or silence gate fails, or if implementation would persist captured audio, raw provider responses, or pre-Send transcription artifacts outside the in-memory composer draft. After explicit Send, the user-edited draft follows the unchanged Method conversation-persistence contract.
+**Stop conditions:** Do not introduce realtime transport, partial transcripts, automatic transcript submission, or provider-selection infrastructure. Stop and re-plan if `gpt-transcribe` cannot serve the existing completed-file boundary, if the synthetic model-access smoke fails, if the English Chrome dogfood check fails, or if implementation would persist captured audio, raw provider responses, or pre-Send transcription artifacts outside the in-memory composer draft. After explicit Send, the user-edited draft follows the unchanged Method conversation-persistence contract.
 
 **Execution profile:** Four dependency-ordered units replace the authenticated provider, make recording attempts cancel-safe, reconcile transcript results into the Method draft, and verify the resulting browser flow. The legacy questionnaire and `/api/transcribe` remain on Groq.
 
@@ -60,12 +60,12 @@ The current Method path hard-codes Groq Whisper and an English language hint. It
 - R13. Missing local OpenAI configuration or an upstream OpenAI 401/403 credential rejection must produce a safe transcription-unavailable response without crashing application startup or changing the typed Method path.
 - R14. Audio-path logs may contain only the existing safe request envelope plus provider, model alias, normalized MIME family, byte bucket, and terminal error class; audio, transcript text, prompts, filenames, provider bodies, raw errors, and user-entered content are forbidden.
 - R15. Before explicit Send, the application must not persist captured audio, raw provider responses, or transcription artifacts outside the in-memory composer draft, and it must not retry a paid transcription automatically. After Send, the user-edited draft is an ordinary Method message governed by the existing conversation-persistence contract.
-- R16. Before any real microphone audio is sent to OpenAI—including local or deployed R26 smoke—the implementation owner must confirm the target OpenAI project's data controls, model access, spend controls, and an accurate user-facing notice that OpenAI processes authenticated Method dictation.
+- R16. Before committing, send a temporary synthetic English spoken-audio file through the production `gpt-transcribe` adapter with the configured server-side `OPENAI_API_KEY`. The returned text must closely match the harmless phrase, proving model access, request construction, and response parsing. Do not use microphone or user audio, print the key, or retain the temporary audio.
 - R20. The browser timeout remains 30 seconds starting immediately before its upload `fetch`. The server provider deadline is 20 seconds starting immediately before the OpenAI `fetch`, leaving a nominal 10-second end-to-end margin for upload, validation, and response delivery. A slow upload may exhaust the browser budget first; either abort must cancel local reading/provider work where possible, fence late completion, and prevent a second response or draft mutation.
 - R22. The authenticated route must use the fixed server-side `gpt-transcribe` alias with automatic multilingual recognition and a bounded Revelio vocabulary prompt; the Method client must not send an English language query. The transcript must preserve the language or languages actually spoken, including within code-switched utterances; the prompt must request transcription without translation or forcing a single output language.
 - R24. Authenticated Method transcription uses OpenAI `gpt-transcribe` directly, without a provider enum, Groq fallback branch, model-selection harness, or runtime model choice.
 - R25. The legacy questionnaire and anonymous `/api/transcribe` route retain their current Groq-backed language behavior and UI.
-- R26. After R16 passes, a short acceptance smoke must cover English, Spanish, natural code-switching, silence, Chrome WebM, Safari MP4, and one near-limit recording before deployed dogfood. For each speech sample, the attending owner records whether the transcript preserves the spoken language(s) and meaning and is usable with light editing. Silence passes only when no fabricated text is appended, the existing draft remains unchanged, and the no-speech typed-or-re-record fallback appears. Any failed speech or silence sample blocks dogfood and triggers re-planning without a runtime provider fallback or reusable scoring harness.
+- R26. After R16 passes and the implementation reaches dogfooding, Andrés performs one human acceptance check in Chrome: record an English sentence with the microphone, press Stop, confirm editable transcript text appears without automatic Send, then send it normally. A failure blocks further dogfooding and triggers investigation. Safari/MP4, Spanish, code-switching, silence, and near-limit real recordings are deferred coverage, not dogfooding blockers.
 
 ### Actors
 
@@ -87,16 +87,16 @@ The current Method path hard-codes Groq Whisper and an English language hint. It
 - AE3. The user attempts Send by click or Enter while transcription is processing. Submission is refused with an accessible reason, and any successful result updates only the same unresolved draft. Covers R5, R8, R11.
 - AE4. Recording reaches the byte or time ceiling. Stop preserves the recorder's complete container, the client uploads only when the final Blob is at most 1.75 MiB, and an uploaded partial recording carries the incomplete warning until the affected draft is sent or edited to empty. An oversized final Blob is not truncated or uploaded. Covers R7, R11.
 - AE5. OpenAI returns 429, 503, a timeout, malformed JSON, oversized text, or an empty transcript. The attempt ends without automatic retry, payloads are absent from logs, and the user can type or record again. Covers R10, R13-R15, R20.
-- AE6. Safari supplies MP4 while Chrome supplies WebM. Each allowed input receives a matching multipart filename and is transcribed; any other media type or mismatched signature is rejected before provider cost. Covers R12, R26.
+- AE6. Safari supplies MP4 while Chrome supplies WebM. Each allowed input receives a matching multipart filename and is transcribed; any other media type or mismatched signature is rejected before provider cost. Automated coverage satisfies R12; attended Safari verification is deferred under R26.
 - AE7. Sign-out or Chat-to-Map navigation begins while permission, recording, or processing is active. The attempt is discarded before the transition continues, existing typed text remains, and every late callback is ignored. Covers R6, R21.
 - AE8. The questionnaire records in Spanish after the Method changes. Its request still uses `/api/transcribe?language=es`, no Method header is added, and its existing controls behave as before. Covers R25.
-- AE9. With existing typed text in the Method draft, the user records silence. No text is appended, the existing draft remains unchanged, and the no-speech fallback is announced. Covers R10, R26.
+- AE9. With existing typed text in the Method draft, the user records silence. No text is appended, the existing draft remains unchanged, and the no-speech fallback is announced. Automated coverage satisfies R10; attended silence verification is deferred under R26.
 
 ### Success Criteria
 
 - Focused automated tests prove that no canceled, departed, timed-out, or superseded attempt can change the draft or start an agent turn.
 - Route tests prove fixed `gpt-transcribe` requests, bounded media validation, safe failures, and payload-free logging.
-- The Method composer preserves the language(s) and meaning of English, Spanish, and code-switched dictation as editable final text that the attending owner rates usable with only light editing; silence produces no fabricated draft text and shows the no-speech fallback.
+- The synthetic R16 smoke proves live `gpt-transcribe` access and the adapter's request and response path. The English Chrome R26 dogfood check yields editable text without automatic Send and permits normal explicit Send. Other language, silence, Safari/MP4, and near-limit behavior retains automated coverage and can receive attended follow-up coverage.
 - Legacy questionnaire tests prove its endpoint, language query, controls, and transcript insertion remain unchanged.
 
 ### Scope Boundaries
@@ -112,8 +112,9 @@ The current Method path hard-codes Groq Whisper and an English language hint. It
 - Streaming or realtime transcription, partial-text reconciliation, VAD/manual-commit tuning, and realtime connection observability.
 - A broader provider abstraction or provider/model benchmark if future requirements create a real selection decision.
 - Automated cross-browser microphone infrastructure and population-level transcription quality measurement.
+- Attended Safari/MP4, Spanish, code-switching, silence, and near-limit recordings. Their automated safety and route coverage remains in scope.
 - Broader questionnaire lifecycle hardening beyond its current endpoint, language, controls, and transcript-insertion regression contract.
-- Aggregate or per-identity admission control for the authenticated paid route. Founder dogfood accepts this serverless enforcement gap with provider-project spend controls as the backstop; a future design must use shared durable coordination rather than claiming a process-local limiter is global protection.
+- Aggregate or per-identity admission control for the authenticated paid route. A future design must use shared durable coordination rather than claiming a process-local limiter is global protection.
 
 #### Out of scope
 
@@ -126,7 +127,7 @@ The current Method path hard-codes Groq Whisper and an English language hint. It
 
 - Implementation starts from `codex/revelio-revamp-integration` at commit `21d585c` or its descendant; shared-file drift must be rechecked before editing.
 - The deployed server needs `OPENAI_API_KEY` access to `gpt-transcribe`; the existing optional configuration remains server-only.
-- Final real-microphone acceptance requires Chrome and Safari access, including an MP4-producing Safari device.
+- The one human microphone acceptance check requires Chrome access during dogfooding. Synthetic R16 verification requires a configured `OPENAI_API_KEY` with `gpt-transcribe` access.
 
 **Identifier preservation:** R1-R4, R17-R19, R23, U1-U2, KTD2-KTD4, and KTD8 belonged to the superseded provider-evaluation and dual-provider rollout plan. R24-R26 carry the replacement contract, and surviving requirement, unit, and KTD identifiers remain intentionally stable for traceability.
 
@@ -222,7 +223,7 @@ sequenceDiagram
 | A delayed final MediaRecorder chunk crosses the server cap | Request Stop at 1.5 MiB, reserve 256 KiB for finalization, validate the complete Blob against the 1.75 MiB upload budget, and never truncate a container or upload an oversized result. |
 | Provider errors leak payloads | Stream-read at most 65,536 response bytes before JSON parsing, cancel the provider response body on overflow, map upstream failures to typed internal causes, and assert sentinel values never reach logs or responses. |
 | The moving `gpt-transcribe` alias changes behavior | Keep the model name fixed in one adapter constant and repeat the short acceptance smoke after dependency or provider changes. |
-| Authenticated callers can create parallel paid requests | Accept this at founder-dogfood scope, rely on OpenAI project spend controls, and defer shared admission control; do not present an instance-local counter as cross-instance protection. |
+| Authenticated callers can create parallel paid requests | Accept this at founder-dogfood scope and defer shared admission control; do not present an instance-local counter as cross-instance protection. |
 
 ### Alternatives Considered
 
@@ -314,11 +315,11 @@ Export one pure audio metadata guard from `server/routes/agent.ts`. Mount it in 
 
 **Files:** `client/src/pages/explore.tsx`, `client/src/pages/explore.test.tsx`.
 
-**Approach:** Adopt the hook's Method policy and keep draft ownership in `Explore`. Requesting exposes Cancel; recording exposes separate Stop and Cancel; processing exposes Cancel. Preserve focus on a stable primary voice control while those states replace one another; return focus to Start after Cancel, denial, empty output, or failure; move focus to the draft after a successful transcript append; and restore no focus during navigation, sign-out, or unmount. Chat-to-Map navigation and sign-out discard before continuing. Send remains focusable with `aria-disabled` when voice is the only blocker, and click, Enter, and direct submission announce the associated reason without stealing focus. Automatic-limit warnings persist until the affected draft is sent or the user edits it to an empty value, including across later recording attempts. Add a durable Method notice near the voice control stating that OpenAI processes authenticated dictation; the existing transient microphone status is an interaction pattern, not evidence that processor disclosure already exists.
+**Approach:** Adopt the hook's Method policy and keep draft ownership in `Explore`. Requesting exposes Cancel; recording exposes separate Stop and Cancel; processing exposes Cancel. Preserve focus on a stable primary voice control while those states replace one another; return focus to Start after Cancel, denial, empty output, or failure; move focus to the draft after a successful transcript append; and restore no focus during navigation, sign-out, or unmount. Chat-to-Map navigation and sign-out discard before continuing. Send remains focusable with `aria-disabled` when voice is the only blocker, and click, Enter, and direct submission announce the associated reason without stealing focus. Automatic-limit warnings persist until the affected draft is sent or the user edits it to an empty value, including across later recording attempts.
 
 **Execution note:** Add component tests for every transition before changing the controls.
 
-**Patterns to follow:** Existing `requestHeaders`, `submitMessage`, focus scheduler, and `Explore` MediaRecorder tests. Existing transient `micNotice` behavior is a placement/status pattern only; it is not the required durable processor disclosure.
+**Patterns to follow:** Existing `requestHeaders`, `submitMessage`, focus scheduler, and `Explore` MediaRecorder tests.
 
 **Test scenarios:**
 
@@ -329,7 +330,6 @@ Export one pure audio metadata guard from `server/routes/agent.ts`. Mount it in 
 - Permission, unsupported-media, timeout, provider, and empty-result failures preserve typed text and expose a recoverable message.
 - Byte-cap and time-cap completion append any successful captured transcript with a persistent incomplete warning. Starting, canceling, or completing another recording does not clear it; only sending the affected draft or editing that draft to an empty value does (R7, F4).
 - Stop and Cancel have distinct accessible names, keyboard behavior, live-region announcements, and non-color state cues.
-- The durable microphone-processing notice identifies OpenAI as the authenticated Method dictation processor and remains distinct from transient recording status; a component assertion protects that disclosure.
 
 **Verification:** Component tests prove draft ownership, no auto-send, departure fencing, accessible controls, and every submission path's interlock.
 
@@ -343,17 +343,17 @@ Export one pure audio metadata guard from `server/routes/agent.ts`. Mount it in 
 
 **Files:** Existing test files from U3-U5; no evaluation corpus, report schema, or rollout artifact is added.
 
-**Approach:** Run focused automated checks and the repository's normal full verification first. Before any real-microphone request, complete the R16 project-control and processor-notice check; only then run the short attended smoke. Record results and failures in the implementation handoff rather than introducing a new evidence subsystem. A speech or silence failure blocks dogfood and triggers re-planning, not a runtime fallback branch.
+**Approach:** Run the synthetic R16 model-access smoke through the production adapter before committing, then complete focused automated checks and the repository's normal verification. After integration, Andrés performs the R26 English Chrome microphone check during dogfooding. Record the results in the implementation handoff rather than introducing a new evidence subsystem. A failed R16 or R26 check blocks further dogfooding and triggers investigation without a runtime provider fallback.
 
 **Test scenarios:**
 
 - Automated route, adapter, hook, questionnaire, and Method composer suites pass together without payload-bearing snapshots or logs.
 - Type checking, the full unit suite, the existing desktop-Chrome journey suite, and the production build pass.
-- Before the first local or deployed manual recording, the target OpenAI project's data controls, model access, spend controls, and the durable Method processor notice satisfy R16.
-- Manual Chrome WebM and Safari MP4 recordings cover English, Spanish, natural code-switching, silence, Cancel, editable final text, and explicit Send. Speech passes only when language(s) and meaning are preserved with light editing; silence passes only with no fabricated text, an unchanged existing draft, and the no-speech fallback. Any failure blocks dogfood and triggers re-planning.
-- One near-limit recording validates the already-selected 1.5 MiB Stop threshold, 256 KiB final-chunk reserve, and 1.75 MiB upload budget. It is not used to discover or choose those bounds.
+- Before committing, synthesize a harmless English phrase as temporary audio, call the real production adapter with the configured key, confirm a close transcript match, and delete the audio.
+- During dogfooding, Andrés records one English sentence in Chrome, presses Stop, confirms editable text appears without automatic Send, and sends it normally.
+- Safari/MP4, Spanish, code-switching, silence, and near-limit real recordings remain deferred attended coverage; deterministic tests continue to cover their applicable media, fallback, and byte-bound behavior.
 
-**Verification:** Automated checks are required for implementation completion. Real-device and project-control checks are explicit deployment prerequisites when the required browser, microphone, credentials, or control-plane access is unavailable locally.
+**Verification:** The synthetic R16 smoke and automated checks are required before the implementation commit. The single human R26 check belongs to dogfooding after integration.
 
 ---
 
@@ -372,8 +372,8 @@ Export one pure audio metadata guard from `server/routes/agent.ts`. Mount it in 
 
 - Inspect test logs and serialized errors for audio, transcript, prompt, filename, raw-error, and provider-body sentinels.
 - Confirm the legacy questionnaire still uses Groq through `/api/transcribe` and that no Method header or model behavior leaks into it.
-- Confirm `OPENAI_API_KEY` model access, data controls, spend controls, and the durable OpenAI processor notice before any local or deployed real-microphone request.
-- Only after that confirmation, complete the short Chrome WebM and Safari MP4 real-microphone smoke before deployed dogfood; Firefox and iOS Safari are useful compatibility checks but do not block local implementation completion.
+- Confirm configured `OPENAI_API_KEY` access and the production adapter's request and response behavior with synthetic English audio before committing; delete the temporary file afterward.
+- After integration, leave the one English Chrome microphone and explicit Send check for Andrés during dogfooding. Safari/MP4, Spanish, code-switching, silence, and near-limit recordings are deferred coverage.
 
 ### Quality gates
 
@@ -382,7 +382,7 @@ Export one pure audio metadata guard from `server/routes/agent.ts`. Mount it in 
 - No protected audio route accepts invalid metadata or mismatched media before provider dispatch.
 - No persistence path contains captured audio, raw provider responses, or pre-Send transcription artifacts outside the in-memory composer draft; after explicit Send, only the user-edited draft follows normal Method message persistence. No log contains audio, transcript text, prompts, filenames, raw provider errors, or provider bodies.
 - No failure path issues a second paid provider request for the same attempt.
-- No silence sample fabricates draft text, and every attended speech sample preserves the spoken language(s) and meaning with light editing; failure triggers re-planning rather than runtime fallback.
+- Automated silence coverage shows no fabricated draft text. The human English Chrome dogfood sample yields editable, usable text and does not auto-send; failure triggers investigation rather than runtime fallback.
 - No provider-selection, benchmark, or evaluation artifact is introduced.
 
 ---
@@ -391,8 +391,8 @@ Export one pure audio metadata guard from `server/routes/agent.ts`. Mount it in 
 
 - U3: The authenticated route uses fixed `gpt-transcribe`, rejects invalid metadata before global body parsing, validates and bounds media, caps raw provider responses at 65,536 bytes before parsing, maps failures safely, never retries a paid upload, respects abort/deadline behavior, and leaves the legacy route unchanged.
 - U4: Method recording has deterministic requesting, recording, processing, finish, discard, final-chunk byte validation, timeout, and unmount behavior; the questionnaire's public endpoint/language/control/transcript-insertion contract remains unchanged without claiming Method lifecycle hardening for it.
-- U5: Method controls distinguish Stop and Cancel, gate every Send path, append only active-attempt final text, define incomplete-warning resolution, show the durable OpenAI processor notice, and discard before navigation or sign-out.
-- U6: Focused and full automated verification pass; any unavailable real-device or deployment-control checks are named as deployment prerequisites rather than represented as completed.
+- U5: Method controls distinguish Stop and Cancel, gate every Send path, append only active-attempt final text, define incomplete-warning resolution, and discard before navigation or sign-out.
+- U6: The synthetic model-access smoke and focused automated verification pass before the implementation commit; the English Chrome human check is handed to dogfooding after integration. Deferred attended coverage is named without blocking dogfooding.
 - The diff contains no abandoned provider-selection, evaluation-harness, or alternate-adapter code.
 
 ---

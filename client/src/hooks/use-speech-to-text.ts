@@ -1,323 +1,464 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Language } from '@/lib/i18n';
 
-/**
- * Recording lifecycle state machine.
- * - `idle`:       No recording in progress — mic button shows default icon
- * - `recording`:  MediaRecorder is capturing audio — mic button pulses red
- * - `processing`: Audio sent to server for transcription — spinner shown
- */
-export type RecordingState = 'idle' | 'recording' | 'processing';
+export type RecordingState = 'idle' | 'requesting' | 'recording' | 'processing';
+export type AutomaticCompletionReason = 'time-limit' | 'byte-limit';
+
+export interface SpeechToTextPolicy {
+  endpoint: string;
+  includeLanguageQuery: boolean;
+  headers?: Readonly<Record<string, string>>;
+  recordingTimesliceMs?: number;
+  rollingStopBytes?: number;
+  maxUploadBytes: number;
+}
+
+/** Opt-in policy for authenticated Method dictation. */
+export const METHOD_SPEECH_TO_TEXT_POLICY = {
+  endpoint: '/api/agent/audio/transcribe',
+  includeLanguageQuery: false,
+  headers: { 'X-Revelio-Request': '1' },
+  recordingTimesliceMs: 250,
+  rollingStopBytes: 1_572_864,
+  maxUploadBytes: 1_835_008,
+} as const satisfies SpeechToTextPolicy;
 
 export interface UseSpeechToTextOptions {
-  /** Language hint for Groq Whisper ('en' | 'es') */
+  /** Language hint retained by the legacy questionnaire endpoint. */
   language: Language;
-  /** Called with (textareaId, transcribedText) when transcription succeeds */
   onTranscription: (textareaId: string, text: string) => void;
-  /** Called when transcription returns empty text (no speech detected) */
   onEmptyTranscription?: () => void;
-  /** Called when an error occurs (permission denied, network failure, etc.) */
   onError?: (message: string) => void;
-  /** Override for the authenticated Method workspace. Legacy callers keep `/api/transcribe`. */
+  /** Legacy endpoint override. Prefer `policy` for bounded Method capture. */
   endpoint?: string;
+  /** Opt-in request and recording limits. Omission preserves questionnaire defaults. */
+  policy?: SpeechToTextPolicy;
 }
 
 export interface UseSpeechToTextReturn {
-  /** Whether the browser supports MediaRecorder + getUserMedia */
   isSupported: boolean;
-  /** Current state of the recording lifecycle */
   recordingState: RecordingState;
-  /** Human-readable error message, or null */
   error: string | null;
-  /** Start recording audio for a specific textarea */
   startRecording: (textareaId: string) => void;
-  /** Stop the current recording (triggers transcription) */
+  /** Finish capture and upload its complete final Blob. */
   stopRecording: () => void;
-  /** ID of the textarea currently being recorded, or null */
+  /** Discard capture or upload work without applying a late result. */
+  discardRecording: () => void;
   activeTextareaId: string | null;
+  /** Persists until the consumer explicitly acknowledges the incomplete result. */
+  automaticCompletionReason: AutomaticCompletionReason | null;
+  clearAutomaticCompletionReason: () => void;
 }
 
-/** Maximum recording duration in milliseconds (2 minutes) */
 const MAX_RECORDING_MS = 120_000;
-
-/** Transcription fetch timeout in milliseconds (30 seconds) */
 const TRANSCRIBE_TIMEOUT_MS = 30_000;
+const LEGACY_MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+const SIZE_LIMIT_MESSAGE =
+  'Recording is too large to transcribe. Try a shorter recording or type your answer.';
+const TIMEOUT_MESSAGE = 'Transcription timed out. Try again or type your answer.';
 
-/**
- * Detect the best audio mime type the browser supports.
- * Chrome/Edge/Firefox prefer webm/opus; Safari falls back to mp4.
- */
+interface ActiveAttempt {
+  id: number;
+  textareaId: string;
+  language: Language;
+  policy: SpeechToTextPolicy;
+  discarded: boolean;
+  finishRequested: boolean;
+  stream: MediaStream | null;
+  recorder: MediaRecorder | null;
+  chunks: Blob[];
+  emittedBytes: number;
+  autoStopTimer: ReturnType<typeof setTimeout> | null;
+  fetchController: AbortController | null;
+  fetchTimer: ReturnType<typeof setTimeout> | null;
+  settled: Promise<void>;
+  resolveSettled: () => void;
+}
+
+function createSettlement(): Pick<ActiveAttempt, 'settled' | 'resolveSettled'> {
+  let resolveSettled!: () => void;
+  const settled = new Promise<void>((resolve) => {
+    resolveSettled = resolve;
+  });
+  return { settled, resolveSettled };
+}
+
 function getPreferredMimeType(): string {
   if (typeof MediaRecorder === 'undefined') return '';
   if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
     return 'audio/webm;codecs=opus';
   }
-  if (MediaRecorder.isTypeSupported('audio/webm')) {
-    return 'audio/webm';
-  }
-  if (MediaRecorder.isTypeSupported('audio/mp4')) {
-    return 'audio/mp4';
-  }
+  if (MediaRecorder.isTypeSupported('audio/webm')) return 'audio/webm';
+  if (MediaRecorder.isTypeSupported('audio/mp4')) return 'audio/mp4';
   return '';
 }
 
-/**
- * Check if the browser supports the required audio APIs.
- * Cached after first call — browser API presence doesn't change at runtime.
- */
-let _browserSupportCached: boolean | null = null;
+let browserSupportCached: boolean | null = null;
 function isSpeechSupported(): boolean {
-  if (_browserSupportCached === null) {
-    _browserSupportCached =
+  if (browserSupportCached === null) {
+    browserSupportCached =
       typeof navigator !== 'undefined' &&
       typeof navigator.mediaDevices?.getUserMedia === 'function' &&
       typeof MediaRecorder !== 'undefined' &&
       getPreferredMimeType() !== '';
   }
-  return _browserSupportCached;
+  return browserSupportCached;
 }
 
-/** Reset the cached browser support check. Exported for testing only. */
 export function _resetBrowserSupportCache(): void {
-  _browserSupportCached = null;
+  browserSupportCached = null;
 }
 
-/**
- * Custom hook that manages the full speech-to-text recording lifecycle:
- * feature detection, MediaRecorder control, audio capture, server communication,
- * and state management.
- *
- * Enforces single-active-recording across all hook instances and auto-stops
- * after 120 seconds.
- *
- * @param options - Configuration: language, onTranscription callback, optional error/empty handlers
- * @returns Recording state and control functions
- *
- * @example
- * ```tsx
- * const stt = useSpeechToText({
- *   language: 'en',
- *   onTranscription: (id, text) => appendToTextarea(id, text),
- *   onError: (msg) => toast({ title: 'Error', description: msg, variant: 'destructive' }),
- * });
- *
- * <button onClick={() => stt.startRecording('q1')}>
- *   {stt.recordingState === 'recording' ? 'Stop' : 'Speak'}
- * </button>
- * ```
- */
-export function useSpeechToText(options: UseSpeechToTextOptions): UseSpeechToTextReturn {
-  const {
-    language,
-    onTranscription,
-    onEmptyTranscription,
-    onError,
-    endpoint = '/api/transcribe',
-  } = options;
+function stopTracks(stream: MediaStream | null): void {
+  stream?.getTracks().forEach((track) => track.stop());
+}
 
+function permissionErrorMessage(error: unknown): string {
+  if (error instanceof DOMException) {
+    if (error.name === 'NotAllowedError') {
+      return 'Microphone access denied. Check your browser settings.';
+    }
+    if (error.name === 'NotFoundError') {
+      return 'No microphone found. Please connect a microphone and try again.';
+    }
+    return `Microphone error: ${error.message}`;
+  }
+  return 'Failed to start recording. Please try again.';
+}
+
+export function useSpeechToText(options: UseSpeechToTextOptions): UseSpeechToTextReturn {
   const [recordingState, setRecordingState] = useState<RecordingState>('idle');
   const [error, setError] = useState<string | null>(null);
   const [activeTextareaId, setActiveTextareaId] = useState<string | null>(null);
+  const [automaticCompletionReason, setAutomaticCompletionReason] =
+    useState<AutomaticCompletionReason | null>(null);
 
-  // Refs for cleanup and single-recording enforcement
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
-  const autoStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mountedRef = useRef(true);
+  const nextAttemptIdRef = useRef(0);
+  const nextStartRequestIdRef = useRef(0);
+  const activeAttemptRef = useRef<ActiveAttempt | null>(null);
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
 
-  // Keep callbacks fresh without re-creating startRecording/stopRecording
-  const onTranscriptionRef = useRef(onTranscription);
-  onTranscriptionRef.current = onTranscription;
-  const onEmptyTranscriptionRef = useRef(onEmptyTranscription);
-  onEmptyTranscriptionRef.current = onEmptyTranscription;
-  const onErrorRef = useRef(onError);
-  onErrorRef.current = onError;
+  const onTranscriptionRef = useRef(options.onTranscription);
+  onTranscriptionRef.current = options.onTranscription;
+  const onEmptyTranscriptionRef = useRef(options.onEmptyTranscription);
+  onEmptyTranscriptionRef.current = options.onEmptyTranscription;
+  const onErrorRef = useRef(options.onError);
+  onErrorRef.current = options.onError;
 
   const isSupported = isSpeechSupported();
 
-  /**
-   * Release microphone stream tracks and clear auto-stop timer.
-   */
-  const cleanup = useCallback(() => {
-    if (autoStopTimerRef.current) {
-      clearTimeout(autoStopTimerRef.current);
-      autoStopTimerRef.current = null;
+  const isCurrent = useCallback(
+    (attempt: ActiveAttempt) =>
+      mountedRef.current &&
+      !attempt.discarded &&
+      activeAttemptRef.current === attempt &&
+      activeAttemptRef.current.id === attempt.id,
+    [],
+  );
+
+  const clearAttemptTimers = useCallback((attempt: ActiveAttempt) => {
+    if (attempt.autoStopTimer !== null) {
+      clearTimeout(attempt.autoStopTimer);
+      attempt.autoStopTimer = null;
     }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
+    if (attempt.fetchTimer !== null) {
+      clearTimeout(attempt.fetchTimer);
+      attempt.fetchTimer = null;
     }
-    mediaRecorderRef.current = null;
-    chunksRef.current = [];
   }, []);
 
-  /**
-   * Send recorded audio to the transcription endpoint and handle the result.
-   */
-  const transcribeAudio = useCallback(
-    async (audioBlob: Blob, textareaId: string) => {
-      setRecordingState('processing');
+  const releaseStream = useCallback((attempt: ActiveAttempt) => {
+    stopTracks(attempt.stream);
+    attempt.stream = null;
+  }, []);
 
-      const abortController = new AbortController();
-      const timeoutId = setTimeout(() => abortController.abort(), TRANSCRIBE_TIMEOUT_MS);
+  const settleAttempt = useCallback(
+    (attempt: ActiveAttempt) => {
+      if (!isCurrent(attempt)) return;
+      clearAttemptTimers(attempt);
+      releaseStream(attempt);
+      attempt.fetchController = null;
+      attempt.recorder = null;
+      attempt.chunks = [];
+      activeAttemptRef.current = null;
+      attempt.resolveSettled();
+      setRecordingState('idle');
+      setActiveTextareaId(null);
+    },
+    [clearAttemptTimers, isCurrent, releaseStream],
+  );
 
-      try {
-        const res = await fetch(`${endpoint}?language=${encodeURIComponent(language)}`, {
-          method: 'POST',
-          headers: { 'Content-Type': audioBlob.type },
-          body: audioBlob,
-          signal: abortController.signal,
-          credentials: 'include',
-        });
+  const failAttempt = useCallback(
+    (attempt: ActiveAttempt, message: string) => {
+      if (!isCurrent(attempt)) return;
+      setError(message);
+      onErrorRef.current?.(message);
+      settleAttempt(attempt);
+    },
+    [isCurrent, settleAttempt],
+  );
 
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({ error: 'Transcription request failed' }));
-          throw new Error(body.error || `Server returned ${res.status}`);
-        }
+  const discardActiveAttempt = useCallback(
+    (updateState: boolean) => {
+      const attempt = activeAttemptRef.current;
+      if (!attempt) return;
 
-        const data = await res.json();
+      activeAttemptRef.current = null;
+      attempt.discarded = true;
+      clearAttemptTimers(attempt);
+      attempt.fetchController?.abort();
+      attempt.fetchController = null;
 
-        if (!data.text || data.text.trim() === '') {
-          onEmptyTranscriptionRef.current?.();
-        } else {
-          onTranscriptionRef.current(textareaId, data.text);
-        }
-      } catch (err) {
-        const message =
-          err instanceof DOMException && err.name === 'AbortError'
-            ? 'Transcription timed out. Try again or type your answer.'
-            : err instanceof Error
-              ? err.message
-              : 'Transcription failed. Try again or type your answer.';
-        setError(message);
-        onErrorRef.current?.(message);
-      } finally {
-        clearTimeout(timeoutId);
+      const recorder = attempt.recorder;
+      attempt.recorder = null;
+      if (recorder) {
+        recorder.ondataavailable = null;
+        recorder.onstop = null;
+        if (recorder.state !== 'inactive') recorder.stop();
+      }
+
+      releaseStream(attempt);
+      attempt.chunks = [];
+      attempt.resolveSettled();
+
+      if (updateState && mountedRef.current) {
         setRecordingState('idle');
         setActiveTextareaId(null);
       }
     },
-    [endpoint, language],
+    [clearAttemptTimers, releaseStream],
   );
 
-  /**
-   * Stop the current recording. Assembles audio blob and triggers transcription.
-   */
+  const transcribeAudio = useCallback(
+    async (attempt: ActiveAttempt, audioBlob: Blob) => {
+      if (!isCurrent(attempt)) return;
+
+      const separator = attempt.policy.endpoint.includes('?') ? '&' : '?';
+      const requestUrl = attempt.policy.includeLanguageQuery
+        ? `${attempt.policy.endpoint}${separator}language=${encodeURIComponent(attempt.language)}`
+        : attempt.policy.endpoint;
+      const controller = new AbortController();
+      attempt.fetchController = controller;
+      // This budget intentionally starts immediately before fetch so upload time counts.
+      attempt.fetchTimer = setTimeout(() => {
+        if (!isCurrent(attempt)) return;
+        controller.abort();
+        failAttempt(attempt, TIMEOUT_MESSAGE);
+      }, TRANSCRIBE_TIMEOUT_MS);
+
+      try {
+        const response = await fetch(requestUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': audioBlob.type,
+            ...attempt.policy.headers,
+          },
+          body: audioBlob,
+          signal: controller.signal,
+          credentials: 'include',
+        });
+
+        if (!isCurrent(attempt)) return;
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({ error: 'Transcription request failed' }));
+          if (!isCurrent(attempt)) return;
+          throw new Error(body.error || `Server returned ${response.status}`);
+        }
+
+        const data = await response.json();
+        if (!isCurrent(attempt)) return;
+
+        if (typeof data.text !== 'string' || data.text.trim() === '') {
+          onEmptyTranscriptionRef.current?.();
+        } else {
+          onTranscriptionRef.current(attempt.textareaId, data.text);
+        }
+        settleAttempt(attempt);
+      } catch (caught) {
+        if (!isCurrent(attempt)) return;
+        const message =
+          caught instanceof DOMException && caught.name === 'AbortError'
+            ? TIMEOUT_MESSAGE
+            : caught instanceof Error
+              ? caught.message
+              : 'Transcription failed. Try again or type your answer.';
+        failAttempt(attempt, message);
+      }
+    },
+    [failAttempt, isCurrent, settleAttempt],
+  );
+
+  const finishAttempt = useCallback(
+    (attempt: ActiveAttempt, reason?: AutomaticCompletionReason) => {
+      if (!isCurrent(attempt) || attempt.finishRequested) return;
+      const recorder = attempt.recorder;
+      if (!recorder || recorder.state === 'inactive') return;
+
+      attempt.finishRequested = true;
+      if (reason) setAutomaticCompletionReason(reason);
+      recorder.stop();
+    },
+    [isCurrent],
+  );
+
   const stopRecording = useCallback(() => {
-    const recorder = mediaRecorderRef.current;
-    if (!recorder || recorder.state === 'inactive') {
-      return;
-    }
+    const attempt = activeAttemptRef.current;
+    if (attempt) finishAttempt(attempt);
+  }, [finishAttempt]);
 
-    // The onstop handler (set in startRecording) will assemble the blob
-    // and call transcribeAudio.
-    recorder.stop();
-  }, []);
+  const discardRecording = useCallback(() => {
+    discardActiveAttempt(true);
+  }, [discardActiveAttempt]);
 
-  /**
-   * Start recording audio for a specific textarea.
-   * Auto-stops any active recording first (single-recording enforcement).
-   */
   const startRecording = useCallback(
     async (textareaId: string) => {
-      // Stop any existing recording first
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-        mediaRecorderRef.current.stop();
-        // Small delay to let onstop fire before starting new recording
-        await new Promise((r) => setTimeout(r, 50));
-      }
-      cleanup();
+      const currentOptions = optionsRef.current;
+      const startRequestId = ++nextStartRequestIdRef.current;
+      const existingAttempt = activeAttemptRef.current;
 
+      if (
+        !currentOptions.policy &&
+        existingAttempt?.recorder &&
+        existingAttempt.recorder.state !== 'inactive'
+      ) {
+        finishAttempt(existingAttempt);
+        await existingAttempt.settled;
+        if (!mountedRef.current || startRequestId !== nextStartRequestIdRef.current) return;
+      } else {
+        discardActiveAttempt(true);
+      }
+
+      const policy: SpeechToTextPolicy = currentOptions.policy
+        ? {
+            ...currentOptions.policy,
+            headers: currentOptions.policy.headers
+              ? { ...currentOptions.policy.headers }
+              : undefined,
+          }
+        : {
+            endpoint: currentOptions.endpoint ?? '/api/transcribe',
+            includeLanguageQuery: true,
+            maxUploadBytes: LEGACY_MAX_UPLOAD_BYTES,
+          };
+      const attempt: ActiveAttempt = {
+        ...createSettlement(),
+        id: ++nextAttemptIdRef.current,
+        textareaId,
+        language: currentOptions.language,
+        policy,
+        discarded: false,
+        finishRequested: false,
+        stream: null,
+        recorder: null,
+        chunks: [],
+        emittedBytes: 0,
+        autoStopTimer: null,
+        fetchController: null,
+        fetchTimer: null,
+      };
+      activeAttemptRef.current = attempt;
       setError(null);
+      setActiveTextareaId(textareaId);
+      setRecordingState('requesting');
+
+      if (!isSupported) {
+        failAttempt(attempt, 'Audio recording is not supported in this browser.');
+        return;
+      }
 
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        streamRef.current = stream;
+        if (!isCurrent(attempt)) {
+          stopTracks(stream);
+          return;
+        }
+        attempt.stream = stream;
 
         const mimeType = getPreferredMimeType();
-
         const recorder = new MediaRecorder(stream, { mimeType });
-        mediaRecorderRef.current = recorder;
-        chunksRef.current = [];
+        attempt.recorder = recorder;
 
-        recorder.ondataavailable = (e) => {
-          if (e.data.size > 0) {
-            chunksRef.current.push(e.data);
+        recorder.ondataavailable = (event) => {
+          if (!isCurrent(attempt) || event.data.size === 0) return;
+          attempt.chunks.push(event.data);
+          attempt.emittedBytes += event.data.size;
+
+          if (
+            attempt.policy.rollingStopBytes !== undefined &&
+            attempt.emittedBytes >= attempt.policy.rollingStopBytes
+          ) {
+            finishAttempt(attempt, 'byte-limit');
           }
         };
 
         recorder.onstop = () => {
-          const blob = new Blob(chunksRef.current, { type: mimeType });
-          // Release stream tracks immediately after stopping
-          if (streamRef.current) {
-            streamRef.current.getTracks().forEach((track) => track.stop());
-            streamRef.current = null;
+          if (!isCurrent(attempt)) return;
+          if (attempt.autoStopTimer !== null) {
+            clearTimeout(attempt.autoStopTimer);
+            attempt.autoStopTimer = null;
           }
-          if (autoStopTimerRef.current) {
-            clearTimeout(autoStopTimerRef.current);
-            autoStopTimerRef.current = null;
+          releaseStream(attempt);
+          attempt.recorder = null;
+
+          const audioBlob = new Blob(attempt.chunks, { type: mimeType });
+          attempt.chunks = [];
+          if (audioBlob.size === 0) {
+            onEmptyTranscriptionRef.current?.();
+            settleAttempt(attempt);
+            return;
+          }
+          if (audioBlob.size > attempt.policy.maxUploadBytes) {
+            failAttempt(attempt, SIZE_LIMIT_MESSAGE);
+            return;
           }
 
-          // Only transcribe if we have audio data
-          if (blob.size > 0) {
-            transcribeAudio(blob, textareaId);
-          } else {
-            setRecordingState('idle');
-            setActiveTextareaId(null);
-          }
+          setRecordingState('processing');
+          void transcribeAudio(attempt, audioBlob);
         };
 
-        recorder.start();
+        if (policy.recordingTimesliceMs === undefined) recorder.start();
+        else recorder.start(policy.recordingTimesliceMs);
         setRecordingState('recording');
-        setActiveTextareaId(textareaId);
 
-        // Auto-stop after MAX_RECORDING_MS
-        autoStopTimerRef.current = setTimeout(() => {
-          if (mediaRecorderRef.current?.state === 'recording') {
-            mediaRecorderRef.current.stop();
-          }
+        attempt.autoStopTimer = setTimeout(() => {
+          finishAttempt(attempt, 'time-limit');
         }, MAX_RECORDING_MS);
-      } catch (err) {
-        cleanup();
-        setRecordingState('idle');
-        setActiveTextareaId(null);
-
-        let message: string;
-        if (err instanceof DOMException) {
-          if (err.name === 'NotAllowedError') {
-            message = 'Microphone access denied. Check your browser settings.';
-          } else if (err.name === 'NotFoundError') {
-            message = 'No microphone found. Please connect a microphone and try again.';
-          } else {
-            message = `Microphone error: ${err.message}`;
-          }
-        } else {
-          message = 'Failed to start recording. Please try again.';
-        }
-
-        setError(message);
-        onErrorRef.current?.(message);
+      } catch (caught) {
+        if (!isCurrent(attempt)) return;
+        failAttempt(attempt, permissionErrorMessage(caught));
       }
     },
-    [cleanup, transcribeAudio],
+    [discardActiveAttempt, failAttempt, finishAttempt, isCurrent, isSupported, releaseStream, settleAttempt, transcribeAudio],
   );
 
-  // Cleanup on unmount — stop recording and release stream
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-        mediaRecorderRef.current.stop();
-      }
-      cleanup();
+      mountedRef.current = false;
+      discardActiveAttempt(false);
     };
-  }, [cleanup]);
+  }, [discardActiveAttempt]);
+
+  const clearAutomaticCompletionReason = useCallback(() => {
+    setAutomaticCompletionReason(null);
+  }, []);
+
+  const exposedRecordingState =
+    !options.policy && recordingState === 'requesting' ? 'idle' : recordingState;
+  const exposedActiveTextareaId =
+    !options.policy && recordingState === 'requesting' ? null : activeTextareaId;
 
   return {
     isSupported,
-    recordingState,
+    recordingState: exposedRecordingState,
     error,
     startRecording,
     stopRecording,
-    activeTextareaId,
+    discardRecording,
+    activeTextareaId: exposedActiveTextareaId,
+    automaticCompletionReason,
+    clearAutomaticCompletionReason,
   };
 }

@@ -1,101 +1,80 @@
 /**
  * @vitest-environment jsdom
- *
- * @description
- * Unit tests for the useSpeechToText hook.
- *
- * Browser APIs (MediaRecorder, getUserMedia) are mocked since tests
- * run in jsdom which does not implement the MediaStream Recording API.
- *
- * Test focus:
- * - Feature detection (isSupported)
- * - State transitions (idle → recording → processing → idle)
- * - Permission denial error handling
- * - Auto-stop after timeout
- * - Cleanup on unmount
- * - Transcription result and error handling
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, act, waitFor } from '@testing-library/react';
-import { useSpeechToText, _resetBrowserSupportCache, type UseSpeechToTextOptions } from './use-speech-to-text';
+import { act, renderHook, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  _resetBrowserSupportCache,
+  METHOD_SPEECH_TO_TEXT_POLICY,
+  useSpeechToText,
+  type UseSpeechToTextOptions,
+} from './use-speech-to-text';
 
-/* ------------------------------------------------------------------ */
-/*                    MediaRecorder Mock                              */
-/* ------------------------------------------------------------------ */
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
 
-/** Minimal MediaRecorder mock that simulates the recording lifecycle */
 class MockMediaRecorder {
-  state: 'inactive' | 'recording' | 'paused' = 'inactive';
-  ondataavailable: ((e: { data: Blob }) => void) | null = null;
-  onstop: (() => void) | null = null;
+  static instances: MockMediaRecorder[] = [];
+  static stopChunks: Blob[] = [new Blob(['fake-audio'], { type: 'audio/webm' })];
 
-  static isTypeSupported(type: string): boolean {
+  static isTypeSupported(type: string) {
     return type === 'audio/webm;codecs=opus' || type === 'audio/webm';
   }
 
+  state: RecordingState = 'inactive';
+  ondataavailable: ((event: { data: Blob }) => void) | null = null;
+  onstop: (() => void) | null = null;
+  start = vi.fn((timeslice?: number) => {
+    this.state = 'recording';
+    return timeslice;
+  });
+  stop = vi.fn(() => {
+    if (this.state === 'inactive') return;
+    this.state = 'inactive';
+    for (const chunk of MockMediaRecorder.stopChunks) {
+      this.ondataavailable?.({ data: chunk });
+    }
+    this.onstop?.();
+  });
+
   constructor(
     public stream: MediaStream,
-    public options?: { mimeType?: string },
-  ) {}
-
-  start() {
-    this.state = 'recording';
+    public options?: MediaRecorderOptions,
+  ) {
+    MockMediaRecorder.instances.push(this);
   }
 
-  stop() {
-    this.state = 'inactive';
-    // Simulate data available then stop
-    this.ondataavailable?.({ data: new Blob(['fake-audio'], { type: 'audio/webm' }) });
-    this.onstop?.();
+  emit(chunk: Blob) {
+    this.ondataavailable?.({ data: chunk });
   }
 }
-
-/* ------------------------------------------------------------------ */
-/*                    Browser API Mocks Setup                        */
-/* ------------------------------------------------------------------ */
 
 const mockGetUserMedia = vi.fn();
-const mockTrackStop = vi.fn();
 
-function createMockStream(): MediaStream {
+function createMockStream() {
+  const stop = vi.fn();
   return {
-    getTracks: () => [{ stop: mockTrackStop }],
-  } as unknown as MediaStream;
+    stream: { getTracks: () => [{ stop }] } as unknown as MediaStream,
+    stop,
+  };
 }
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  _resetBrowserSupportCache();
-
-  // Set up browser API mocks
-  Object.defineProperty(global, 'MediaRecorder', {
-    value: MockMediaRecorder,
-    writable: true,
-    configurable: true,
-  });
-
-  Object.defineProperty(global.navigator, 'mediaDevices', {
-    value: { getUserMedia: mockGetUserMedia },
-    writable: true,
-    configurable: true,
-  });
-
-  // Default: getUserMedia resolves with a mock stream
-  mockGetUserMedia.mockResolvedValue(createMockStream());
-
-  // Default: fetch resolves with transcribed text
-  global.fetch = vi.fn().mockResolvedValue({
+function response(text: string) {
+  return {
     ok: true,
-    json: () => Promise.resolve({ text: 'hello world' }),
-  });
-});
+    json: () => Promise.resolve({ text }),
+  };
+}
 
-/* ------------------------------------------------------------------ */
-/*                    Helper                                          */
-/* ------------------------------------------------------------------ */
-
-function defaultOptions(overrides?: Partial<UseSpeechToTextOptions>): UseSpeechToTextOptions {
+function defaultOptions(overrides: Partial<UseSpeechToTextOptions> = {}): UseSpeechToTextOptions {
   return {
     language: 'en',
     onTranscription: vi.fn(),
@@ -105,275 +84,382 @@ function defaultOptions(overrides?: Partial<UseSpeechToTextOptions>): UseSpeechT
   };
 }
 
-/* ------------------------------------------------------------------ */
-/*                    Tests                                            */
-/* ------------------------------------------------------------------ */
+beforeEach(() => {
+  vi.clearAllMocks();
+  _resetBrowserSupportCache();
+  MockMediaRecorder.instances = [];
+  MockMediaRecorder.stopChunks = [new Blob(['fake-audio'], { type: 'audio/webm' })];
+
+  Object.defineProperty(globalThis, 'MediaRecorder', {
+    value: MockMediaRecorder,
+    configurable: true,
+    writable: true,
+  });
+  Object.defineProperty(globalThis.navigator, 'mediaDevices', {
+    value: { getUserMedia: mockGetUserMedia },
+    configurable: true,
+    writable: true,
+  });
+
+  mockGetUserMedia.mockResolvedValue(createMockStream().stream);
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response('hello world')));
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
 
 describe('useSpeechToText', () => {
-  describe('feature detection', () => {
-    it('returns isSupported=true when MediaRecorder and getUserMedia are available', () => {
-      const { result } = renderHook(() => useSpeechToText(defaultOptions()));
-      expect(result.current.isSupported).toBe(true);
+  it('detects supported and unsupported browsers', () => {
+    const supported = renderHook(() => useSpeechToText(defaultOptions()));
+    expect(supported.result.current.isSupported).toBe(true);
+    supported.unmount();
+
+    Object.defineProperty(globalThis, 'MediaRecorder', {
+      value: undefined,
+      configurable: true,
+      writable: true,
     });
-
-    it('returns isSupported=false when MediaRecorder is undefined', () => {
-      Object.defineProperty(global, 'MediaRecorder', {
-        value: undefined,
-        writable: true,
-        configurable: true,
-      });
-
-      const { result } = renderHook(() => useSpeechToText(defaultOptions()));
-      expect(result.current.isSupported).toBe(false);
-    });
-
-    it('returns isSupported=false when getUserMedia is unavailable', () => {
-      Object.defineProperty(global.navigator, 'mediaDevices', {
-        value: undefined,
-        writable: true,
-        configurable: true,
-      });
-
-      const { result } = renderHook(() => useSpeechToText(defaultOptions()));
-      expect(result.current.isSupported).toBe(false);
-    });
+    _resetBrowserSupportCache();
+    const unsupported = renderHook(() => useSpeechToText(defaultOptions()));
+    expect(unsupported.result.current.isSupported).toBe(false);
   });
 
-  describe('recording lifecycle', () => {
-    it('can target the authenticated bounded-audio endpoint without changing the legacy default', async () => {
-      const { result } = renderHook(() => useSpeechToText(defaultOptions({
-        endpoint: '/api/agent/audio/transcribe',
-      })));
+  it('keeps the legacy endpoint, language query, and successful callback defaults', async () => {
+    const onTranscription = vi.fn();
+    const { result } = renderHook(() => useSpeechToText(defaultOptions({
+      language: 'es',
+      onTranscription,
+    })));
 
-      await act(async () => {
-        result.current.startRecording('chat-draft');
-      });
-      await act(async () => {
-        result.current.stopRecording();
-      });
+    await act(async () => result.current.startRecording('q1'));
+    await act(async () => result.current.stopRecording());
 
-      await waitFor(() => expect(global.fetch).toHaveBeenCalled());
-      expect(global.fetch).toHaveBeenCalledWith(
-        '/api/agent/audio/transcribe?language=en',
-        expect.objectContaining({ method: 'POST', credentials: 'include' }),
-      );
-    });
-
-    it('transitions from idle to recording when startRecording is called', async () => {
-      const { result } = renderHook(() => useSpeechToText(defaultOptions()));
-      expect(result.current.recordingState).toBe('idle');
-
-      await act(async () => {
-        result.current.startRecording('q1');
-      });
-
-      expect(result.current.recordingState).toBe('recording');
-      expect(result.current.activeTextareaId).toBe('q1');
-    });
-
-    it('transitions from recording to processing when stopRecording is called', async () => {
-      const opts = defaultOptions();
-      const { result } = renderHook(() => useSpeechToText(opts));
-
-      // Start recording
-      await act(async () => {
-        result.current.startRecording('q1');
-      });
-
-      // Stop recording — should transition to processing then idle
-      await act(async () => {
-        result.current.stopRecording();
-      });
-
-      // After fetch resolves, should be back to idle
-      await waitFor(() => {
-        expect(result.current.recordingState).toBe('idle');
-      });
-    });
-
-    it('calls onTranscription with textarea ID and text on success', async () => {
-      const onTranscription = vi.fn();
-      const opts = defaultOptions({ onTranscription });
-      const { result } = renderHook(() => useSpeechToText(opts));
-
-      await act(async () => {
-        result.current.startRecording('q2');
-      });
-
-      await act(async () => {
-        result.current.stopRecording();
-      });
-
-      await waitFor(() => {
-        expect(onTranscription).toHaveBeenCalledWith('q2', 'hello world');
-      });
-    });
-
-    it('calls onEmptyTranscription when server returns empty text', async () => {
-      const onEmptyTranscription = vi.fn();
-      const onTranscription = vi.fn();
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ text: '' }),
-      });
-
-      const opts = defaultOptions({ onTranscription, onEmptyTranscription });
-      const { result } = renderHook(() => useSpeechToText(opts));
-
-      await act(async () => {
-        result.current.startRecording('q1');
-      });
-      await act(async () => {
-        result.current.stopRecording();
-      });
-
-      await waitFor(() => {
-        expect(onEmptyTranscription).toHaveBeenCalled();
-        expect(onTranscription).not.toHaveBeenCalled();
-      });
-    });
+    await waitFor(() => expect(onTranscription).toHaveBeenCalledWith('q1', 'hello world'));
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/transcribe?language=es',
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'Content-Type': 'audio/webm;codecs=opus' },
+        credentials: 'include',
+      }),
+    );
+    expect(result.current.recordingState).toBe('idle');
   });
 
-  describe('error handling', () => {
-    it('sets error and calls onError when mic permission is denied', async () => {
-      const onError = vi.fn();
-      mockGetUserMedia.mockRejectedValue(
-        new DOMException('Permission denied', 'NotAllowedError'),
-      );
+  it('moves from requesting permission to recording', async () => {
+    const permission = deferred<MediaStream>();
+    mockGetUserMedia.mockReturnValue(permission.promise);
+    const { result } = renderHook(() => useSpeechToText({
+      ...defaultOptions(),
+      policy: METHOD_SPEECH_TO_TEXT_POLICY,
+    }));
 
-      const { result } = renderHook(() => useSpeechToText(defaultOptions({ onError })));
-
-      await act(async () => {
-        result.current.startRecording('q1');
-      });
-
-      expect(result.current.error).toMatch(/denied/i);
-      expect(result.current.recordingState).toBe('idle');
-      expect(onError).toHaveBeenCalledWith(expect.stringMatching(/denied/i));
+    act(() => {
+      result.current.startRecording('draft');
     });
+    expect(result.current.recordingState).toBe('requesting');
+    expect(result.current.activeTextareaId).toBe('draft');
 
-    it('sets error when microphone is not found', async () => {
-      const onError = vi.fn();
-      mockGetUserMedia.mockRejectedValue(
-        new DOMException('No device', 'NotFoundError'),
-      );
-
-      const { result } = renderHook(() => useSpeechToText(defaultOptions({ onError })));
-
-      await act(async () => {
-        result.current.startRecording('q1');
-      });
-
-      expect(result.current.error).toMatch(/no microphone/i);
-      expect(onError).toHaveBeenCalled();
-    });
-
-    it('calls onError when server returns an error', async () => {
-      const onError = vi.fn();
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
-        ok: false,
-        status: 500,
-        json: () => Promise.resolve({ error: 'Groq API failed' }),
-      });
-
-      const { result } = renderHook(() => useSpeechToText(defaultOptions({ onError })));
-
-      await act(async () => {
-        result.current.startRecording('q1');
-      });
-      await act(async () => {
-        result.current.stopRecording();
-      });
-
-      await waitFor(() => {
-        expect(onError).toHaveBeenCalledWith(expect.stringMatching(/Groq API failed/));
-        expect(result.current.recordingState).toBe('idle');
-      });
-    });
-
-    it('calls onError when fetch throws a network error', async () => {
-      const onError = vi.fn();
-      (global.fetch as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Network error'));
-
-      const { result } = renderHook(() => useSpeechToText(defaultOptions({ onError })));
-
-      await act(async () => {
-        result.current.startRecording('q1');
-      });
-      await act(async () => {
-        result.current.stopRecording();
-      });
-
-      await waitFor(() => {
-        expect(onError).toHaveBeenCalledWith('Network error');
-        expect(result.current.recordingState).toBe('idle');
-      });
-    });
+    await act(async () => permission.resolve(createMockStream().stream));
+    expect(result.current.recordingState).toBe('recording');
   });
 
-  describe('auto-stop', () => {
-    it('auto-stops recording after 120 seconds', async () => {
-      vi.useFakeTimers();
+  it('keeps legacy permission requests externally idle while fencing late grants', async () => {
+    const permission = deferred<MediaStream>();
+    const lateStream = createMockStream();
+    mockGetUserMedia.mockReturnValue(permission.promise);
+    const { result, unmount } = renderHook(() => useSpeechToText(defaultOptions()));
 
-      const onTranscription = vi.fn();
-      const { result } = renderHook(() => useSpeechToText(defaultOptions({ onTranscription })));
-
-      await act(async () => {
-        result.current.startRecording('q1');
-      });
-
-      expect(result.current.recordingState).toBe('recording');
-
-      // Advance past the 120 second auto-stop and flush microtasks
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(120_001);
-      });
-
-      // Should have triggered stop → processing → idle
-      expect(result.current.recordingState).toBe('idle');
-
-      vi.useRealTimers();
+    act(() => {
+      result.current.startRecording('question');
     });
+    expect(result.current.recordingState).toBe('idle');
+    expect(result.current.activeTextareaId).toBeNull();
+
+    unmount();
+    await act(async () => permission.resolve(lateStream.stream));
+    expect(lateStream.stop).toHaveBeenCalledOnce();
+    expect(MockMediaRecorder.instances).toHaveLength(0);
+    expect(fetch).not.toHaveBeenCalled();
   });
 
-  describe('cleanup', () => {
-    it('stops recording and releases stream on unmount', async () => {
-      const { result, unmount } = renderHook(() => useSpeechToText(defaultOptions()));
+  it('finishes a legacy recording before starting the next textarea', async () => {
+    const firstUpload = deferred<ReturnType<typeof response>>();
+    vi.mocked(fetch)
+      .mockReturnValueOnce(firstUpload.promise as Promise<Response>)
+      .mockResolvedValueOnce(response('second transcript') as Response);
+    const onTranscription = vi.fn();
+    const { result } = renderHook(() => useSpeechToText(defaultOptions({ onTranscription })));
 
-      await act(async () => {
-        result.current.startRecording('q1');
-      });
-
-      expect(result.current.recordingState).toBe('recording');
-
-      // Unmount should trigger cleanup
-      unmount();
-
-      // The mock track.stop should have been called (stream released)
-      expect(mockTrackStop).toHaveBeenCalled();
+    await act(async () => result.current.startRecording('first'));
+    let secondStart!: Promise<void>;
+    act(() => {
+      secondStart = result.current.startRecording('second') as unknown as Promise<void>;
     });
+
+    expect(MockMediaRecorder.instances[0].stop).toHaveBeenCalledOnce();
+    expect(MockMediaRecorder.instances).toHaveLength(1);
+    await act(async () => firstUpload.resolve(response('first transcript')));
+    await act(async () => secondStart);
+
+    expect(onTranscription).toHaveBeenCalledWith('first', 'first transcript');
+    expect(MockMediaRecorder.instances).toHaveLength(2);
+    expect(result.current.activeTextareaId).toBe('second');
+    expect(result.current.recordingState).toBe('recording');
   });
 
-  describe('clears error on new recording', () => {
-    it('clears previous error when starting a new recording', async () => {
-      const onError = vi.fn();
-      mockGetUserMedia
-        .mockRejectedValueOnce(new DOMException('Denied', 'NotAllowedError'))
-        .mockResolvedValueOnce(createMockStream());
+  it('discards pending permission and stops a stream that arrives late', async () => {
+    const permission = deferred<MediaStream>();
+    const lateStream = createMockStream();
+    mockGetUserMedia.mockReturnValue(permission.promise);
+    const onTranscription = vi.fn();
+    const { result } = renderHook(() => useSpeechToText(defaultOptions({ onTranscription })));
 
-      const { result } = renderHook(() => useSpeechToText(defaultOptions({ onError })));
-
-      // First attempt fails
-      await act(async () => {
-        result.current.startRecording('q1');
-      });
-      expect(result.current.error).toBeTruthy();
-
-      // Second attempt clears error
-      await act(async () => {
-        result.current.startRecording('q1');
-      });
-      expect(result.current.error).toBeNull();
+    act(() => {
+      result.current.startRecording('draft');
     });
+    act(() => result.current.discardRecording());
+    expect(result.current.recordingState).toBe('idle');
+
+    await act(async () => permission.resolve(lateStream.stream));
+    expect(lateStream.stop).toHaveBeenCalledOnce();
+    expect(MockMediaRecorder.instances).toHaveLength(0);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(onTranscription).not.toHaveBeenCalled();
+  });
+
+  it('discards recording without uploading and ignores recorder events', async () => {
+    const captured = createMockStream();
+    mockGetUserMedia.mockResolvedValue(captured.stream);
+    const onTranscription = vi.fn();
+    const { result } = renderHook(() => useSpeechToText(defaultOptions({ onTranscription })));
+
+    await act(async () => result.current.startRecording('draft'));
+    const recorder = MockMediaRecorder.instances[0];
+    act(() => result.current.discardRecording());
+
+    recorder.emit(new Blob(['late']));
+    recorder.onstop?.();
+    expect(captured.stop).toHaveBeenCalledOnce();
+    expect(fetch).not.toHaveBeenCalled();
+    expect(onTranscription).not.toHaveBeenCalled();
+    expect(result.current.recordingState).toBe('idle');
+  });
+
+  it('aborts processing and ignores a late fetch result', async () => {
+    const upload = deferred<ReturnType<typeof response>>();
+    vi.mocked(fetch).mockReturnValue(upload.promise as Promise<Response>);
+    const onTranscription = vi.fn();
+    const { result } = renderHook(() => useSpeechToText(defaultOptions({ onTranscription })));
+
+    await act(async () => result.current.startRecording('draft'));
+    act(() => result.current.stopRecording());
+    expect(result.current.recordingState).toBe('processing');
+    const signal = vi.mocked(fetch).mock.calls[0]?.[1]?.signal;
+
+    act(() => result.current.discardRecording());
+    expect(signal?.aborted).toBe(true);
+    await act(async () => upload.resolve(response('too late')));
+
+    expect(onTranscription).not.toHaveBeenCalled();
+    expect(result.current.recordingState).toBe('idle');
+  });
+
+  it('fences every callback from a superseded permission attempt', async () => {
+    const firstPermission = deferred<MediaStream>();
+    const firstStream = createMockStream();
+    const secondStream = createMockStream();
+    mockGetUserMedia
+      .mockReturnValueOnce(firstPermission.promise)
+      .mockResolvedValueOnce(secondStream.stream);
+    const { result } = renderHook(() => useSpeechToText(defaultOptions()));
+
+    act(() => {
+      result.current.startRecording('first');
+    });
+    await act(async () => result.current.startRecording('second'));
+    expect(result.current.activeTextareaId).toBe('second');
+    expect(result.current.recordingState).toBe('recording');
+
+    await act(async () => firstPermission.resolve(firstStream.stream));
+    expect(firstStream.stop).toHaveBeenCalledOnce();
+    expect(result.current.activeTextareaId).toBe('second');
+    expect(result.current.recordingState).toBe('recording');
+  });
+
+  it('keeps a later recording active when a superseded upload completes', async () => {
+    const firstUpload = deferred<ReturnType<typeof response>>();
+    vi.mocked(fetch).mockReturnValueOnce(firstUpload.promise as Promise<Response>);
+    const onTranscription = vi.fn();
+    const { result } = renderHook(() => useSpeechToText(defaultOptions({ onTranscription })));
+
+    await act(async () => result.current.startRecording('first'));
+    act(() => result.current.stopRecording());
+    const firstSignal = vi.mocked(fetch).mock.calls[0]?.[1]?.signal;
+
+    await act(async () => result.current.startRecording('second'));
+    expect(firstSignal?.aborted).toBe(true);
+    expect(result.current.activeTextareaId).toBe('second');
+    expect(result.current.recordingState).toBe('recording');
+
+    await act(async () => firstUpload.resolve(response('stale transcript')));
+    expect(onTranscription).not.toHaveBeenCalled();
+    expect(result.current.activeTextareaId).toBe('second');
+    expect(result.current.recordingState).toBe('recording');
+  });
+
+  it('unmounts as discard without invoking the recorder upload path', async () => {
+    const captured = createMockStream();
+    mockGetUserMedia.mockResolvedValue(captured.stream);
+    const { result, unmount } = renderHook(() => useSpeechToText(defaultOptions()));
+
+    await act(async () => result.current.startRecording('draft'));
+    const recorder = MockMediaRecorder.instances[0];
+    unmount();
+
+    expect(recorder.stop).toHaveBeenCalledOnce();
+    expect(captured.stop).toHaveBeenCalledOnce();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('opts Method into its endpoint, header, no language query, and short timeslices', async () => {
+    const { result } = renderHook(() => useSpeechToText({
+      ...defaultOptions(),
+      policy: METHOD_SPEECH_TO_TEXT_POLICY,
+    }));
+
+    await act(async () => result.current.startRecording('draft'));
+    expect(MockMediaRecorder.instances[0].start).toHaveBeenCalledWith(250);
+    await act(async () => result.current.stopRecording());
+
+    await waitFor(() => expect(fetch).toHaveBeenCalled());
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/agent/audio/transcribe',
+      expect.objectContaining({
+        headers: {
+          'Content-Type': 'audio/webm;codecs=opus',
+          'X-Revelio-Request': '1',
+        },
+      }),
+    );
+  });
+
+  it('requests one normal Stop at the rolling byte limit and reports an incomplete reason', async () => {
+    MockMediaRecorder.stopChunks = [new Blob([new Uint8Array(10)])];
+    const { result } = renderHook(() => useSpeechToText({
+      ...defaultOptions(),
+      policy: METHOD_SPEECH_TO_TEXT_POLICY,
+    }));
+
+    await act(async () => result.current.startRecording('draft'));
+    const recorder = MockMediaRecorder.instances[0];
+    act(() => recorder.emit(new Blob([new Uint8Array(1_572_864)])));
+
+    expect(recorder.stop).toHaveBeenCalledOnce();
+    expect(result.current.automaticCompletionReason).toBe('byte-limit');
+    await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+    const uploaded = vi.mocked(fetch).mock.calls[0]?.[1]?.body as Blob;
+    expect(uploaded.size).toBe(1_572_874);
+  });
+
+  it('never uploads a single chunk above the Method final-blob budget', async () => {
+    MockMediaRecorder.stopChunks = [];
+    const onError = vi.fn();
+    const { result } = renderHook(() => useSpeechToText({
+      ...defaultOptions({ onError }),
+      policy: METHOD_SPEECH_TO_TEXT_POLICY,
+    }));
+
+    await act(async () => result.current.startRecording('draft'));
+    act(() => MockMediaRecorder.instances[0].emit(new Blob([new Uint8Array(1_835_009)])));
+
+    expect(fetch).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith(expect.stringMatching(/too large/i));
+    expect(result.current.recordingState).toBe('idle');
+  });
+
+  it('keeps the delayed final chunk and rejects the complete oversized Blob', async () => {
+    MockMediaRecorder.stopChunks = [new Blob([new Uint8Array(300_000)])];
+    const onError = vi.fn();
+    const { result } = renderHook(() => useSpeechToText({
+      ...defaultOptions({ onError }),
+      policy: METHOD_SPEECH_TO_TEXT_POLICY,
+    }));
+
+    await act(async () => result.current.startRecording('draft'));
+    act(() => MockMediaRecorder.instances[0].emit(new Blob([new Uint8Array(1_572_864)])));
+
+    expect(fetch).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith(expect.stringMatching(/too large/i));
+    expect(result.current.automaticCompletionReason).toBe('byte-limit');
+  });
+
+  it('auto-finishes at the time cap with a typed incomplete reason', async () => {
+    vi.useFakeTimers();
+    const { result } = renderHook(() => useSpeechToText({
+      ...defaultOptions(),
+      policy: METHOD_SPEECH_TO_TEXT_POLICY,
+    }));
+
+    await act(async () => result.current.startRecording('draft'));
+    await act(async () => vi.advanceTimersByTimeAsync(120_000));
+
+    expect(MockMediaRecorder.instances[0].stop).toHaveBeenCalledOnce();
+    expect(result.current.automaticCompletionReason).toBe('time-limit');
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
+  it('starts the 30-second timeout with fetch, aborts it, and fences late completion', async () => {
+    vi.useFakeTimers();
+    const upload = deferred<ReturnType<typeof response>>();
+    vi.mocked(fetch).mockReturnValue(upload.promise as Promise<Response>);
+    const onTranscription = vi.fn();
+    const onError = vi.fn();
+    const { result } = renderHook(() => useSpeechToText(defaultOptions({
+      onTranscription,
+      onError,
+    })));
+
+    await act(async () => result.current.startRecording('draft'));
+    act(() => result.current.stopRecording());
+    const signal = vi.mocked(fetch).mock.calls[0]?.[1]?.signal;
+    expect(signal?.aborted).toBe(false);
+
+    await act(async () => vi.advanceTimersByTimeAsync(30_000));
+    expect(signal?.aborted).toBe(true);
+    expect(result.current.recordingState).toBe('idle');
+    expect(onError).toHaveBeenCalledWith(expect.stringMatching(/timed out/i));
+
+    await act(async () => upload.resolve(response('late transcript')));
+    expect(onTranscription).not.toHaveBeenCalled();
+  });
+
+  it('preserves useful permission, empty, and provider failure callbacks', async () => {
+    const onError = vi.fn();
+    mockGetUserMedia.mockRejectedValueOnce(new DOMException('Denied', 'NotAllowedError'));
+    const denied = renderHook(() => useSpeechToText(defaultOptions({ onError })));
+    await act(async () => denied.result.current.startRecording('q1'));
+    expect(onError).toHaveBeenCalledWith(expect.stringMatching(/denied/i));
+    denied.unmount();
+
+    const onEmptyTranscription = vi.fn();
+    vi.mocked(fetch).mockResolvedValueOnce(response('') as Response);
+    const empty = renderHook(() => useSpeechToText(defaultOptions({ onEmptyTranscription })));
+    await act(async () => empty.result.current.startRecording('q1'));
+    await act(async () => empty.result.current.stopRecording());
+    await waitFor(() => expect(onEmptyTranscription).toHaveBeenCalledOnce());
+    empty.unmount();
+
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: false,
+      status: 503,
+      json: () => Promise.resolve({ error: 'Transcription unavailable' }),
+    } as Response);
+    const failed = renderHook(() => useSpeechToText(defaultOptions({ onError })));
+    await act(async () => failed.result.current.startRecording('q1'));
+    await act(async () => failed.result.current.stopRecording());
+    await waitFor(() => expect(onError).toHaveBeenCalledWith('Transcription unavailable'));
   });
 });

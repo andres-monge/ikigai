@@ -18,14 +18,18 @@ import type {
 } from '../storage.js';
 import { MethodOwnerBusyError } from '../storage.js';
 import { createDisplayRecovery } from '../ai/history.js';
+import { OpenAITranscriptionError } from '../ai/transcription.js';
 import { createAgentRouter } from './agent.js';
 
 const USER_ID = 'opaque-user-1';
 const SENTINEL = 'private-prompt-map-history-source-provider-sentinel';
 const METHOD_REQUEST_ORIGIN = 'https://revelio.test';
+const WEBM_AUDIO = Buffer.from('1a45dfa39f4286810142f7810142f2810442f381084282847765626d4287810442858102', 'hex');
+const MP4_AUDIO = Buffer.from('00000018667479706d7034320000000069736f6d6d703432', 'hex');
 const GUARDED_METHOD_POST_PATHS = new Set([
   '/api/agent',
   '/api/agent/workspace/operations',
+  '/api/agent/audio/transcribe',
 ]);
 type SupertestRequest = ReturnType<ReturnType<typeof rawRequest>['post']>;
 const timestamp = (second: number) => `2030-01-01T00:00:${String(second).padStart(2, '0')}.000Z`;
@@ -440,11 +444,11 @@ function request(app: express.Express) {
     get: (path: string) => client.get(path),
     post: (path: string) => {
       const pending = client.post(path);
-      return GUARDED_METHOD_POST_PATHS.has(path)
+      return GUARDED_METHOD_POST_PATHS.has(path.split('?')[0] ?? path)
         ? pending
             .set('Origin', METHOD_REQUEST_ORIGIN)
             .set('X-Revelio-Request', '1')
-            .set('Content-Type', 'application/json')
+            .set('Content-Type', path.includes('/audio/transcribe') ? 'audio/webm' : 'application/json')
         : pending;
     },
   };
@@ -525,6 +529,59 @@ describe('protected Method routes', () => {
         expect(storage.persistCareerMapOperation, testCase.label).not.toHaveBeenCalled();
         expect(model.doStreamCalls, testCase.label).toHaveLength(0);
       }
+    });
+
+    it.each([
+      ['missing origin', (pending: SupertestRequest) => pending
+        .set('X-Revelio-Request', '1').set('Content-Type', 'audio/webm'), 403],
+      ['malformed origin', (pending: SupertestRequest) => pending
+        .set('Origin', 'not-an-origin').set('X-Revelio-Request', '1').set('Content-Type', 'audio/webm'), 403],
+      ['origin path', (pending: SupertestRequest) => pending
+        .set('Origin', `${METHOD_REQUEST_ORIGIN}/path`).set('X-Revelio-Request', '1').set('Content-Type', 'audio/webm'), 403],
+      ['sibling origin', (pending: SupertestRequest) => pending
+        .set('Origin', 'https://revelio-me-git-feature.vercel.app').set('X-Revelio-Request', '1').set('Content-Type', 'audio/webm'), 403],
+      ['cross origin', (pending: SupertestRequest) => pending
+        .set('Origin', 'https://attacker.example').set('X-Revelio-Request', '1').set('Content-Type', 'audio/webm'), 403],
+      ['missing Method header', (pending: SupertestRequest) => pending
+        .set('Origin', METHOD_REQUEST_ORIGIN).set('Content-Type', 'audio/webm'), 403],
+      ['invalid Method header', (pending: SupertestRequest) => pending
+        .set('Origin', METHOD_REQUEST_ORIGIN).set('X-Revelio-Request', 'true').set('Content-Type', 'audio/webm'), 403],
+      ['unsupported media', (pending: SupertestRequest) => pending
+        .set('Origin', METHOD_REQUEST_ORIGIN).set('X-Revelio-Request', '1').set('Content-Type', 'audio/mpeg'), 400],
+      ['unsupported WebM codec', (pending: SupertestRequest) => pending
+        .set('Origin', METHOD_REQUEST_ORIGIN).set('X-Revelio-Request', '1').set('Content-Type', 'audio/webm; codecs=vorbis'), 400],
+    ] as const)('rejects %s audio metadata before auth, logging, parsing, or provider work', async (
+      _label, apply, status,
+    ) => {
+      const requireAuth = vi.fn();
+      const operationalLog = vi.fn();
+      const transcribeAudio = vi.fn();
+      const app = testApp({
+        storage: createStorage(), requireAuth, agentEnabled: true, transcribeAudio, operationalLog,
+      });
+      const response = await apply(rawRequest(app).post('/api/agent/audio/transcribe')).send(WEBM_AUDIO);
+
+      expect(response.status).toBe(status);
+      expect(requireAuth).not.toHaveBeenCalled();
+      expect(operationalLog).not.toHaveBeenCalled();
+      expect(transcribeAudio).not.toHaveBeenCalled();
+    });
+
+    it('exposes no credentialed preflight on the audio route', async () => {
+      const requireAuth = vi.fn();
+      const operationalLog = vi.fn();
+      const transcribeAudio = vi.fn();
+      const app = testApp({
+        storage: createStorage(), requireAuth, agentEnabled: true, transcribeAudio, operationalLog,
+      });
+      const preflight = await rawRequest(app)
+        .options('/api/agent/audio/transcribe')
+        .set('Origin', METHOD_REQUEST_ORIGIN)
+        .set('Access-Control-Request-Method', 'POST');
+      expect(preflight.status).toBe(405);
+      expect(requireAuth).not.toHaveBeenCalled();
+      expect(operationalLog).not.toHaveBeenCalled();
+      expect(transcribeAudio).not.toHaveBeenCalled();
     });
 
     it.each([
@@ -622,7 +679,7 @@ describe('protected Method routes', () => {
       request(app).get('/api/agent/history'),
       request(app).post('/api/agent').send({ id: 'message', message: 'hello' }),
       request(app).post('/api/agent/workspace/operations').send({}),
-      request(app).post('/api/agent/audio/transcribe').set('content-type', 'audio/webm').send(Buffer.from('audio')),
+      request(app).post('/api/agent/audio/transcribe').send(WEBM_AUDIO),
     ]);
 
     expect(responses.map((response) => response.status)).toEqual([401, 401, 401, 401, 401]);
@@ -667,8 +724,7 @@ describe('protected Method routes', () => {
           operationId: 'operation-disabled-flag', clientMessageId: 'message-disabled-flag',
         }),
       );
-      const audio = await request(app).post('/api/agent/audio/transcribe')
-        .set('content-type', 'audio/webm').send(Buffer.from('audio'));
+      const audio = await request(app).post('/api/agent/audio/transcribe').send(WEBM_AUDIO);
 
       expect(workspace.status).toBe(200);
       expect(workspace.body).toMatchObject({ status: 'ready' });
@@ -2989,35 +3045,181 @@ describe('protected Method routes', () => {
       .not.toContain(cleanupFailure);
   });
 
-  it('keeps protected audio bounded and returns payload-free provider failures', async () => {
-    const failure = new Error(SENTINEL);
-    failure.name = 'AudioProviderFailure';
+  it.each([
+    ['audio/webm', WEBM_AUDIO],
+    ['audio/webm; codecs=opus', WEBM_AUDIO],
+    ['audio/mp4', MP4_AUDIO],
+  ] as const)('validates and forwards one normalized %s upload', async (contentType, audio) => {
+    const transcribeAudio = vi.fn(async () => 'bounded transcript');
+    const logs: Array<Record<string, unknown>> = [];
+    const app = testApp({
+      storage: createStorage(), requireAuth: authenticated, agentEnabled: true,
+      transcribeAudio, operationalLog: (entry) => logs.push(entry),
+    });
+
+    const response = await request(app)
+      .post('/api/agent/audio/transcribe?language=fr')
+      .set('content-type', contentType)
+      .send(audio);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ text: 'bounded transcript' });
+    expect(transcribeAudio).toHaveBeenCalledOnce();
+    expect(transcribeAudio).toHaveBeenCalledWith({
+      audio,
+      mediaType: contentType.startsWith('audio/mp4') ? 'audio/mp4' : 'audio/webm',
+      abortSignal: expect.any(AbortSignal),
+    });
+    expect(logs).toEqual([expect.objectContaining({
+      provider: 'openai', model: 'gpt-transcribe', status: 200,
+    })]);
+  });
+
+  it('maps provider silence to one successful empty response and one privacy-safe log', async () => {
+    const transcribeAudio = vi.fn(async () => {
+      throw new OpenAITranscriptionError('empty-transcript');
+    });
     const logs: Array<Record<string, unknown>> = [];
     const app = testApp({
       storage: createStorage(),
       requireAuth: authenticated,
       agentEnabled: true,
-      transcribeAudio: vi.fn(async () => { throw failure; }),
+      transcribeAudio,
       operationalLog: (entry) => logs.push(entry),
     });
-    const failed = await request(app)
-      .post('/api/agent/audio/transcribe?language=es')
-      .set('content-type', 'audio/webm')
-      .send(Buffer.from('audio'));
-    const invalid = await request(app)
-      .post('/api/agent/audio/transcribe?language=fr')
-      .set('content-type', 'audio/webm')
-      .send(Buffer.from('audio'));
-    const oversized = await request(app)
-      .post('/api/agent/audio/transcribe')
-      .set('content-type', 'audio/webm')
-      .send(Buffer.alloc(2 * 1024 * 1024 + 1));
 
-    expect(failed.status).toBe(502);
-    expect(invalid.status).toBe(400);
-    expect(oversized.status).toBe(413);
-    expect(JSON.stringify(failed.body)).not.toContain(SENTINEL);
+    const response = await request(app)
+      .post('/api/agent/audio/transcribe')
+      .send(WEBM_AUDIO);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ text: '' });
+    expect(transcribeAudio).toHaveBeenCalledOnce();
+    expect(logs).toEqual([expect.objectContaining({
+      provider: 'openai',
+      model: 'gpt-transcribe',
+      status: 200,
+      errorClass: 'OpenAITranscriptionError',
+    })]);
     expect(JSON.stringify(logs)).not.toContain(SENTINEL);
+  });
+
+  it('rejects empty, unsupported, mismatched, and oversized audio before provider dispatch', async () => {
+    const transcribeAudio = vi.fn();
+    const app = testApp({
+      storage: createStorage(), requireAuth: authenticated, agentEnabled: true,
+      transcribeAudio, operationalLog: vi.fn(),
+    });
+    const send = (contentType: string, body: Buffer) => request(app)
+      .post('/api/agent/audio/transcribe')
+      .set('content-type', contentType)
+      .send(body);
+
+    expect((await send('audio/webm', Buffer.alloc(0))).status).toBe(400);
+    expect((await send('audio/webm', MP4_AUDIO)).status).toBe(400);
+    expect((await send('audio/mp4', WEBM_AUDIO)).status).toBe(400);
+    expect((await send('audio/mpeg', WEBM_AUDIO)).status).toBe(400);
+    expect((await send('audio/webm', Buffer.from('1a45dfa3a34286810142f7810142f2810442f381084282886d6174726f736b614287810442858102', 'hex'))).status).toBe(400);
+    expect((await send('audio/webm', Buffer.from('1a45dfa39f4286810142f7810142f2810442f381084282847765626d42878104', 'hex'))).status).toBe(400);
+    expect((await send('audio/mp4', Buffer.from('00000018667479706d70343200000000', 'hex'))).status).toBe(400);
+    expect((await send('audio/mp4', Buffer.from('000000186674797068656963000000006865696368656978', 'hex'))).status).toBe(400);
+    expect((await send('audio/webm', Buffer.concat([
+      WEBM_AUDIO, Buffer.alloc(2 * 1024 * 1024 - WEBM_AUDIO.length + 1),
+    ]))).status).toBe(413);
+    expect(transcribeAudio).not.toHaveBeenCalled();
+  });
+
+  it('accepts the exact 2 MiB raw-body boundary', async () => {
+    const transcribeAudio = vi.fn(async () => 'boundary transcript');
+    const audio = Buffer.alloc(2 * 1024 * 1024);
+    WEBM_AUDIO.copy(audio);
+    const response = await request(testApp({
+      storage: createStorage(), requireAuth: authenticated, agentEnabled: true,
+      transcribeAudio, operationalLog: vi.fn(),
+    })).post('/api/agent/audio/transcribe').send(audio);
+
+    expect(response.status).toBe(200);
+    expect(transcribeAudio).toHaveBeenCalledOnce();
+    expect(transcribeAudio.mock.calls[0]?.[0].audio).toHaveLength(2 * 1024 * 1024);
+  });
+
+  it('returns 503 for a missing OpenAI key without breaking authenticated Method reads', async () => {
+    const previous = process.env.OPENAI_API_KEY;
+    process.env.OPENAI_API_KEY = '';
+    vi.resetModules();
+    try {
+      const { createAgentRouter: createFreshAgentRouter } = await import('./agent.js');
+      const app = testApp({
+        storage: createStorage(), requireAuth: authenticated, agentEnabled: true,
+        operationalLog: vi.fn(),
+      }, createFreshAgentRouter);
+
+      const workspace = await request(app).get('/api/agent/workspace');
+      const audio = await request(app).post('/api/agent/audio/transcribe').send(WEBM_AUDIO);
+
+      expect(workspace.status).toBe(200);
+      expect(audio.status).toBe(503);
+      expect(audio.body).toEqual({
+        error: 'Transcription is unavailable', errorClass: 'OpenAITranscriptionError',
+      });
+    } finally {
+      if (previous === undefined) delete process.env.OPENAI_API_KEY;
+      else process.env.OPENAI_API_KEY = previous;
+      vi.resetModules();
+    }
+  });
+
+  it('maps unavailable and provider failures without leaking payloads or retrying', async () => {
+    const failure = new Error(SENTINEL);
+    failure.name = 'AudioProviderFailure';
+    const logs: Array<Record<string, unknown>> = [];
+    const transcribeAudio = vi.fn()
+      .mockRejectedValueOnce(new OpenAITranscriptionError('unavailable'))
+      .mockRejectedValueOnce(failure);
+    const app = testApp({
+      storage: createStorage(),
+      requireAuth: authenticated,
+      agentEnabled: true,
+      transcribeAudio,
+      operationalLog: (entry) => logs.push(entry),
+    });
+    const unavailable = await request(app).post('/api/agent/audio/transcribe').send(WEBM_AUDIO);
+    const failed = await request(app).post('/api/agent/audio/transcribe').send(WEBM_AUDIO);
+
+    expect(unavailable.status).toBe(503);
+    expect(failed.status).toBe(502);
+    expect(transcribeAudio).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify([unavailable.body, failed.body])).not.toContain(SENTINEL);
+    expect(JSON.stringify(logs)).not.toContain(SENTINEL);
+  });
+
+  it('aborts the single provider dispatch at the 20-second deadline', async () => {
+    vi.useFakeTimers();
+    try {
+      let providerSignal: AbortSignal | undefined;
+      let providerStarted!: () => void;
+      const started = new Promise<void>((resolve) => { providerStarted = resolve; });
+      const transcribeAudio = vi.fn((input: { abortSignal?: AbortSignal }) => {
+        providerSignal = input.abortSignal;
+        providerStarted();
+        return new Promise<string>((_resolve, reject) => {
+          input.abortSignal?.addEventListener('abort', () => reject(input.abortSignal?.reason), { once: true });
+        });
+      });
+      const responsePromise = Promise.resolve(request(testApp({
+        storage: createStorage(), requireAuth: authenticated, agentEnabled: true,
+        transcribeAudio, operationalLog: vi.fn(),
+      })).post('/api/agent/audio/transcribe').send(WEBM_AUDIO));
+      await started;
+      await vi.advanceTimersByTimeAsync(20_000);
+      const response = await responsePromise;
+
+      expect(response.status).toBe(502);
+      expect(providerSignal?.aborted).toBe(true);
+      expect(transcribeAudio).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('fails and releases exactly once on a payload-bearing agent provider error', async () => {

@@ -1,9 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import express, { Router, type Request, type RequestHandler } from 'express';
-import { createGroq } from '@ai-sdk/groq';
 import { createOpenAI } from '@ai-sdk/openai';
 import {
-  experimental_transcribe as transcribe,
   createUIMessageStream,
   pipeUIMessageStreamToResponse,
   toUIMessageStream,
@@ -54,14 +52,21 @@ import {
   operationStatusStreamPartSchema,
 } from '../../shared/streaming-schemas.js';
 import { methodRouteLabel } from './agent-logging.js';
+import {
+  MAX_TRANSCRIPT_CODE_UNITS,
+  OPENAI_TRANSCRIPTION_MODEL,
+  OpenAITranscriptionError,
+  transcribeOpenAIAudio,
+  type TranscriptionMediaType,
+} from '../ai/transcription.js';
 
 const agentRequestSchema = z.object({
   id: opaqueClientMessageIdSchema,
   message: z.string().trim().min(1).max(12_000),
 }).strict();
 
-const audioLanguageSchema = z.enum(['en', 'es']);
 const METHOD_AUDIO_LIMIT = '2mb';
+const METHOD_AUDIO_PROVIDER_TIMEOUT_MS = 20_000;
 const GUARDED_METHOD_PATHS = ['/', '/workspace/operations'];
 const PROVISIONING_HANDOFF_WAIT_MS = 12_000;
 const PROVISIONING_HANDOFF_INITIAL_DELAY_MS = 25;
@@ -81,7 +86,11 @@ export interface AgentRouterOptions {
   model?: LanguageModel;
   nativeWebSearchTool?: ToolSet[string];
   conversationClient?: ConversationItemsClient;
-  transcribeAudio?: (input: { audio: Buffer; language: 'en' | 'es'; abortSignal?: AbortSignal }) => Promise<string>;
+  transcribeAudio?: (input: {
+    audio: Buffer;
+    mediaType: TranscriptionMediaType;
+    abortSignal?: AbortSignal;
+  }) => Promise<string>;
   now?: () => Date;
   id?: () => string;
   operationalLog?: (entry: Record<string, unknown>) => void;
@@ -118,14 +127,21 @@ function requestHasExactOrigin(request: Request, expectedOrigin: string | undefi
   }
 }
 
+function hasValidMethodRequestMetadata(
+  request: Request,
+  expectedOrigin: string | undefined,
+): boolean {
+  return requestHasExactOrigin(request, expectedOrigin)
+    && request.get('x-revelio-request') === '1';
+}
+
 function guardCustomMethodPost(expectedOrigin: string | undefined): RequestHandler {
   return (request, response, next) => {
     if (request.method === 'OPTIONS') {
       response.status(405).json({ error: 'Method preflight is not supported' });
       return;
     }
-    if (!requestHasExactOrigin(request, expectedOrigin)
-      || request.get('x-revelio-request') !== '1') {
+    if (!hasValidMethodRequestMetadata(request, expectedOrigin)) {
       response.status(403).json({ error: 'Invalid Method request metadata' });
       return;
     }
@@ -133,6 +149,44 @@ function guardCustomMethodPost(expectedOrigin: string | undefined): RequestHandl
       response.status(415).json({ error: 'Method requests require application/json' });
       return;
     }
+    next();
+  };
+}
+
+function normalizedAudioMediaType(value: string | undefined): TranscriptionMediaType | undefined {
+  if (!value) return undefined;
+  const [rawType, ...rawParameters] = value.split(';');
+  const mediaType = rawType?.trim().toLowerCase();
+  const parameters = rawParameters.map((parameter) => parameter.trim().toLowerCase()).filter(Boolean);
+  if (mediaType === 'audio/mp4' && parameters.length === 0) return 'audio/mp4';
+  if (mediaType !== 'audio/webm') return undefined;
+  if (parameters.length === 0) return 'audio/webm';
+  return parameters.length === 1 && /^codecs\s*=\s*"?opus"?$/u.test(parameters[0] ?? '')
+    ? 'audio/webm'
+    : undefined;
+}
+
+/**
+ * Metadata-only guard for the paid Method transcription route. It never reads
+ * the request stream, so callers can mount it before body parsers and logging.
+ */
+export function createAudioTranscriptionMetadataGuard(expectedOriginValue: string | undefined): RequestHandler {
+  const expectedOrigin = configuredMethodOrigin(expectedOriginValue ?? '');
+  return (request, response, next) => {
+    if (request.method !== 'POST') {
+      response.status(405).json({ error: 'Method audio preflight is not supported' });
+      return;
+    }
+    if (!hasValidMethodRequestMetadata(request, expectedOrigin)) {
+      response.status(403).json({ error: 'Invalid Method request metadata' });
+      return;
+    }
+    const mediaType = normalizedAudioMediaType(request.get('content-type'));
+    if (!mediaType) {
+      response.status(400).json({ error: 'Method audio requires WebM or MP4' });
+      return;
+    }
+    response.locals.methodAudioMediaType = mediaType;
     next();
   };
 }
@@ -184,6 +238,7 @@ function safeErrorClass(error: unknown): string {
     'MethodErasurePendingError',
     'MethodOwnerBusyError',
     'NoOutputGeneratedError',
+    'OpenAITranscriptionError',
     'RetryError',
     'TimeoutError',
     'TurnLeaseLostError',
@@ -392,20 +447,90 @@ async function waitForProvisioningHandoff(input: {
   }
 }
 
+function attachProviderDeadline(parentSignal: AbortSignal): {
+  signal: AbortSignal;
+  detach: () => void;
+} {
+  const controller = new AbortController();
+  const abortFromParent = () => {
+    if (!controller.signal.aborted) controller.abort(parentSignal.reason);
+  };
+  if (parentSignal.aborted) abortFromParent();
+  else parentSignal.addEventListener('abort', abortFromParent, { once: true });
+  const timeout = setTimeout(() => {
+    if (!controller.signal.aborted) {
+      controller.abort(new DOMException('Transcription provider deadline exceeded.', 'TimeoutError'));
+    }
+  }, METHOD_AUDIO_PROVIDER_TIMEOUT_MS);
+  timeout.unref?.();
+  return {
+    signal: controller.signal,
+    detach: () => {
+      clearTimeout(timeout);
+      parentSignal.removeEventListener('abort', abortFromParent);
+    },
+  };
+}
+
+function validAudioSignature(audio: Buffer, mediaType: TranscriptionMediaType): boolean {
+  if (mediaType === 'audio/webm') {
+    if (audio.length < 6 || audio.readUInt32BE(0) !== 0x1a45dfa3) return false;
+    const headerSize = readEbmlVint(audio, 4, true);
+    if (!headerSize || headerSize.value > 256) return false;
+    const headerEnd = 4 + headerSize.length + headerSize.value;
+    if (headerEnd > audio.length) return false;
+    let offset = 4 + headerSize.length;
+    let webmDocType = false;
+    while (offset < headerEnd) {
+      const id = readEbmlVint(audio, offset, false);
+      if (!id) return false;
+      offset += id.length;
+      const size = readEbmlVint(audio, offset, true);
+      if (!size) return false;
+      offset += size.length;
+      if (offset + size.value > headerEnd) return false;
+      if (id.value === 0x4282) {
+        if (webmDocType || audio.toString('ascii', offset, offset + size.value) !== 'webm') return false;
+        webmDocType = true;
+      }
+      offset += size.value;
+    }
+    return webmDocType;
+  }
+  if (audio.length < 16 || audio.toString('ascii', 4, 8) !== 'ftyp') return false;
+  const boxSize = audio.readUInt32BE(0);
+  if (boxSize < 16 || boxSize > 256 || boxSize % 4 !== 0 || boxSize > audio.length) return false;
+  for (let offset = 8; offset < boxSize; offset += offset === 8 ? 8 : 4) {
+    if (/^(?:isom|iso[2-9]|mp4[12]|M4[AB] |3gp[4-9]|dash)$/.test(audio.toString('ascii', offset, offset + 4))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function readEbmlVint(audio: Buffer, offset: number, stripMarker: boolean): { value: number; length: number } | undefined {
+  const first = audio[offset];
+  if (!first) return undefined;
+  let length = 1;
+  while (length <= 4 && (first & (0x80 >> (length - 1))) === 0) length += 1;
+  if (length > 4 || offset + length > audio.length) return undefined;
+  let value = stripMarker ? first & ((0x80 >> length) - 1) : first;
+  for (let index = 1; index < length; index += 1) value = value * 256 + audio[offset + index];
+  if (stripMarker && value === 2 ** (7 * length) - 1) return undefined;
+  return { value, length };
+}
+
 async function defaultTranscribeAudio(input: {
   audio: Buffer;
-  language: 'en' | 'es';
+  mediaType: TranscriptionMediaType;
   abortSignal?: AbortSignal;
 }): Promise<string> {
-  if (!env.GROQ_API_KEY) throw new Error('TranscriptionUnavailable');
-  const groq = createGroq({ apiKey: env.GROQ_API_KEY });
-  const result = await transcribe({
-    model: groq.transcription('whisper-large-v3-turbo'),
+  return transcribeOpenAIAudio({
+    apiKey: env.OPENAI_API_KEY,
     audio: input.audio,
+    mediaType: input.mediaType,
     abortSignal: input.abortSignal,
-    providerOptions: { groq: { language: input.language } },
   });
-  return result.text;
 }
 
 export function createAgentRouter(options: AgentRouterOptions = {}): Router {
@@ -456,11 +581,13 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
   // request logging, lease acquisition, map reads, or provider work. Audio has
   // its own bounded media contract and intentionally bypasses this JSON guard.
   const methodPostGuard = guardCustomMethodPost(methodRequestOrigin);
+  const audioMetadataGuard = createAudioTranscriptionMetadataGuard(methodRequestOrigin);
   // Register against the same Express paths as the eventual handlers so
   // default case-insensitive and trailing-slash route matching cannot bypass
   // the guard.
   router.post(GUARDED_METHOD_PATHS, methodPostGuard);
   router.options(GUARDED_METHOD_PATHS, methodPostGuard);
+  router.all('/audio/transcribe', audioMetadataGuard);
   router.use((request, response, next) => {
     const startedAt = Date.now();
     const requestId = nextId();
@@ -1008,35 +1135,59 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
     }
   });
 
-  router.post('/audio/transcribe', express.raw({ type: 'audio/*', limit: METHOD_AUDIO_LIMIT }), async (request, response) => {
+  router.post('/audio/transcribe', express.raw({ type: () => true, limit: METHOD_AUDIO_LIMIT }), async (request, response) => {
     if (!enabled(options.agentEnabled)) {
       response.locals.methodLog = { errorClass: 'AgentDisabledError' };
       response.status(503).json({ error: 'Agent audio is disabled', errorClass: 'AgentDisabledError' });
       return;
     }
-    const contentType = request.headers['content-type'] ?? '';
-    const language = audioLanguageSchema.safeParse(typeof request.query.language === 'string' ? request.query.language : 'en');
-    if (!contentType.startsWith('audio/') || !Buffer.isBuffer(request.body) || request.body.length === 0 || !language.success) {
+    const mediaType = response.locals.methodAudioMediaType as TranscriptionMediaType | undefined;
+    if (!mediaType || !Buffer.isBuffer(request.body) || request.body.length === 0
+      || !validAudioSignature(request.body, mediaType)) {
       response.locals.methodLog = { errorClass: 'ValidationError' };
       response.status(400).json({ error: 'Invalid bounded audio request', errorClass: 'ValidationError' });
       return;
     }
     const abort = attachAbort(request, response);
+    const providerDeadline = attachProviderDeadline(abort.signal);
     try {
       throwIfRouteAborted(abort.signal);
       const text = await (options.transcribeAudio ?? defaultTranscribeAudio)({
         audio: request.body,
-        language: language.data,
-        abortSignal: abort.signal,
+        mediaType,
+        abortSignal: providerDeadline.signal,
       });
       if (abort.signal.aborted) return;
-      response.locals.methodLog = { provider: 'groq-whisper' };
+      if (providerDeadline.signal.aborted) throw providerDeadline.signal.reason;
+      if (typeof text !== 'string' || text.trim().length === 0 || text.length > MAX_TRANSCRIPT_CODE_UNITS) {
+        throw new OpenAITranscriptionError(
+          typeof text === 'string' && text.length > MAX_TRANSCRIPT_CODE_UNITS
+            ? 'transcript-too-large'
+            : 'empty-transcript',
+        );
+      }
+      response.locals.methodLog = { provider: 'openai', model: OPENAI_TRANSCRIPTION_MODEL };
       response.json({ text });
     } catch (error) {
       if (abort.signal.aborted) return;
-      response.locals.methodLog = { provider: 'groq-whisper', errorClass: safeErrorClass(error) };
-      response.status(502).json({ error: 'Transcription failed', errorClass: safeErrorClass(error) });
+      const emptyTranscript = error instanceof OpenAITranscriptionError
+        && error.kind === 'empty-transcript';
+      response.locals.methodLog = {
+        provider: 'openai',
+        model: OPENAI_TRANSCRIPTION_MODEL,
+        errorClass: safeErrorClass(error),
+      };
+      if (emptyTranscript) {
+        response.json({ text: '' });
+        return;
+      }
+      const unavailable = error instanceof OpenAITranscriptionError && error.kind === 'unavailable';
+      response.status(unavailable ? 503 : 502).json({
+        error: unavailable ? 'Transcription is unavailable' : 'Transcription failed',
+        errorClass: safeErrorClass(error),
+      });
     } finally {
+      providerDeadline.detach();
       abort.detach();
     }
   });

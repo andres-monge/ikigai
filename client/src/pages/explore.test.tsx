@@ -105,6 +105,58 @@ function props() {
   return { userEmail: 'explorer@example.com', isSigningOut: false, signOutError: null, onSignOut: vi.fn() };
 }
 
+function installVoiceHarness(options: { pendingPermission?: boolean } = {}) {
+  const originalMediaDevices = Object.getOwnPropertyDescriptor(global.navigator, 'mediaDevices');
+  const permission = deferred<MediaStream>();
+  const stopTrack = vi.fn();
+  const stream = { getTracks: () => [{ stop: stopTrack }] } as unknown as MediaStream;
+
+  class ControlledMediaRecorder {
+    static instances: ControlledMediaRecorder[] = [];
+    static isTypeSupported() { return true; }
+
+    state: RecordingState = 'inactive';
+    ondataavailable: ((event: { data: Blob }) => void) | null = null;
+    onstop: (() => void) | null = null;
+
+    constructor(_stream: MediaStream, public readonly options?: MediaRecorderOptions) {
+      ControlledMediaRecorder.instances.push(this);
+    }
+
+    start() { this.state = 'recording'; }
+    stop() {
+      this.state = 'inactive';
+      this.ondataavailable?.({ data: new Blob(['voice'], { type: 'audio/webm' }) });
+      this.onstop?.();
+    }
+    emit(data: Blob) { this.ondataavailable?.({ data }); }
+  }
+
+  const getUserMedia = vi.fn(() => options.pendingPermission ? permission.promise : Promise.resolve(stream));
+  vi.stubGlobal('MediaRecorder', ControlledMediaRecorder);
+  Object.defineProperty(global.navigator, 'mediaDevices', {
+    configurable: true,
+    value: { getUserMedia },
+  });
+  _resetBrowserSupportCache();
+
+  return {
+    permission,
+    stream,
+    stopTrack,
+    getUserMedia,
+    recorders: ControlledMediaRecorder.instances,
+    restore() {
+      if (originalMediaDevices) {
+        Object.defineProperty(global.navigator, 'mediaDevices', originalMediaDevices);
+      } else {
+        Reflect.deleteProperty(global.navigator, 'mediaDevices');
+      }
+      _resetBrowserSupportCache();
+    },
+  };
+}
+
 describe('Explore U6 conversation-first workspace', () => {
   beforeEach(() => {
     _resetBrowserSupportCache();
@@ -342,9 +394,9 @@ describe('Explore U6 conversation-first workspace', () => {
       const textbox = await screen.findByRole('textbox', { name: 'Message Revelio' });
       fireEvent.click(screen.getByRole('button', { name: 'Record a message' }));
 
-      expect(await screen.findByText('Recording… Tap stop when you’re done.')).toBeTruthy();
+      expect(await screen.findByText('Recording… Choose Stop to transcribe or Cancel to discard.')).toBeTruthy();
       fireEvent.click(screen.getByRole('button', { name: 'Stop recording' }));
-      expect(await screen.findByText('Transcribing… Your words will be added to the draft for review.')).toBeTruthy();
+      expect(await screen.findByText('Transcribing… Your words will be added to the draft for review. You can cancel.')).toBeTruthy();
 
       await act(async () => {
         transcription.resolve(jsonResponse({ text: 'Speech stays editable.' }));
@@ -361,6 +413,329 @@ describe('Explore U6 conversation-first workspace', () => {
       _resetBrowserSupportCache();
     }
   });
+
+  it('uses the Method policy, keeps Stop and Cancel distinct, appends to the latest draft, and never auto-sends', async () => {
+    const voice = installVoiceHarness();
+    const transcription = deferred<Response>();
+    vi.mocked(fetch).mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === '/api/agent/history') return jsonResponse({ status: 'empty', messages: [] });
+      if (url === '/api/agent/workspace') return jsonResponse({ status: 'ready', map: createCareerMap('explorer-1') });
+      if (url === '/api/agent/audio/transcribe') return transcription.promise;
+      throw new Error(`Unexpected request: ${url} ${String(init?.method)}`);
+    });
+
+    try {
+      render(<Explore {...props()} />);
+      const textbox = await screen.findByRole('textbox', { name: 'Message Revelio' });
+      fireEvent.change(textbox, { target: { value: 'Typed context' } });
+      const start = screen.getByRole('button', { name: 'Record a message' });
+      start.focus();
+      fireEvent.click(start);
+
+      const stop = await screen.findByRole('button', { name: 'Stop recording' });
+      expect(screen.getByRole('button', { name: 'Cancel recording' })).toBeTruthy();
+      expect(document.activeElement).toBe(stop);
+      fireEvent.click(stop);
+
+      const cancelProcessing = await screen.findByRole('button', { name: 'Cancel transcription' });
+      expect(document.activeElement).toBe(cancelProcessing);
+      const audioCall = vi.mocked(fetch).mock.calls.find(([input]) => String(input) === '/api/agent/audio/transcribe');
+      expect(audioCall?.[1]?.headers).toMatchObject({ 'X-Revelio-Request': '1' });
+      expect(String(audioCall?.[0])).not.toContain('language=');
+
+      fireEvent.change(textbox, { target: { value: 'Typed context, edited while processing' } });
+      await act(async () => { transcription.resolve(jsonResponse({ text: 'Hola, keep both languages.' })); });
+      await waitFor(() => expect((textbox as HTMLTextAreaElement).value)
+        .toBe('Typed context, edited while processing Hola, keep both languages.'));
+      await waitFor(() => expect(document.activeElement).toBe(textbox));
+      expect(vi.mocked(fetch).mock.calls.filter(([input]) => String(input) === '/api/agent')).toHaveLength(0);
+      expect(screen.queryByText(/OpenAI processes authenticated Method dictation/i)).toBeNull();
+    } finally {
+      voice.restore();
+    }
+  });
+
+  it.each(['requesting', 'recording', 'processing'] as const)(
+    'cancels %s without changing the draft and fences late completion',
+    async (phase) => {
+      const voice = installVoiceHarness({ pendingPermission: phase === 'requesting' });
+      const transcription = deferred<Response>();
+      vi.mocked(fetch).mockImplementation(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === '/api/agent/history') return jsonResponse({ status: 'empty', messages: [] });
+        if (url === '/api/agent/workspace') return jsonResponse({ status: 'ready', map: createCareerMap('explorer-1') });
+        if (url === '/api/agent/audio/transcribe') return transcription.promise;
+        throw new Error(`Unexpected request: ${url}`);
+      });
+
+      try {
+        render(<Explore {...props()} />);
+        const textbox = await screen.findByRole('textbox', { name: 'Message Revelio' });
+        fireEvent.change(textbox, { target: { value: `Keep ${phase} draft` } });
+        fireEvent.click(screen.getByRole('button', { name: 'Record a message' }));
+
+        if (phase === 'requesting') {
+          fireEvent.click(await screen.findByRole('button', { name: 'Cancel recording request' }));
+          await act(async () => { voice.permission.resolve(voice.stream); });
+          expect(voice.stopTrack).toHaveBeenCalledTimes(1);
+        } else {
+          await screen.findByRole('button', { name: 'Stop recording' });
+          if (phase === 'processing') {
+            fireEvent.click(screen.getByRole('button', { name: 'Stop recording' }));
+            fireEvent.click(await screen.findByRole('button', { name: 'Cancel transcription' }));
+            await act(async () => { transcription.resolve(jsonResponse({ text: 'Late transcript' })); });
+          } else {
+            const recorder = voice.recorders[0];
+            const staleStop = recorder.onstop;
+            fireEvent.click(screen.getByRole('button', { name: 'Cancel recording' }));
+            act(() => { staleStop?.(); });
+          }
+        }
+
+        await waitFor(() => expect((textbox as HTMLTextAreaElement).value).toBe(`Keep ${phase} draft`));
+        const restarted = screen.getByRole('button', { name: 'Record a message' });
+        await waitFor(() => expect(document.activeElement).toBe(restarted));
+        expect(screen.queryByDisplayValue(/Late transcript/)).toBeNull();
+        expect(screen.getByText(/canceled.*draft was not changed/i)).toBeTruthy();
+      } finally {
+        voice.restore();
+      }
+    },
+  );
+
+  it.each(['requesting', 'recording', 'processing'] as const)(
+    'keeps Send focusable and blocks click and Enter while voice is %s',
+    async (phase) => {
+      const voice = installVoiceHarness({ pendingPermission: phase === 'requesting' });
+      const transcription = deferred<Response>();
+      vi.mocked(fetch).mockImplementation(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === '/api/agent/history') return jsonResponse({ status: 'empty', messages: [] });
+        if (url === '/api/agent/workspace') return jsonResponse({ status: 'ready', map: createCareerMap('explorer-1') });
+        if (url === '/api/agent/audio/transcribe') return transcription.promise;
+        if (url === '/api/agent') throw new Error('agent submission must stay blocked');
+        throw new Error(`Unexpected request: ${url}`);
+      });
+
+      try {
+        render(<Explore {...props()} />);
+        const textbox = await screen.findByRole('textbox', { name: 'Message Revelio' });
+        fireEvent.change(textbox, { target: { value: 'Do not send yet' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Record a message' }));
+        if (phase !== 'requesting') await screen.findByRole('button', { name: 'Stop recording' });
+        if (phase === 'processing') {
+          fireEvent.click(screen.getByRole('button', { name: 'Stop recording' }));
+          await screen.findByRole('button', { name: 'Cancel transcription' });
+        }
+
+        const send = screen.getByRole('button', { name: 'Send' });
+        expect((send as HTMLButtonElement).disabled).toBe(false);
+        expect(send.getAttribute('aria-disabled')).toBe('true');
+        send.focus();
+        fireEvent.click(send);
+        expect(document.activeElement).toBe(send);
+        fireEvent.keyDown(textbox, { key: 'Enter' });
+        expect((textbox as HTMLTextAreaElement).value).toBe('Do not send yet');
+        expect(screen.getByText('Finish or cancel recording before sending.')).toBeTruthy();
+        expect(vi.mocked(fetch).mock.calls.filter(([input]) => String(input) === '/api/agent')).toHaveLength(0);
+      } finally {
+        voice.restore();
+      }
+    },
+  );
+
+  it.each(['map', 'sign-out'] as const)('discards processing before %s and ignores a late transcript', async (departure) => {
+    const voice = installVoiceHarness();
+    const transcription = deferred<Response>();
+    let uploadSignal: AbortSignal | null | undefined;
+    const onSignOut = vi.fn(() => {
+      expect(uploadSignal?.aborted).toBe(true);
+    });
+    vi.mocked(fetch).mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === '/api/agent/history') return jsonResponse({ status: 'empty', messages: [] });
+      if (url === '/api/agent/workspace') return jsonResponse({ status: 'ready', map: createCareerMap('explorer-1') });
+      if (url === '/api/agent/audio/transcribe') {
+        uploadSignal = init?.signal;
+        return transcription.promise;
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    try {
+      render(<Explore {...props()} onSignOut={onSignOut} />);
+      const textbox = await screen.findByRole('textbox', { name: 'Message Revelio' });
+      fireEvent.change(textbox, { target: { value: 'Preserve on departure' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Record a message' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Stop recording' }));
+      await screen.findByRole('button', { name: 'Cancel transcription' });
+
+      let departureControl: HTMLElement;
+      if (departure === 'map') {
+        departureControl = screen.getByRole('tab', { name: 'Your Map' });
+        departureControl.focus();
+        fireEvent.click(departureControl);
+        expect(uploadSignal?.aborted).toBe(true);
+      } else {
+        departureControl = screen.getByRole('button', { name: 'Sign out' });
+        departureControl.focus();
+        fireEvent.click(departureControl);
+        expect(onSignOut).toHaveBeenCalledTimes(1);
+      }
+      await act(async () => { transcription.resolve(jsonResponse({ text: 'Too late' })); });
+      expect((textbox as HTMLTextAreaElement).value).toBe('Preserve on departure');
+      expect(document.activeElement).toBe(departureControl);
+    } finally {
+      voice.restore();
+    }
+  });
+
+  it('discards unresolved voice work when signing-out state arrives externally', async () => {
+    const voice = installVoiceHarness();
+    const transcription = deferred<Response>();
+    let uploadSignal: AbortSignal | null | undefined;
+    vi.mocked(fetch).mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === '/api/agent/history') return jsonResponse({ status: 'empty', messages: [] });
+      if (url === '/api/agent/workspace') return jsonResponse({ status: 'ready', map: createCareerMap('explorer-1') });
+      if (url === '/api/agent/audio/transcribe') {
+        uploadSignal = init?.signal;
+        return transcription.promise;
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    try {
+      const view = render(<Explore {...props()} />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Record a message' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Stop recording' }));
+      await screen.findByRole('button', { name: 'Cancel transcription' });
+      view.rerender(<Explore {...props()} isSigningOut />);
+      expect(uploadSignal?.aborted).toBe(true);
+      await act(async () => { transcription.resolve(jsonResponse({ text: 'Too late' })); });
+      expect((screen.getByRole('textbox', { name: 'Message Revelio' }) as HTMLTextAreaElement).value).toBe('');
+    } finally {
+      voice.restore();
+    }
+  });
+
+  it('preserves typed text and returns focus for permission errors and empty transcription', async () => {
+    const voice = installVoiceHarness();
+    voice.getUserMedia.mockRejectedValueOnce(new DOMException('Denied', 'NotAllowedError'));
+    const emptyTranscription = deferred<Response>();
+    vi.mocked(fetch).mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/agent/history') return jsonResponse({ status: 'empty', messages: [] });
+      if (url === '/api/agent/workspace') return jsonResponse({ status: 'ready', map: createCareerMap('explorer-1') });
+      if (url === '/api/agent/audio/transcribe') return emptyTranscription.promise;
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    try {
+      render(<Explore {...props()} />);
+      const textbox = await screen.findByRole('textbox', { name: 'Message Revelio' });
+      fireEvent.change(textbox, { target: { value: 'Typed fallback' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Record a message' }));
+      expect((await screen.findByRole('alert')).textContent).toMatch(/Microphone access denied.*type your answer or try recording again/i);
+      await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Record a message' })));
+
+      voice.getUserMedia.mockResolvedValueOnce(voice.stream);
+      fireEvent.click(screen.getByRole('button', { name: 'Record a message' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Stop recording' }));
+      await act(async () => { emptyTranscription.resolve(jsonResponse({ text: '   ' })); });
+      expect(await screen.findByText(/No speech was detected.*type your answer or try recording again/i)).toBeTruthy();
+      expect((textbox as HTMLTextAreaElement).value).toBe('Typed fallback');
+      await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Record a message' })));
+    } finally {
+      voice.restore();
+    }
+  });
+
+  it('keeps unsupported dictation focusable and exposes the typed fallback', async () => {
+    vi.stubGlobal('MediaRecorder', undefined);
+    _resetBrowserSupportCache();
+    render(<Explore {...props()} />);
+    const textbox = await screen.findByRole('textbox', { name: 'Message Revelio' });
+    fireEvent.change(textbox, { target: { value: 'Typing still works' } });
+    const unavailable = screen.getByRole('button', { name: 'Microphone unavailable' });
+    expect((unavailable as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(unavailable);
+    expect((await screen.findByRole('alert')).textContent).toMatch(/not supported.*type your answer or try recording again/i);
+    expect((textbox as HTMLTextAreaElement).value).toBe('Typing still works');
+    await waitFor(() => expect(document.activeElement).toBe(unavailable));
+  });
+
+  it.each(['byte-limit', 'time-limit'] as const)(
+    'keeps the %s incomplete warning through later voice work and clears it only with the affected draft',
+    async (limitReason) => {
+      const voice = installVoiceHarness();
+      const firstTranscription = deferred<Response>();
+      const laterTranscription = deferred<Response>();
+      const agentTurn = deferred<Response>();
+      let audioRequests = 0;
+      vi.mocked(fetch).mockImplementation(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === '/api/agent/history') return jsonResponse({ status: 'empty', messages: [] });
+        if (url === '/api/agent/workspace') return jsonResponse({ status: 'ready', map: createCareerMap('explorer-1') });
+        if (url === '/api/agent/audio/transcribe') {
+          audioRequests += 1;
+          return audioRequests === 1 ? firstTranscription.promise : laterTranscription.promise;
+        }
+        if (url === '/api/agent') return agentTurn.promise;
+        throw new Error(`Unexpected request: ${url}`);
+      });
+
+      try {
+        render(<Explore {...props()} />);
+        const textbox = await screen.findByRole('textbox', { name: 'Message Revelio' });
+        fireEvent.change(textbox, { target: { value: 'Affected draft' } });
+        if (limitReason === 'time-limit') vi.useFakeTimers();
+        await act(async () => {
+          fireEvent.click(screen.getByRole('button', { name: 'Record a message' }));
+          await Promise.resolve();
+          await Promise.resolve();
+        });
+        const stopRecording = limitReason === 'time-limit'
+          ? screen.getByRole('button', { name: 'Stop recording' })
+          : await screen.findByRole('button', { name: 'Stop recording' });
+        expect(stopRecording).toBeTruthy();
+
+        if (limitReason === 'byte-limit') {
+          act(() => { voice.recorders[0].emit(new Blob([new Uint8Array(1_572_864)], { type: 'audio/webm' })); });
+        } else {
+          await act(async () => { vi.advanceTimersByTime(120_000); });
+          vi.useRealTimers();
+        }
+        await screen.findByRole('button', { name: 'Cancel transcription' });
+        await act(async () => { firstTranscription.resolve(jsonResponse({ text: 'Possibly incomplete.' })); });
+
+        const warning = await screen.findByText(/Recording stopped at the size\/time limit; this transcript may be incomplete\. Review before sending\./i);
+        expect((textbox as HTMLTextAreaElement).value).toBe('Affected draft Possibly incomplete.');
+
+        fireEvent.click(screen.getByRole('button', { name: 'Record a message' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Cancel recording' }));
+        expect(warning.isConnected).toBe(true);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Record a message' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Stop recording' }));
+        await act(async () => { laterTranscription.resolve(jsonResponse({ text: 'Later complete.' })); });
+        expect(await screen.findByText(/Recording stopped at the size\/time limit/)).toBeTruthy();
+
+        if (limitReason === 'byte-limit') {
+          fireEvent.change(textbox, { target: { value: '' } });
+          expect(screen.queryByText(/Recording stopped at the size\/time limit/)).toBeNull();
+        } else {
+          fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+          expect(screen.queryByText(/Recording stopped at the size\/time limit/)).toBeNull();
+          expect(vi.mocked(fetch).mock.calls.filter(([input]) => String(input) === '/api/agent')).toHaveLength(1);
+        }
+      } finally {
+        vi.useRealTimers();
+        voice.restore();
+      }
+    },
+  );
 
   it('keeps historical and failed presentations read-only and never attaches streaming text', async () => {
     const map = suggestedPathsMap();

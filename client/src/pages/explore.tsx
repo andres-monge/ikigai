@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUp, Loader2, Mic, Square } from 'lucide-react';
+import { ArrowUp, Loader2, Mic, Square, X } from 'lucide-react';
 import {
   conversationHistoryPageSchema,
   methodOperationEnvelopeSchema,
@@ -7,7 +7,7 @@ import {
   type OperationStatusData,
 } from '@shared/streaming-schemas';
 import { deriveMethodCheckpoint, type CareerMap, type CareerMapOperationType } from '@shared/career-map';
-import { useSpeechToText } from '@/hooks/use-speech-to-text';
+import { METHOD_SPEECH_TO_TEXT_POLICY, useSpeechToText } from '@/hooks/use-speech-to-text';
 import {
   consumeAgentStreamLine,
   type AgentStreamState,
@@ -44,6 +44,11 @@ interface PersistenceError {
   message: string;
   action: 'retry' | 'refresh' | 'continue';
   retryOperation?: DeterministicOperationRequest;
+}
+
+interface MicNotice {
+  message: string;
+  kind: 'status' | 'error';
 }
 
 const persistenceErrorPriority: Record<PersistenceError['kind'], number> = {
@@ -147,7 +152,8 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
   const [olderBusy, setOlderBusy] = useState(false);
   const [turnNotice, setTurnNotice] = useState<string | null>(null);
   const [activePanel, setActivePanel] = useState<Panel>('chat');
-  const [micNotice, setMicNotice] = useState<string | null>(null);
+  const [micNotice, setMicNotice] = useState<MicNotice | null>(null);
+  const [incompleteTranscriptWarning, setIncompleteTranscriptWarning] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const readControllersRef = useRef(new Set<AbortController>());
   const mountedRef = useRef(true);
@@ -157,6 +163,9 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
   const focusFramesRef = useRef(new Set<number>());
   const draftValueRef = useRef('');
   const draftRef = useRef<HTMLTextAreaElement | null>(null);
+  const voicePrimaryRef = useRef<HTMLButtonElement | null>(null);
+  const suppressVoiceFocusRef = useRef(false);
+  const automaticCompletionReasonRef = useRef<ReturnType<typeof useSpeechToText>['automaticCompletionReason']>(null);
   const transcriptRef = useRef<HTMLDivElement | null>(null);
   const pinnedToBottomRef = useRef(true);
   const settledTranscriptRef = useRef(false);
@@ -347,21 +356,96 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
     field.style.height = `${Math.min(field.scrollHeight, 176)}px`;
   }, [draft]);
 
+  const restoreVoiceFocus = useCallback(() => {
+    if (suppressVoiceFocusRef.current || activePanelRef.current !== 'chat') return;
+    scheduleFocus(() => voicePrimaryRef.current);
+  }, [scheduleFocus]);
+
   const speech = useSpeechToText({
     language: 'en',
-    endpoint: '/api/agent/audio/transcribe',
+    policy: METHOD_SPEECH_TO_TEXT_POLICY,
     onTranscription: (_id, text) => {
       setDraft((current) => {
         const next = `${current}${current.trim() ? ' ' : ''}${text}`;
         draftValueRef.current = next;
         return next;
       });
-      setMicNotice('Transcription added to your draft.');
-      scheduleFocus(() => draftRef.current);
+      if (automaticCompletionReasonRef.current) setIncompleteTranscriptWarning(true);
+      setMicNotice({ message: 'Transcription added to your draft. Review it before sending.', kind: 'status' });
+      if (!suppressVoiceFocusRef.current && activePanelRef.current === 'chat') {
+        scheduleFocus(() => draftRef.current);
+      }
     },
-    onEmptyTranscription: () => setMicNotice('No speech was detected. Your draft was not changed.'),
-    onError: (message) => setMicNotice(message),
+    onEmptyTranscription: () => {
+      setMicNotice({
+        message: 'No speech was detected. Your draft was not changed. Type your answer or try recording again.',
+        kind: 'error',
+      });
+      restoreVoiceFocus();
+    },
+    onError: (message) => {
+      const fallback = /type your answer/i.test(message)
+        ? message
+        : `${message} Type your answer or try recording again.`;
+      setMicNotice({ message: fallback, kind: 'error' });
+      restoreVoiceFocus();
+    },
   });
+  automaticCompletionReasonRef.current = speech.automaticCompletionReason;
+  const voiceBusy = speech.recordingState !== 'idle';
+
+  const clearIncompleteTranscriptWarning = useCallback(() => {
+    setIncompleteTranscriptWarning(false);
+    speech.clearAutomaticCompletionReason();
+  }, [speech.clearAutomaticCompletionReason]);
+
+  const cancelVoice = useCallback((restoreFocus: boolean, announce = true) => {
+    speech.discardRecording();
+    if (announce) {
+      setMicNotice({ message: 'Recording canceled. Your draft was not changed.', kind: 'status' });
+    }
+    if (restoreFocus) restoreVoiceFocus();
+  }, [restoreVoiceFocus, speech.discardRecording]);
+
+  const startVoice = useCallback(() => {
+    suppressVoiceFocusRef.current = false;
+    // The visible warning is draft-owned. Reset only the hook's per-attempt signal
+    // so a later automatic stop can be attributed to the new result.
+    speech.clearAutomaticCompletionReason();
+    setMicNotice(null);
+    speech.startRecording('revelio-draft');
+  }, [speech.clearAutomaticCompletionReason, speech.startRecording]);
+
+  const announceVoiceSendBlock = useCallback(() => {
+    setMicNotice({ message: 'Sending blocked. Finish or cancel recording before sending.', kind: 'status' });
+  }, []);
+
+  const selectPanel = useCallback((panel: Panel) => {
+    if (panel === 'map') {
+      suppressVoiceFocusRef.current = true;
+      speech.discardRecording();
+    } else {
+      suppressVoiceFocusRef.current = false;
+    }
+    setActivePanel(panel);
+  }, [speech.discardRecording]);
+
+  const handleSignOut = useCallback(() => {
+    suppressVoiceFocusRef.current = true;
+    speech.discardRecording();
+    onSignOut();
+  }, [onSignOut, speech.discardRecording]);
+
+  useEffect(() => {
+    if (!isSigningOut) return;
+    suppressVoiceFocusRef.current = true;
+    speech.discardRecording();
+  }, [isSigningOut, speech.discardRecording]);
+
+  useEffect(() => () => {
+    suppressVoiceFocusRef.current = true;
+    speech.discardRecording();
+  }, [speech.discardRecording]);
 
   async function loadOlder() {
     if (!olderCursor || olderBusy) return;
@@ -508,8 +592,13 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
   const retryNewest = () => { void refreshNewestAndValidate(); };
 
   async function submitMessage() {
+    if (voiceBusy) {
+      announceVoiceSendBlock();
+      return;
+    }
     const message = draft.trim();
     if (!message || turnBusy || bootstrapPending) return;
+    if (incompleteTranscriptWarning) clearIncompleteTranscriptWarning();
     refreshGenerationRef.current += 1;
     const messageId = newOpaqueId('message');
     const controller = new AbortController();
@@ -755,10 +844,12 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
   const isFirstRun = displayedMessages.length === 0;
   const micLabel = !speech.isSupported
     ? 'Microphone unavailable'
-    : speech.recordingState === 'recording'
+    : speech.recordingState === 'requesting'
+      ? 'Cancel recording request'
+      : speech.recordingState === 'recording'
       ? 'Stop recording'
       : speech.recordingState === 'processing'
-        ? 'Transcribing your recording'
+        ? 'Cancel transcription'
         : 'Record a message';
 
   return (
@@ -771,7 +862,7 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
           </div>
           <div className="flex shrink-0 items-center gap-3">
             <span className="hidden text-xs text-stone-600 sm:inline">{userEmail}</span>
-            <button type="button" onClick={onSignOut} disabled={isSigningOut} className="min-h-11 border-2 border-black bg-white px-3 font-display text-xs font-black shadow-[2px_2px_0_rgba(0,0,0,0.65)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black disabled:opacity-50">
+            <button type="button" onClick={handleSignOut} disabled={isSigningOut} className="min-h-11 border-2 border-black bg-white px-3 font-display text-xs font-black shadow-[2px_2px_0_rgba(0,0,0,0.65)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black disabled:opacity-50">
               {isSigningOut ? 'Signing out…' : 'Sign out'}
             </button>
           </div>
@@ -793,12 +884,12 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
                 aria-controls={`${panel}-panel`}
                 tabIndex={activePanel === panel ? 0 : -1}
                 className={`min-h-12 border-r-2 border-black px-4 font-display text-sm font-black transition-colors last:border-r-0 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-4 focus-visible:outline-black sm:min-h-10 sm:px-8 ${activePanel === panel ? 'bg-ikigai-yellow' : 'bg-white hover:bg-ikigai-beige'}`}
-                onClick={() => setActivePanel(panel)}
+                onClick={() => selectPanel(panel)}
                 onKeyDown={(event) => {
                   if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
                   event.preventDefault();
                   const next: Panel = event.key === 'ArrowLeft' || event.key === 'Home' ? 'chat' : 'map';
-                  setActivePanel(next);
+                  selectPanel(next);
                   requestAnimationFrame(() => tabRefs.current[next]?.focus());
                 }}
               >
@@ -927,11 +1018,31 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
                 </div>
               ) : null}
               {turnNotice ? <p role="status" aria-live="polite" className="text-xs font-bold text-stone-700">{turnNotice}</p> : null}
-              {micNotice ? <p role="status" aria-live="polite" className="text-xs text-stone-600">{micNotice}</p> : null}
-              {speech.recordingState === 'recording' ? (
-                <p role="status" aria-live="polite" className="text-xs font-bold text-stone-700">Recording… Tap stop when you’re done.</p>
+              {micNotice ? (
+                <p
+                  role={micNotice.kind === 'error' ? 'alert' : 'status'}
+                  aria-live={micNotice.kind === 'error' ? undefined : 'polite'}
+                  className={`text-xs ${micNotice.kind === 'error' ? 'font-bold text-red-800' : 'text-stone-600'}`}
+                >
+                  {micNotice.message}
+                </p>
+              ) : null}
+              {incompleteTranscriptWarning ? (
+                <p role="alert" className="border-l-4 border-amber-700 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-950">
+                  Recording stopped at the size/time limit; this transcript may be incomplete. Review before sending.
+                </p>
+              ) : null}
+              {speech.recordingState === 'requesting' ? (
+                <p role="status" aria-live="polite" className="text-xs font-bold text-stone-700">Waiting for microphone permission… You can cancel.</p>
+              ) : speech.recordingState === 'recording' ? (
+                <p role="status" aria-live="polite" className="text-xs font-bold text-stone-700">Recording… Choose Stop to transcribe or Cancel to discard.</p>
               ) : speech.recordingState === 'processing' ? (
-                <p role="status" aria-live="polite" className="text-xs font-bold text-stone-700">Transcribing… Your words will be added to the draft for review.</p>
+                <p role="status" aria-live="polite" className="text-xs font-bold text-stone-700">Transcribing… Your words will be added to the draft for review. You can cancel.</p>
+              ) : null}
+              {voiceBusy ? (
+                <p id="voice-send-block-reason" className="text-xs font-bold text-stone-700">
+                  Finish or cancel recording before sending.
+                </p>
               ) : null}
               <label htmlFor="revelio-draft" className="sr-only">Message Revelio</label>
               <div className="flex items-end gap-1 border-2 border-black bg-white p-2 shadow-[3px_3px_0_rgba(0,0,0,0.65)] transition-[border-color,box-shadow] focus-within:border-ikigai-teal">
@@ -944,6 +1055,9 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
                   onChange={(event) => {
                     draftValueRef.current = event.target.value;
                     setDraft(event.target.value);
+                    if (event.target.value === '' && incompleteTranscriptWarning) {
+                      clearIncompleteTranscriptWarning();
+                    }
                   }}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' && !event.shiftKey) {
@@ -955,20 +1069,36 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
                   className="min-h-11 max-h-44 flex-1 resize-none self-center border-0 bg-transparent px-2 py-2 text-[1.0625rem] font-medium leading-7 outline-none placeholder:font-normal placeholder:text-stone-500"
                 />
                 <button
+                  ref={voicePrimaryRef}
                   type="button"
-                  disabled={!speech.isSupported || speech.recordingState === 'processing' || turnBusy || bootstrapPending}
+                  disabled={speech.recordingState === 'idle' && (turnBusy || bootstrapPending)}
                   aria-pressed={speech.recordingState === 'recording'}
                   aria-label={micLabel}
                   title={micLabel}
-                  onClick={() => speech.recordingState === 'recording' ? speech.stopRecording() : void speech.startRecording('revelio-draft')}
-                  className={`grid h-11 w-11 shrink-0 place-items-center border-2 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black disabled:cursor-not-allowed disabled:opacity-40 ${speech.recordingState === 'recording' ? 'border-black bg-ikigai-pink text-white' : 'border-transparent text-stone-700 hover:border-black hover:bg-ikigai-beige'}`}
+                  onClick={() => {
+                    if (speech.recordingState === 'idle') startVoice();
+                    else if (speech.recordingState === 'recording') speech.stopRecording();
+                    else cancelVoice(true);
+                  }}
+                  className={`grid h-11 w-11 shrink-0 place-items-center border-2 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black disabled:cursor-not-allowed disabled:opacity-40 ${speech.recordingState === 'idle' ? 'border-transparent text-stone-700 hover:border-black hover:bg-ikigai-beige' : 'border-black bg-ikigai-pink text-white'}`}
                 >
-                  {speech.recordingState === 'processing'
-                    ? <Loader2 aria-hidden="true" className="h-5 w-5 motion-safe:animate-spin" />
-                    : speech.recordingState === 'recording'
+                  {speech.recordingState === 'recording'
                       ? <Square aria-hidden="true" className="h-4 w-4 fill-current" />
+                      : speech.recordingState === 'requesting' || speech.recordingState === 'processing'
+                        ? <X aria-hidden="true" className="h-5 w-5" strokeWidth={2.5} />
                       : <Mic aria-hidden="true" className="h-5 w-5" strokeWidth={2.25} />}
                 </button>
+                {speech.recordingState === 'recording' ? (
+                  <button
+                    type="button"
+                    aria-label="Cancel recording"
+                    title="Cancel recording"
+                    onClick={() => cancelVoice(true)}
+                    className="grid h-11 w-11 shrink-0 place-items-center border-2 border-black bg-white text-black focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black"
+                  >
+                    <X aria-hidden="true" className="h-5 w-5" strokeWidth={2.5} />
+                  </button>
+                ) : null}
                 {turnBusy && turnCanStop ? (
                   <button
                     type="button"
@@ -993,11 +1123,12 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
                   <button
                     type="button"
                     disabled={!draft.trim() || bootstrapPending}
+                    aria-disabled={voiceBusy || undefined}
                     aria-label="Send"
                     title="Send"
-                    aria-describedby={bootstrapPending ? 'composer-loading-reason' : undefined}
+                    aria-describedby={voiceBusy ? 'voice-send-block-reason' : bootstrapPending ? 'composer-loading-reason' : undefined}
                     onClick={() => void submitMessage()}
-                    className="grid h-11 w-11 shrink-0 place-items-center border-2 border-black bg-ikigai-teal text-black shadow-[2px_2px_0_rgba(0,0,0,0.65)] transition-[transform,box-shadow,opacity] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black active:translate-x-0.5 active:translate-y-0.5 active:shadow-none disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
+                    className="grid h-11 w-11 shrink-0 place-items-center border-2 border-black bg-ikigai-teal text-black shadow-[2px_2px_0_rgba(0,0,0,0.65)] transition-[transform,box-shadow,opacity] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black active:translate-x-0.5 active:translate-y-0.5 active:shadow-none aria-disabled:cursor-not-allowed aria-disabled:opacity-60 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
                   >
                     <ArrowUp aria-hidden="true" className="h-5 w-5" strokeWidth={3} />
                   </button>

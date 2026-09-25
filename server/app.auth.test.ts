@@ -34,6 +34,14 @@ vi.mock('./routes.js', () => ({
   },
 }));
 
+vi.mock('./routes/agent.js', () => ({
+  createAudioTranscriptionMetadataGuard: () => (
+    _request: import('express').Request,
+    _response: import('express').Response,
+    next: import('express').NextFunction,
+  ) => next(),
+}));
+
 import { createApp } from './app.js';
 
 describe('Express auth integration', () => {
