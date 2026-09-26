@@ -3124,14 +3124,14 @@ describe('protected Method routes', () => {
     expect((await send('audio/mp4', Buffer.from('00000018667479706d70343200000000', 'hex'))).status).toBe(400);
     expect((await send('audio/mp4', Buffer.from('000000186674797068656963000000006865696368656978', 'hex'))).status).toBe(400);
     expect((await send('audio/webm', Buffer.concat([
-      WEBM_AUDIO, Buffer.alloc(2 * 1024 * 1024 - WEBM_AUDIO.length + 1),
+      WEBM_AUDIO, Buffer.alloc(11 * 1024 * 1024 - WEBM_AUDIO.length + 1),
     ]))).status).toBe(413);
     expect(transcribeAudio).not.toHaveBeenCalled();
   });
 
-  it('accepts the exact 2 MiB raw-body boundary', async () => {
+  it('accepts the exact 11 MiB raw-body boundary', async () => {
     const transcribeAudio = vi.fn(async () => 'boundary transcript');
-    const audio = Buffer.alloc(2 * 1024 * 1024);
+    const audio = Buffer.alloc(11 * 1024 * 1024);
     WEBM_AUDIO.copy(audio);
     const response = await request(testApp({
       storage: createStorage(), requireAuth: authenticated, agentEnabled: true,
@@ -3140,7 +3140,7 @@ describe('protected Method routes', () => {
 
     expect(response.status).toBe(200);
     expect(transcribeAudio).toHaveBeenCalledOnce();
-    expect(transcribeAudio.mock.calls[0]?.[0].audio).toHaveLength(2 * 1024 * 1024);
+    expect(transcribeAudio.mock.calls[0]?.[0].audio).toHaveLength(11 * 1024 * 1024);
   });
 
   it('returns 503 for a missing OpenAI key without breaking authenticated Method reads', async () => {
@@ -3193,7 +3193,7 @@ describe('protected Method routes', () => {
     expect(JSON.stringify(logs)).not.toContain(SENTINEL);
   });
 
-  it('aborts the single provider dispatch at the 20-second deadline', async () => {
+  it('aborts the single provider dispatch at the 90-second deadline', async () => {
     vi.useFakeTimers();
     try {
       let providerSignal: AbortSignal | undefined;
@@ -3211,7 +3211,7 @@ describe('protected Method routes', () => {
         transcribeAudio, operationalLog: vi.fn(),
       })).post('/api/agent/audio/transcribe').send(WEBM_AUDIO));
       await started;
-      await vi.advanceTimersByTimeAsync(20_000);
+      await vi.advanceTimersByTimeAsync(90_000);
       const response = await responsePromise;
 
       expect(response.status).toBe(502);

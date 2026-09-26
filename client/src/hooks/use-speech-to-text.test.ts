@@ -355,13 +355,13 @@ describe('useSpeechToText', () => {
 
     await act(async () => result.current.startRecording('draft'));
     const recorder = MockMediaRecorder.instances[0];
-    act(() => recorder.emit(new Blob([new Uint8Array(1_572_864)])));
+    act(() => recorder.emit(new Blob([new Uint8Array(9 * 1024 * 1024)])));
 
     expect(recorder.stop).toHaveBeenCalledOnce();
     expect(result.current.automaticCompletionReason).toBe('byte-limit');
     await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
     const uploaded = vi.mocked(fetch).mock.calls[0]?.[1]?.body as Blob;
-    expect(uploaded.size).toBe(1_572_874);
+    expect(uploaded.size).toBe(9 * 1024 * 1024 + 10);
   });
 
   it('never uploads a single chunk above the Method final-blob budget', async () => {
@@ -373,7 +373,7 @@ describe('useSpeechToText', () => {
     }));
 
     await act(async () => result.current.startRecording('draft'));
-    act(() => MockMediaRecorder.instances[0].emit(new Blob([new Uint8Array(1_835_009)])));
+    act(() => MockMediaRecorder.instances[0].emit(new Blob([new Uint8Array(10 * 1024 * 1024 + 1)])));
 
     expect(fetch).not.toHaveBeenCalled();
     expect(onError).toHaveBeenCalledWith(expect.stringMatching(/too large/i));
@@ -381,7 +381,7 @@ describe('useSpeechToText', () => {
   });
 
   it('keeps the delayed final chunk and rejects the complete oversized Blob', async () => {
-    MockMediaRecorder.stopChunks = [new Blob([new Uint8Array(300_000)])];
+    MockMediaRecorder.stopChunks = [new Blob([new Uint8Array(1024 * 1024 + 1)])];
     const onError = vi.fn();
     const { result } = renderHook(() => useSpeechToText({
       ...defaultOptions({ onError }),
@@ -389,7 +389,7 @@ describe('useSpeechToText', () => {
     }));
 
     await act(async () => result.current.startRecording('draft'));
-    act(() => MockMediaRecorder.instances[0].emit(new Blob([new Uint8Array(1_572_864)])));
+    act(() => MockMediaRecorder.instances[0].emit(new Blob([new Uint8Array(9 * 1024 * 1024)])));
 
     expect(fetch).not.toHaveBeenCalled();
     expect(onError).toHaveBeenCalledWith(expect.stringMatching(/too large/i));
@@ -405,6 +405,8 @@ describe('useSpeechToText', () => {
 
     await act(async () => result.current.startRecording('draft'));
     await act(async () => vi.advanceTimersByTimeAsync(120_000));
+    expect(MockMediaRecorder.instances[0].stop).not.toHaveBeenCalled();
+    await act(async () => vi.advanceTimersByTimeAsync(180_000));
 
     expect(MockMediaRecorder.instances[0].stop).toHaveBeenCalledOnce();
     expect(result.current.automaticCompletionReason).toBe('time-limit');
@@ -434,6 +436,26 @@ describe('useSpeechToText', () => {
 
     await act(async () => upload.resolve(response('late transcript')));
     expect(onTranscription).not.toHaveBeenCalled();
+  });
+
+  it('gives a five-minute Method recording a longer transcription budget without changing the legacy timeout', async () => {
+    vi.useFakeTimers();
+    const upload = deferred<ReturnType<typeof response>>();
+    vi.mocked(fetch).mockReturnValue(upload.promise as Promise<Response>);
+    const onError = vi.fn();
+    const { result } = renderHook(() => useSpeechToText({
+      ...defaultOptions({ onError }),
+      policy: METHOD_SPEECH_TO_TEXT_POLICY,
+    }));
+
+    await act(async () => result.current.startRecording('draft'));
+    act(() => result.current.stopRecording());
+    const signal = vi.mocked(fetch).mock.calls[0]?.[1]?.signal;
+    await act(async () => vi.advanceTimersByTimeAsync(30_000));
+    expect(signal?.aborted).toBe(false);
+    await act(async () => vi.advanceTimersByTimeAsync(75_000));
+    expect(signal?.aborted).toBe(true);
+    expect(onError).toHaveBeenCalledWith(expect.stringMatching(/timed out/i));
   });
 
   it('preserves useful permission, empty, and provider failure callbacks', async () => {

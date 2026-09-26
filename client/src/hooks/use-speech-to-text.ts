@@ -9,6 +9,8 @@ export interface SpeechToTextPolicy {
   includeLanguageQuery: boolean;
   headers?: Readonly<Record<string, string>>;
   recordingTimesliceMs?: number;
+  maxRecordingMs?: number;
+  transcriptionTimeoutMs?: number;
   rollingStopBytes?: number;
   maxUploadBytes: number;
 }
@@ -19,8 +21,10 @@ export const METHOD_SPEECH_TO_TEXT_POLICY = {
   includeLanguageQuery: false,
   headers: { 'X-Revelio-Request': '1' },
   recordingTimesliceMs: 250,
-  rollingStopBytes: 1_572_864,
-  maxUploadBytes: 1_835_008,
+  maxRecordingMs: 300_000,
+  transcriptionTimeoutMs: 105_000,
+  rollingStopBytes: 9 * 1024 * 1024,
+  maxUploadBytes: 10 * 1024 * 1024,
 } as const satisfies SpeechToTextPolicy;
 
 export interface UseSpeechToTextOptions {
@@ -246,7 +250,7 @@ export function useSpeechToText(options: UseSpeechToTextOptions): UseSpeechToTex
         if (!isCurrent(attempt)) return;
         controller.abort();
         failAttempt(attempt, TIMEOUT_MESSAGE);
-      }, TRANSCRIBE_TIMEOUT_MS);
+      }, attempt.policy.transcriptionTimeoutMs ?? TRANSCRIBE_TIMEOUT_MS);
 
       try {
         const response = await fetch(requestUrl, {
@@ -424,7 +428,7 @@ export function useSpeechToText(options: UseSpeechToTextOptions): UseSpeechToTex
 
         attempt.autoStopTimer = setTimeout(() => {
           finishAttempt(attempt, 'time-limit');
-        }, MAX_RECORDING_MS);
+        }, policy.maxRecordingMs ?? MAX_RECORDING_MS);
       } catch (caught) {
         if (!isCurrent(attempt)) return;
         failAttempt(attempt, permissionErrorMessage(caught));

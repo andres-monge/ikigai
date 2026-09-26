@@ -65,8 +65,8 @@ const agentRequestSchema = z.object({
   message: z.string().trim().min(1).max(12_000),
 }).strict();
 
-const METHOD_AUDIO_LIMIT = '2mb';
-const METHOD_AUDIO_PROVIDER_TIMEOUT_MS = 20_000;
+const METHOD_AUDIO_LIMIT = '11mb';
+const METHOD_AUDIO_PROVIDER_TIMEOUT_MS = 90_000;
 const GUARDED_METHOD_PATHS = ['/', '/workspace/operations'];
 const PROVISIONING_HANDOFF_WAIT_MS = 12_000;
 const PROVISIONING_HANDOFF_INITIAL_DELAY_MS = 25;

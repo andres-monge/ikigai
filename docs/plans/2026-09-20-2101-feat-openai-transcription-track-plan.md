@@ -3,6 +3,7 @@ title: OpenAI Transcription Track - Plan
 type: feat
 date: 2026-09-20
 deepened: 2026-09-21
+amended: 2026-09-26
 artifact_contract: ce-unified-plan/v1
 product_contract_source: ce-plan-bootstrap
 execution: code
@@ -17,6 +18,8 @@ execution: code
 **Means:** Replace the authenticated Method composer's Groq call with completed-file transcription through OpenAI `gpt-transcribe`, then harden the shared recording lifecycle and Method composer around that fixed provider choice (KTD1, KTD5, KTD10-KTD12).
 
 **Authority hierarchy:** Current code and tests define existing behavior. `docs/plans/2026-08-14-claude-feat-revelio-revamp-plan.md` governs revamp integration, and `docs/thesis.md` governs the Method agent. This plan governs only the authenticated voice-transcription track.
+
+**2026-09-26 user-directed amendment:** In the authenticated Method composer only, allow up to five minutes of recording instead of 120 seconds. Raise the rolling Stop threshold to 9 MiB, final client upload budget to 10 MiB, and server raw-body cap to 11 MiB so the byte limit does not ordinarily cut off a five-minute recording; retain the incomplete warning when either limit is actually reached. Allow 90 seconds for provider transcription and 105 seconds for the client upload/response, leaving the legacy questionnaire unchanged. Successful transcription simply appears in the editable draft without an additional success notice. This supersedes the older Method-only numeric limits below; all cancellation, no-truncation, explicit-Send, and privacy requirements remain.
 
 **Stop conditions:** Do not introduce realtime transport, partial transcripts, automatic transcript submission, or provider-selection infrastructure. Stop and re-plan if `gpt-transcribe` cannot serve the existing completed-file boundary, if the synthetic model-access smoke fails, if the English Chrome dogfood check fails, or if implementation would persist captured audio, raw provider responses, or pre-Send transcription artifacts outside the in-memory composer draft. After explicit Send, the user-edited draft follows the unchanged Method conversation-persistence contract.
 

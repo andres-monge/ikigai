@@ -371,7 +371,6 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
         return next;
       });
       if (automaticCompletionReasonRef.current) setIncompleteTranscriptWarning(true);
-      setMicNotice({ message: 'Transcription added to your draft. Review it before sending.', kind: 'status' });
       if (!suppressVoiceFocusRef.current && activePanelRef.current === 'chat') {
         scheduleFocus(() => draftRef.current);
       }

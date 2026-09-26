@@ -402,6 +402,7 @@ describe('Explore U6 conversation-first workspace', () => {
         transcription.resolve(jsonResponse({ text: 'Speech stays editable.' }));
       });
       await waitFor(() => expect((textbox as HTMLTextAreaElement).value).toBe('Speech stays editable.'));
+      expect(screen.queryByText('Transcription added to your draft. Review it before sending.')).toBeNull();
       expect(screen.getByRole('button', { name: 'Send' })).toBeTruthy();
       expect(vi.mocked(fetch).mock.calls.filter(([input]) => String(input) === '/api/agent')).toHaveLength(0);
     } finally {
@@ -702,9 +703,9 @@ describe('Explore U6 conversation-first workspace', () => {
         expect(stopRecording).toBeTruthy();
 
         if (limitReason === 'byte-limit') {
-          act(() => { voice.recorders[0].emit(new Blob([new Uint8Array(1_572_864)], { type: 'audio/webm' })); });
+          act(() => { voice.recorders[0].emit(new Blob([new Uint8Array(9 * 1024 * 1024)], { type: 'audio/webm' })); });
         } else {
-          await act(async () => { vi.advanceTimersByTime(120_000); });
+          await act(async () => { vi.advanceTimersByTime(300_000); });
           vi.useRealTimers();
         }
         await screen.findByRole('button', { name: 'Cancel transcription' });
