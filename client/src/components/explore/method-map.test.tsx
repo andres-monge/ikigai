@@ -45,13 +45,16 @@ function pathMap(status: 'suggested' | 'active' = 'suggested'): CareerMap {
 }
 
 describe('MethodMap', () => {
-  it('keeps canonical checkpoint/status text and inspection-only disclosures', () => {
+  it('keeps canonical checkpoint/status text and a readable North Star context', () => {
     render(<MethodMap map={pathMap()} />);
     const checkpoint = screen.getByTestId('method-checkpoint');
     expect(within(checkpoint).getByText('Pending decision: Choose a Purpose Path')).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Your North Star' })).toBeTruthy();
-    expect(screen.getByText('Confirmed Your North Star')).toBeTruthy();
-    expect(screen.getByText('Inspect Your North Star')).toBeTruthy();
+    expect(within(checkpoint).getByText('Current focus')).toBeTruthy();
+    expect(screen.getByText('Confirmed')).toBeTruthy();
+    expect(screen.queryByText('Inspect Your North Star')).toBeNull();
+    expect(screen.queryByText('People using them.')).toBeNull();
+    expect(screen.getByText('Complexity is a choice.')).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/\bFoundation\b|Why I Work/);
     expect(screen.getAllByTestId('purpose-path-card')).toHaveLength(3);
     const grid = document.querySelector('.purpose-path-comparison > .method-path-grid');

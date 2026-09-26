@@ -49,7 +49,7 @@ function CheckpointSummary({ map }: { map: CareerMap }) {
   const checkpoint = deriveMethodCheckpoint(map);
   return (
     <section data-testid="method-checkpoint" className="border-2 border-black bg-black p-5 text-white shadow-[4px_4px_0_rgba(77,182,172,0.8)]">
-      <p className="text-xs font-black uppercase tracking-[0.12em] text-[#ffc107]">Current Method focus</p>
+      <p className="text-xs font-black uppercase tracking-[0.12em] text-[#ffc107]">Current focus</p>
       <h2 className="mt-2 font-display text-2xl font-black">{moduleLabels[checkpoint.module]}</h2>
       <p className="mt-2 text-sm font-semibold">
         {checkpoint.pendingDecision
@@ -285,12 +285,10 @@ export function MethodMap({ map }: MethodMapProps) {
       ) : null}
       {why ? (
         <section className="max-w-3xl border-2 border-black bg-white p-5 shadow-[4px_4px_0_rgba(0,0,0,0.65)]">
-          <p className="method-map-label">{why.status === 'confirmed' ? 'Confirmed Your North Star' : 'Suggested Your North Star'}</p>
+          <p className="method-map-label">{why.status === 'confirmed' ? 'Confirmed' : 'Suggested'}</p>
           <h2 className="text-2xl font-black">Your North Star</h2>
           <p className="mt-3 text-lg font-medium leading-7">{why.statement}</p>
-          <p className="mt-2 text-sm text-stone-600">{why.serves}</p>
-          <details className="mt-4 border-t border-slate-300 pt-3">
-            <summary className="cursor-pointer text-sm font-bold">Inspect Your North Star</summary>
+          <div className="mt-4 border-t border-slate-300 pt-3">
             <p className="mt-3 text-sm"><strong>Point of view:</strong> {why.pointOfView}</p>
             {currentEvidence.length > 0 ? (
               <ul className="mt-3 list-disc space-y-1 pl-5 text-sm">
@@ -300,7 +298,7 @@ export function MethodMap({ map }: MethodMapProps) {
             {currentConstraints.length > 0 ? (
               <p className="mt-3 text-sm"><strong>Practical reality:</strong> {currentConstraints.map((item) => item.description).join(' · ')}</p>
             ) : null}
-          </details>
+          </div>
         </section>
       ) : null}
 
