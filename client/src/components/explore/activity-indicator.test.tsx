@@ -15,12 +15,12 @@ it('rotates verbs without an immediate repeat and clears its timer when removed'
   vi.spyOn(Math, 'random').mockReturnValue(0);
   const view = render(<ActivityIndicator />);
 
-  expect(screen.getByText('Thinking…')).toBeTruthy();
+  expect(screen.getByText('Accomplishing…')).toBeTruthy();
   expect(screen.getByRole('status', { name: 'Revelio is responding.' })).toBeTruthy();
   act(() => { vi.advanceTimersByTime(1500); });
-  expect(screen.getByText('Pondering…')).toBeTruthy();
+  expect(screen.getByText('Actioning…')).toBeTruthy();
   act(() => { vi.advanceTimersByTime(1500); });
-  expect(screen.getByText('Thinking…')).toBeTruthy();
+  expect(screen.getByText('Accomplishing…')).toBeTruthy();
 
   view.unmount();
   expect(vi.getTimerCount()).toBe(0);
