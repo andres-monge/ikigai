@@ -2056,6 +2056,7 @@ describe('protected Method routes', () => {
   });
 
   it('fails a completed provider turn with no reply so the explorer can retry their message', async () => {
+    const logs: Array<Record<string, unknown>> = [];
     const model = new MockLanguageModelV4({
       doStream: async () => ({
         stream: simulateReadableStream({
@@ -2081,7 +2082,7 @@ describe('protected Method routes', () => {
         })),
       },
       internalContextMarker: () => 'silent-context-0',
-      operationalLog: vi.fn(),
+      operationalLog: (entry) => logs.push(entry),
     })).post('/api/agent').send({
       id: 'client-message-silent',
       message: 'Please change one of the Purpose Paths.',
@@ -2094,6 +2095,12 @@ describe('protected Method routes', () => {
     }));
     expect(storage.completeAgentTurn).not.toHaveBeenCalled();
     expect(storage.releaseTurnLease).toHaveBeenCalledOnce();
+    expect(logs.at(-1)).toMatchObject({
+      route: 'agent-turn', errorClass: 'NoOutputGeneratedError',
+      agentFinishReason: 'length', agentStepCount: 1, agentVisibleOutput: false,
+      agentInputTokens: 1, agentOutputTokens: 1, agentReasoningTokens: 0,
+    });
+    expect(JSON.stringify(logs)).not.toContain('Please change one of the Purpose Paths.');
   });
 
   it('keeps the terminal stream boundary behind durable completion so immediate history and the next turn see committed state', async () => {

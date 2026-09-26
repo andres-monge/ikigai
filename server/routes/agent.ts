@@ -24,6 +24,7 @@ import {
   REVELIO_AGENT_MODEL,
   REVELIO_AGENT_PROVIDER,
   createMethodAgent,
+  type MethodAgentTurnDiagnostics,
   type MethodAgentTurnStreamResult,
 } from '../ai/agent.js';
 import { createMethodModuleLoader, type MethodModuleLoader } from '../ai/method/loader.js';
@@ -245,6 +246,18 @@ function safeErrorClass(error: unknown): string {
     'ZodError',
   ]);
   return allowlisted.has(candidate) ? candidate : 'ExternalProviderError';
+}
+
+function methodTurnDiagnosticLog(diagnostics: MethodAgentTurnDiagnostics): Record<string, unknown> {
+  return {
+    agentFinishReason: diagnostics.finishReason,
+    agentStepFinishReasons: diagnostics.stepFinishReasons,
+    agentStepCount: diagnostics.stepCount,
+    agentVisibleOutput: diagnostics.visibleOutput,
+    ...(diagnostics.inputTokens !== undefined ? { agentInputTokens: diagnostics.inputTokens } : {}),
+    ...(diagnostics.outputTokens !== undefined ? { agentOutputTokens: diagnostics.outputTokens } : {}),
+    ...(diagnostics.reasoningTokens !== undefined ? { agentReasoningTokens: diagnostics.reasoningTokens } : {}),
+  };
 }
 
 function requestFingerprint(clientMessageId: string, message: string): string {
@@ -905,6 +918,12 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
               turn!.turnId,
               toolCallId,
             ].join('\u0000')),
+            onTurnDiagnostics: (diagnostics) => {
+              response.locals.methodLog = {
+                ...response.locals.methodLog,
+                ...methodTurnDiagnosticLog(diagnostics),
+              };
+            },
             onOperationStatus: async (event) => {
               if (event.phase === 'terminal' && event.status === 'saved') {
                 continuationOperationSaved = true;
@@ -1487,6 +1506,12 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
               turn!.turnId,
               toolCallId,
             ].join('\u0000')),
+            onTurnDiagnostics: (diagnostics) => {
+              response.locals.methodLog = {
+                ...response.locals.methodLog,
+                ...methodTurnDiagnosticLog(diagnostics),
+              };
+            },
             onOperationStatus: async (event) => {
               if (event.phase === 'terminal' && event.status === 'saved') {
                 operationSaved = true;

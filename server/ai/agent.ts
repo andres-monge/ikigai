@@ -43,6 +43,16 @@ export interface MethodPreparedStepTrace {
   compaction: boolean;
 }
 
+export interface MethodAgentTurnDiagnostics {
+  finishReason: string;
+  stepFinishReasons: string[];
+  stepCount: number;
+  visibleOutput: boolean;
+  inputTokens?: number;
+  outputTokens?: number;
+  reasoningTokens?: number;
+}
+
 export interface CreateMethodAgentOptions {
   model: LanguageModel;
   nativeWebSearchTool: ToolSet[string];
@@ -57,6 +67,7 @@ export interface CreateMethodAgentOptions {
   abortSignal?: AbortSignal;
   onError?: (error: unknown) => void;
   onPreparedStep?: (trace: MethodPreparedStepTrace) => void;
+  onTurnDiagnostics?: (diagnostics: MethodAgentTurnDiagnostics) => void;
   onOperationStatus?: (event: MethodOperationLifecycleEvent) => void | Promise<void>;
   operationIdForToolCall?: (toolCallId: string) => string;
   internalContextMarker?: (responseIndex: number) => string;
@@ -66,6 +77,17 @@ const emptyUsage = {
   inputTokens: { total: 0, noCache: 0, cacheRead: 0, cacheWrite: 0 },
   outputTokens: { total: 0, text: 0, reasoning: 0 },
 };
+
+function safeTokenCount(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 1_000_000_000
+    ? value
+    : undefined;
+}
+
+function safeFinishReason(value: unknown): string {
+  return value === 'stop' || value === 'length' || value === 'content-filter'
+    || value === 'tool-calls' || value === 'error' ? value : 'other';
+}
 
 function sanitizedProviderFailureParts(includeText = true) {
   return [
@@ -548,6 +570,19 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
             const finalVisibleText = displayGroups.flatMap(({ group, hasClientTool }) => (
               hasClientTool ? [] : group.flatMap((part) => part.type === 'text-delta' ? [part.text] : [])
             )).join('');
+            const usage = outerFinish?.totalUsage;
+            const inputTokens = safeTokenCount(usage?.inputTokens);
+            const outputTokens = safeTokenCount(usage?.outputTokens);
+            const reasoningTokens = safeTokenCount(usage?.outputTokenDetails?.reasoningTokens);
+            options.onTurnDiagnostics?.({
+              finishReason: safeFinishReason(outerFinish?.finishReason),
+              stepFinishReasons: steps.slice(0, REVELIO_MAX_AGENT_STEPS).map((step) => safeFinishReason(step.finishReason)),
+              stepCount: steps.length,
+              visibleOutput: finalVisibleText.trim().length > 0,
+              ...(inputTokens !== undefined ? { inputTokens } : {}),
+              ...(outputTokens !== undefined ? { outputTokens } : {}),
+              ...(reasoningTokens !== undefined ? { reasoningTokens } : {}),
+            });
             const finalVisibleTextHash = createHash('sha256').update(finalVisibleText).digest('hex');
             let visibleOffset = 0;
             for (const { group, hasClientTool, citations } of displayGroups) {

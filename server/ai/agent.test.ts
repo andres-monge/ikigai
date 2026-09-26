@@ -365,6 +365,7 @@ async function makeAgent(input: {
   origin?: 'agent-turn' | 'workspace-action';
   abortSignal?: AbortSignal;
   onPreparedStep?: Parameters<typeof createMethodAgent>[0]['onPreparedStep'];
+  onTurnDiagnostics?: Parameters<typeof createMethodAgent>[0]['onTurnDiagnostics'];
   onOperationStatus?: Parameters<typeof createMethodAgent>[0]['onOperationStatus'];
   onError?: (error: unknown) => void;
 }) {
@@ -388,6 +389,7 @@ async function makeAgent(input: {
         : input.currentMessage ?? explorerMessage,
       abortSignal: input.abortSignal, onError: input.onError,
       onPreparedStep: input.onPreparedStep,
+      onTurnDiagnostics: input.onTurnDiagnostics,
       onOperationStatus: input.onOperationStatus,
       internalContextMarker: (stepNumber) => `context-${stepNumber}`,
     }),
@@ -408,13 +410,19 @@ describe('amended Method agent core loop', () => {
   it('uses one automatic-choice call for natural conversation with no status or mutation', async () => {
     const model = streamModel([textChunks('Small experiments turn uncertainty into evidence. What would you like to make useful next?')]);
     const statuses = vi.fn();
-    const { agent, storage } = await makeAgent({ model, onOperationStatus: statuses });
+    const diagnostics = vi.fn();
+    const { agent, storage } = await makeAgent({ model, onOperationStatus: statuses, onTurnDiagnostics: diagnostics });
     const output = await collect(await agent.stream({ prompt: explorerMessage }));
 
     expect(JSON.stringify(output)).toContain('What would you like to make useful next?');
     expect(model.doStreamCalls).toHaveLength(1);
     expect(statuses).not.toHaveBeenCalled();
     expect(storage.map.revision).toBe(0);
+    expect(diagnostics).toHaveBeenCalledWith(expect.objectContaining({
+      finishReason: 'stop', stepFinishReasons: ['stop'], stepCount: 1,
+      visibleOutput: true, inputTokens: 1, outputTokens: 1, reasoningTokens: 0,
+    }));
+    expect(diagnostics).toHaveBeenCalledOnce();
     expect(model.doStreamCalls[0]?.toolChoice).toEqual({ type: 'auto' });
     expect(model.doStreamCalls[0]?.tools?.map((candidate) => candidate.name)).toContain('web_search');
     expect(model.doStreamCalls[0]?.providerOptions?.openai).toMatchObject({
@@ -917,12 +925,19 @@ describe('amended Method agent core loop', () => {
       textChunks('The authoritative map now includes that evidence.'),
     ]);
     const traces: Array<Record<string, unknown>> = [];
-    const { agent } = await makeAgent({ model, onPreparedStep: (trace) => traces.push(trace) });
+    const diagnostics = vi.fn();
+    const { agent } = await makeAgent({
+      model, onPreparedStep: (trace) => traces.push(trace), onTurnDiagnostics: diagnostics,
+    });
     const result = await agent.stream({ prompt: explorerMessage });
     await collect(result);
 
     expect(traces.map((trace) => trace.mapRevision)).toEqual([0, 1]);
     expect(traces.map((trace) => trace.compaction)).toEqual([true, false]);
+    expect(diagnostics).toHaveBeenCalledWith(expect.objectContaining({
+      finishReason: 'stop', stepFinishReasons: ['tool-calls', 'stop'],
+      stepCount: 2, visibleOutput: true, inputTokens: 2, outputTokens: 2,
+    }));
     expect(traces.every((trace) => (trace.activeTools as string[]).includes('web_search'))).toBe(true);
     expect(model.doStreamCalls.map((call) => JSON.stringify(call.prompt)).every(
       (prompt) => prompt.includes(METHOD_INTERNAL_CONTEXT_MARKER),
