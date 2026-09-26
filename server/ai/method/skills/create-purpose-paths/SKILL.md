@@ -1,7 +1,7 @@
 ---
 name: create-purpose-paths
 description: Create and revise exactly three distinct Purpose Paths with equal weight and explorer-owned choice.
-version: 1.1.1
+version: 1.1.2
 ---
 # Create Purpose Paths
 
@@ -15,7 +15,7 @@ Each path must contain:
 
 - a clear, concrete name;
 - how it serves the confirmed North Star;
-- what could become possible;
+- what could become possible: a concrete, excitingly ambitious picture of the change this path could make for the people or cause named in the explorer's North Star if they chose to keep pursuing it. Give the explorer a reason to feel energized by the potential, without promising success or pretending the first project must achieve it. Make this motivating horizon distinct from how the path serves the North Star, the evidence it may fit, and the small first project; do not merely restate those fields;
 - evidence for why it may be worth exploring;
 - one clear question about what the explorer needs to learn through doing this work: their interest, energy, appetite for its daily tasks, or willingness to continue. Do not substitute a question about whether the project or business will succeed;
 - a Path Project preview; and

@@ -216,6 +216,7 @@ describe('repository-owned Method module loader', () => {
     expect(paths).toContain(PURPOSE_PATHS_OFFER_SPANISH);
     expect(paths).toMatch(/only.*localized framing.*no.*footer invitation/is);
     expect(paths).toMatch(/what the explorer needs to learn.*interest.*energy.*willingness to continue/is);
+    expect(paths).toMatch(/what could become possible.*concrete, excitingly ambitious.*North Star.*feel energized.*without promising success.*distinct from.*small first project/is);
     expect(paths).toMatch(/stated time, money, access.*do not default.*enterprise-scale compliance/is);
     expect(paths).toMatch(/citation markers.*out of every card field/is);
     expect(paths).toMatch(/do not repeat.*seven.*fields/is);
