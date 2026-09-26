@@ -263,6 +263,32 @@ describe('Explore U6 conversation-first workspace', () => {
     expect(openingArticle.compareDocumentPosition(historicalUser) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
+  it('restores a path revision request when the provider ends without a visible reply', async () => {
+    const originalHistory = historyMessages();
+    vi.mocked(fetch).mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/agent/history') return jsonResponse({ status: 'ready', messages: originalHistory });
+      if (url === '/api/agent/workspace') return jsonResponse({ status: 'ready', map: suggestedPathsMap() });
+      if (url === '/api/agent') return streamResponse([
+        { type: 'start', messageId: 'assistant-silent' },
+        { type: 'error', errorText: 'The agent request failed.' },
+      ]);
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<Explore {...props()} />);
+    const textbox = await screen.findByRole('textbox', { name: 'Message Revelio' });
+    const message = 'Please change one of these paths.';
+    fireEvent.change(textbox, { target: { value: message } });
+    const send = screen.getByRole('button', { name: 'Send' });
+    await waitFor(() => expect((send as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(send);
+
+    await waitFor(() => expect((textbox as HTMLTextAreaElement).value).toBe(message));
+    expect(screen.getByText('Revelio’s reply failed. Your submitted message is available to edit.')).toBeTruthy();
+    expect(screen.getAllByTestId('purpose-path-card')).toHaveLength(6);
+  });
+
   it('withholds the opening until paginated history reaches the oldest boundary', async () => {
     vi.mocked(fetch).mockImplementation(async (input: RequestInfo | URL) => {
       const url = String(input);

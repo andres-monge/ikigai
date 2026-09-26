@@ -1591,6 +1591,11 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
               terminalFailure = cancellationError;
             }
           } else {
+            if (!safeAssistantText.trim()) {
+              const noOutput = new Error('The agent produced no visible reply.');
+              noOutput.name = 'NoOutputGeneratedError';
+              throw noOutput;
+            }
             const authoritative = await storage.loadCareerMap(identity.userId);
             const revision = authoritative.status === 'ready' ? authoritative.map.revision : undefined;
             if (revision !== undefined) response.locals.methodLog = { ...response.locals.methodLog, revision };

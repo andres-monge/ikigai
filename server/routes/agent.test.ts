@@ -2045,11 +2045,54 @@ describe('protected Method routes', () => {
     expect(response.text).not.toContain(privateProviderError.message);
     const chunks = uiStreamChunks(response.text);
     expect(chunks.some((chunk) => chunk.type === 'data-operation-status')).toBe(false);
-    expect(chunks).toContainEqual(expect.objectContaining({ type: 'finish', finishReason: 'error' }));
+    expect(chunks).toContainEqual(expect.objectContaining({ type: 'error' }));
     expect(model.doStreamCalls).toHaveLength(1);
     expect(storage.persistCareerMapOperation).not.toHaveBeenCalled();
-    expect(storage.completeAgentTurn).toHaveBeenCalledOnce();
-    expect(storage.failAgentTurn).not.toHaveBeenCalled();
+    expect(storage.completeAgentTurn).not.toHaveBeenCalled();
+    expect(storage.failAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
+      errorClass: 'NoOutputGeneratedError',
+    }));
+    expect(storage.releaseTurnLease).toHaveBeenCalledOnce();
+  });
+
+  it('fails a completed provider turn with no reply so the explorer can retry their message', async () => {
+    const model = new MockLanguageModelV4({
+      doStream: async () => ({
+        stream: simulateReadableStream({
+          chunks: [
+            { type: 'stream-start', warnings: [] },
+            { type: 'finish', finishReason: { unified: 'length', raw: 'max_output_tokens' }, usage: usage() },
+          ] as never,
+        }),
+      }),
+    });
+    const storage = createStorage({
+      getConversationMapping: vi.fn(async () => 'silent-turn-conversation'),
+    });
+    const response = await request(testApp({
+      storage,
+      requireAuth: authenticated,
+      agentEnabled: true,
+      model,
+      conversationClient: {
+        listItems: vi.fn(async () => ({
+          data: [internalContextItem('silent-internal-context', 'silent-context-0')],
+          hasMore: false,
+        })),
+      },
+      internalContextMarker: () => 'silent-context-0',
+      operationalLog: vi.fn(),
+    })).post('/api/agent').send({
+      id: 'client-message-silent',
+      message: 'Please change one of the Purpose Paths.',
+    });
+
+    expect(response.status).toBe(200);
+    expect(uiStreamChunks(response.text)).toContainEqual(expect.objectContaining({ type: 'error' }));
+    expect(storage.failAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
+      errorClass: 'NoOutputGeneratedError',
+    }));
+    expect(storage.completeAgentTurn).not.toHaveBeenCalled();
     expect(storage.releaseTurnLease).toHaveBeenCalledOnce();
   });
 
