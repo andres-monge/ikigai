@@ -688,6 +688,20 @@ describe('strict state-specific Method tools', () => {
     const valid = { setId: 'set-source-free', setRevision: 1, paths: [path(1), path(2), path(3)] };
 
     expect(schema.safeParse(valid).success).toBe(true);
+    expect(schema.safeParse({
+      ...valid,
+      paths: [{ ...path(1), practicalFit: 'Can start  with five hours a week.' }, path(2), path(3)],
+    }).success).toBe(true);
+    for (const marked of [
+      'Can start this week citeturn0search1',
+      'Can start this week 【turn0search1】',
+      'Can start this week cite turn0search1',
+    ]) {
+      expect(schema.safeParse({
+        ...valid,
+        paths: [{ ...path(1), practicalFit: marked }, path(2), path(3)],
+      }).success).toBe(false);
+    }
     for (const obsolete of [
       { researchSources: null },
       { userSources: null },

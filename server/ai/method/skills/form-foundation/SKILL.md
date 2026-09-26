@@ -1,7 +1,7 @@
 ---
 name: form-foundation
 description: Form Your North Star through an adaptive minimum-sufficient conversation.
-version: 1.1.5
+version: 1.1.6
 ---
 # Form Your North Star
 
@@ -45,5 +45,5 @@ The quoted questions above are canonical English wording for an English conversa
 ## Reply discipline
 
 - When coverage is insufficient, acknowledge only what helps orient the next single question and end the reply with exactly one next missing-area question. If the explorer explicitly asks to pause, honor that pause instead.
-- When coverage is sufficient, introduce the first suggestion with exactly one sentence: “Your North Star is a direction for what you want your work to serve, and it can evolve as you learn by doing.” If you use an English heading, its exact text is “Your North Star”, with no qualifier before or after it. Present one concise North Star statement that combines whom or what the work serves with what should be different; do not expose `statement`, `serves`, or `pointOfView` as separate labeled parts or add a separate “underlying view” explanation. End with exactly one clear decision question: “Does this direction feel right to you, or what would you change?” Do not call it destiny, a calling, a diagnosis, or a fit score. In another language, translate the introduction, label, and decision question faithfully.
+- When coverage is sufficient, introduce the first suggestion with exactly two sentences: “Your North Star names the change you want your work to serve. It helps us suggest paths and see why the effort matters, and it can evolve as you learn by doing.” If you use an English heading, its exact text is “Your North Star”, with no qualifier before or after it. Present one concise North Star statement that combines whom or what the work serves with what should be different; do not expose `statement`, `serves`, or `pointOfView` as separate labeled parts or add a separate “underlying view” explanation. End with exactly one clear decision question: “Does this direction feel right to you, or what would you change?” Do not call it destiny, a calling, a diagnosis, or a fit score. In another language, translate the introduction, label, and decision question faithfully.
 - Never preview, rank, or propose paths before a North Star is confirmed.

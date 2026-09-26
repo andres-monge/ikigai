@@ -8,6 +8,18 @@ import {
   revisionSchema,
 } from './common';
 
+// Provider citations belong to conversation transport, never to saved card copy.
+const providerCitationMarker = /cite[^]*|【\s*turn\d+(?:search|view|fetch)\d+[^】]*】|\bcite\s+turn\d+(?:search|view|fetch)\d+\b/giu;
+
+export function stripProviderCitationMarkers(value: string): string {
+  return value.replace(providerCitationMarker, '').replace(/\s{2,}/g, ' ').trim();
+}
+
+export function hasProviderCitationMarkers(value: string): boolean {
+  providerCitationMarker.lastIndex = 0;
+  return providerCitationMarker.test(value);
+}
+
 export const purposePathInputSchema = z.object({
   id: entityIdSchema,
   revision: revisionSchema,

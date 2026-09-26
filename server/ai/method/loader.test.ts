@@ -163,8 +163,8 @@ describe('repository-owned Method module loader', () => {
     expect(BASE_METHOD_INSTRUCTIONS).toMatch(/recognition over praise/i);
     expect(BASE_METHOD_INSTRUCTIONS).toMatch(/never add generic praise/i);
     expect(BASE_METHOD_INSTRUCTIONS).not.toMatch(/Why I Work|confirmed Why|Suggested Why/i);
-    expect(PURPOSE_PATHS_OFFER_ENGLISH).toBe('Here are three ways to serve your North Star.');
-    expect(PURPOSE_PATHS_OFFER_SPANISH).toBe('Aquí tienes tres formas de servir a tu Estrella Polar.');
+    expect(PURPOSE_PATHS_OFFER_ENGLISH).toMatch(/three directions.*small, low-commitment project.*learn whether you want to keep going/is);
+    expect(PURPOSE_PATHS_OFFER_SPANISH).toMatch(/tres direcciones.*proyecto pequeño.*descubrir si quieres seguir/is);
     expect(R22_CANONICAL_ENGLISH).toBe(
       "The point of a project is not to succeed, it's to learn if it's something you'd want to pursue. Think of projects like dating: you start with something chill and low commitment, then invest more only if each date makes you want another.",
     );
@@ -183,7 +183,7 @@ describe('repository-owned Method module loader', () => {
     expect(foundation).toMatch(/never store.*cannot name.*fascination.*fallback question/is);
     expect(foundation).toMatch(/ten-year.*only when/i);
     expect(foundation).toContain('If you could fast-forward ten years, what meaningful change would you be proud to have contributed to?');
-    expect(foundation).toContain('Your North Star is a direction for what you want your work to serve, and it can evolve as you learn by doing.');
+    expect(foundation).toContain('Your North Star names the change you want your work to serve. It helps us suggest paths and see why the effort matters, and it can evolve as you learn by doing.');
     expect(foundation).toContain('its exact text is “Your North Star”');
     expect(foundation).toContain('Does this direction feel right to you, or what would you change?');
     expect(foundation).toMatch(/one concise North Star statement.*do not expose.*statement.*serves.*pointOfView/is);
@@ -214,7 +214,10 @@ describe('repository-owned Method module loader', () => {
     expect(paths).toMatch(/bare ordinal.*exact current path/i);
     expect(paths).toContain(PURPOSE_PATHS_OFFER_ENGLISH);
     expect(paths).toContain(PURPOSE_PATHS_OFFER_SPANISH);
-    expect(paths).toMatch(/only.*localized offer.*no.*footer invitation/is);
+    expect(paths).toMatch(/only.*localized framing.*no.*footer invitation/is);
+    expect(paths).toMatch(/what the explorer needs to learn.*interest.*energy.*willingness to continue/is);
+    expect(paths).toMatch(/stated time, money, access.*do not default.*enterprise-scale compliance/is);
+    expect(paths).toMatch(/citation markers.*out of every card field/is);
     expect(paths).toMatch(/do not repeat.*seven.*fields/is);
     expect(paths).not.toMatch(/350 words|80 words|confirmed Why|same Why/i);
 

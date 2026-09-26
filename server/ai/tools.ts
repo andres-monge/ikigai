@@ -11,6 +11,7 @@ import {
   projectAcceptancePhraseSchema,
   projectAcceptanceQuestionSchema,
   purposePathInputSchema,
+  hasProviderCitationMarkers,
   realityConstraintSchema,
   revisionSchema,
   whyInputSchema,
@@ -120,7 +121,16 @@ export type MethodToolRuntime = Omit<MethodOperationExecutorOptions, 'sourceId' 
   onOperationStatus?: (event: MethodOperationLifecycleEvent) => void | Promise<void>;
 };
 
-const pathToolInputSchema = purposePathInputSchema;
+const pathToolInputSchema = purposePathInputSchema.superRefine((path, context) => {
+  for (const [field, value] of Object.entries(path)) {
+    const values = Array.isArray(value) ? value : [value];
+    values.forEach((item, index) => {
+      if (typeof item === 'string' && hasProviderCitationMarkers(item)) {
+        context.addIssue({ code: z.ZodIssueCode.custom, path: Array.isArray(value) ? [field, index] : [field], message: 'Provider citation markers belong in conversation, not a Purpose Path card.' });
+      }
+    });
+  }
+});
 const projectToolInputSchema = pathProjectInputSchema;
 const evidenceToolInputSchema = foundationEvidenceSchema
   .omit({ provenance: true, supersedesEvidenceId: true })

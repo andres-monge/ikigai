@@ -1,7 +1,7 @@
-export const BASE_INSTRUCTIONS_VERSION = '1.1.2';
+export const BASE_INSTRUCTIONS_VERSION = '1.1.3';
 
-export const PURPOSE_PATHS_OFFER_ENGLISH = 'Here are three ways to serve your North Star.';
-export const PURPOSE_PATHS_OFFER_SPANISH = 'Aquí tienes tres formas de servir a tu Estrella Polar.';
+export const PURPOSE_PATHS_OFFER_ENGLISH = 'Here are three directions to explore in service of your North Star. Each begins with a small, low-commitment project—a date with the work. The aim is to learn whether you want to keep going, not to make the project succeed.';
+export const PURPOSE_PATHS_OFFER_SPANISH = 'Aquí tienes tres direcciones que explorar al servicio de tu Estrella Polar. Cada una empieza con un proyecto pequeño y de poco compromiso: una cita con ese trabajo. El objetivo es descubrir si quieres seguir, no que el proyecto tenga éxito.';
 
 export const R22_CANONICAL_ENGLISH = "The point of a project is not to succeed, it's to learn if it's something you'd want to pursue. Think of projects like dating: you start with something chill and low commitment, then invest more only if each date makes you want another.";
 

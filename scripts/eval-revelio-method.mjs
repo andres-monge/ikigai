@@ -1516,7 +1516,7 @@ function assessScenario(scenario, result) {
   const foundationReplyText = foundationNarrations.map((turn) => turn.replyText).join('\n');
   assert(!/\bprovisional\b/i.test(foundationReplyText), `${scenario.id}: a Foundation reply exposed the internal North Star lifecycle label.`);
   if (proposalIsEnglish) {
-    assert(proposalNarration.includes('Your North Star is a direction for what you want your work to serve, and it can evolve as you learn by doing.'), `${scenario.id}: the first North Star suggestion omitted the canonical introduction.`);
+    assert(proposalNarration.includes('Your North Star names the change you want your work to serve. It helps us suggest paths and see why the effort matters, and it can evolve as you learn by doing.'), `${scenario.id}: the first North Star suggestion omitted the canonical introduction.`);
     assert(proposalNarration.endsWith('Does this direction feel right to you, or what would you change?'), `${scenario.id}: the first North Star suggestion omitted the canonical decision question.`);
     assert(hasOnlyCanonicalEnglishNorthStarHeadings(proposalNarration), `${scenario.id}: an English North Star heading used a qualified or alternate label.`);
     assert(!exposesQualifiedNorthStarLabel(proposalNarration), `${scenario.id}: an English reply exposed a qualified North Star label.`);

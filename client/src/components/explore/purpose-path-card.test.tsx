@@ -42,6 +42,20 @@ describe('PurposePathCard', () => {
     expect(screen.queryByRole('button')).toBeNull();
   });
 
+  it('shows an explorer-facing learning question and hides provider citation markers in saved card text', () => {
+    render(<PurposePathCard path={{
+      ...path,
+      name: 'Make difficult systems humane citeturn0search3',
+      centralUnknown: 'Do I enjoy this work enough to continue? citeturn0search1',
+      practicalFit: 'Try it for five hours a week 【turn0search2】',
+    }} index={0} onStart={() => {}} />);
+    expect(screen.getByText('What do you need to learn?')).toBeTruthy();
+    expect(screen.getByText('Do I enjoy this work enough to continue?')).toBeTruthy();
+    expect(screen.getByText('Try it for five hours a week')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Start path 1: Make difficult systems humane' })).toBeTruthy();
+    expect(screen.getByTestId('purpose-path-card').textContent).not.toMatch(/cite|turn0search/i);
+  });
+
   it('uses the comparison container width for the stack-to-subgrid breakpoint', () => {
     const css = readFileSync('client/src/index.css', 'utf8');
     expect(css).toMatch(/\.purpose-path-comparison\s*\{[^}]*container-type:\s*inline-size/s);
