@@ -31,6 +31,9 @@ export const REVELIO_AGENT_PROVIDER = 'openai-responses';
 // A threshold below the fixed Method prompt compacts routine turns and can
 // exhaust the response budget before the agent emits a reply or tool call.
 export const REVELIO_COMPACT_THRESHOLD = 32_000;
+// Reasoning and a compaction pass can consume output tokens before any
+// visible reply or tool call. Keep the provider's suggested starting buffer.
+export const REVELIO_MAX_OUTPUT_TOKENS = 25_000;
 // Bounds one internal provider/tool loop, not the number of explorer turns.
 export const REVELIO_MAX_AGENT_STEPS = 50;
 export const METHOD_INTERNAL_CONTEXT_MARKER = 'SERVER REFRESH CONTEXT';
@@ -459,7 +462,7 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
   const toolLoopAgent = new ToolLoopAgent({
     model: privacySafeStreamingModel(options.model, options.onError),
     ...streamTextErrorHandler,
-    maxOutputTokens: 1_500,
+    maxOutputTokens: REVELIO_MAX_OUTPUT_TOKENS,
     tools,
     toolChoice: 'auto',
     // U7 deliberately ends at first-project acceptance. A committed

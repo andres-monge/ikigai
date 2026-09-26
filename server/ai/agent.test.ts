@@ -16,6 +16,7 @@ import {
   METHOD_INTERNAL_CONTEXT_MARKER,
   REVELIO_MAX_AGENT_STEPS,
   REVELIO_AGENT_MODEL,
+  REVELIO_MAX_OUTPUT_TOKENS,
   type MethodAgentTurnStreamResult,
 } from './agent.js';
 import { createMethodModuleLoader } from './method/loader.js';
@@ -960,6 +961,8 @@ describe('amended Method agent core loop', () => {
     expect(model.doStreamCalls[0]?.providerOptions?.openai?.contextManagement).toEqual([
       { type: 'compaction', compactThreshold: 32_000 },
     ]);
+    expect(model.doStreamCalls.every((call) => call.maxOutputTokens === REVELIO_MAX_OUTPUT_TOKENS)).toBe(true);
+    expect(REVELIO_MAX_OUTPUT_TOKENS).toBeGreaterThanOrEqual(25_000);
     expect(model.doStreamCalls[1]?.providerOptions?.openai).not.toHaveProperty('contextManagement');
     expect(model.doStreamCalls.every((call) => {
       const instructions = String(call.providerOptions?.openai?.instructions);
