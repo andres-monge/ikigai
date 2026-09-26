@@ -333,7 +333,7 @@ describe('Explore U6 conversation-first workspace', () => {
     fireEvent.click(send);
 
     await waitFor(() => expect(streamController).toBeTruthy());
-    expect((await screen.findByText('Thinking…')).getAttribute('role')).toBe('status');
+    expect(await screen.findByRole('status', { name: 'Revelio is responding.' })).toBeTruthy();
 
     await act(async () => {
       streamController!.enqueue(encoder.encode([
@@ -344,7 +344,7 @@ describe('Explore U6 conversation-first workspace', () => {
     });
 
     expect(await screen.findByText('First response token.')).toBeTruthy();
-    expect(screen.queryByText('Thinking…')).toBeNull();
+    expect(screen.queryByRole('status', { name: 'Revelio is responding.' })).toBeNull();
 
     await act(async () => {
       streamController!.enqueue(encoder.encode([
@@ -849,7 +849,7 @@ describe('Explore U6 conversation-first workspace', () => {
     render(<Explore {...props()} />);
     fireEvent.click(await screen.findByRole('button', { name: 'Start path 1: Path 1' }));
 
-    expect((await screen.findByText('Thinking…')).getAttribute('role')).toBe('status');
+    expect(await screen.findByRole('status', { name: 'Revelio is responding.' })).toBeTruthy();
 
     await act(async () => {
       operationResponse.resolve(jsonResponse({
@@ -862,7 +862,7 @@ describe('Explore U6 conversation-first workspace', () => {
         retryable: false,
       }, 409));
     });
-    await waitFor(() => expect(screen.queryByText('Thinking…')).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('status', { name: 'Revelio is responding.' })).toBeNull());
   });
 
   it('uses the revision-confirmation operation for a revised Purpose Path set', async () => {

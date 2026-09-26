@@ -16,6 +16,7 @@ import {
 import { SafeMessage } from '@/components/explore/safe-message';
 import { MethodMap } from '@/components/explore/method-map';
 import { PurposePathCard } from '@/components/explore/purpose-path-card';
+import { ActivityIndicator } from '@/components/explore/activity-indicator';
 
 type LoadState = 'loading' | 'empty' | 'ready' | 'error';
 type WorkspaceLoadState = LoadState | 'repair-required';
@@ -963,15 +964,7 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
                   })}
                 </div>
               ))}
-              {turnBusy && !streamedText ? (
-                <p
-                  role="status"
-                  aria-live="polite"
-                  className="mx-auto w-full max-w-[38rem] text-sm font-bold text-stone-600 motion-safe:animate-pulse"
-                >
-                  Thinking…
-                </p>
-              ) : null}
+              {turnPhase === 'active' && !streamedText ? <ActivityIndicator /> : null}
             </div>
           </div>
           <div className="shrink-0 px-4 pb-4 pt-2 sm:px-6">
