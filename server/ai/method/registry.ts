@@ -10,17 +10,17 @@ export const METHOD_MODULE_REGISTRY = {
   'form-foundation': {
     key: 'form-foundation',
     directory: 'form-foundation',
-    contentVersion: '1.1.6',
+    contentVersion: '1.1.7',
   },
   'create-purpose-paths': {
     key: 'create-purpose-paths',
     directory: 'create-purpose-paths',
-    contentVersion: '1.1.2',
+    contentVersion: '1.1.3',
   },
   'design-path-project': {
     key: 'design-path-project',
     directory: 'design-path-project',
-    contentVersion: '1.2.0',
+    contentVersion: '1.2.1',
   },
 } as const satisfies Partial<Record<MethodModule, MethodModuleRegistration>>;
 

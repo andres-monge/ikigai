@@ -2,13 +2,12 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   classifyFoundationQuestionTopics,
-  isPredominantlySpanish,
   matchesPathOperationExpectation,
   summarizeFirstProjectReplacement,
   summarizeFoundationTrace,
   summarizeR22Presentation,
 } from './evaluation';
-import { R22_CANONICAL_ENGLISH, R22_CANONICAL_SPANISH } from './base-instructions';
+import { R22_CANONICAL_ENGLISH } from './base-instructions';
 
 describe('Method evaluation assertions', () => {
   it('executes every declared U7 semantic-intent fixture before retaining its metadata', () => {
@@ -117,16 +116,6 @@ describe('Method evaluation assertions', () => {
     ]);
   });
 
-  it('requires Spanish to predominate instead of accepting three injected marker words', () => {
-    expect(isPredominantlySpanish('Claro. A partir de ahora seguimos en español. No recomendaré ningún camino.')).toBe(true);
-    expect(isPredominantlySpanish('El objetivo no es tener éxito, sino aprender si quieres seguir explorando este camino.')).toBe(true);
-    expect(isPredominantlySpanish('¿Qué sueles leer o pensar durante horas?')).toBe(true);
-    expect(isPredominantlySpanish('¿What should you work on next?')).toBe(false);
-    expect(isPredominantlySpanish('The project is ready and the next step is clear; el la que.')).toBe(false);
-    expect(isPredominantlySpanish('Gracias. The rest of this response is in English, with el camino and la pregunta added at the end.')).toBe(false);
-    expect(isPredominantlySpanish('')).toBe(false);
-  });
-
   it('rejects right-operation/wrong-turn and right-operation/wrong-path false greens', () => {
     const replacement = {
       turnIndex: 2,
@@ -229,9 +218,10 @@ describe('Method evaluation assertions', () => {
 
   it('requires the locale framing alone, then one short question, with no preface or heading', () => {
     const correctEnglish = `${R22_CANONICAL_ENGLISH}\n\nDo you explicitly accept this Path Project?`;
-    const correctSpanish = `${R22_CANONICAL_SPANISH}\n\n¿Aceptas explícitamente este Proyecto de Camino?`;
+    const alternateFraming = 'A translated framing supplied by the model.';
+    const correctAlternate = `${alternateFraming}\n\nWould you accept?`;
     expect(summarizeR22Presentation(correctEnglish, R22_CANONICAL_ENGLISH).valid).toBe(true);
-    expect(summarizeR22Presentation(correctSpanish, R22_CANONICAL_SPANISH).valid).toBe(true);
+    expect(summarizeR22Presentation(correctAlternate, alternateFraming).valid).toBe(true);
     expect(summarizeR22Presentation(
       `One useful framing:\n\n${R22_CANONICAL_ENGLISH}\n\nDo you accept?`,
       R22_CANONICAL_ENGLISH,

@@ -1,7 +1,7 @@
 ---
 name: design-path-project
 description: Design one grounded first Path Project for collaborative refinement and explicit acceptance.
-version: 1.2.0
+version: 1.2.1
 ---
 # Design a Path Project
 
@@ -34,28 +34,20 @@ Point toward an excitingly ambitious outcome through a first version the explore
 
 ## Required framing before acceptance
 
-Do not use the framing in the initial proposal or before a proposal the explorer rejects. Once the explorer indicates that the current proposal is ready for acceptance, use `present-first-project-framing` once for the exact pending project and locale. Supply the exact framing text, one clear localized `acceptancePhrase` as presentation reference copy, and one short question that includes it. After its committed result, output exactly the persisted framing and question. The pending marker becomes delivered only when that exact visible response and the durable assistant turn complete together; a failed or malformed turn is re-framable. Acceptance can happen only after a later explorer message semantically accepts the project. This durable marker prevents repetition after reload or compaction.
+Do not use the framing in the initial proposal or before a proposal the explorer rejects. Once the explorer indicates that the current proposal is ready for acceptance, use `present-first-project-framing` once for the exact pending project. Supply the exact framing text, one clear `acceptancePhrase` as presentation reference copy, and one short question that includes it. After its committed result, output exactly the persisted framing and question. The pending marker becomes delivered only when that exact visible response and the durable assistant turn complete together; a failed or malformed turn is re-framable. Acceptance can happen only after a later explorer message semantically accepts the project. This durable marker prevents repetition after reload or compaction.
 
-That pre-acceptance reply has exactly two plain paragraphs: the locale-correct framing by itself, followed by one short question asking for explicit acceptance. Add no heading, quotation marks, preface, restatement, paraphrase, or second copy of the framing. Do not mention the framing anywhere else.
+That pre-acceptance reply has exactly two plain paragraphs: the framing by itself, followed by one short question asking for explicit acceptance. Add no heading, quotation marks, preface, restatement, paraphrase, or second copy of the framing. Do not mention the framing anywhere else.
 
-In an English conversation, use the following sentence as `framingText` exactly:
+Use the following sentence as `framingText` exactly:
 
 The point of a project is not to succeed, it's to learn if it's something you'd want to pursue. Think of projects like dating: you start with something chill and low commitment, then invest more only if each date makes you want another.
 
-Use `I explicitly accept this Path Project.` as the English `acceptancePhrase` reference copy. The one-line `acceptanceQuestion` must contain that phrase and end with one question mark; the later message does not need to exact-match it.
-
-In a Spanish conversation, use this faithful concise translation as `framingText` exactly:
-
-El objetivo de un proyecto no es tener éxito, sino aprender si es algo que querrías seguir explorando. Piensa en los proyectos como en las citas: empiezas con algo relajado y de poco compromiso, y solo inviertes más si cada cita te deja con ganas de otra.
-
-Use `Acepto explícitamente este Proyecto de Camino.` as the Spanish `acceptancePhrase` reference copy. The one-line `acceptanceQuestion` must contain that phrase and end with one question mark; the later message does not need to exact-match it.
-
-For any other language, translate all five ideas faithfully and concisely: success is not the point; the project tests desire to pursue; projects are like dating; begin chill and low commitment; invest more only when each date creates desire for another. If the explorer tries to accept before the framing has appeared, give the framing and ask for explicit acceptance in the next turn instead of calling the acceptance operation. Do not repeat it after acceptance.
+Use `I explicitly accept this Path Project.` as the `acceptancePhrase` reference copy. The one-line `acceptanceQuestion` must contain that phrase and end with one question mark; the later message does not need to exact-match it. If the explorer tries to accept before the framing has appeared, give the framing and ask for explicit acceptance in the next turn instead of calling the acceptance operation. Do not repeat it after acceptance.
 
 ## State operations
 
 - Use `propose-first-project` for the one initial proposal and `replace-project-proposal` for one new unaccepted proposal.
-- Use `present-first-project-framing` exactly once only when the explorer says the current proposal is ready for acceptance. Its locale is the BCP 47 language tag mirrored from the explorer's latest message. Persist `framingText`, `acceptancePhrase`, and `acceptanceQuestion`; after it commits, emit only `${framingText}\n\n${acceptanceQuestion}` with no formatting or extra text.
+- Use `present-first-project-framing` exactly once only when the explorer says the current proposal is ready for acceptance. Persist `framingText`, `acceptancePhrase`, and `acceptanceQuestion`; after it commits, emit only `${framingText}\n\n${acceptanceQuestion}` with no formatting or extra text.
 - Do not expose or use follow-on project operations during the first-project decision.
 - Use `accept-first-project` only after canonical state says the framing was delivered once in a completed prior presentation and the main agent judges an unambiguous semantic acceptance from the current explorer message. `acceptancePhrase` is reference copy, not an exact-match authorization gate. Target the framing presentation turn, not the earlier proposal turn.
 - After any operation, wait for the authoritative result. Reload the map, checkpoint, active tools, and module before continuing. Acceptance may derive the later `guide-path-project` module; this three-module build must then stop rather than load an unregistered module.

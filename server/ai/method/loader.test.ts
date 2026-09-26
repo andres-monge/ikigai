@@ -7,9 +7,7 @@ import type { MethodCheckpoint } from '@shared/career-map';
 import {
   BASE_METHOD_INSTRUCTIONS,
   PURPOSE_PATHS_OFFER_ENGLISH,
-  PURPOSE_PATHS_OFFER_SPANISH,
   R22_CANONICAL_ENGLISH,
-  R22_CANONICAL_SPANISH,
 } from './base-instructions';
 import { METHOD_MODULE_KEYS, METHOD_MODULE_REGISTRY } from './registry';
 import {
@@ -144,14 +142,12 @@ describe('repository-owned Method module loader', () => {
     });
   });
 
-  it('keeps global voice, trust, state-order, brevity, and language rules in the small base instructions', () => {
+  it('keeps global voice, trust, state-order, and brevity rules in the small base instructions', () => {
     expect(BASE_METHOD_INSTRUCTIONS.length).toBeLessThan(4_000);
     expect(BASE_METHOD_INSTRUCTIONS).toMatch(/plain, concise, and concrete/i);
     expect(BASE_METHOD_INSTRUCTIONS).toMatch(/prestige/i);
     expect(BASE_METHOD_INSTRUCTIONS).toMatch(/untrusted data/i);
     expect(BASE_METHOD_INSTRUCTIONS).toMatch(/committed operation result/i);
-    expect(BASE_METHOD_INSTRUCTIONS).toMatch(/mirror the language of the explorer's latest message/i);
-    expect(BASE_METHOD_INSTRUCTIONS).toMatch(/explicit language change/i);
     expect(BASE_METHOD_INSTRUCTIONS).toMatch(/paragraphs.*H2–H4.*bold.*italics.*ordered.*unordered lists/is);
     expect(BASE_METHOD_INSTRUCTIONS).toMatch(/do not author HTML, links, images, code, tables, or blockquotes/i);
     expect(BASE_METHOD_INSTRUCTIONS).toMatch(/cards are application-owned/i);
@@ -163,12 +159,11 @@ describe('repository-owned Method module loader', () => {
     expect(BASE_METHOD_INSTRUCTIONS).toMatch(/recognition over praise/i);
     expect(BASE_METHOD_INSTRUCTIONS).toMatch(/never add generic praise/i);
     expect(BASE_METHOD_INSTRUCTIONS).not.toMatch(/Why I Work|confirmed Why|Suggested Why/i);
-    expect(PURPOSE_PATHS_OFFER_ENGLISH).toMatch(/three directions.*small, low-commitment project.*learn whether you want to keep going/is);
-    expect(PURPOSE_PATHS_OFFER_SPANISH).toMatch(/tres direcciones.*proyecto pequeño.*descubrir si quieres seguir/is);
+    expect(BASE_METHOD_INSTRUCTIONS).not.toMatch(/mirror the language|explicit language change|faithful concise translation/i);
+    expect(PURPOSE_PATHS_OFFER_ENGLISH).toBe('Here are three possible paths to pursue your North Star. Each begins with a small, low-commitment project. Think of it like a date. The aim is to learn whether you want to keep going, not to make the project succeed.');
     expect(R22_CANONICAL_ENGLISH).toBe(
       "The point of a project is not to succeed, it's to learn if it's something you'd want to pursue. Think of projects like dating: you start with something chill and low commitment, then invest more only if each date makes you want another.",
     );
-    expect(R22_CANONICAL_SPANISH).toMatch(/no es tener éxito.*aprender.*citas.*poco compromiso.*ganas de otra/i);
   });
 
   it('encodes the bounded Foundation, path, and first-project hard rules in the loaded modules', async () => {
@@ -183,8 +178,8 @@ describe('repository-owned Method module loader', () => {
     expect(foundation).toMatch(/never store.*cannot name.*fascination.*fallback question/is);
     expect(foundation).toMatch(/ten-year.*only when/i);
     expect(foundation).toContain('If you could fast-forward ten years, what meaningful change would you be proud to have contributed to?');
-    expect(foundation).toContain('Your North Star names the change you want your work to serve. It helps us suggest paths and see why the effort matters, and it can evolve as you learn by doing.');
-    expect(foundation).toContain('its exact text is “Your North Star”');
+    expect(foundation).toContain('Your North Star names the goal you want your work to serve. It helps us suggest paths, and it can evolve as you learn by doing things.');
+    expect(foundation).toContain('use the unqualified label “Your North Star”');
     expect(foundation).toContain('Does this direction feel right to you, or what would you change?');
     expect(foundation).toMatch(/one concise North Star statement.*do not expose.*statement.*serves.*pointOfView/is);
     expect(foundation).not.toMatch(/\bprovisional\b/i);
@@ -195,7 +190,6 @@ describe('repository-owned Method module loader', () => {
     expect(foundation).toMatch(/coverage is sufficient.*exactly one clear decision question/is);
     expect(foundation).toMatch(/one short question per turn/i);
     expect(foundation).toMatch(/do not propose Purpose Paths until.*confirmed/i);
-    expect(foundation).toMatch(/never switch to English.*example is written in English/i);
     expect(foundation).toMatch(/exact.*invalidatedArtifactClasses/i);
     expect(foundation).toMatch(/zero.*ordinary later-turn confirmation.*no impact classes/is);
     expect(foundation).toMatch(/nonzero.*only.*exact affected.*later explorer turn/is);
@@ -213,8 +207,7 @@ describe('repository-owned Method module loader', () => {
     expect(paths).toMatch(/explicitly asks for a recommendation/i);
     expect(paths).toMatch(/bare ordinal.*exact current path/i);
     expect(paths).toContain(PURPOSE_PATHS_OFFER_ENGLISH);
-    expect(paths).toContain(PURPOSE_PATHS_OFFER_SPANISH);
-    expect(paths).toMatch(/only.*localized framing.*no.*footer invitation/is);
+    expect(paths).toMatch(/only.*framing.*no.*footer invitation/is);
     expect(paths).toMatch(/what the explorer needs to learn.*interest.*energy.*willingness to continue/is);
     expect(paths).toMatch(/what could become possible.*concrete, excitingly ambitious.*North Star.*feel energized.*without promising success.*distinct from.*small first project/is);
     expect(paths).toMatch(/stated time, money, access.*do not default.*enterprise-scale compliance/is);
@@ -231,7 +224,7 @@ describe('repository-owned Method module loader', () => {
     expect(project).toMatch(/acceptancePhrase.*not.*exact-match/is);
     expect(project).toMatch(/durable marker prevents repetition after reload or compaction/i);
     expect(project).toContain(R22_CANONICAL_ENGLISH);
-    expect(project).toContain(R22_CANONICAL_SPANISH);
+    expect(project).not.toMatch(/Spanish conversation|translate all five ideas/i);
     expect(project.indexOf(R22_CANONICAL_ENGLISH)).toBe(project.lastIndexOf(R22_CANONICAL_ENGLISH));
   });
 });

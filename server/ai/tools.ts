@@ -23,9 +23,7 @@ import {
 import { compileCareerMapBriefing, type CareerMapBriefing } from './briefing.js';
 import {
   FIRST_PROJECT_ACCEPTANCE_PHRASE_ENGLISH,
-  FIRST_PROJECT_ACCEPTANCE_PHRASE_SPANISH,
   R22_CANONICAL_ENGLISH,
-  R22_CANONICAL_SPANISH,
 } from './method/base-instructions.js';
 import type { LoadedMethodModule, MethodModuleLoader } from './method/loader.js';
 import {
@@ -589,7 +587,7 @@ export function createMethodTools(runtime: MethodToolRuntime): ToolSet {
     replace_project_proposal: operationTool(runtime, 'replace-project-proposal', 'Replace the one pending first-project proposal.', z.object({ projectId: entityIdSchema, projectRevision: revisionSchema, replacement: projectToolInputSchema }).strict(), (input) => {
       return { ...input, presentation: context().presentation };
     }),
-    present_first_project_framing: operationTool(runtime, 'present-first-project-framing', 'Record that the required locale-correct first-project framing will be the only framing in this completed assistant turn.', z.object({
+    present_first_project_framing: operationTool(runtime, 'present-first-project-framing', 'Record that the required first-project framing will be the only framing in this completed assistant turn.', z.object({
       projectId: entityIdSchema,
       projectRevision: revisionSchema,
       locale: languageTagSchema,
@@ -598,16 +596,13 @@ export function createMethodTools(runtime: MethodToolRuntime): ToolSet {
       acceptanceQuestion: projectAcceptanceQuestionSchema,
     }).strict(), (input) => {
       const language = input.locale.split('-')[0]?.toLowerCase();
-      const canonicalAcceptancePhrase = language === 'en'
-        ? FIRST_PROJECT_ACCEPTANCE_PHRASE_ENGLISH
-        : language === 'es' ? FIRST_PROJECT_ACCEPTANCE_PHRASE_SPANISH : undefined;
+      const canonicalAcceptancePhrase = language === 'en' ? FIRST_PROJECT_ACCEPTANCE_PHRASE_ENGLISH : undefined;
       if (
         (language === 'en' && input.framingText !== R22_CANONICAL_ENGLISH)
-        || (language === 'es' && input.framingText !== R22_CANONICAL_SPANISH)
         || (canonicalAcceptancePhrase !== undefined && input.acceptancePhrase !== canonicalAcceptancePhrase)
         || !input.acceptanceQuestion.includes(input.acceptancePhrase)
       ) {
-        const error = new Error('The first-project framing or acceptance copy does not match the canonical locale contract.');
+        const error = new Error('The first-project framing or acceptance copy does not match the canonical contract.');
         error.name = 'FramingDeliveryError';
         throw error;
       }

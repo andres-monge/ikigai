@@ -27,15 +27,11 @@ import {
   BASE_INSTRUCTIONS_VERSION,
   BASE_METHOD_INSTRUCTIONS,
   FIRST_PROJECT_ACCEPTANCE_PHRASE_ENGLISH,
-  FIRST_PROJECT_ACCEPTANCE_PHRASE_SPANISH,
   PURPOSE_PATHS_OFFER_ENGLISH,
-  PURPOSE_PATHS_OFFER_SPANISH,
   R22_CANONICAL_ENGLISH,
-  R22_CANONICAL_SPANISH,
 } from '../server/ai/method/base-instructions.ts';
 import {
   classifyFoundationQuestionTopics,
-  isPredominantlySpanish,
   matchesPathOperationExpectation,
   summarizeFirstProjectReplacement,
   summarizeFoundationTrace,
@@ -58,12 +54,6 @@ class EvaluationAssertionError extends Error {
 
 function assert(condition, message) {
   if (!condition) throw new EvaluationAssertionError(message);
-}
-
-function expectedR22Framing(scenario) {
-  return scenario.openingLanguage === 'en' && scenario.languageChangeTurn === undefined
-    ? R22_CANONICAL_ENGLISH
-    : R22_CANONICAL_SPANISH;
 }
 
 if (!allowedModels.has(modelId)) {
@@ -214,7 +204,6 @@ function proveU7FixtureCoverage() {
 const scenarios = [
   {
     id: 'english-rich',
-    openingLanguage: 'en',
     foundationExpectations: {
       requiredFirstTurnQuestionTopics: [],
       forbiddenFirstTurnQuestionTopics: [
@@ -239,8 +228,7 @@ const scenarios = [
     ],
   },
   {
-    id: 'spanish-opening',
-    openingLanguage: 'es',
+    id: 'english-fallback',
     foundationExpectations: {
       requiredFirstTurnQuestionTopics: ['consumption-thinking-fallback'],
       forbiddenFirstTurnQuestionTopics: ['ten-year-meaning'],
@@ -254,20 +242,18 @@ const scenarios = [
     projectReplacementTurn: 5,
     requiredOperations: ['combine-purpose-paths', 'replace-project-proposal'],
     turns: [
-      'No se me ocurre ninguna actividad que me absorba de verdad. En diez años me gustaría haber ayudado a que equipos pequeños tomen decisiones más humanas, porque creo que la claridad debe llevar a una acción propia. La gente me pide que explique sistemas complejos. Tengo cinco horas semanales y necesito mantener mis ingresos.',
-      'Suelo leer y pensar durante horas sobre cómo diseñar mejores decisiones, y una vez convertí esas ideas en una guía que mi equipo usó voluntariamente.',
-      'Sí, esa Estrella Polar me representa y quiero confirmarla.',
-      'Combina el primer y el segundo camino en uno, conserva el tercero y crea un nuevo tercer camino para que el conjunto siga teniendo exactamente tres opciones sin ranking.',
-      'Elijo explícitamente el primer camino del conjunto actual.',
-      'No quiero un ejercicio de portfolio para un cliente imaginario. Sustituye ese proyecto por uno nuevo con un resultado que yo quiera o para alguien que conozca de primera mano.',
-      'El proyecto sustituto está listo. Dame ahora el encuadre obligatorio y pídeme que lo acepte, pero todavía no lo aceptes.',
-      'Acepto este Proyecto de Camino y quiero empezar.',
+      'I cannot think of any activity that absorbs me. In ten years I would like to have helped small teams make more humane decisions, because I believe clarity should lead to their own action. People ask me to explain complex systems. I have five hours a week and need to keep my income.',
+      'I read and think for hours about designing better decisions, and once turned those ideas into a guide my team used voluntarily.',
+      'Yes, that North Star represents me and I want to confirm it.',
+      'Combine the first and second paths into one, keep the third, and create a new third path so there are exactly three options without ranking.',
+      'I explicitly choose the first path in the current set.',
+      'I do not want a portfolio exercise for an imaginary client. Replace that project with one I want or one for someone I know firsthand.',
+      'The replacement project is ready. Give me the required framing and ask me to accept it, but do not accept it yet.',
+      'I accept this Path Project and want to start.',
     ],
   },
   {
-    id: 'explicit-language-change',
-    openingLanguage: 'en',
-    languageChangeTurn: 5,
+    id: 'english-pause-and-discussion',
     foundationExpectations: {
       requiredFirstTurnQuestionTopics: ['ten-year-meaning'],
       forbiddenFirstTurnQuestionTopics: [],
@@ -281,10 +267,10 @@ const scenarios = [
       'In ten years I would be proud to have helped ordinary teams make consequential choices without depending on experts. I think good systems should transfer agency rather than create dependence.',
       'That North Star is accurate. I want to confirm it.',
       'The second path appeals mainly because its title sounds prestigious. Investigate that distortion and replace or revise it without ranking the alternatives.',
-      'A partir de ahora, hablemos en español. Confirma brevemente que has cambiado de idioma sin recomendarme ningún camino.',
-      'Elijo explícitamente el primer camino del conjunto actual.',
-      'Este proyecto está listo. Dame ahora el encuadre obligatorio en español y pídeme que lo acepte en el siguiente turno.',
-      'Acepto este Proyecto de Camino y quiero empezar.',
+      'Before I choose, explain briefly what makes these paths different without recommending one.',
+      'I explicitly choose the first path in the current set.',
+      'This project is ready. Give me the required framing and ask me to accept it next turn.',
+      'I accept this Path Project and want to start.',
     ],
   },
 ];
@@ -296,17 +282,6 @@ function timestamp(sequence) {
 function countOccurrences(text, needle) {
   if (!needle) return 0;
   return text.split(needle).length - 1;
-}
-
-function hasFaithfulSpanishR22(text) {
-  const lower = text.toLowerCase();
-  return /no es (tener )?(éxito|triunfar)/i.test(lower)
-    && /aprend/i.test(lower)
-    && /(seguir|continuar|perseguir)/i.test(lower)
-    && /citas/i.test(lower)
-    && /(poco|bajo|sin mucho) compromiso|relajad|tranquil/i.test(lower)
-    && /invi[ea]rt|invert/i.test(lower)
-    && /(otra|siguiente)/i.test(lower);
 }
 
 function normalizeWords(value) {
@@ -1311,7 +1286,7 @@ function createSyntheticHarness(scenario, loader, model) {
       },
     }),
     present_first_project_framing: tool({
-      description: 'Record the locale-correct R22 framing once for the pending first project, then emit exactly that framing and one short acceptance question.',
+      description: 'Record the R22 framing once for the pending first project, then emit exactly that framing and one short acceptance question.',
       inputSchema: z.object({
         locale: z.string().min(2).max(35),
         framingText: z.string().min(1).max(2_000),
@@ -1322,10 +1297,8 @@ function createSyntheticHarness(scenario, loader, model) {
       execute: ({ locale, framingText, acceptancePhrase, acceptanceQuestion }, { toolCallId }) => {
         const project = currentSuggestedProject();
         assert(project, `${scenario.id}: no first project is available for framing.`);
-        assert(framingText === expectedR22Framing(scenario), `${scenario.id}: framing tool did not persist the locale-correct canonical text.`);
-        const expectedAcceptancePhrase = expectedR22Framing(scenario) === R22_CANONICAL_ENGLISH
-          ? FIRST_PROJECT_ACCEPTANCE_PHRASE_ENGLISH
-          : FIRST_PROJECT_ACCEPTANCE_PHRASE_SPANISH;
+        assert(framingText === R22_CANONICAL_ENGLISH, `${scenario.id}: framing tool did not persist the canonical text.`);
+        const expectedAcceptancePhrase = FIRST_PROJECT_ACCEPTANCE_PHRASE_ENGLISH;
         assert(acceptancePhrase === expectedAcceptancePhrase, `${scenario.id}: framing tool did not persist the canonical locale acceptance phrase.`);
         assert(acceptanceQuestion.includes(acceptancePhrase), `${scenario.id}: acceptance question did not include the exact persisted phrase.`);
         return commit('present-first-project-framing', {
@@ -1341,14 +1314,14 @@ function createSyntheticHarness(scenario, loader, model) {
       },
     }),
     accept_first_project: tool({
-      description: 'Accept the pending first project only after the prior completed assistant turn gave the locale-correct R22 framing and the current user explicitly accepts.',
+      description: 'Accept the pending first project only after the prior completed assistant turn gave the R22 framing and the current user explicitly accepts.',
       inputSchema: z.object({}).strict(),
       execute: (_input, { toolCallId }) => {
         const project = currentSuggestedProject();
         assert(project, `${scenario.id}: no first project is available to accept.`);
         assert(project.acceptanceFraming?.status === 'delivered', `${scenario.id}: project framing was not durably delivered.`);
-        const expectedFraming = expectedR22Framing(scenario);
-        assert(summarizeR22Presentation(previousAssistantText, expectedFraming).valid, `${scenario.id}: project acceptance did not follow the strict locale-correct R22 presentation.`);
+        const expectedFraming = R22_CANONICAL_ENGLISH;
+        assert(summarizeR22Presentation(previousAssistantText, expectedFraming).valid, `${scenario.id}: project acceptance did not follow the strict R22 presentation.`);
         const result = commit('accept-first-project', {
           projectId: project.id,
           projectRevision: project.revision,
@@ -1469,7 +1442,6 @@ function createSyntheticHarness(scenario, loader, model) {
         })),
         resultingRevision: map.revision,
         replyShape: replyShape(text),
-        replyLooksSpanish: text ? isPredominantlySpanish(text) : null,
         replyText: text,
       });
       previousAssistantText = text;
@@ -1496,7 +1468,7 @@ function assessScenario(scenario, result) {
   const projectReplacement = scenario.projectReplacementTurn === undefined
     ? null
     : summarizeFirstProjectReplacement(operations, scenario.projectReplacementTurn);
-  const expectedFraming = expectedR22Framing(scenario);
+  const expectedFraming = R22_CANONICAL_ENGLISH;
   const r22Presentation = summarizeR22Presentation(framingTurn?.replyText ?? '', expectedFraming);
 
   assert(evidenceAuthorityViolations.length === 0, `${scenario.id}: model attempted ${evidenceAuthorityViolations.length} non-verbatim Foundation write(s).`);
@@ -1509,19 +1481,15 @@ function assessScenario(scenario, result) {
   const pausedFoundationNarrations = foundationNarrations.filter((turn) => pauseTurns.has(turn.turnIndex));
   const proposalTurnIndex = operations.find((item) => item.type === 'propose-why')?.turnIndex;
   const proposalNarration = turns.find((turn) => turn.turnIndex === proposalTurnIndex)?.replyText.trim() ?? '';
-  const proposalIsEnglish = scenario.openingLanguage === 'en'
-    && (scenario.languageChangeTurn === undefined || proposalTurnIndex < scenario.languageChangeTurn);
   assert(activeFoundationNarrations.every((turn) => turn.replyShape.questions === 1), `${scenario.id}: every active North Star narration must end with exactly one forward-moving question.`);
   assert(pausedFoundationNarrations.every((turn) => turn.replyShape.questions === 0 && turn.operations.length === 0), `${scenario.id}: an explicit Foundation pause asked a question or mutated canonical state.`);
   const foundationReplyText = foundationNarrations.map((turn) => turn.replyText).join('\n');
   assert(!/\bprovisional\b/i.test(foundationReplyText), `${scenario.id}: a Foundation reply exposed the internal North Star lifecycle label.`);
-  if (proposalIsEnglish) {
-    assert(proposalNarration.includes('Your North Star names the change you want your work to serve. It helps us suggest paths and see why the effort matters, and it can evolve as you learn by doing.'), `${scenario.id}: the first North Star suggestion omitted the canonical introduction.`);
-    assert(proposalNarration.endsWith('Does this direction feel right to you, or what would you change?'), `${scenario.id}: the first North Star suggestion omitted the canonical decision question.`);
-    assert(hasOnlyCanonicalEnglishNorthStarHeadings(proposalNarration), `${scenario.id}: an English North Star heading used a qualified or alternate label.`);
-    assert(!exposesQualifiedNorthStarLabel(proposalNarration), `${scenario.id}: an English reply exposed a qualified North Star label.`);
-    assert(!exposesSplitNorthStarField(proposalNarration), `${scenario.id}: the North Star suggestion exposed split internal fields instead of one direction.`);
-  }
+  assert(proposalNarration.includes('Your North Star names the goal you want your work to serve. It helps us suggest paths, and it can evolve as you learn by doing things.'), `${scenario.id}: the first North Star suggestion omitted the canonical introduction.`);
+  assert(proposalNarration.endsWith('Does this direction feel right to you, or what would you change?'), `${scenario.id}: the first North Star suggestion omitted the canonical decision question.`);
+  assert(hasOnlyCanonicalEnglishNorthStarHeadings(proposalNarration), `${scenario.id}: an English North Star heading used a qualified or alternate label.`);
+  assert(!exposesQualifiedNorthStarLabel(proposalNarration), `${scenario.id}: an English reply exposed a qualified North Star label.`);
+  assert(!exposesSplitNorthStarField(proposalNarration), `${scenario.id}: the North Star suggestion exposed split internal fields instead of one direction.`);
   for (const topic of scenario.foundationExpectations.requiredFirstTurnQuestionTopics) {
     assert(firstTurnQuestionTopics.includes(topic), `${scenario.id}: first North Star reply did not ask the required ${topic} follow-up.`);
   }
@@ -1554,10 +1522,7 @@ function assessScenario(scenario, result) {
 
   for (const operation of operations.filter((item) => ['propose-purpose-paths', 'replace-purpose-path', 'combine-purpose-paths'].includes(item.type))) {
     const offer = turns.find((turn) => turn.turnIndex === operation.turnIndex)?.replyText.trim();
-    const expectedOffer = scenario.openingLanguage === 'es'
-      || (scenario.languageChangeTurn !== undefined && operation.turnIndex >= scenario.languageChangeTurn)
-      ? PURPOSE_PATHS_OFFER_SPANISH
-      : PURPOSE_PATHS_OFFER_ENGLISH;
+    const expectedOffer = PURPOSE_PATHS_OFFER_ENGLISH;
     assert(offer === expectedOffer, `${scenario.id}: Purpose Paths narration was not the one exact concise localized offer.`);
   }
 
@@ -1569,16 +1534,7 @@ function assessScenario(scenario, result) {
 
   assert(acceptedTurn !== undefined && framingTurn, `${scenario.id}: acceptance did not have an immediately preceding assistant turn.`);
   assert(r22Presentation.valid, `${scenario.id}: R22 framing was not the exact first paragraph followed by one short acceptance question.`);
-  assert(countOccurrences(allReplyText, expectedFraming) === 1, `${scenario.id}: locale-correct R22 framing did not appear exactly once.`);
-  if (scenario.openingLanguage !== 'en' || scenario.languageChangeTurn !== undefined) {
-    assert(framingTurn.replyLooksSpanish === true, `${scenario.id}: localized R22 framing was not in Spanish.`);
-    assert(hasFaithfulSpanishR22(framingTurn.replyText), `${scenario.id}: Spanish R22 framing was not semantically faithful.`);
-  }
-
-  assert(scenario.openingLanguage !== 'es' || turns[0].replyLooksSpanish === true, `${scenario.id}: Spanish opening did not receive a Spanish first reply.`);
-  if (scenario.languageChangeTurn !== undefined) {
-    assert(turns[scenario.languageChangeTurn]?.replyLooksSpanish === true, `${scenario.id}: explicit language change was not mirrored on the next reply.`);
-  }
+  assert(countOccurrences(allReplyText, expectedFraming) === 1, `${scenario.id}: R22 framing did not appear exactly once.`);
 
   assert(turns.every((turn) => turn.replyShape.characters < 4_000), `${scenario.id}: a reply violated the concise response bound.`);
   assert(!/(permanent calling|destiny|scientific fit|fit score|ranked best|best path for you|your true calling|vocación definitiva|destino|puntuación de encaje|mejor camino para ti)/i.test(allReplyText), `${scenario.id}: reply used a forbidden identity, fit, destiny, or ranking claim.`);
@@ -1627,7 +1583,7 @@ function retainedDiagnostic(scenario, result) {
   const framingTurn = acceptedOperation === undefined
     ? undefined
     : result.turns.find((item) => item.turnIndex === acceptedOperation.turnIndex - 1);
-  const expectedFraming = expectedR22Framing(scenario);
+  const expectedFraming = R22_CANONICAL_ENGLISH;
   return {
     sample: scenario.id,
     revision: result.map.revision,

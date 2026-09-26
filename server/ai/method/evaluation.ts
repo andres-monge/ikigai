@@ -63,25 +63,6 @@ export interface R22PresentationSummary {
   readonly valid: boolean;
 }
 
-const spanishTokens = new Set([
-  'ahora', 'al', 'aunque', 'aqui', 'asi', 'cada', 'camino', 'claro', 'como', 'con', 'cual', 'cuales',
-  'cuando', 'de', 'del', 'donde', 'el', 'ella', 'ellas', 'ellos', 'en', 'es', 'esa', 'esas', 'ese', 'eso',
-  'esos', 'espanol', 'esta', 'estas', 'este', 'esto', 'estos', 'explorar', 'fue', 'gracias', 'hasta', 'hay',
-  'horas', 'la', 'las', 'leer', 'lo', 'los', 'mas', 'mirar', 'muy', 'ningun', 'ninguna', 'o', 'para',
-  'pensar', 'pero', 'porque', 'por',
-  'pregunta', 'proyecto', 'puede', 'puedes', 'que', 'quien', 'quienes', 'quieres', 'seguimos', 'ser', 'si',
-  'sin', 'sobre', 'solo', 'son', 'su', 'sueles', 'sus', 'tambien', 'te', 'tu', 'tus', 'un', 'una', 'unas', 'unos',
-  'y', 'ya',
-]);
-
-const englishTokens = new Set([
-  'already', 'also', 'although', 'an', 'and', 'are', 'be', 'because', 'been', 'but', 'by', 'can', 'could',
-  'english', 'explore', 'for', 'from', 'here', 'in', 'is', 'it', 'learn', 'more', 'now', 'of', 'only', 'or',
-  'our', 'over', 'path', 'project', 'question', 'should', 'that', 'the', 'their', 'there', 'these', 'they',
-  'this', 'those', 'until', 'very', 'want', 'was', 'we', 'when', 'where', 'which', 'who', 'with', 'without',
-  'work', 'would', 'yes', 'you', 'your',
-]);
-
 function unique(values: Array<string | null | undefined>): string[] {
   return [...new Set(values.filter((value): value is string => Boolean(value)))];
 }
@@ -167,23 +148,6 @@ export function classifyFoundationQuestionTopics(text: string): FoundationQuesti
     'starting-assets',
     'reality-boundary',
   ].filter((topic): topic is FoundationQuestionTopic => topics.has(topic as FoundationQuestionTopic));
-}
-
-export function isPredominantlySpanish(text: string): boolean {
-  const tokens = normalize(text).match(/[a-z]+/g) ?? [];
-  if (tokens.length === 0) return false;
-
-  const spanishHits = tokens.filter((token) => spanishTokens.has(token)).length;
-  const englishHits = tokens.filter((token) => englishTokens.has(token)).length;
-  const classifiedHits = spanishHits + englishHits;
-  if (classifiedHits === 0) return false;
-
-  const spanishDominates = spanishHits / classifiedHits >= 0.7
-    && spanishHits / tokens.length >= 0.18;
-  return spanishDominates && (
-    spanishHits >= 3
-    || (/[¿¡]/u.test(text) && spanishHits >= 2 && spanishHits > englishHits * 2)
-  );
 }
 
 export function matchesPathOperationExpectation(

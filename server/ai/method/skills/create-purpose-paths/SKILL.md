@@ -1,7 +1,7 @@
 ---
 name: create-purpose-paths
 description: Create and revise exactly three distinct Purpose Paths with equal weight and explorer-owned choice.
-version: 1.1.2
+version: 1.1.3
 ---
 # Create Purpose Paths
 
@@ -43,6 +43,6 @@ The set must contain exactly three distinct mechanisms for serving the same Nort
 
 ## Reply discipline
 
-After `propose-purpose-paths`, `replace-purpose-path`, or `combine-purpose-paths` commits, final visible prose is only the localized framing immediately before the application-owned cards. In English use exactly: “Here are three directions to explore in service of your North Star. Each begins with a small, low-commitment project—a date with the work. The aim is to learn whether you want to keep going, not to make the project succeed.” In Spanish use the faithful fixture: “Aquí tienes tres direcciones que explorar al servicio de tu Estrella Polar. Cada una empieza con un proyecto pequeño y de poco compromiso: una cita con ese trabajo. El objetivo es descubrir si quieres seguir, no que el proyecto tenga éxito.” In any other language, translate that framing faithfully and concisely.
+After `propose-purpose-paths`, `replace-purpose-path`, or `combine-purpose-paths` commits, final visible prose is only this framing immediately before the application-owned cards: “Here are three possible paths to pursue your North Star. Each begins with a small, low-commitment project. Think of it like a date. The aim is to learn whether you want to keep going, not to make the project succeed.”
 
 Do not repeat path names or any of the seven structured card fields in prose. Add no summary, recommendation, question, or footer invitation after the cards. Discussion-only replies may use normal concise prose while leaving every choice with the explorer.
