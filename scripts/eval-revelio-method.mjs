@@ -43,8 +43,8 @@ import {
 } from '../server/ai/method/evaluation.ts';
 import { createMethodModuleLoader } from '../server/ai/method/loader.ts';
 
-const allowedModels = new Set(['gpt-5.6-sol']);
-const modelId = process.env.REVELIO_METHOD_MODEL || 'gpt-5.6-sol';
+const allowedModels = new Set(['gpt-6-sol']);
+const modelId = process.env.REVELIO_METHOD_MODEL || 'gpt-6-sol';
 const apiKey = process.env.OPENAI_API_KEY;
 const requestTimeoutMs = Number(process.env.REVELIO_METHOD_TIMEOUT_MS || 60_000);
 const runStartedAt = new Date().toISOString();
@@ -67,7 +67,7 @@ function expectedR22Framing(scenario) {
 }
 
 if (!allowedModels.has(modelId)) {
-  throw new EvaluationAssertionError(`REVELIO_METHOD_MODEL must be one of the G1 native passing models; received ${modelId}.`);
+  throw new EvaluationAssertionError(`REVELIO_METHOD_MODEL must be ${[...allowedModels].join(' or ')}; received ${modelId}.`);
 }
 if (!Number.isSafeInteger(requestTimeoutMs) || requestTimeoutMs <= 0) {
   throw new EvaluationAssertionError('REVELIO_METHOD_TIMEOUT_MS must be a positive integer.');

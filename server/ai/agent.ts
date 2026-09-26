@@ -26,7 +26,7 @@ import {
   type NativeSearchStep,
 } from './research.js';
 
-export const REVELIO_AGENT_MODEL = 'gpt-5.6-sol';
+export const REVELIO_AGENT_MODEL = 'gpt-6-sol';
 export const REVELIO_AGENT_PROVIDER = 'openai-responses';
 export const REVELIO_COMPACT_THRESHOLD = 1_000;
 // Bounds one internal provider/tool loop, not the number of explorer turns.

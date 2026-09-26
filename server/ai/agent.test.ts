@@ -397,7 +397,7 @@ async function makeAgent(input: {
 describe('amended Method agent core loop', () => {
   it('keeps Sol and one native SDK loop without evidence or raw-result plumbing', () => {
     const source = readFileSync(new URL('./agent.ts', import.meta.url), 'utf8');
-    expect(REVELIO_AGENT_MODEL).toBe('gpt-5.6-sol');
+    expect(REVELIO_AGENT_MODEL).toBe('gpt-6-sol');
     expect(source).not.toMatch(/classifyMethodTurn|classifyConsequentialAuthorization|MethodTurnRoute/);
     expect(source).not.toMatch(/continue_natural_conversation|NATURAL_CONVERSATION_TOOL_NAME/);
     expect(source).not.toMatch(/NativeSearchEvidence|evidenceManifest|researchResolutionPending/);
