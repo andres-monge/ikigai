@@ -959,7 +959,7 @@ describe('amended Method agent core loop', () => {
     ]));
     expect(preparedPromptTexts[1]?.some((text) => text.includes('"marker":"context-0"'))).toBe(false);
     expect(model.doStreamCalls[0]?.providerOptions?.openai?.contextManagement).toEqual([
-      { type: 'compaction', compactThreshold: 32_000 },
+      { type: 'compaction', compactThreshold: 200_000 },
     ]);
     expect(model.doStreamCalls.every((call) => call.maxOutputTokens === REVELIO_MAX_OUTPUT_TOKENS)).toBe(true);
     expect(REVELIO_MAX_OUTPUT_TOKENS).toBeGreaterThanOrEqual(25_000);

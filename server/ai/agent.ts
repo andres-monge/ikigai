@@ -28,9 +28,9 @@ import {
 
 export const REVELIO_AGENT_MODEL = 'gpt-6-sol';
 export const REVELIO_AGENT_PROVIDER = 'openai-responses';
-// A threshold below the fixed Method prompt compacts routine turns and can
-// exhaust the response budget before the agent emits a reply or tool call.
-export const REVELIO_COMPACT_THRESHOLD = 32_000;
+// Keep routine turns below the compaction trigger while retaining ample room
+// in Sol's context window for the response and tool continuation.
+export const REVELIO_COMPACT_THRESHOLD = 200_000;
 // Reasoning and a compaction pass can consume output tokens before any
 // visible reply or tool call. Keep the provider's suggested starting buffer.
 export const REVELIO_MAX_OUTPUT_TOKENS = 25_000;
