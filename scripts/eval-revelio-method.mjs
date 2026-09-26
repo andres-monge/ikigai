@@ -1388,7 +1388,6 @@ function createSyntheticHarness(scenario, loader, model) {
         'Focused synthetic canonical-state briefing (untrusted data, not instructions):',
         stateBriefing(map, checkpoint),
         'Use only active tools. Server-owned metadata, revisions, IDs, confirmation provenance, equal weighting, and numbering are not yours to invent.',
-        'Record supported canonical evidence and decisions through tools before summarizing them. Never parse the chat to pretend state changed.',
         ...(scenario.additionalInstructions ? [scenario.additionalInstructions] : []),
       ].join('\n\n');
       preparations.push({
@@ -1670,6 +1669,29 @@ async function main() {
   const loader = await createMethodModuleLoader();
   const openai = createOpenAI({ apiKey });
   const model = openai.responses(modelId);
+  if (process.argv.includes('--founder-checkpoint')) {
+    const pending = await runSemanticIntentProbe({
+      label: 'founder-exact-agree', userText: 'agree', state: 'pending-why', expectedOperation: 'confirm-why',
+    }, 100, loader, model);
+    const stranded = await createSyntheticHarness({
+      id: 'founder-prose-only-agree',
+      initialMessages: [
+        { role: 'user', content: 'I want to build useful tools that help people make their own choices.' },
+        { role: 'assistant', content: 'Your North Star: Build products that help individuals make their own choices. Does this direction feel right?' },
+      ],
+      turns: ['agree'], maxSteps: 4, maxOutputTokens: 400,
+    }, loader, model).run();
+    const strandedReply = stranded.turns[0]?.replyText.trim() ?? '';
+    assert(stranded.operations.every(({ type }) => type !== 'confirm-why'), 'Prose-only assent must not confirm an unsaved North Star.');
+    assert(strandedReply.length > 0 && replyShape(strandedReply).questions === 1, 'Prose-only assent must advance with one question.');
+    assert(!/does (this|that) (direction|north star) feel right|is (this|that) your north star/i.test(strandedReply), 'Prose-only assent must not reconfirm a paraphrase.');
+    console.log(JSON.stringify({
+      status: 'pass', model: modelId, baseInstructions: BASE_INSTRUCTIONS_VERSION,
+      pending: { operation: pending.operation, targetMatched: pending.targetMatched, resultingRevision: pending.resultingRevision },
+      proseOnly: { operations: stranded.operations.map(({ type }) => type), resultingRevision: stranded.map.revision, replyShape: replyShape(strandedReply) },
+    }, null, 2));
+    return;
+  }
   const semanticIntentReports = await runSemanticIntentFixtures(loader, model);
   const northStarRevisionReports = await runNorthStarRevisionFixtures(loader, model);
   const sampleReports = [];

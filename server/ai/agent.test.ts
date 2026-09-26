@@ -421,6 +421,15 @@ describe('amended Method agent core loop', () => {
       conversation: 'conversation-server-owned', store: true,
       parallelToolCalls: false, reasoningEffort: 'low',
     });
+    expect(model.doStreamCalls[0]?.providerOptions?.openai?.instructions).toContain(
+      'Record supported canonical evidence and decisions through tools before summarizing.',
+    );
+    expect(model.doStreamCalls[0]?.providerOptions?.openai?.instructions).toContain(
+      'Do not ask for assent to another paraphrase.',
+    );
+    expect(model.doStreamCalls[0]?.providerOptions?.openai?.instructions).toContain(
+      'end with one concrete question advancing the active Method checkpoint',
+    );
     expect(model.doStreamCalls[0]?.providerOptions?.openai).not.toHaveProperty('include');
   });
 
