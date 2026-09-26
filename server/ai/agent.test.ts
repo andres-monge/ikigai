@@ -956,7 +956,9 @@ describe('amended Method agent core loop', () => {
       expect.stringContaining('"marker":"context-1"'),
     ]));
     expect(preparedPromptTexts[1]?.some((text) => text.includes('"marker":"context-0"'))).toBe(false);
-    expect(model.doStreamCalls[0]?.providerOptions?.openai).toHaveProperty('contextManagement');
+    expect(model.doStreamCalls[0]?.providerOptions?.openai?.contextManagement).toEqual([
+      { type: 'compaction', compactThreshold: 32_000 },
+    ]);
     expect(model.doStreamCalls[1]?.providerOptions?.openai).not.toHaveProperty('contextManagement');
     expect(model.doStreamCalls.every((call) => {
       const instructions = String(call.providerOptions?.openai?.instructions);

@@ -28,7 +28,9 @@ import {
 
 export const REVELIO_AGENT_MODEL = 'gpt-6-sol';
 export const REVELIO_AGENT_PROVIDER = 'openai-responses';
-export const REVELIO_COMPACT_THRESHOLD = 1_000;
+// A threshold below the fixed Method prompt compacts routine turns and can
+// exhaust the response budget before the agent emits a reply or tool call.
+export const REVELIO_COMPACT_THRESHOLD = 32_000;
 // Bounds one internal provider/tool loop, not the number of explorer turns.
 export const REVELIO_MAX_AGENT_STEPS = 50;
 export const METHOD_INTERNAL_CONTEXT_MARKER = 'SERVER REFRESH CONTEXT';
