@@ -50,6 +50,7 @@ export interface MethodAgentTurnDiagnostics {
   stepFinishReasons: string[];
   stepCount: number;
   visibleOutput: boolean;
+  usageReported: boolean;
   inputTokens?: number;
   outputTokens?: number;
   reasoningTokens?: number;
@@ -84,6 +85,17 @@ function safeTokenCount(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 1_000_000_000
     ? value
     : undefined;
+}
+
+function reportedTokenTotal(values: readonly unknown[]): number | undefined {
+  if (values.length === 0) return undefined;
+  let total = 0;
+  for (const value of values) {
+    const count = safeTokenCount(value);
+    if (count === undefined || total + count > 1_000_000_000) return undefined;
+    total += count;
+  }
+  return total;
 }
 
 function safeFinishReason(value: unknown): string {
@@ -572,15 +584,17 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
             const finalVisibleText = displayGroups.flatMap(({ group, hasClientTool }) => (
               hasClientTool ? [] : group.flatMap((part) => part.type === 'text-delta' ? [part.text] : [])
             )).join('');
-            const usage = outerFinish?.totalUsage;
-            const inputTokens = safeTokenCount(usage?.inputTokens);
-            const outputTokens = safeTokenCount(usage?.outputTokens);
-            const reasoningTokens = safeTokenCount(usage?.outputTokenDetails?.reasoningTokens);
+            // AI SDK aggregates missing provider usage as zeros in totalUsage.
+            // Sum only per-step counts that the provider actually reported.
+            const inputTokens = reportedTokenTotal(steps.map((step) => step.usage.inputTokens));
+            const outputTokens = reportedTokenTotal(steps.map((step) => step.usage.outputTokens));
+            const reasoningTokens = reportedTokenTotal(steps.map((step) => step.usage.outputTokenDetails?.reasoningTokens));
             options.onTurnDiagnostics?.({
               finishReason: safeFinishReason(outerFinish?.finishReason),
               stepFinishReasons: steps.slice(0, REVELIO_MAX_AGENT_STEPS).map((step) => safeFinishReason(step.finishReason)),
               stepCount: steps.length,
               visibleOutput: finalVisibleText.trim().length > 0,
+              usageReported: inputTokens !== undefined && outputTokens !== undefined,
               ...(inputTokens !== undefined ? { inputTokens } : {}),
               ...(outputTokens !== undefined ? { outputTokens } : {}),
               ...(reasoningTokens !== undefined ? { reasoningTokens } : {}),

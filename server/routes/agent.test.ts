@@ -2062,7 +2062,9 @@ describe('protected Method routes', () => {
         stream: simulateReadableStream({
           chunks: [
             { type: 'stream-start', warnings: [] },
-            { type: 'finish', finishReason: { unified: 'length', raw: 'max_output_tokens' }, usage: usage() },
+            { type: 'finish', finishReason: { unified: 'length', raw: 'max_output_tokens' }, usage: {
+              inputTokens: { total: undefined }, outputTokens: { total: undefined },
+            } },
           ] as never,
         }),
       }),
@@ -2098,8 +2100,11 @@ describe('protected Method routes', () => {
     expect(logs.at(-1)).toMatchObject({
       route: 'agent-turn', errorClass: 'NoOutputGeneratedError',
       agentFinishReason: 'length', agentStepCount: 1, agentVisibleOutput: false,
-      agentInputTokens: 1, agentOutputTokens: 1, agentReasoningTokens: 0,
+      agentUsageReported: false,
     });
+    expect(logs.at(-1)).not.toHaveProperty('agentInputTokens');
+    expect(logs.at(-1)).not.toHaveProperty('agentOutputTokens');
+    expect(logs.at(-1)).not.toHaveProperty('agentReasoningTokens');
     expect(JSON.stringify(logs)).not.toContain('Please change one of the Purpose Paths.');
   });
 

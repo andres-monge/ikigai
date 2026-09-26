@@ -254,6 +254,7 @@ function methodTurnDiagnosticLog(diagnostics: MethodAgentTurnDiagnostics): Recor
     agentStepFinishReasons: diagnostics.stepFinishReasons,
     agentStepCount: diagnostics.stepCount,
     agentVisibleOutput: diagnostics.visibleOutput,
+    agentUsageReported: diagnostics.usageReported,
     ...(diagnostics.inputTokens !== undefined ? { agentInputTokens: diagnostics.inputTokens } : {}),
     ...(diagnostics.outputTokens !== undefined ? { agentOutputTokens: diagnostics.outputTokens } : {}),
     ...(diagnostics.reasoningTokens !== undefined ? { agentReasoningTokens: diagnostics.reasoningTokens } : {}),

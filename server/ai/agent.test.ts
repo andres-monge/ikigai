@@ -420,7 +420,8 @@ describe('amended Method agent core loop', () => {
     expect(storage.map.revision).toBe(0);
     expect(diagnostics).toHaveBeenCalledWith(expect.objectContaining({
       finishReason: 'stop', stepFinishReasons: ['stop'], stepCount: 1,
-      visibleOutput: true, inputTokens: 1, outputTokens: 1, reasoningTokens: 0,
+      visibleOutput: true, usageReported: true,
+      inputTokens: 1, outputTokens: 1, reasoningTokens: 0,
     }));
     expect(diagnostics).toHaveBeenCalledOnce();
     expect(model.doStreamCalls[0]?.toolChoice).toEqual({ type: 'auto' });
