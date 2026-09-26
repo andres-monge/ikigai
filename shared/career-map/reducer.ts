@@ -114,6 +114,13 @@ function assertPathRevisionConsistency(map: CareerMap, paths: PurposePathInput[]
   }
 }
 
+function assertFirstPathSetInTurn(map: CareerMap, presentation: ModelPresentation): void {
+  assert(
+    !map.pathSets.some((set) => set.presentation.assistantTurnId === presentation.assistantTurnId),
+    'An assistant turn may present only one Purpose Path set.',
+  );
+}
+
 function auditableConfirmation(
   target: { id: string; revision: number; presentation: ModelPresentation },
   action: UserActionProvenance,
@@ -344,6 +351,7 @@ function applyDomainOperation(map: CareerMap, operation: CareerMapOperation): Ca
       return;
     }
     case 'propose-purpose-paths': {
+      assertFirstPathSetInTurn(map, operation.payload.presentation);
       const why = currentWhy(map);
       assert(why, 'Purpose Paths require a confirmed Why.');
       ensureUniqueIds(operation.payload.paths, 'Purpose Paths');
@@ -361,6 +369,7 @@ function applyDomainOperation(map: CareerMap, operation: CareerMapOperation): Ca
       return;
     }
     case 'replace-purpose-path': {
+      assertFirstPathSetInTurn(map, operation.payload.presentation);
       const source = map.pathSets.find((set) => sameRevision(set, operation.payload.sourceSetId, operation.payload.sourceSetRevision));
       assert(source && source.status !== 'superseded', 'Purpose Path source set is stale.', 'stale-target');
       assert(source.paths.some((path) => path.id === operation.payload.replacedPathId), 'Replacement target is not in the source set.', 'stale-target');
@@ -381,6 +390,7 @@ function applyDomainOperation(map: CareerMap, operation: CareerMapOperation): Ca
       return;
     }
     case 'combine-purpose-paths': {
+      assertFirstPathSetInTurn(map, operation.payload.presentation);
       const source = map.pathSets.find((set) => sameRevision(set, operation.payload.sourceSetId, operation.payload.sourceSetRevision));
       assert(source && source.status !== 'superseded', 'Purpose Path combination source is stale.', 'stale-target');
       const [first, second] = operation.payload.combinedPathIds;

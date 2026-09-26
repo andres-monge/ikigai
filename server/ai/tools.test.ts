@@ -765,6 +765,39 @@ describe('strict state-specific Method tools', () => {
     expect(result).toMatchObject({ status: 'committed', authoritativeRevision: 4 });
     expect(storage.persist).toHaveBeenCalledOnce();
   });
+
+  it('does not persist two Purpose Path presentations across provider Responses in one assistant turn', async () => {
+    const storage = new ReducerStorage(pendingPaths());
+    const loader = await createMethodModuleLoader();
+    const prepared = { current: await refreshMethodState(storage, loader, 'explorer-1') };
+    const operationGuard = createMethodResponseOperationGuard();
+    const tools = createMethodTools({
+      ...runtime(storage), loader, surface: 'agent-turn', prepared, operationGuard,
+      timing: { turnSequence: 4, occurredAt: at(4) },
+    });
+    const replacement = (id: string) => ({
+      id, revision: 1, name: `Replacement ${id}`,
+      servesWhy: 'Serve another way', possibility: 'A distinct possibility',
+      evidence: ['Evidence'], centralUnknown: 'Unknown',
+      projectPreview: 'Project', practicalFit: 'Fit',
+    });
+
+    expect(await tools.replace_purpose_path.execute?.({
+      sourceSetId: 'set-1', sourceSetRevision: 1, replacedPathId: 'path-1',
+      replacementSetId: 'set-2', replacementSetRevision: 1, replacement: replacement('path-4'),
+    }, { toolCallId: 'first-response', messages: [] } as never)).toMatchObject({ status: 'committed' });
+
+    operationGuard.reset();
+    prepared.current = await refreshMethodState(storage, loader, 'explorer-1');
+    expect(await tools.replace_purpose_path.execute?.({
+      sourceSetId: 'set-2', sourceSetRevision: 1, replacedPathId: 'path-2',
+      replacementSetId: 'set-3', replacementSetRevision: 1, replacement: replacement('path-5'),
+    }, { toolCallId: 'second-response', messages: [] } as never)).toMatchObject({
+      status: 'rejected', errorClass: 'illegal-transition',
+    });
+    expect(storage.map.pathSets).toHaveLength(2);
+    expect(storage.map.pathSets.at(-1)?.id).toBe('set-2');
+  });
   it('combines both requested plural numeric aliases while allowing the separately named preserved sibling', async () => {
     const storage = new ReducerStorage(pendingPaths());
     const loader = await createMethodModuleLoader();

@@ -246,6 +246,41 @@ describe('Method reducer', () => {
     expect(current?.paths.every((candidate) => candidate.selection === 'available')).toBe(true);
   });
 
+  it('rejects a second Purpose Path set presented in the same assistant turn', () => {
+    let map = withConfirmedWhy();
+    map = commit(map, 'propose-purpose-paths', {
+      setId: 'paths-1', setRevision: 1, paths: paths(), presentation: presentation(3),
+    });
+    map = commit(map, 'replace-purpose-path', {
+      sourceSetId: 'paths-1', sourceSetRevision: 1, replacedPathId: 'path-1',
+      replacementSetId: 'paths-2', replacementSetRevision: 1,
+      replacement: { ...paths('replacement')[0], id: 'path-4' }, presentation: presentation(4),
+    });
+
+    const second = applyCareerMapOperation(map, operation(map, 'replace-purpose-path', {
+      sourceSetId: 'paths-2', sourceSetRevision: 1, replacedPathId: 'path-2',
+      replacementSetId: 'paths-3', replacementSetRevision: 1,
+      replacement: { ...paths('replacement')[1], id: 'path-5' }, presentation: presentation(4),
+    }));
+
+    expect(second.status).toBe('rejected');
+    if (second.status !== 'rejected') throw new Error('Second same-turn set unexpectedly committed.');
+    expect(second.error.code).toBe('illegal-transition');
+    expect(second.map).toEqual(map);
+    expect(second.map.pathSets).toHaveLength(2);
+
+    const combined = applyCareerMapOperation(map, operation(map, 'combine-purpose-paths', {
+      sourceSetId: 'paths-2', sourceSetRevision: 1, combinedPathIds: ['path-4', 'path-2'],
+      replacementSetId: 'paths-3', replacementSetRevision: 1,
+      paths: [paths('combined')[0], paths('combined')[1], paths()[2]],
+      presentation: presentation(4),
+    }));
+    expect(combined.status).toBe('rejected');
+    if (combined.status !== 'rejected') throw new Error('Same-turn combination unexpectedly committed.');
+    expect(combined.error.code).toBe('illegal-transition');
+    expect(combined.map).toEqual(map);
+  });
+
   it('requires a new revision whenever Purpose Path content changes', () => {
     let map = withConfirmedWhy();
     map = commit(map, 'propose-purpose-paths', {
