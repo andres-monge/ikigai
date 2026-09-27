@@ -102,6 +102,11 @@ function pathInput(path: PurposePath): PurposePathInput {
   return input;
 }
 
+function pathContent(path: PurposePathInput): Omit<PurposePathInput, 'id' | 'revision'> {
+  const { id: _id, revision: _revision, ...content } = path;
+  return content;
+}
+
 function assertPathRevisionConsistency(map: CareerMap, paths: PurposePathInput[]): void {
   const existingPaths = map.pathSets.flatMap((set) => set.paths);
   for (const candidate of paths) {
@@ -397,7 +402,7 @@ function applyDomainOperation(map: CareerMap, operation: CareerMapOperation): Ca
       const sourceIds = new Set(source.paths.map((path) => path.id));
       const changed = operation.payload.paths.filter((path, index) => {
         assert(!sourceIds.has(path.id) || path.id === source.paths[index].id, 'Retained Purpose Paths must keep their original order.');
-        return canonicalJson(path) !== canonicalJson(pathInput(source.paths[index]));
+        return canonicalJson(pathContent(path)) !== canonicalJson(pathContent(pathInput(source.paths[index])));
       });
       assert(changed.length >= 2, 'A full-set revision must change at least two Purpose Paths.');
       ensureUniqueIds(operation.payload.paths, 'Purpose Paths');

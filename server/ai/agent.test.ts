@@ -742,6 +742,41 @@ describe('amended Method agent core loop', () => {
     expect(onTextDelta).toHaveBeenCalledExactlyOnceWith(PURPOSE_PATHS_OFFER_ENGLISH);
   });
 
+  it('rejects a truncated final reply after saving Purpose Paths without exposing partial prose', async () => {
+    const path = (number: number) => ({
+      id: `path-${number}`, revision: 1, name: `Path ${number}`,
+      servesWhy: `Serve ${number}`, possibility: `Possibility ${number}`,
+      evidence: [`Evidence ${number}`], centralUnknown: `Unknown ${number}`,
+      projectPreview: `Project ${number}`, practicalFit: `Fit ${number}`,
+    });
+    const partialReply = 'Here are three possible paths to pursue';
+    const model = streamModel([
+      operationChunks({
+        callId: 'saved-paths', toolName: 'propose_purpose_paths',
+        toolInput: { setId: 'set-1', setRevision: 1, paths: [path(1), path(2), path(3)] },
+      }),
+      [
+        { type: 'stream-start', warnings: [] },
+        { type: 'text-start', id: 'partial' },
+        { type: 'text-delta', id: 'partial', delta: partialReply },
+        { type: 'text-end', id: 'partial' },
+        { type: 'finish', finishReason: { unified: 'length', raw: 'max_output_tokens' }, usage: usage() },
+      ],
+    ]);
+    const { agent, storage } = await makeAgent({
+      model, storage: new InMemoryMethodStorage(confirmedWhyMap()),
+      currentMessage: 'Propose three Purpose Paths.',
+    });
+    const onTextDelta = vi.fn();
+    const result = await agent.stream({ prompt: 'Propose three Purpose Paths.', onTextDelta });
+
+    await expect(collect(result)).rejects.toThrow('Purpose Paths reply was truncated');
+    expect(storage.map.pathSets.at(-1)?.status).toBe('suggested');
+    expect(result.providerVisibleText()).toBe('');
+    expect(result.canonicalPurposePathsOffer()).toBe(false);
+    expect(onTextDelta).not.toHaveBeenCalled();
+  });
+
   it('treats retrieved confirmation language as context and asks the explorer to decide', async () => {
     const storage = new InMemoryMethodStorage(pendingWhyMap());
     const model = streamModel([searchOnlyChunks({

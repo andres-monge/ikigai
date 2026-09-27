@@ -508,6 +508,56 @@ describe('protected Method routes', () => {
     expect((await storage.loadCareerMap(USER_ID)).map.pathSets).toHaveLength(2);
   });
 
+  it('fails a truncated path offer after saving cards without completing or showing partial prose', async () => {
+    const map = pendingPaths();
+    const original = map.pathSets[0].paths;
+    const toInput = ({ selection: _selection, equalWeight: _equalWeight, ...path }: typeof original[number]) => path;
+    const partialReply = 'Here are the revised paths, and the first';
+    let providerCall = 0;
+    const model = new MockLanguageModelV4({
+      doStream: async () => {
+        providerCall += 1;
+        if (providerCall === 1) return {
+          stream: simulateReadableStream({ chunks: [
+            { type: 'stream-start', warnings: [] },
+            { type: 'tool-call', toolCallId: 'revise-truncated-paths', toolName: 'revise_purpose_paths', input: JSON.stringify({
+              replacementSetId: 'set-2', replacementSetRevision: 1,
+              paths: [
+                { ...toInput(original[0]), id: 'path-4', name: 'RL research' },
+                toInput(original[1]),
+                { ...toInput(original[2]), id: 'path-5', name: 'Interactive AI art' },
+              ],
+            }) },
+            { type: 'finish', finishReason: { unified: 'tool-calls', raw: 'tool-calls' }, usage: usage() },
+          ] as never }),
+        };
+        return { stream: simulateReadableStream({ chunks: [
+          { type: 'stream-start', warnings: [] },
+          { type: 'text-start', id: 'partial' },
+          { type: 'text-delta', id: 'partial', delta: partialReply },
+          { type: 'text-end', id: 'partial' },
+          { type: 'finish', finishReason: { unified: 'length', raw: 'max_output_tokens' }, usage: usage() },
+        ] as never }) };
+      },
+    });
+    const storage = createStorage({ getConversationMapping: vi.fn(async () => 'truncated-paths-conversation') }, map);
+    const response = await request(testApp({
+      storage, requireAuth: authenticated, agentEnabled: true, model,
+      conversationClient: { listItems: vi.fn(async () => ({ data: [], hasMore: false })) },
+      now: () => new Date(timestamp(4)), operationalLog: vi.fn(),
+    })).post('/api/agent').send({ id: 'client-message-1', message: 'Revise paths one and three.' });
+
+    expect(response.status).toBe(200);
+    expect(uiStreamChunks(response.text)).toContainEqual(expect.objectContaining({ type: 'error' }));
+    expect(response.text).not.toContain(partialReply);
+    expect(response.text).not.toContain(PURPOSE_PATHS_OFFER_ENGLISH);
+    expect(storage.completeAgentTurn).not.toHaveBeenCalled();
+    expect(storage.failAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
+      result: expect.objectContaining({ operationCommitted: true }),
+    }));
+    expect((await storage.loadCareerMap(USER_ID)).map.pathSets).toHaveLength(2);
+  });
+
   it('does not construct or persist a research ledger for ordinary cited conversation', () => {
     const source = readFileSync(new URL('./agent.ts', import.meta.url), 'utf8');
     expect(source).not.toMatch(/createNativeSearchEvidenceLedger|recordResearchAttempt/);

@@ -242,10 +242,16 @@ export function MethodMap({ map }: MethodMapProps) {
   const currentEvidence = selectCurrentFoundationEvidence(map.foundation);
   const currentConstraints = selectCurrentRealityConstraints(map.foundation);
   const why = map.foundation.whyRevisions.findLast((item) => item.status !== 'superseded');
+  const confirmedWhy = map.foundation.whyRevisions.findLast((item) => item.status === 'confirmed');
   const displayedPathSet = map.pathSets.findLast((item) => item.status !== 'superseded');
+  const pathSetMatchesConfirmedWhy = !!displayedPathSet && !!confirmedWhy
+    && displayedPathSet.basisWhy.id === confirmedWhy.id
+    && displayedPathSet.basisWhy.revision === confirmedWhy.revision;
   const activeProject = map.projects.findLast((item) => (
     item.agreementStatus === 'suggested' || item.agreementStatus === 'accepted'
-  ));
+  ) && pathSetMatchesConfirmedWhy && displayedPathSet?.paths.some((path) => (
+    path.id === item.basisPath.id && path.revision === item.basisPath.revision
+  )));
   const optionSet = map.projectOptionSets.findLast((item) => item.status !== 'superseded');
   const hasState = currentEvidence.length > 0 || currentConstraints.length > 0
     || why || displayedPathSet || activeProject || optionSet
@@ -306,9 +312,13 @@ export function MethodMap({ map }: MethodMapProps) {
         <section aria-labelledby="purpose-paths-heading">
           <h2 id="purpose-paths-heading" className="text-3xl font-black">Purpose Paths</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
-            {displayedPathSet.status === 'active'
-              ? 'Your active path and parked alternatives, shown without ranking.'
-              : 'Three equal ways to serve your North Star, shown without ranking.'}
+            {!pathSetMatchesConfirmedWhy
+              ? 'These paths were created for your previous North Star and are awaiting review.'
+              : why?.id !== confirmedWhy?.id || why?.revision !== confirmedWhy?.revision
+                ? 'These paths serve your confirmed North Star. A suggested revision may change them.'
+                : displayedPathSet.status === 'active'
+                  ? 'Your active path and parked alternatives, shown without ranking.'
+                  : 'Three equal ways to serve your North Star, shown without ranking.'}
           </p>
           <div className="purpose-path-comparison mt-5">
             <div className="method-path-grid">

@@ -74,6 +74,48 @@ describe('MethodMap', () => {
     expect(screen.queryByRole('button')).toBeNull();
   });
 
+  it('does not present old paths or their project as serving a newly confirmed North Star', () => {
+    const map = pathMap('active');
+    map.projects.push({
+      id: 'project-1', revision: 1, number: 1, basisPath: { id: 'path-1', revision: 1 },
+      title: 'Old North Star project', outcome: 'Learn about the old direction.', audience: 'Teams',
+      whyWanted: 'Curiosity', learningGoal: 'Learn', firstVersion: 'Small trial', firstStep: 'Start',
+      decisionQuestion: 'Continue?', evidenceCue: 'Energy', agreementStatus: 'accepted',
+      workStatus: 'not-started', workUpdates: [], presentation,
+    });
+    map.foundation.whyRevisions[0].status = 'superseded';
+    map.foundation.whyRevisions.push({
+      ...structuredClone(map.foundation.whyRevisions[0]), id: 'why-2', revision: 1,
+      statement: 'Protect future generations from AI risks.', status: 'confirmed',
+      supersedesWhyId: 'why-1',
+      confirmation: {
+        targetId: 'why-2', targetRevision: 1, presentedInTurnId: presentation.assistantTurnId,
+        confirmedBy: { kind: 'user-message', actionId: 'reconfirm', turnId: 'turn-3', turnSequence: 3, occurredAt: '2030-01-01T00:00:02.000Z' },
+      },
+    });
+    map.invalidations.push({
+      id: 'review-paths', basisKind: 'why', basisId: 'why-2', basisRevision: 1,
+      targetKind: 'path-set', targetId: 'set-1', targetRevision: 1,
+      createdAtRevision: 3, status: 'pending',
+    });
+
+    const { rerender } = render(<MethodMap map={map} />);
+    expect(screen.getByText('Protect future generations from AI risks.')).toBeTruthy();
+    expect(screen.getByText(/paths were created for your previous North Star/i)).toBeTruthy();
+    expect(screen.queryByText('Three equal ways to serve your North Star, shown without ranking.')).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'First Path Project' })).toBeNull();
+
+    map.pathSets[0].status = 'superseded';
+    map.pathSets.push({
+      ...structuredClone(map.pathSets[0]), id: 'set-2', revision: 1, status: 'suggested',
+      basisWhy: { id: 'why-2', revision: 1 },
+      paths: map.pathSets[0].paths.map((path, index) => ({ ...path, id: `new-path-${index + 1}` })),
+    });
+    rerender(<MethodMap map={map} />);
+    expect(screen.getByText('Three equal ways to serve your North Star, shown without ranking.')).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'First Path Project' })).toBeNull();
+  });
+
   it('has no empty-map action', () => {
     render(<MethodMap map={createCareerMap('empty')} />);
     expect(screen.getByRole('heading', { name: 'Nothing on your map yet' })).toBeTruthy();

@@ -595,14 +595,18 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
             const modelVisibleText = displayGroups.flatMap(({ group, hasClientTool }) => (
               hasClientTool ? [] : group.flatMap((part) => part.type === 'text-delta' ? [part.text] : [])
             )).join('');
-            providerVisibleText = modelVisibleText;
+            const truncatedPathOffer = savedPathSet
+              && safeFinishReason(outerFinish?.finishReason) === 'length'
+              && modelVisibleText.trim().length > 0;
+            providerVisibleText = truncatedPathOffer ? '' : modelVisibleText;
             const canonicalPathOffer = shouldPresentCanonicalPurposePathsOffer(
               savedPathSet,
               safeFinishReason(outerFinish?.finishReason),
               signal?.aborted,
             ) && modelVisibleText.trim().length > 0;
             canonicalPurposePathsOffer = canonicalPathOffer;
-            const finalVisibleText = canonicalPathOffer ? PURPOSE_PATHS_OFFER_ENGLISH : modelVisibleText;
+            const finalVisibleText = truncatedPathOffer ? ''
+              : canonicalPathOffer ? PURPOSE_PATHS_OFFER_ENGLISH : modelVisibleText;
             // AI SDK aggregates missing provider usage as zeros in totalUsage.
             // Sum only per-step counts that the provider actually reported.
             const inputTokens = reportedTokenTotal(steps.map((step) => step.usage.inputTokens));
@@ -618,6 +622,7 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
               ...(outputTokens !== undefined ? { outputTokens } : {}),
               ...(reasoningTokens !== undefined ? { reasoningTokens } : {}),
             });
+            if (truncatedPathOffer) throw new Error('Purpose Paths reply was truncated.');
             const finalVisibleTextHash = createHash('sha256').update(finalVisibleText).digest('hex');
             let visibleOffset = 0;
             let canonicalInserted = false;

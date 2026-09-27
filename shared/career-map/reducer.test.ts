@@ -345,6 +345,30 @@ describe('Method reducer', () => {
     expect(duplicate.map).toEqual(map);
   });
 
+  it('does not count a new path identity or revision as a second substantive change', () => {
+    let map = withConfirmedWhy();
+    map = commit(map, 'propose-purpose-paths', {
+      setId: 'paths-1', setRevision: 1, paths: paths(), presentation: presentation(3),
+    });
+
+    const revised = applyCareerMapOperation(map, operation(map, 'revise-purpose-paths', {
+      sourceSetId: 'paths-1', sourceSetRevision: 1,
+      replacementSetId: 'paths-2', replacementSetRevision: 1,
+      paths: [
+        { ...paths()[0], id: 'path-4', name: 'Make research useful' },
+        { ...paths()[1], id: 'path-5', revision: 2 },
+        paths()[2],
+      ],
+      presentation: presentation(4),
+    }));
+
+    expect(revised.status).toBe('rejected');
+    if (revised.status === 'rejected') {
+      expect(revised.error.message).toBe('A full-set revision must change at least two Purpose Paths.');
+    }
+    expect(revised.map).toEqual(map);
+  });
+
   it('requires a new revision whenever Purpose Path content changes', () => {
     let map = withConfirmedWhy();
     map = commit(map, 'propose-purpose-paths', {
