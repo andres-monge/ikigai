@@ -8,6 +8,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
+import { isDeepStrictEqual } from 'node:util';
 import { createOpenAI } from '@ai-sdk/openai';
 import { ToolLoopAgent, stepCountIs, tool } from 'ai';
 import { z } from 'zod';
@@ -39,6 +40,7 @@ import {
 } from '../server/ai/method/evaluation.ts';
 import { createMethodModuleLoader } from '../server/ai/method/loader.ts';
 import { compileCareerMapBriefing } from '../server/ai/briefing.ts';
+import { REVISE_PURPOSE_PATHS_TOOL_DESCRIPTION, revisePurposePathsToolInputSchema } from '../server/ai/tools.ts';
 
 const allowedModels = new Set(['gpt-6-sol']);
 const modelId = process.env.REVELIO_METHOD_MODEL || 'gpt-6-sol';
@@ -931,8 +933,9 @@ async function runAdaptivePathsFixtures(loader, model) {
     assert(!/which (?:one|interest|path|of (?:the )?two).{0,55}(?:choose|pick|prefer)|(?:choose|pick) (?:one|between)/i.test(discussionQuestion), 'Adaptive discussion pushed the path choice back onto the explorer.');
   }
   assert(revision.operations.length === 1 && revision.operations[0].type === 'revise-purpose-paths', `Two-path revision did not use one atomic full-set operation (${revision.operations.map(({ type }) => type).join(',') || 'none'}).`);
-  assert(revision.map.pathSets.length === 2 && revision.map.pathSets.at(-1)?.paths[1].id === revisionSeed.map.pathSets[0].paths[1].id, 'Two-path revision failed to preserve the unchanged sibling in one suggested set.');
+  assert(revision.map.pathSets.length === 2, `Two-path revision did not save exactly one complete suggested set (sets=${revision.map.pathSets.length}, operation=${revision.operations[0]?.status}).`);
   const revisedCards = revision.map.pathSets.at(-1)?.paths ?? [];
+  assert(revisedCards.length === 3 && isDeepStrictEqual(revisedCards[1], revisionSeed.map.pathSets[0].paths[1]), 'Two-path revision failed to preserve the unchanged sibling exactly in its original position.');
   assert(/(?:\bRL\b|alignment)/i.test(JSON.stringify(revisedCards[0])) && /(?:TouchDesigner|AI art)/i.test(JSON.stringify(revisedCards[2])), 'Two-path revision did not create the requested RL and AI-art paths in positions one and three.');
   assert(revision.turns[0]?.replyText.trim() === PURPOSE_PATHS_OFFER_ENGLISH, 'Two-path revision did not use the canonical single-set offer.');
   assert(mismatch.operations[0]?.type === 'open-foundation-revision-focus', 'Explicit North Star reconsideration did not open Foundation reflection.');
@@ -1293,28 +1296,12 @@ function createSyntheticHarness(scenario, loader, model) {
       },
     }),
     revise_purpose_paths: tool({
-      description: 'Revise two or three current paths as one complete three-path set, preserving unchanged siblings.',
-      inputSchema: z.object({ revisions: z.array(z.object({ pathId: z.string().min(1), replacement: pathInputSchema }).strict()).min(2).max(3) }).strict(),
-      execute: ({ revisions }, { toolCallId }) => {
-        const set = currentPathSet();
-        assert(set, `${scenario.id}: no path set is available to revise.`);
-        const byId = new Map(revisions.map((item) => [item.pathId, item.replacement]));
-        assert(byId.size === revisions.length && revisions.every((item) => set.paths.some((path) => path.id === item.pathId)), `${scenario.id}: invalid revision targets.`);
-        const paths = set.paths.map((path) => {
-          const replacement = byId.get(path.id);
-          if (replacement) return { id: nextId('path'), revision: 1, ...replacement };
-          const { selection: _selection, equalWeight: _equalWeight, ...preserved } = path;
-          return preserved;
-        });
-        return commit('revise-purpose-paths', {
-          sourceSetId: set.id,
-          sourceSetRevision: set.revision,
-          replacementSetId: nextId('path-set'),
-          replacementSetRevision: 1,
-          paths,
-          presentation: presentation(),
-        }, toolCallId);
-      },
+      description: REVISE_PURPOSE_PATHS_TOOL_DESCRIPTION,
+      inputSchema: revisePurposePathsToolInputSchema,
+      execute: (input, { toolCallId }) => commit('revise-purpose-paths', {
+        ...input,
+        presentation: presentation(),
+      }, toolCallId),
     }),
     combine_purpose_paths: tool({
       description: 'Combine two current paths and atomically preserve one sibling plus a merged path and a new third path.',
