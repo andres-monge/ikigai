@@ -5,6 +5,8 @@
  * provider route, and the U2 in-memory reducer. Retained output contains only
  * attribution, operation receipts, state shape, and reply-shape assertions.
  * Use --adaptive-revision-only=original|clarified to run one revision turn.
+ * Use --adaptive-revision-concurrent=original|clarified to inspect only the
+ * revision result while the other adaptive fixtures run alongside it.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -885,6 +887,7 @@ async function runSemanticIntentFixtures(loader, model) {
 }
 
 const adaptiveRevisionRequests = {
+  // This wording leaves the North Star connection open; keep it only to probe the historical variance.
   original: 'Please replace Decision Tools with a path where I do hands-on reward-learning and AI-alignment research, and Practical Research with a path where I create interactive AI art in TouchDesigner. Keep Team Facilitation unchanged. Show me the three revised paths together; I am not selecting one yet.',
   clarified: 'My North Star is still helping small teams make difficult choices. Please replace Decision Tools with a path where I do hands-on reward-learning and AI-alignment research to help small teams evaluate AI decisions, and Practical Research with a path where I create interactive AI art in TouchDesigner to help small teams explore difficult choices. Keep Team Facilitation unchanged. Show me the three revised paths together; I am not selecting one yet.',
 };
@@ -899,14 +902,33 @@ function adaptiveRevisionScenario(seed, requestKind = 'clarified') {
   };
 }
 
+function revisionInputShape(map, payload) {
+  const source = map.pathSets.find((set) => set.id === payload.sourceSetId && set.revision === payload.sourceSetRevision);
+  const pathInput = (path) => {
+    const { selection: _selection, equalWeight: _equalWeight, ...input } = path;
+    return input;
+  };
+  const existingPaths = map.pathSets.flatMap((set) => set.paths);
+  return {
+    sourceMatches: !!source && source.status !== 'superseded',
+    changedPositions: source ? payload.paths.filter((path, index) => !isDeepStrictEqual(path, pathInput(source.paths[index]))).length : null,
+    retainedIdOrderValid: source ? payload.paths.every((path, index) => !source.paths.some((previous) => previous.id === path.id) || path.id === source.paths[index].id) : null,
+    duplicatePathIds: new Set(payload.paths.map((path) => path.id)).size !== payload.paths.length,
+    reusedPathRevisionWithChangedContent: payload.paths.some((path) => existingPaths.some((previous) => (
+      previous.id === path.id && previous.revision === path.revision && !isDeepStrictEqual(path, pathInput(previous))
+    ))),
+    replacementSetRevisionExists: map.pathSets.some((set) => set.id === payload.replacementSetId && set.revision === payload.replacementSetRevision),
+  };
+}
+
 function adaptiveRevisionDiagnostic(result, seed, requestKind) {
   const turn = result.turns[0];
   const reply = turn?.replyText ?? '';
   return {
     requestKind,
     revisionToolOffered: turn?.activeTools.includes('revise_purpose_paths') ?? false,
-    operations: result.operations.map(({ type, status, rejectionCode, pathSetCountBefore, pathSetCountAfter, mapRevisionBefore, authoritativeRevision, sourceIdReused }) => ({
-      type, status, rejectionCode, pathSetCountBefore, pathSetCountAfter, mapRevisionBefore, authoritativeRevision, sourceIdReused,
+    operations: result.operations.map(({ type, status, rejectionCode, revisionInputShape, pathSetCountBefore, pathSetCountAfter, mapRevisionBefore, authoritativeRevision, sourceIdReused }) => ({
+      type, status, rejectionCode, revisionInputShape, pathSetCountBefore, pathSetCountAfter, mapRevisionBefore, authoritativeRevision, sourceIdReused,
     })),
     initialSets: seed.map.pathSets.length,
     finalSets: result.map.pathSets.length,
@@ -935,13 +957,13 @@ function assertAdaptiveRevision(revision, revisionSeed, requestKind = 'clarified
   return diagnostic;
 }
 
-async function runAdaptivePathsFixtures(loader, model) {
+async function runAdaptivePathsFixtures(loader, model, revisionRequestKind = 'clarified', revisionOnly = false) {
   const makeSeed = (index) => createSemanticIntentSeed({ label: 'adaptive-paths', state: 'pending-path' }, index);
   const discussionSeed = makeSeed(200);
   const revisionSeed = makeSeed(201);
   const mismatchSeed = makeSeed(202);
   const unsolicitedMismatchSeed = makeSeed(203);
-  const [discussion, revision, mismatch, unsolicitedMismatch] = await Promise.all([
+  const fixtureRuns = [
     createSyntheticHarness({
     id: 'adaptive-path-discussion', initialMap: discussionSeed.map, useProductionBriefing: true,
     initialMessages: discussionSeed.priorMessages,
@@ -951,7 +973,7 @@ async function runAdaptivePathsFixtures(loader, model) {
       "I don't want Decision Tools. I'm newly curious about RL and alignment, and about making AI art with TouchDesigner. I don't know which is more meaningful yet. That's why I'm here talking to you.",
     ],
     }, loader, model).run(),
-    createSyntheticHarness(adaptiveRevisionScenario(revisionSeed), loader, model).run(),
+    createSyntheticHarness(adaptiveRevisionScenario(revisionSeed, revisionRequestKind), loader, model).run(),
     createSyntheticHarness({
     id: 'adaptive-north-star-mismatch', initialMap: mismatchSeed.map, useProductionBriefing: true,
     initialMessages: mismatchSeed.priorMessages,
@@ -971,7 +993,15 @@ async function runAdaptivePathsFixtures(loader, model) {
       'I do not want Decision Tools. Protecting future generations from AI risks has started to matter much more to me than helping small teams decide together. I am curious where that could lead.',
     ],
     }, loader, model).run(),
-  ]);
+  ];
+  if (revisionOnly) {
+    const outcomes = await Promise.allSettled(fixtureRuns);
+    const revisionOutcome = outcomes[1];
+    if (revisionOutcome.status === 'rejected') throw revisionOutcome.reason;
+    return assertAdaptiveRevision(revisionOutcome.value, revisionSeed, revisionRequestKind);
+  }
+  const [discussion, revision, mismatch, unsolicitedMismatch] = await Promise.all(fixtureRuns);
+  assertAdaptiveRevision(revision, revisionSeed, revisionRequestKind);
   const discussionText = discussion.turns[0]?.replyText ?? '';
   const discussionQuestion = discussionText.split(/\n+/).findLast((line) => line.includes('?')) ?? '';
   assert(!discussion.operations.some(({ type }) => type === 'select-purpose-path'), 'Adaptive discussion selected a path without explorer authorization.');
@@ -986,7 +1016,6 @@ async function runAdaptivePathsFixtures(loader, model) {
     assert(/(?:\bRL\b|alignment)/i.test(discussionText) && /(?:TouchDesigner|AI art)/i.test(discussionText), 'Adaptive discussion did not address both new interests.');
     assert(!/which (?:one|interest|path|of (?:the )?two).{0,55}(?:choose|pick|prefer)|(?:choose|pick) (?:one|between)/i.test(discussionQuestion), 'Adaptive discussion pushed the path choice back onto the explorer.');
   }
-  assertAdaptiveRevision(revision, revisionSeed);
   assert(mismatch.operations[0]?.type === 'open-foundation-revision-focus', 'Explicit North Star reconsideration did not open Foundation reflection.');
   assert(mismatch.operations.filter(({ turnIndex, type }) => turnIndex === 0 && !['open-foundation-revision-focus', 'append-foundation-evidence', 'record-reality-constraint'].includes(type)).length === 0, 'North Star reflection performed a premature decision or path write.');
   assert(mismatch.map.foundation.whyRevisions.findLast(({ status }) => status === 'confirmed')?.id === mismatchSeed.map.foundation.whyRevisions.findLast(({ status }) => status === 'confirmed')?.id, 'Opening reflection silently revised the North Star.');
@@ -1202,6 +1231,7 @@ function createSyntheticHarness(scenario, loader, model) {
     const beforeSet = currentPathSet();
     const pathSetCountBefore = map.pathSets.length;
     const mapRevisionBefore = map.revision;
+    const inputShape = type === 'revise-purpose-paths' ? revisionInputShape(map, payload) : null;
     if (serverOwned) {
       assert(
         type === 'deliver-first-project-framing' || type === 'abandon-first-project-framing',
@@ -1227,6 +1257,7 @@ function createSyntheticHarness(scenario, loader, model) {
       type,
       status: result.status,
       rejectionCode: result.status === 'rejected' ? result.error.code : null,
+      revisionInputShape: inputShape,
       pathSetCountBefore,
       pathSetCountAfter: map.pathSets.length,
       mapRevisionBefore,
@@ -1826,6 +1857,14 @@ async function main() {
     const result = await createSyntheticHarness(adaptiveRevisionScenario(seed, requestKind), loader, model).run();
     const diagnostic = assertAdaptiveRevision(result, seed, requestKind);
     console.log(JSON.stringify({ status: 'pass', model: modelId, baseInstructions: BASE_INSTRUCTIONS_VERSION, revision: diagnostic }, null, 2));
+    return;
+  }
+  const concurrentRevisionArgument = process.argv.find((argument) => argument.startsWith('--adaptive-revision-concurrent='));
+  if (concurrentRevisionArgument) {
+    const requestKind = concurrentRevisionArgument.slice('--adaptive-revision-concurrent='.length);
+    assert(Object.hasOwn(adaptiveRevisionRequests, requestKind), `Unknown concurrent adaptive revision request: ${requestKind}.`);
+    const revision = await runAdaptivePathsFixtures(loader, model, requestKind, true);
+    console.log(JSON.stringify({ status: 'pass', model: modelId, baseInstructions: BASE_INSTRUCTIONS_VERSION, revision }, null, 2));
     return;
   }
   if (process.argv.includes('--adaptive-paths-checkpoint')) {
