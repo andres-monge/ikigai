@@ -48,6 +48,7 @@ import {
 import { createMethodModuleLoader } from '../server/ai/method/loader.ts';
 import { compileCareerMapBriefing } from '../server/ai/briefing.ts';
 import { REVISE_PURPOSE_PATHS_TOOL_DESCRIPTION, normalizeRevisedPurposePathRevisions, revisePurposePathsToolInputSchema } from '../server/ai/tools.ts';
+import { firstRejectedOperationDiagnostic } from './eval-revelio-rejection-diagnostic.mjs';
 
 const allowedModels = new Set(['gpt-6-sol']);
 const modelId = process.env.REVELIO_METHOD_MODEL || 'gpt-6-sol';
@@ -1654,7 +1655,13 @@ function createSyntheticHarness(scenario, loader, model) {
       messages.push({ role: 'user', content: userText });
       const operationStart = operations.length;
       const preparationStart = preparations.length;
-      const result = await agent.generate({ messages, timeout: requestTimeoutMs });
+      let result;
+      try {
+        result = await agent.generate({ messages, timeout: requestTimeoutMs });
+      } finally {
+        const rejection = firstRejectedOperationDiagnostic(operations.slice(operationStart));
+        if (rejection) throw new EvaluationAssertionError(`${scenario.id}: reducer rejected an operation: ${rejection}.`);
+      }
       // Production suppresses every step that contains a client-executed tool
       // call. Evaluate and terminalize the same user-visible text rather than
       // AI SDK's aggregate result.text, which can include pre-tool narration.
