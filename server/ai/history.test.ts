@@ -17,6 +17,7 @@ import {
   resolveDisplayProjection,
   resolveInternalContextItemIds,
 } from './history.js';
+import { PURPOSE_PATHS_OFFER_ENGLISH } from './method/base-instructions.js';
 
 function textDigest(text: string): string {
   return createHash('sha256').update(text).digest('hex');
@@ -59,6 +60,40 @@ function durableTurn(input: {
 }
 
 describe('protected OpenAI Conversation history adapter', () => {
+  it('hydrates the canonical offer from a provider-bound revised set without exposing model prose', async () => {
+    const rawReply = 'The three paths have changed. Which would you pick?';
+    const turn = durableTurn({
+      turnId: 'revised-paths', userItemId: 'revision-user', assistantItemId: 'revision-assistant',
+      terminalResult: {
+        kind: 'completed', refetch: true, canonicalPurposePathsOffer: true,
+        displayProjection: { userItemId: 'revision-user', assistantItemIds: ['revision-assistant-a', 'revision-assistant'] },
+      },
+    });
+    const loaded = await loadConversationHistory({
+      storage: {
+        getConversationMapping: vi.fn(async () => 'conversation-server-owned'),
+        listAgentTurns: vi.fn(async () => [turn]),
+      },
+      client: { listItems: vi.fn(async () => ({
+        data: [
+          { id: 'revision-assistant', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Which would you pick?' }] },
+          { id: 'revision-assistant-a', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'The three paths have changed. ' }] },
+          { id: 'revision-user', type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Revise two paths.' }] },
+        ],
+        hasMore: false,
+      })) },
+      userId: 'explorer-1',
+    });
+
+    expect(loaded.messages).toHaveLength(2);
+    expect(loaded.messages[1]).toMatchObject({
+      id: 'revision-assistant', role: 'assistant', isFinalAssistantItem: true,
+      parts: [{ type: 'text', text: PURPOSE_PATHS_OFFER_ENGLISH }],
+    });
+    expect(JSON.stringify(loaded.messages)).not.toContain(rawReply);
+    expect(JSON.stringify(loaded.messages)).not.toContain('Which would you pick?');
+  });
+
   it('returns an empty bootstrap without calling the provider when no server mapping exists', async () => {
     const listItems = vi.fn();
     const result = await loadConversationHistory({

@@ -30,6 +30,8 @@ import {
   FIRST_PROJECT_ACCEPTANCE_PHRASE_ENGLISH,
   PURPOSE_PATHS_OFFER_ENGLISH,
   R22_CANONICAL_ENGLISH,
+  isPurposePathSetOperation,
+  shouldPresentCanonicalPurposePathsOffer,
 } from '../server/ai/method/base-instructions.ts';
 import {
   classifyFoundationQuestionTopics,
@@ -360,6 +362,14 @@ function visibleAssistantText(result) {
     .filter((step) => !(step.toolCalls ?? []).some((call) => call.providerExecuted !== true))
     .map((step) => step.text ?? '')
     .join('');
+}
+
+function stepDiagnostics(result) {
+  return result.steps.map((step) => ({
+    finishReason: step.finishReason ?? null,
+    outputTokens: step.usage?.outputTokens ?? null,
+    toolNames: (step.toolCalls ?? []).map((call) => call.toolName),
+  }));
 }
 
 function proveU2FirstProjectReplacementBoundary() {
@@ -894,8 +904,10 @@ async function runAdaptivePathsFixtures(loader, model) {
     initialMessages: revisionSeed.priorMessages,
     turnSequenceStart: revisionSeed.currentTurnSequence,
     maxSteps: 7, maxOutputTokens: 1_500,
+    // The mismatch fixtures test a changed contribution; this fixture requests
+    // two new mechanisms for the already confirmed North Star.
     turns: [
-      'Please replace Decision Tools with a path where I do hands-on reward-learning and AI-alignment research, and Practical Research with a path where I create interactive AI art in TouchDesigner. Keep Team Facilitation unchanged. Show me the three revised paths together; I am not selecting one yet.',
+      'My North Star is still helping small teams make difficult choices. Please replace Decision Tools with a path where I do hands-on reward-learning and AI-alignment research to help small teams evaluate AI decisions, and Practical Research with a path where I create interactive AI art in TouchDesigner to help small teams explore difficult choices. Keep Team Facilitation unchanged. Show me the three revised paths together; I am not selecting one yet.',
     ],
     }, loader, model).run(),
     createSyntheticHarness({
@@ -932,7 +944,16 @@ async function runAdaptivePathsFixtures(loader, model) {
     assert(/(?:\bRL\b|alignment)/i.test(discussionText) && /(?:TouchDesigner|AI art)/i.test(discussionText), 'Adaptive discussion did not address both new interests.');
     assert(!/which (?:one|interest|path|of (?:the )?two).{0,55}(?:choose|pick|prefer)|(?:choose|pick) (?:one|between)/i.test(discussionQuestion), 'Adaptive discussion pushed the path choice back onto the explorer.');
   }
-  assert(revision.operations.length === 1 && revision.operations[0].type === 'revise-purpose-paths', `Two-path revision did not use one atomic full-set operation (${revision.operations.map(({ type }) => type).join(',') || 'none'}).`);
+  assert(revision.operations.length === 1 && revision.operations[0].type === 'revise-purpose-paths', `Two-path revision did not use one atomic full-set operation (${revision.operations.map(({ type }) => type).join(',') || 'none'}): ${JSON.stringify({
+    steps: revision.turns[0]?.stepDiagnostics,
+    replyCharacters: revision.turns[0]?.replyText.length,
+    questionCount: revision.turns[0]?.replyShape.questions,
+    mentionsNorthStar: /North Star/i.test(revision.turns[0]?.replyText ?? ''),
+    mentionsSmallTeams: /small teams/i.test(revision.turns[0]?.replyText ?? ''),
+    mentionsMismatch: /different|disconnect|tension|fit|serve/i.test(revision.turns[0]?.replyText ?? ''),
+    mentionsRL: /\bRL\b|alignment|reward.learning/i.test(revision.turns[0]?.replyText ?? ''),
+    mentionsArt: /TouchDesigner|AI art/i.test(revision.turns[0]?.replyText ?? ''),
+  })}.`);
   assert(revision.map.pathSets.length === revisionSeed.map.pathSets.length + 1, `Two-path revision set count changed unexpectedly: ${JSON.stringify({
     initialSets: revisionSeed.map.pathSets.length,
     finalSets: revision.map.pathSets.length,
@@ -944,7 +965,7 @@ async function runAdaptivePathsFixtures(loader, model) {
   const revisedCards = revision.map.pathSets.at(-1)?.paths ?? [];
   assert(revisedCards.length === 3 && isDeepStrictEqual(revisedCards[1], revisionSeed.map.pathSets[0].paths[1]), 'Two-path revision failed to preserve the unchanged sibling exactly in its original position.');
   assert(/(?:\bRL\b|alignment)/i.test(JSON.stringify(revisedCards[0])) && /(?:TouchDesigner|AI art)/i.test(JSON.stringify(revisedCards[2])), 'Two-path revision did not create the requested RL and AI-art paths in positions one and three.');
-  assert(revision.turns[0]?.replyText.trim() === PURPOSE_PATHS_OFFER_ENGLISH, 'Two-path revision did not use the canonical single-set offer.');
+  assert(revision.turns[0]?.replyText.trim() === PURPOSE_PATHS_OFFER_ENGLISH, `Two-path revision did not use the canonical single-set offer: ${JSON.stringify({ stepDiagnostics: revision.turns[0]?.stepDiagnostics, replyCharacters: revision.turns[0]?.replyText.length, expectedCharacters: PURPOSE_PATHS_OFFER_ENGLISH.length })}.`);
   assert(mismatch.operations[0]?.type === 'open-foundation-revision-focus', 'Explicit North Star reconsideration did not open Foundation reflection.');
   assert(mismatch.operations.filter(({ turnIndex, type }) => turnIndex === 0 && !['open-foundation-revision-focus', 'append-foundation-evidence', 'record-reality-constraint'].includes(type)).length === 0, 'North Star reflection performed a premature decision or path write.');
   assert(mismatch.map.foundation.whyRevisions.findLast(({ status }) => status === 'confirmed')?.id === mismatchSeed.map.foundation.whyRevisions.findLast(({ status }) => status === 'confirmed')?.id, 'Opening reflection silently revised the North Star.');
@@ -959,7 +980,11 @@ async function runAdaptivePathsFixtures(loader, model) {
   assert(!/which (?:one|interest|path).{0,55}(?:choose|pick|prefer)|(?:choose|pick) (?:one|between)/i.test(unsolicitedText), 'Unsolicited mismatch pushed a path choice.');
   return {
     discussion: { operations: discussion.operations.map(({ type }) => type), questionCount: replyShape(discussionText).questions },
-    revision: { operations: revision.operations.map(({ type }) => type), suggestedSetCount: revision.map.pathSets.filter(({ status }) => status === 'suggested').length },
+    revision: {
+      operations: revision.operations.map(({ type }) => type),
+      suggestedSetCount: revision.map.pathSets.filter(({ status }) => status === 'suggested').length,
+      modelOfferMatched: revision.turns[0]?.modelOfferMatched,
+    },
     mismatch: { operations: mismatch.operations.map(({ type }) => type), module: deriveMethodCheckpoint(mismatch.map).module },
     unsolicitedMismatch: { operations: unsolicitedMismatch.operations.map(({ type }) => type), questionCount: replyShape(unsolicitedText).questions },
   };
@@ -1532,7 +1557,16 @@ function createSyntheticHarness(scenario, loader, model) {
       // Production suppresses every step that contains a client-executed tool
       // call. Evaluate and terminalize the same user-visible text rather than
       // AI SDK's aggregate result.text, which can include pre-tool narration.
-      const text = visibleAssistantText(result);
+      const modelText = visibleAssistantText(result);
+      const pathSetSaved = operations.slice(operationStart).some(({ type, status }) => (
+        isPurposePathSetOperation(type)
+        && (status === 'committed' || status === 'replayed')
+      ));
+      const canonicalPathOffer = shouldPresentCanonicalPurposePathsOffer(
+        pathSetSaved,
+        result.steps.at(-1)?.finishReason ?? '',
+      ) && modelText.trim().length > 0;
+      const text = canonicalPathOffer ? PURPOSE_PATHS_OFFER_ENGLISH : modelText;
       const pendingFraming = map.projects.find((project) => (
         project.acceptanceFraming?.status === 'pending'
         && project.acceptanceFraming.assistantTurnId === `${scenario.id}-assistant-${currentTurnSequence}`
@@ -1554,6 +1588,10 @@ function createSyntheticHarness(scenario, loader, model) {
       const turnPreparations = preparations.slice(preparationStart);
       turns.push({
         turnIndex,
+        ...(scenario.id === 'adaptive-two-path-revision' ? {
+          stepDiagnostics: stepDiagnostics(result),
+          modelOfferMatched: canonicalPathOffer ? modelText.trim() === PURPOSE_PATHS_OFFER_ENGLISH : null,
+        } : {}),
         initialModule: turnPreparations[0]?.module ?? null,
         narrationModule: turnPreparations.at(-1)?.module ?? null,
         moduleVersions: [...new Set(turnPreparations.map((item) => `${item.module}@${item.moduleVersion}`))],

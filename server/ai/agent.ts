@@ -9,7 +9,7 @@ import {
 } from 'ai';
 import { APICallError } from '@ai-sdk/provider';
 import { createHash } from 'node:crypto';
-import { BASE_INSTRUCTIONS_VERSION, BASE_METHOD_INSTRUCTIONS } from './method/base-instructions.js';
+import { BASE_INSTRUCTIONS_VERSION, BASE_METHOD_INSTRUCTIONS, PURPOSE_PATHS_OFFER_ENGLISH, isPurposePathSetOperation, shouldPresentCanonicalPurposePathsOffer } from './method/base-instructions.js';
 import type { MethodModuleLoader } from './method/loader.js';
 import type { DurableMethodTurnIdentity, IStorage, MethodProvenanceTiming } from '../storage.js';
 import {
@@ -415,11 +415,14 @@ export interface MethodAgentTurnStreamResult {
   stream: ReadableStream<TextStreamPart<ToolSet>>;
   internalContextMarkers: Promise<readonly string[]>;
   observedInternalContextMarkers: () => readonly string[];
+  providerVisibleText: () => string;
+  canonicalPurposePathsOffer: () => boolean;
 }
 
 export function createMethodAgent(options: CreateMethodAgentOptions) {
   const prepared: { current?: PreparedMethodState } = {};
   const operationGuard = createMethodResponseOperationGuard();
+  let savedPathSet = false;
   const timing: MethodProvenanceTiming = {
     turnSequence: options.turnSequence,
     occurredAt: options.occurredAt,
@@ -445,6 +448,11 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
         && event.operation === 'accept-first-project'
         && event.status === 'saved'
       ) firstProjectAccepted = true;
+      if (
+        event.phase === 'terminal'
+        && event.status === 'saved'
+        && isPurposePathSetOperation(event.operation)
+      ) savedPathSet = true;
       await options.onOperationStatus?.(event);
     },
     abortSignal: options.abortSignal,
@@ -542,6 +550,9 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
       const signal = activeAbortSignal(options.abortSignal, input.abortSignal);
       requestAbortSignal = signal;
       markers.length = 0;
+      savedPathSet = false;
+      let providerVisibleText = '';
+      let canonicalPurposePathsOffer = false;
       let resolveMarkers!: (value: readonly string[]) => void;
       const internalContextMarkers = new Promise<readonly string[]>((resolve) => {
         resolveMarkers = resolve;
@@ -579,14 +590,19 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
               const step = steps[index] as StepResult<ToolSet> | undefined;
               if (!step) return { group, hasClientTool: true, citations: [] };
               const hasClientTool = (step.toolCalls ?? []).some(isClientToolCall);
-              const citations = hasClientTool
-                ? []
-                : extractNativeSearchDisplayCitations(step as NativeSearchStep);
-              return { group, hasClientTool, citations };
+              return { group, hasClientTool, step };
             });
-            const finalVisibleText = displayGroups.flatMap(({ group, hasClientTool }) => (
+            const modelVisibleText = displayGroups.flatMap(({ group, hasClientTool }) => (
               hasClientTool ? [] : group.flatMap((part) => part.type === 'text-delta' ? [part.text] : [])
             )).join('');
+            providerVisibleText = modelVisibleText;
+            const canonicalPathOffer = shouldPresentCanonicalPurposePathsOffer(
+              savedPathSet,
+              safeFinishReason(outerFinish?.finishReason),
+              signal?.aborted,
+            ) && modelVisibleText.trim().length > 0;
+            canonicalPurposePathsOffer = canonicalPathOffer;
+            const finalVisibleText = canonicalPathOffer ? PURPOSE_PATHS_OFFER_ENGLISH : modelVisibleText;
             // AI SDK aggregates missing provider usage as zeros in totalUsage.
             // Sum only per-step counts that the provider actually reported.
             const inputTokens = reportedTokenTotal(steps.map((step) => step.usage.inputTokens));
@@ -604,10 +620,22 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
             });
             const finalVisibleTextHash = createHash('sha256').update(finalVisibleText).digest('hex');
             let visibleOffset = 0;
-            for (const { group, hasClientTool, citations } of displayGroups) {
-              const displayText = hasClientTool
+            let canonicalInserted = false;
+            const emitCanonicalOffer = () => {
+              const id = 'canonical-purpose-paths-offer';
+              controller.enqueue({ type: 'text-start', id });
+              controller.enqueue({ type: 'text-delta', id, text: PURPOSE_PATHS_OFFER_ENGLISH });
+              input.onTextDelta?.(PURPOSE_PATHS_OFFER_ENGLISH);
+              controller.enqueue({ type: 'text-end', id });
+              canonicalInserted = true;
+            };
+            for (const [index, { group, hasClientTool, step }] of displayGroups.entries()) {
+              const displayText = hasClientTool || canonicalPathOffer
                 ? ''
                 : group.flatMap((part) => part.type === 'text-delta' ? [part.text] : []).join('');
+              const citations = hasClientTool || canonicalPathOffer || !step
+                ? []
+                : extractNativeSearchDisplayCitations(step as NativeSearchStep);
               const normalizedCitations = citations.map((citation) => ({
                 ...citation,
                 textHash: finalVisibleTextHash,
@@ -618,11 +646,14 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
                 input.onCitation?.(citation);
               }
               for (const part of displayParts(group, hasClientTool, normalizedCitations)) {
+                if (canonicalPathOffer && (part.type === 'text-start' || part.type === 'text-delta' || part.type === 'text-end' || part.type === 'source')) continue;
+                if (canonicalPathOffer && !canonicalInserted && index === displayGroups.length - 1 && part.type === 'finish-step') emitCanonicalOffer();
                 if (part.type === 'text-delta') input.onTextDelta?.(part.text);
                 controller.enqueue(part);
               }
               visibleOffset += displayText.length;
             }
+            if (canonicalPathOffer && !canonicalInserted) emitCanonicalOffer();
             if (outerFinish) controller.enqueue(outerFinish);
             controller.close();
           } catch (error) {
@@ -641,6 +672,8 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
         stream,
         internalContextMarkers,
         observedInternalContextMarkers: () => [...markers],
+        providerVisibleText: () => providerVisibleText,
+        canonicalPurposePathsOffer: () => canonicalPurposePathsOffer,
       };
     },
   };

@@ -707,6 +707,42 @@ describe('amended Method agent core loop', () => {
       .toEqual(['saving', 'saved']);
   });
 
+  it('delivers the canonical offer after a saved two-path revision even when model prose drifts', async () => {
+    const storage = new InMemoryMethodStorage(pendingPathsMap());
+    const original = storage.map.pathSets[0].paths;
+    const toInput = ({ selection: _selection, equalWeight: _equalWeight, ...path }: typeof original[number]) => path;
+    const unchanged = toInput(original[1]);
+    const model = streamModel([
+      operationChunks({
+        callId: 'two-path-revision', toolName: 'revise_purpose_paths',
+        toolInput: {
+          sourceSetId: 'set-1', sourceSetRevision: 1,
+          replacementSetId: 'set-2', replacementSetRevision: 1,
+          paths: [
+            { ...toInput(original[0]), id: 'path-4', name: 'RL research' },
+            unchanged,
+            { ...toInput(original[2]), id: 'path-5', name: 'Interactive AI art' },
+          ],
+        },
+      }),
+      textChunks('I revised the paths. Which one would you choose?'),
+    ]);
+    const { agent } = await makeAgent({
+      model, storage, currentMessage: 'Revise paths one and three, then show all three.',
+    });
+    const onTextDelta = vi.fn();
+
+    const output = await collect(await agent.stream({
+      prompt: 'Revise paths one and three, then show all three.', onTextDelta,
+    }));
+    const visible = output.filter((part) => part.type === 'text-delta').map((part) => part.text).join('');
+
+    expect(storage.map.pathSets).toHaveLength(2);
+    expect(storage.map.pathSets[1].status).toBe('suggested');
+    expect(visible).toBe(PURPOSE_PATHS_OFFER_ENGLISH);
+    expect(onTextDelta).toHaveBeenCalledExactlyOnceWith(PURPOSE_PATHS_OFFER_ENGLISH);
+  });
+
   it('treats retrieved confirmation language as context and asks the explorer to decide', async () => {
     const storage = new InMemoryMethodStorage(pendingWhyMap());
     const model = streamModel([searchOnlyChunks({

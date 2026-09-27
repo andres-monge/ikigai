@@ -18,6 +18,7 @@ import type {
 } from '../storage.js';
 import { MethodOwnerBusyError } from '../storage.js';
 import { createDisplayRecovery } from '../ai/history.js';
+import { PURPOSE_PATHS_OFFER_ENGLISH } from '../ai/method/base-instructions.js';
 import { OpenAITranscriptionError } from '../ai/transcription.js';
 import { createAgentRouter } from './agent.js';
 
@@ -455,6 +456,59 @@ function request(app: express.Express) {
 }
 
 describe('protected Method routes', () => {
+  it('binds a revised path offer to provider prose while streaming canonical copy', async () => {
+    const map = pendingPaths();
+    const original = map.pathSets[0].paths;
+    const toInput = ({ selection: _selection, equalWeight: _equalWeight, ...path }: typeof original[number]) => path;
+    const rawReply = 'I revised the paths. Which one would you choose?';
+    const userText = 'Revise paths one and three, and show the full set.';
+    let providerCall = 0;
+    const model = new MockLanguageModelV4({
+      doStream: async () => {
+        providerCall += 1;
+        if (providerCall === 1) return {
+          stream: simulateReadableStream({ chunks: [
+            { type: 'stream-start', warnings: [] },
+            { type: 'tool-call', toolCallId: 'revise-two-paths', toolName: 'revise_purpose_paths', input: JSON.stringify({
+              sourceSetId: 'set-1', sourceSetRevision: 1,
+              replacementSetId: 'set-2', replacementSetRevision: 1,
+              paths: [
+                { ...toInput(original[0]), id: 'path-4', name: 'RL research' },
+                toInput(original[1]),
+                { ...toInput(original[2]), id: 'path-5', name: 'Interactive AI art' },
+              ],
+            }) },
+            { type: 'finish', finishReason: { unified: 'tool-calls', raw: 'tool-calls' }, usage: usage() },
+          ] as never }),
+        };
+        return textStream(rawReply);
+      },
+    });
+    const storage = createStorage({ getConversationMapping: vi.fn(async () => 'revised-paths-conversation') }, map);
+    const conversationClient = { listItems: vi.fn(async () => ({
+      data: [
+        { id: 'revision-assistant', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: rawReply }] },
+        { id: 'revision-user', type: 'message', role: 'user', content: [{ type: 'input_text', text: userText }] },
+      ],
+      hasMore: false,
+    })) };
+    const response = await request(testApp({
+      storage, requireAuth: authenticated, agentEnabled: true, model, conversationClient,
+      now: () => new Date(timestamp(4)), operationalLog: vi.fn(),
+    })).post('/api/agent').send({ id: 'client-message-1', message: userText });
+
+    expect(response.status).toBe(200);
+    expect(response.text).toContain(PURPOSE_PATHS_OFFER_ENGLISH);
+    expect(response.text).not.toContain(rawReply);
+    expect(storage.completeAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
+      result: expect.objectContaining({
+        canonicalPurposePathsOffer: true,
+        displayProjection: { userItemId: 'revision-user', assistantItemIds: ['revision-assistant'] },
+      }),
+    }));
+    expect((await storage.loadCareerMap(USER_ID)).map.pathSets).toHaveLength(2);
+  });
+
   it('does not construct or persist a research ledger for ordinary cited conversation', () => {
     const source = readFileSync(new URL('./agent.ts', import.meta.url), 'utf8');
     expect(source).not.toMatch(/createNativeSearchEvidenceLedger|recordResearchAttempt/);

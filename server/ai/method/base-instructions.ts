@@ -2,6 +2,18 @@ export const BASE_INSTRUCTIONS_VERSION = '1.1.5';
 
 export const PURPOSE_PATHS_OFFER_ENGLISH = 'Here are three possible paths to pursue your North Star. Each begins with a small, low-commitment project. Think of it like a date. The aim is to learn whether you want to keep going, not to make the project succeed.';
 
+const PURPOSE_PATH_SET_OPERATIONS = new Set([
+  'propose-purpose-paths', 'replace-purpose-path', 'revise-purpose-paths', 'combine-purpose-paths',
+]);
+
+export function isPurposePathSetOperation(operation: string): boolean {
+  return PURPOSE_PATH_SET_OPERATIONS.has(operation);
+}
+
+export function shouldPresentCanonicalPurposePathsOffer(savedPathSet: boolean, finishReason: string, aborted = false): boolean {
+  return savedPathSet && finishReason === 'stop' && !aborted;
+}
+
 export const R22_CANONICAL_ENGLISH = "The point of a project is not to succeed, it's to learn if it's something you'd want to pursue. Think of projects like dating: you start with something chill and low commitment, then invest more only if each date makes you want another.";
 
 export const FIRST_PROJECT_ACCEPTANCE_PHRASE_ENGLISH = 'I explicitly accept this Path Project.';

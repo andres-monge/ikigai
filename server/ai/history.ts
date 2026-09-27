@@ -19,6 +19,7 @@ import {
   type ClaimLinkedCitation,
 } from '../../shared/streaming-schemas.js';
 import type { IStorage } from '../storage.js';
+import { PURPOSE_PATHS_OFFER_ENGLISH } from './method/base-instructions.js';
 import { resolveNativeSearchCitationClaim } from './research.js';
 
 const conversationIdSchema = z.string().min(1).max(200);
@@ -574,6 +575,7 @@ function projectConversationHistory(
   const turnIdsByMessage = new Map<string, string>();
   const turnStatusesByMessage = new Map<string, 'completed' | 'cancelled' | 'failed'>();
   const finalAssistantItemIds = new Set<string>();
+  const canonicalOfferTurnIds = new Set<string>();
   const claimedUserItemIds = new Set<string>();
   const claimedAssistantItemIds = new Set<string>();
   const directProjections = new Map<string, z.infer<typeof displayProjectionSchema>>();
@@ -647,7 +649,10 @@ function projectConversationHistory(
     turnIdsByMessage.set(projection.userItemId, turn.turnId);
     turnStatusesByMessage.set(projection.userItemId, turn.status);
     const finalAssistantItemId = projection.assistantItemIds.at(-1);
-    if (finalAssistantItemId) finalAssistantItemIds.add(finalAssistantItemId);
+    if (finalAssistantItemId) {
+      finalAssistantItemIds.add(finalAssistantItemId);
+      if (terminal.canonicalPurposePathsOffer === true) canonicalOfferTurnIds.add(turn.turnId);
+    }
     for (const id of projection.assistantItemIds) {
       allowed.set(id, 'assistant');
       turnIdsByMessage.set(id, turn.turnId);
@@ -663,11 +668,26 @@ function projectConversationHistory(
       turnIdsByMessage,
       turnStatusesByMessage,
       finalAssistantItemIds,
-    ).map((message) => (
-      message.role === 'assistant' && stoppedAssistantIds.has(message.id)
-        ? { ...message, deliveryStatus: 'stopped' as const }
-        : message
-    )),
+    ).filter((message) => (
+      message.role !== 'assistant'
+      || !message.turn
+      || !canonicalOfferTurnIds.has(message.turn.turnId)
+      || message.isFinalAssistantItem === true
+    )).map((message) => {
+      const shown = message.role === 'assistant'
+        && message.turn
+        && canonicalOfferTurnIds.has(message.turn.turnId)
+        ? {
+            ...message,
+            parts: [{ type: 'text' as const, text: PURPOSE_PATHS_OFFER_ENGLISH }],
+            sources: undefined,
+            citations: undefined,
+          }
+        : message;
+      return shown.role === 'assistant' && stoppedAssistantIds.has(shown.id)
+        ? { ...shown, deliveryStatus: 'stopped' as const }
+        : shown;
+    }),
     backfills,
   };
 }

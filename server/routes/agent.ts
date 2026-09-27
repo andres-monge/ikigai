@@ -1236,6 +1236,8 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
     let safeAssistantText = '';
     let conversationId: string | undefined;
     let methodResult: MethodAgentTurnStreamResult | undefined;
+    const bindingAssistantText = () => methodResult?.providerVisibleText() || safeAssistantText;
+    const canonicalPurposePathsOffer = () => methodResult?.canonicalPurposePathsOffer() === true;
     let operationSaved = false;
     let latestSavedRevision: number | undefined;
     let terminalProviderStatePromise: Promise<{
@@ -1304,17 +1306,18 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
       const operationCommitted = operationSaved
         || latestSavedRevision !== undefined
         || (revision !== undefined && startingRevision !== undefined && revision > startingRevision);
-      const displayProjection = providerState.complete && safeAssistantText.length > 0
+      const displayProjection = providerState.complete && bindingAssistantText().length > 0
         ? resolveDisplayProjection(
             providerState.items,
             parsed.data.message,
-            safeAssistantText,
+            bindingAssistantText(),
             new Set(providerState.internalContextItemIds),
           )
         : undefined;
       return {
         ...(revision !== undefined ? { revision } : {}),
         ...(operationCommitted ? { operationCommitted: true } : {}),
+        ...(canonicalPurposePathsOffer() ? { canonicalPurposePathsOffer: true } : {}),
         ...(providerState.internalContextItemIds.length > 0
           ? { internalContextItemIds: providerState.internalContextItemIds }
           : {}),
@@ -1323,8 +1326,8 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
           : {}),
         ...(displayProjection
           ? { displayProjection }
-          : safeAssistantText.length > 0
-            ? { displayRecovery: createDisplayRecovery(parsed.data.message, safeAssistantText, true) }
+          : bindingAssistantText().length > 0
+            ? { displayRecovery: createDisplayRecovery(parsed.data.message, bindingAssistantText(), true) }
             : {}),
       };
     };
@@ -1348,9 +1351,10 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
           kind: 'cancelled', stopped: true, refetch: true,
           displayRecovery: createDisplayRecovery(
             parsed.data.message,
-            safeAssistantText,
+            bindingAssistantText(),
             safeAssistantText.length > 0,
           ),
+          ...(canonicalPurposePathsOffer() ? { canonicalPurposePathsOffer: true } : {}),
           ...(providerState.internalContextItemIds.length > 0
             ? { internalContextItemIds: providerState.internalContextItemIds }
             : {}),
@@ -1635,7 +1639,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
               ? resolveDisplayProjection(
                   providerState.items,
                   parsed.data.message,
-                  safeAssistantText,
+                  bindingAssistantText(),
                   new Set(providerState.internalContextItemIds),
                 )
               : undefined;
@@ -1657,9 +1661,10 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
                   ...(providerState.internalContextItemIds.length > 0
                     ? { internalContextItemIds: providerState.internalContextItemIds }
                     : {}),
+                  ...(canonicalPurposePathsOffer() ? { canonicalPurposePathsOffer: true } : {}),
                   ...(displayProjection
                     ? { displayProjection }
-                    : { displayRecovery: createDisplayRecovery(parsed.data.message, safeAssistantText, false) }),
+                    : { displayRecovery: createDisplayRecovery(parsed.data.message, bindingAssistantText(), false) }),
                 },
                 assistantText: safeAssistantText,
                 abortSignal: abort.signal,
