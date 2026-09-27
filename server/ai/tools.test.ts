@@ -370,6 +370,19 @@ describe('strict state-specific Method tools', () => {
     expect(storage.map.foundation.whyRevisions.findLast((why) => why.status === 'confirmed')?.id).toBe('why-1');
     expect(storage.map.pathSets.findLast((set) => set.status === 'suggested')?.id).toBe('set-1');
     expect(storage.persist).toHaveBeenCalledOnce();
+
+    const stillSameTurn = createMethodTools({
+      ...runtime(storage), loader, surface: 'agent-turn',
+      prepared: { current: await refreshMethodState(storage, loader, 'explorer-1') },
+      timing: { turnSequence: 4, occurredAt: at(4) },
+      currentMessage: 'Can we revisit my North Star before choosing a path?',
+    });
+    expect(await stillSameTurn.close_focus.execute?.({}, { toolCallId: 'premature-close', messages: [] } as never)).toMatchObject({
+      status: 'rejected', errorClass: 'illegal-transition',
+    });
+    expect(storage.map.focus?.kind).toBe('foundation-revision');
+    expect(toolNamesForCheckpoint(deriveMethodCheckpoint(storage.map), 4)).not.toContain('close_focus');
+    expect(toolNamesForCheckpoint(deriveMethodCheckpoint(storage.map), 5)).toContain('close_focus');
   });
 
   it('returns from Foundation reflection to the pending path choice when the explorer keeps the North Star', async () => {

@@ -957,6 +957,10 @@ function applyDomainOperation(map: CareerMap, operation: CareerMapOperation): Ca
     case 'close-focus': {
       assert(map.focus, 'No explicit focus is open.');
       if (map.focus.kind === 'foundation-revision') {
+        assert(
+          operation.payload.action.turnSequence > map.focus.openedBy.turnSequence,
+          'Foundation reflection can close only after a later explorer turn.',
+        );
         const confirmed = currentWhy(map);
         if (confirmed) {
           for (const why of map.foundation.whyRevisions) {

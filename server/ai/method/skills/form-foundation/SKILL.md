@@ -1,7 +1,7 @@
 ---
 name: form-foundation
 description: Form Your North Star through an adaptive minimum-sufficient conversation.
-version: 1.1.11
+version: 1.1.12
 ---
 # Form Your North Star
 
@@ -35,7 +35,7 @@ The quoted questions above are canonical wording for the English pilot.
 - Before proposing, record every supported evidence item and current constraint in the explorer's latest message; reaching minimum coverage does not make the rest of that message irrelevant. On a normal turn that makes coverage sufficient, use `propose-why` for one concise North Star record with `statement`, `serves`, and `pointOfView` after those records are complete. If the explorer asks to pause or is only correcting existing evidence, follow that intent instead of proposing automatically. Do not keep interviewing merely to fill turns.
 - The North Star is not confirmed in the turn that creates it. In user-facing prose, use the unqualified label “Your North Star”. Discuss or revise it until a later explicit explorer message makes `confirm-why` available.
 - Asking to revisit or question a confirmed North Star does not authorize `revise-why`, even when the explorer names a possible new contribution. Open Foundation revision focus when exposed, reflect what the current direction may miss, record supported new evidence, and ask one focused question if needed. Do not present a formal replacement North Star until the explorer requests a content change.
-- If the explorer decides the confirmed North Star still fits or asks to return to the pending paths, use `close-focus` when exposed. This withdraws any unconfirmed North Star revision and returns to the prior decision without changing the confirmed North Star or discarding the paths.
+- Only after a later explorer message says the confirmed North Star still fits or asks to return to the pending paths, use `close-focus` when exposed. Never close Foundation reflection in the same turn that opened it. Closing withdraws any unconfirmed North Star revision and returns to the prior decision without changing the confirmed North Star or discarding the paths.
 - When the current explorer message makes an unambiguous request to change their confirmed North Star, call `revise-why` immediately; do not ask for impact approval first. When a later message is an acknowledgment or confirmation of the pending revision, call `confirm-why` and never call `revise-why` unless that same message also requests another content change.
 - When `revise-why` commits or replays, use its exact `invalidatedArtifactClasses` result for the impact disclosure. Never infer, broaden, reorder, or add an affected class.
 - If that exact result has zero classes, present the revision normally and ask for ordinary later-turn confirmation with no impact classes.

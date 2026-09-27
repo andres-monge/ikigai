@@ -677,6 +677,24 @@ describe('Method reducer', () => {
     expect(map.pathSets.at(-1)?.status).toBe('suggested');
   });
 
+  it('keeps Foundation reflection open until a later explorer turn', () => {
+    let map = withConfirmedWhy();
+    map = commit(map, 'propose-purpose-paths', {
+      setId: 'paths-original', setRevision: 1, paths: paths(), presentation: presentation(3),
+    });
+    map = commit(map, 'open-foundation-revision-focus', {
+      reason: 'Reconsider who the work serves.', action: action(4),
+    });
+
+    const prematureClose = applyCareerMapOperation(map, operation(map, 'close-focus', { action: action(4) }));
+    expect(prematureClose.status).toBe('rejected');
+    expect(prematureClose.map.focus?.kind).toBe('foundation-revision');
+
+    map = commit(map, 'close-focus', { action: action(5) });
+    expect(map.focus).toBeUndefined();
+    expect(deriveMethodCheckpoint(map).pendingDecision?.kind).toBe('path-selection');
+  });
+
   it('rejects stale confirmation after a pending Why revision is superseded and accepts the later exact target', () => {
     let map = withConfirmedWhy();
     map = commit(map, 'revise-why', {

@@ -524,8 +524,15 @@ export const WORKSPACE_OPERATION_TYPES = [
 
 export function toolNamesForCheckpoint(
   checkpoint: MethodCheckpoint,
+  currentTurnSequence?: number,
 ): string[] {
   return checkpoint.availableOperations.flatMap((operation) => {
+    if (
+      operation === 'close-focus'
+      && checkpoint.focus?.kind === 'foundation-revision'
+      && currentTurnSequence !== undefined
+      && currentTurnSequence <= checkpoint.focus.openedBy.turnSequence
+    ) return [];
     const name = OPERATION_TO_TOOL_NAME[operation as keyof typeof OPERATION_TO_TOOL_NAME];
     return name ? [name] : [];
   });
@@ -565,7 +572,7 @@ export function createMethodTools(runtime: MethodToolRuntime): ToolSet {
     }),
     confirm_why: operationTool(runtime, 'confirm-why', 'Confirm only the exact pending North Star from a completed prior assistant turn when the main agent judges the current explorer message as confirmation.', whyConfirmationSchema, (input) => confirmationPayload(runtime, { ...input, targetId: input.whyId, targetRevision: input.whyRevision }, 'confirm-why', 'why-confirmation', 'whyId')),
     open_foundation_revision_focus: operationTool(runtime, 'open-foundation-revision-focus', 'Open a conversation to reconsider the North Star when the explorer asks to revisit it; for example, a new interest may point to a different contribution or point of view. State the reason. Opening this focus does not revise or confirm the North Star; explore the tension with the explorer before proposing any revision.', z.object({ reason: z.string().min(1).max(2_000) }).strict(), ({ reason }) => ({ reason, action: context().action })),
-    close_focus: operationTool(runtime, 'close-focus', 'Close the current reflection focus when the explorer has resolved it or asks to return to the prior decision. In Foundation revision focus, this withdraws an unconfirmed North Star revision and restores the prior decision without changing the confirmed North Star or Purpose Paths.', z.object({}).strict(), () => ({ action: context().action })),
+    close_focus: operationTool(runtime, 'close-focus', 'Close the current reflection focus only after a later explorer turn resolves it or asks to return to the prior decision. Never close Foundation reflection in the same turn that opened it. In Foundation revision focus, this withdraws an unconfirmed North Star revision and restores the prior decision without changing the confirmed North Star or Purpose Paths.', z.object({}).strict(), () => ({ action: context().action })),
     resolve_basis_review: operationTool(runtime, 'resolve-basis-review', 'Resolve the exact earliest invalidated artifact shown in the current checkpoint. After a confirmed North Star revision, an old path set must use replaced; this preserves its history and allows a fresh three-path set after all reviews are resolved. Review later artifacts individually rather than automatically reaffirming them.', z.object({
       targetKind: invalidationTargetKindSchema,
       targetId: entityIdSchema,

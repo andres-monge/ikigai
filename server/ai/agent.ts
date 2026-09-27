@@ -474,7 +474,7 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
       const state = await refreshMethodState(options.storage, options.loader, options.userId);
       prepared.current = state;
       operationGuard.reset();
-      const activeTools = ['web_search', ...toolNamesForCheckpoint(state.checkpoint)];
+      const activeTools = ['web_search', ...toolNamesForCheckpoint(state.checkpoint, options.turnSequence)];
       const priorMarkers = new Set(markers);
       const messagesWithoutPriorInternalContext = messages.filter((message) => (
         !isCurrentTurnInternalContextMessage(

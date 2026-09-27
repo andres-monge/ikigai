@@ -893,7 +893,7 @@ async function runAdaptivePathsFixtures(loader, model) {
     id: 'adaptive-two-path-revision', initialMap: revisionSeed.map, useProductionBriefing: true,
     initialMessages: revisionSeed.priorMessages,
     turnSequenceStart: revisionSeed.currentTurnSequence,
-    maxSteps: 7, maxOutputTokens: 650,
+    maxSteps: 7, maxOutputTokens: 1_500,
     turns: [
       'Please replace Decision Tools with a path where I do hands-on reward-learning and AI-alignment research, and Practical Research with a path where I create interactive AI art in TouchDesigner. Keep Team Facilitation unchanged. Show me the three revised paths together; I am not selecting one yet.',
     ],
@@ -933,7 +933,14 @@ async function runAdaptivePathsFixtures(loader, model) {
     assert(!/which (?:one|interest|path|of (?:the )?two).{0,55}(?:choose|pick|prefer)|(?:choose|pick) (?:one|between)/i.test(discussionQuestion), 'Adaptive discussion pushed the path choice back onto the explorer.');
   }
   assert(revision.operations.length === 1 && revision.operations[0].type === 'revise-purpose-paths', `Two-path revision did not use one atomic full-set operation (${revision.operations.map(({ type }) => type).join(',') || 'none'}).`);
-  assert(revision.map.pathSets.length === 2, `Two-path revision did not save exactly one complete suggested set (sets=${revision.map.pathSets.length}, operation=${revision.operations[0]?.status}).`);
+  assert(revision.map.pathSets.length === revisionSeed.map.pathSets.length + 1, `Two-path revision set count changed unexpectedly: ${JSON.stringify({
+    initialSets: revisionSeed.map.pathSets.length,
+    finalSets: revision.map.pathSets.length,
+    operationStatus: revision.operations[0]?.status,
+    operationSetCounts: revision.operations[0] ? [revision.operations[0].pathSetCountBefore, revision.operations[0].pathSetCountAfter] : null,
+    mapRevisions: revision.operations[0] ? [revision.operations[0].mapRevisionBefore, revision.operations[0].authoritativeRevision] : null,
+    sourceIdReused: revision.operations[0]?.sourceIdReused,
+  })}`);
   const revisedCards = revision.map.pathSets.at(-1)?.paths ?? [];
   assert(revisedCards.length === 3 && isDeepStrictEqual(revisedCards[1], revisionSeed.map.pathSets[0].paths[1]), 'Two-path revision failed to preserve the unchanged sibling exactly in its original position.');
   assert(/(?:\bRL\b|alignment)/i.test(JSON.stringify(revisedCards[0])) && /(?:TouchDesigner|AI art)/i.test(JSON.stringify(revisedCards[2])), 'Two-path revision did not create the requested RL and AI-art paths in positions one and three.');
@@ -1147,6 +1154,8 @@ function createSyntheticHarness(scenario, loader, model) {
   function commit(type, payload, toolCallId, privacySafeObservation = {}, serverOwned = false) {
     const before = deriveMethodCheckpoint(map);
     const beforeSet = currentPathSet();
+    const pathSetCountBefore = map.pathSets.length;
+    const mapRevisionBefore = map.revision;
     if (serverOwned) {
       assert(
         type === 'deliver-first-project-framing' || type === 'abandon-first-project-framing',
@@ -1155,9 +1164,11 @@ function createSyntheticHarness(scenario, loader, model) {
     } else {
       assert(before.availableOperations.includes(type), `${scenario.id}: model called unavailable operation ${type}.`);
     }
+    const sourceId = toolCallId || nextId('source');
+    const sourceIdReused = map.operationHistory.some((receipt) => receipt.sourceId === sourceId);
     const result = applyCareerMapOperation(map, {
       type,
-      sourceId: toolCallId || nextId('source'),
+      sourceId,
       expectedRevision: map.revision,
       occurredAt: timestamp(operationSequence + currentTurnSequence),
       payload,
@@ -1169,6 +1180,10 @@ function createSyntheticHarness(scenario, loader, model) {
       turnIndex: currentTurnIndex,
       type,
       status: result.status,
+      pathSetCountBefore,
+      pathSetCountAfter: map.pathSets.length,
+      mapRevisionBefore,
+      sourceIdReused,
       evidenceCategory: type === 'append-foundation-evidence' ? payload.evidence.category : null,
       constraintKind: type === 'record-reality-constraint' ? payload.constraint.kind : null,
       targetPathId: type === 'replace-purpose-path' ? payload.replacedPathId : null,
@@ -1264,7 +1279,7 @@ function createSyntheticHarness(scenario, loader, model) {
       }, toolCallId),
     }),
     close_focus: tool({
-      description: 'Close the current reflection focus when the explorer decides the North Star still fits or asks to return to paths.',
+      description: 'Close the current reflection focus only after a later explorer turn says the North Star still fits or asks to return to paths. Never close it in the turn that opened it.',
       inputSchema: z.object({}).strict(),
       execute: (_input, { toolCallId }) => commit('close-focus', { action: userAction() }, toolCallId),
     }),
@@ -1461,6 +1476,11 @@ function createSyntheticHarness(scenario, loader, model) {
       // selector also exposes later correction/focus operations that this
       // bounded harness deliberately does not register as model tools yet.
       const activeTools = checkpoint.availableOperations.flatMap((operation) => {
+        if (
+          operation === 'close-focus'
+          && checkpoint.focus?.kind === 'foundation-revision'
+          && currentTurnSequence <= checkpoint.focus.openedBy.turnSequence
+        ) return [];
         const toolName = operationToTool[operation];
         return toolName ? [toolName] : [];
       });
