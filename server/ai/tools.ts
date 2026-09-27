@@ -494,6 +494,9 @@ export const OPERATION_TO_TOOL_NAME = {
   'propose-why': 'propose_why',
   'revise-why': 'revise_why',
   'confirm-why': 'confirm_why',
+  'open-foundation-revision-focus': 'open_foundation_revision_focus',
+  'close-focus': 'close_focus',
+  'resolve-basis-review': 'resolve_basis_review',
   'propose-purpose-paths': 'propose_purpose_paths',
   'replace-purpose-path': 'replace_purpose_path',
   'revise-purpose-paths': 'revise_purpose_paths',
@@ -549,10 +552,18 @@ export function createMethodTools(runtime: MethodToolRuntime): ToolSet {
     propose_why: operationTool(runtime, 'propose-why', 'Propose one North Star for the explorer to consider. It cannot be confirmed in this assistant turn.', whyInputSchema, (why) => {
       return { why, presentation: context().presentation };
     }),
-    revise_why: operationTool(runtime, 'revise-why', "Use only when the current explorer message asks to change the North Star's content or recover a failed presentation; never use it for an acknowledgment or confirmation. Suggest the revision and return its exact affected artifact classes.", z.object({ supersedesWhyId: entityIdSchema, why: whyInputSchema }).strict(), ({ supersedesWhyId, why }) => {
+    revise_why: operationTool(runtime, 'revise-why', "Use only when the current explorer message explicitly asks to change the North Star's content or recover a failed presentation. Asking to revisit or reflect on it does not authorize this operation. Never use it for an acknowledgment or confirmation. Suggest the revision and return its exact affected artifact classes.", z.object({ supersedesWhyId: entityIdSchema, why: whyInputSchema }).strict(), ({ supersedesWhyId, why }) => {
       return { supersedesWhyId, why, presentation: context().presentation };
     }),
     confirm_why: operationTool(runtime, 'confirm-why', 'Confirm only the exact pending North Star from a completed prior assistant turn when the main agent judges the current explorer message as confirmation.', whyConfirmationSchema, (input) => confirmationPayload(runtime, { ...input, targetId: input.whyId, targetRevision: input.whyRevision }, 'confirm-why', 'why-confirmation', 'whyId')),
+    open_foundation_revision_focus: operationTool(runtime, 'open-foundation-revision-focus', 'Open a conversation to reconsider the North Star when the explorer asks to revisit it; for example, a new interest may point to a different contribution or point of view. State the reason. Opening this focus does not revise or confirm the North Star; explore the tension with the explorer before proposing any revision.', z.object({ reason: z.string().min(1).max(2_000) }).strict(), ({ reason }) => ({ reason, action: context().action })),
+    close_focus: operationTool(runtime, 'close-focus', 'Close the current reflection focus when the explorer has resolved it or asks to return to the prior decision. In Foundation revision focus, this withdraws an unconfirmed North Star revision and restores the prior decision without changing the confirmed North Star or Purpose Paths.', z.object({}).strict(), () => ({ action: context().action })),
+    resolve_basis_review: operationTool(runtime, 'resolve-basis-review', 'Resolve the exact earliest invalidated artifact shown in the current checkpoint. After a confirmed North Star revision, an old path set must use replaced; this preserves its history and allows a fresh three-path set after all reviews are resolved. Review later artifacts individually rather than automatically reaffirming them.', z.object({
+      targetKind: invalidationTargetKindSchema,
+      targetId: entityIdSchema,
+      targetRevision: revisionSchema,
+      resolution: z.enum(['reaffirmed', 'revised', 'replaced']),
+    }).strict(), (input) => ({ ...input, action: context().action })),
     propose_purpose_paths: operationTool(runtime, 'propose-purpose-paths', 'Suggest exactly three equal-weight Purpose Paths grounded in the confirmed North Star.', z.object({ setId: entityIdSchema, setRevision: revisionSchema, paths: z.array(pathToolInputSchema).length(3) }).strict(), ({ setId, setRevision, paths }) => {
       return { setId, setRevision, paths, presentation: context().presentation };
     }),

@@ -1,7 +1,7 @@
 ---
 name: create-purpose-paths
 description: Create and revise exactly three distinct Purpose Paths with equal weight and explorer-owned choice.
-version: 1.1.4
+version: 1.1.6
 ---
 # Create Purpose Paths
 
@@ -25,6 +25,14 @@ Keep provider citation markers and source references out of every card field. Re
 
 The set must contain exactly three distinct mechanisms for serving the same North Star. Give every path equal weight. Never rank, score, highlight, preselect, or recommend a path unless the explorer explicitly asks for a recommendation. Even then, explain uncertainty and leave the choice with them.
 
+## Adaptive reflection before choice
+
+- Read each reply for what the explorer is learning about the paths, their daily practices, the people they want to serve, and what fits their life. A partial rejection plus new information is material for revising the set, not a request to choose among the remaining cards. Reflect the specific implication before moving the conversation forward. If the explorer says they do not know which interest to choose, help interpret and shape options; do not repeat the choice or ask them to rank hypothetical activities.
+- Use their current Foundation evidence, constraints, conversation, and any firsthand work. Notice expressed curiosity, voluntarily pursued work, energy for the practice, and hesitation about the practice versus its identity. Probe only the uncertainty that matters for the next proposal; do not administer another four-part questionnaire. Work they already pursue is evidence of engagement, but when they ask for a different path, do not keep it by default.
+- Curate three paths the explorer could plausibly want to try through small projects within their real constraints. The paths must use distinct mechanisms and pose three distinct learning questions about the explorer's relationship to the work; one project should not answer all three. Do not fill a slot merely for topical variety or force a weak connection to the North Star.
+- A new curiosity may be a tentative path without prior firsthand evidence or a declared commitment. Put the uncertainty and a small project inside the path; require no prior test before presenting it. Ask one focused question before drafting only when the missing answer changes the kind of path to propose. Otherwise make the best grounded proposal and let action create evidence.
+- If a new interest suggests a different contribution to people or a cause than the confirmed North Star expresses, name the specific tension and invite North Star reflection. Do not force the interest into the three cards, automatically revise the North Star, or permanently set it aside. A new medium, subject, or skill that can credibly serve the existing direction can remain a path. If the explorer asks to revisit the North Star, use `open-foundation-revision-focus` when exposed; then follow Form the Foundation's revision and impact rules. Discuss a possible mismatch without a state change when the explorer has not asked to revisit it.
+
 ## Revision and choice
 
 - Let the explorer question, rewrite, combine, or replace paths before choosing.
@@ -37,6 +45,7 @@ The set must contain exactly three distinct mechanisms for serving the same Nort
 
 ## State operations
 
+- If the checkpoint presents a basis review for a path set tied to a previous North Star, use `resolve-basis-review` with the exact target and `replaced`. Keep the old set in history. Once all pending reviews have been resolved and Foundation focus is closed, propose a fresh set of three paths for the newly confirmed North Star.
 - Use `propose-purpose-paths`, `replace-purpose-path`, `revise-purpose-paths`, or `combine-purpose-paths` only when that exact operation is currently exposed.
 - Do not include `rank`, `score`, `equalWeight`, `selection`, or confirmation fields in model-authored path input. The deterministic reducer owns equal weighting, availability, activation, parking, lineage, and validation.
 - Use `select-purpose-path` or `confirm-purpose-path-revision` only for the exact path and set the explorer explicitly chose after a completed prior presentation.

@@ -368,6 +368,25 @@ describe('compileCareerMapBriefing', () => {
     expect(briefing.markdown).toContain('Parked research');
   });
 
+  it('carries current Foundation evidence and constraints into Purpose Path reflection', () => {
+    const map = withConfirmedWhy();
+    map.foundation.evidence.push({
+      id: 'briefing-fascination', revision: 1, category: 'fascination',
+      content: 'I keep building tools for people around me.', provenance: action(1),
+    });
+    map.foundation.constraints.push({
+      id: 'briefing-time', revision: 1, kind: 'time',
+      description: 'I have five hours a week.', provenance: action(1),
+    });
+    const pathsMap = commit(map, 'propose-purpose-paths', {
+      setId: 'briefing-path-set', setRevision: 1, paths: paths(), presentation: presentation(3),
+    });
+    const briefing = compileCareerMapBriefing(pathsMap);
+    expect(briefing.module).toBe('create-purpose-paths');
+    expect(briefing.markdown).toContain('I keep building tools for people around me.');
+    expect(briefing.markdown).toContain('I have five hours a week.');
+  });
+
   it('warns on stale lineage and lets corrected canonical state outrank stale transcript text', () => {
     let map = withPendingProject();
     map = commit(map, 'open-foundation-revision-focus', { reason: 'New firsthand evidence', action: action(6) });

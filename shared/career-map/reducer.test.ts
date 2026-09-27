@@ -646,6 +646,37 @@ describe('Method reducer', () => {
     expect(replayed.map).toEqual(revised.map);
   });
 
+  it('replaces a path set based on the old North Star before offering fresh paths', () => {
+    let map = withConfirmedWhy();
+    map = commit(map, 'propose-purpose-paths', {
+      setId: 'paths-old', setRevision: 1, paths: paths(), presentation: presentation(3),
+    });
+    map = commit(map, 'revise-why', {
+      why: { id: 'why-2', revision: 1, statement: 'Help future generations live with safer AI.', serves: 'Future generations', pointOfView: 'AI safety should protect their agency.' },
+      supersedesWhyId: 'why-1', presentation: presentation(20),
+    });
+    map = commit(map, 'confirm-why', { whyId: 'why-2', whyRevision: 1, action: action(21) });
+    expect(deriveMethodCheckpoint(map).review).toMatchObject({ targetKind: 'path-set', targetId: 'paths-old' });
+
+    const staleReaffirmation = applyCareerMapOperation(map, operation(map, 'resolve-basis-review', {
+      targetKind: 'path-set', targetId: 'paths-old', targetRevision: 1,
+      resolution: 'reaffirmed', action: action(22),
+    }));
+    expect(staleReaffirmation.status).toBe('rejected');
+
+    map = commit(map, 'resolve-basis-review', {
+      targetKind: 'path-set', targetId: 'paths-old', targetRevision: 1,
+      resolution: 'replaced', action: action(22),
+    });
+    expect(map.pathSets[0].status).toBe('superseded');
+    expect(deriveMethodCheckpoint(map).availableOperations).toContain('propose-purpose-paths');
+    map = commit(map, 'propose-purpose-paths', {
+      setId: 'paths-new', setRevision: 1, paths: paths('new'), presentation: presentation(23),
+    });
+    expect(map.pathSets.at(-1)?.basisWhy).toEqual({ id: 'why-2', revision: 1 });
+    expect(map.pathSets.at(-1)?.status).toBe('suggested');
+  });
+
   it('rejects stale confirmation after a pending Why revision is superseded and accepts the later exact target', () => {
     let map = withConfirmedWhy();
     map = commit(map, 'revise-why', {

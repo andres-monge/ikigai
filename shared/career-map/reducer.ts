@@ -276,7 +276,8 @@ function ensureNoPendingReview(map: CareerMap, type: CareerMapOperationType): vo
     why.status === 'suggested' && why.supersedesWhyId !== undefined
   ));
   assert(
-    !pendingWhyRevision || type === 'revise-why' || type === 'confirm-why',
+    !pendingWhyRevision || type === 'revise-why' || type === 'confirm-why'
+      || (type === 'close-focus' && map.focus?.kind === 'foundation-revision'),
     'Confirm or revise the pending Why revision before downstream changes.',
   );
 }
@@ -955,6 +956,14 @@ function applyDomainOperation(map: CareerMap, operation: CareerMapOperation): Ca
     }
     case 'close-focus': {
       assert(map.focus, 'No explicit focus is open.');
+      if (map.focus.kind === 'foundation-revision') {
+        const confirmed = currentWhy(map);
+        if (confirmed) {
+          for (const why of map.foundation.whyRevisions) {
+            if (why.status === 'suggested' && why.supersedesWhyId === confirmed.id) why.status = 'superseded';
+          }
+        }
+      }
       delete map.focus;
       return;
     }
@@ -970,6 +979,15 @@ function applyDomainOperation(map: CareerMap, operation: CareerMapOperation): Ca
         && earliest.targetKind === operation.payload.targetKind
         && earliest.targetId === operation.payload.targetId
         && earliest.targetRevision === operation.payload.targetRevision, 'Resolve the earliest invalidated basis first.', 'stale-target');
+      if (earliest.targetKind === 'path-set') {
+        const set = map.pathSets.find((item) => sameRevision(item, earliest.targetId, earliest.targetRevision));
+        assert(set, 'The invalidated path set no longer exists.', 'stale-target');
+        const why = currentWhy(map);
+        if (why && !sameRevision(set.basisWhy, why.id, why.revision)) {
+          assert(operation.payload.resolution === 'replaced', 'Paths based on the previous North Star must be replaced before new paths are offered.');
+          set.status = 'superseded';
+        }
+      }
       earliest.status = 'resolved';
       earliest.resolution = { kind: operation.payload.resolution, action: operation.payload.action };
       return;

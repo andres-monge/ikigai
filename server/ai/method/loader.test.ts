@@ -152,8 +152,8 @@ describe('repository-owned Method module loader', () => {
     expect(BASE_METHOD_INSTRUCTIONS).toMatch(/do not author HTML, links, images, code, tables, or blockquotes/i);
     expect(BASE_METHOD_INSTRUCTIONS).toMatch(/cards are application-owned/i);
     expect(BASE_METHOD_INSTRUCTIONS).toMatch(/main agent.*current explorer message.*language/is);
-    expect(BASE_METHOD_INSTRUCTIONS).toMatch(/hedges, quotations, questions, conditionals, ambiguity, generic assent.*multiple.*multi-target/is);
-    expect(BASE_METHOD_INSTRUCTIONS).toMatch(/does not authorize.*pending decision.*end.*exactly one.*question/is);
+    expect(BASE_METHOD_INSTRUCTIONS).toMatch(/hedges, quotations, conditionals, or ambiguity.*consequential decision/is);
+    expect(BASE_METHOD_INSTRUCTIONS).toMatch(/pending decision.*respond to the explorer's actual message.*do not push.*choice/is);
     expect(BASE_METHOD_INSTRUCTIONS).toMatch(/bare ordinal.*exact current path/i);
     expect(BASE_METHOD_INSTRUCTIONS).toMatch(/match the explorer's conversational register/i);
     expect(BASE_METHOD_INSTRUCTIONS).toMatch(/recognition over praise/i);
@@ -195,6 +195,8 @@ describe('repository-owned Method module loader', () => {
     expect(foundation).toMatch(/nonzero.*only.*exact affected.*later explorer turn/is);
     expect(foundation).toMatch(/presentation.*failed.*revise-why.*again/is);
     expect(foundation).toMatch(/unambiguous.*change.*revise-why.*immediately/is);
+    expect(foundation).toMatch(/ask(?:s|ing)? to revisit.*does not authorize.*revise-why/is);
+    expect(foundation).toMatch(/still fits.*pending paths.*close-focus/is);
     expect(foundation).toMatch(/acknowledgment or confirmation.*confirm-why.*never.*revise-why/is);
     expect(foundation).toMatch(/do not.*same assistant turn.*confirm-why/is);
     expect(foundation).not.toMatch(/Why I Work|confirmed Why|Suggested Why/i);
@@ -203,6 +205,10 @@ describe('repository-owned Method module loader', () => {
     expect(paths).toMatch(/equal weight/i);
     expect(paths).toMatch(/never rank/i);
     expect(paths).toMatch(/replace only the requested path/i);
+    expect(paths).toMatch(/new interest.*different contribution.*North Star.*reflection/is);
+    expect(paths).toMatch(/one focused question.*only when.*changes the kind of path/is);
+    expect(paths).toMatch(/small project.*inside the path.*no prior test/i);
+    expect(paths).toMatch(/three.*distinct.*learning questions/is);
     expect(paths).toMatch(/combine.*complete three-path set/i);
     expect(paths).toMatch(/explicitly asks for a recommendation/i);
     expect(paths).toMatch(/bare ordinal.*exact current path/i);

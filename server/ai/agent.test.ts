@@ -438,7 +438,7 @@ describe('amended Method agent core loop', () => {
       'Do not ask for assent to another paraphrase.',
     );
     expect(model.doStreamCalls[0]?.providerOptions?.openai?.instructions).toContain(
-      'end with one concrete question advancing the active Method checkpoint',
+      'A pending checkpoint alone is not a reason to ask for selection.',
     );
     expect(model.doStreamCalls[0]?.providerOptions?.openai).not.toHaveProperty('include');
   });

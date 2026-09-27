@@ -282,7 +282,7 @@ describe('strict state-specific Method tools', () => {
     const source = readFileSync(new URL('./tools.ts', import.meta.url), 'utf8');
     expect(source).not.toMatch(/ResearchSourceReference|MethodEvidenceResolver|researchSources|userSources/);
     expect(source).not.toMatch(/nativeSearchObserved|researchResolutionRequired|ResearchHandleError/);
-    expect(source).toMatch(/revise_why:[\s\S]*?current explorer message asks to change[\s\S]*?never use it for an acknowledgment or confirmation/i);
+    expect(source).toMatch(/revise_why:[\s\S]*?current explorer message explicitly asks to change[\s\S]*?never use it for an acknowledgment or confirmation/i);
   });
 
   it('contains no external-action surface and marks every tool strict', async () => {
@@ -343,11 +343,131 @@ describe('strict state-specific Method tools', () => {
     const prepared = await refreshMethodState(storage, loader, 'explorer-1');
     const exposed = toolNamesForCheckpoint(prepared.checkpoint);
     expect(exposed).toEqual(expect.arrayContaining([
-      'replace_purpose_path', 'combine_purpose_paths', 'select_purpose_path',
+      'replace_purpose_path', 'combine_purpose_paths', 'select_purpose_path', 'open_foundation_revision_focus',
     ]));
     expect(exposed).not.toContain('research_current_world');
     expect(storage.map.revision).toBe(3);
     expect(storage.persist).not.toHaveBeenCalled();
+  });
+
+  it('opens Foundation reflection from pending paths without revising the North Star', async () => {
+    const storage = new ReducerStorage(pendingPaths());
+    const loader = await createMethodModuleLoader();
+    const prepared = await refreshMethodState(storage, loader, 'explorer-1');
+    const tools = createMethodTools({
+      ...runtime(storage), loader, surface: 'agent-turn', prepared: { current: prepared },
+      timing: { turnSequence: 4, occurredAt: at(4) },
+      currentMessage: 'I am drawn to alignment research because I want to help people decide which values AI systems uphold.',
+    });
+    expect(tools.open_foundation_revision_focus.description).toMatch(/different contribution or point of view/);
+
+    const result = await tools.open_foundation_revision_focus.execute?.({
+      reason: 'Alignment research may change the contribution this explorer wants to make.',
+    }, { toolCallId: 'reconsider-why', messages: [] } as never);
+
+    expect(result).toMatchObject({ status: 'committed', authoritativeRevision: 4, derivedModule: 'form-foundation' });
+    expect(storage.map.focus).toMatchObject({ kind: 'foundation-revision' });
+    expect(storage.map.foundation.whyRevisions.findLast((why) => why.status === 'confirmed')?.id).toBe('why-1');
+    expect(storage.map.pathSets.findLast((set) => set.status === 'suggested')?.id).toBe('set-1');
+    expect(storage.persist).toHaveBeenCalledOnce();
+  });
+
+  it('returns from Foundation reflection to the pending path choice when the explorer keeps the North Star', async () => {
+    const storage = new ReducerStorage(pendingPaths());
+    const loader = await createMethodModuleLoader();
+    const openingTools = createMethodTools({
+      ...runtime(storage), loader, surface: 'agent-turn',
+      prepared: { current: await refreshMethodState(storage, loader, 'explorer-1') },
+      timing: { turnSequence: 4, occurredAt: at(4) },
+      currentMessage: 'Can we revisit whether my North Star still fits?',
+    });
+    expect(await openingTools.open_foundation_revision_focus.execute?.({ reason: 'Explore whether the direction still fits.' }, {
+      toolCallId: 'open-reflection', messages: [],
+    } as never)).toMatchObject({ status: 'committed' });
+
+    const focused = await refreshMethodState(storage, loader, 'explorer-1');
+    expect(toolNamesForCheckpoint(focused.checkpoint)).toContain('close_focus');
+    const closingTools = createMethodTools({
+      ...runtime(storage), loader, surface: 'agent-turn', prepared: { current: focused },
+      timing: { turnSequence: 6, occurredAt: at(6) },
+      currentMessage: 'My existing North Star still fits. Let us return to the paths.',
+    });
+    expect(await closingTools.close_focus.execute?.({}, { toolCallId: 'close-reflection', messages: [] } as never)).toMatchObject({
+      status: 'committed', derivedModule: 'create-purpose-paths',
+    });
+    expect(storage.map.focus).toBeUndefined();
+    expect(deriveMethodCheckpoint(storage.map).pendingDecision?.kind).toBe('path-selection');
+    expect(storage.map.foundation.whyRevisions.findLast((why) => why.status === 'confirmed')?.id).toBe('why-1');
+    expect(storage.map.pathSets.findLast((set) => set.status === 'suggested')?.id).toBe('set-1');
+  });
+
+  it('withdraws an unconfirmed North Star revision when the explorer keeps the original', async () => {
+    const storage = new ReducerStorage(pendingPaths());
+    const loader = await createMethodModuleLoader();
+    const opened = applyCareerMapOperation(storage.map, {
+      type: 'open-foundation-revision-focus', sourceId: 'open-revision-focus', expectedRevision: storage.map.revision, occurredAt: at(4),
+      payload: { reason: 'Consider a different contribution.', action: userAction(4) },
+    });
+    if (opened.status !== 'committed') throw new Error('Foundation focus fixture failed.');
+    const revised = applyCareerMapOperation(opened.map, {
+      type: 'revise-why', sourceId: 'draft-new-why', expectedRevision: opened.map.revision, occurredAt: at(5),
+      payload: {
+        supersedesWhyId: 'why-1',
+        why: { id: 'why-2', revision: 1, statement: 'Protect future generations from AI risks.', serves: 'Future generations', pointOfView: 'AI should preserve their agency.' },
+        presentation: { kind: 'model-presentation', assistantTurnId: 'revised-why-turn', turnSequence: 5, completed: true, presentedAt: at(5) },
+      },
+    });
+    if (revised.status !== 'committed') throw new Error('Pending revision fixture failed.');
+    storage.map = revised.map;
+    const prepared = await refreshMethodState(storage, loader, 'explorer-1');
+    expect(prepared.checkpoint.focus?.kind).toBe('foundation-revision');
+    expect(storage.map.foundation.whyRevisions.find((why) => why.id === 'why-2')?.status).toBe('suggested');
+    expect(toolNamesForCheckpoint(prepared.checkpoint)).toContain('close_focus');
+    const tools = createMethodTools({
+      ...runtime(storage), loader, surface: 'agent-turn', prepared: { current: prepared },
+      timing: { turnSequence: 6, occurredAt: at(6) },
+      currentMessage: 'Keep my original North Star and show me the three paths again.',
+    });
+    expect(await tools.close_focus.execute?.({}, { toolCallId: 'withdraw-revision', messages: [] } as never)).toMatchObject({
+      status: 'committed', derivedModule: 'create-purpose-paths', pendingDecision: { kind: 'path-selection' },
+    });
+    expect(storage.map.foundation.whyRevisions.find((why) => why.id === 'why-2')?.status).toBe('superseded');
+    expect(storage.map.foundation.whyRevisions.find((why) => why.id === 'why-1')?.status).toBe('confirmed');
+    expect(storage.map.pathSets.find((set) => set.id === 'set-1')?.status).toBe('suggested');
+  });
+
+  it('exposes and commits a path-set basis review after a confirmed North Star revision', async () => {
+    let map = pendingPaths();
+    const revise = applyCareerMapOperation(map, {
+      type: 'revise-why', sourceId: 'revise-why-source', expectedRevision: map.revision, occurredAt: at(4),
+      payload: {
+        supersedesWhyId: 'why-1',
+        why: { id: 'why-2', revision: 1, statement: 'Make AI safer for future generations.', serves: 'Future generations', pointOfView: 'AI should preserve their agency.' },
+        presentation: { kind: 'model-presentation', assistantTurnId: 'revised-why-turn', turnSequence: 4, completed: true, presentedAt: at(4) },
+      },
+    });
+    if (revise.status !== 'committed') throw new Error('Why revision fixture failed.');
+    map = revise.map;
+    const confirm = applyCareerMapOperation(map, {
+      type: 'confirm-why', sourceId: 'confirm-revised-why-source', expectedRevision: map.revision, occurredAt: at(5),
+      payload: { whyId: 'why-2', whyRevision: 1, action: userAction(5) },
+    });
+    if (confirm.status !== 'committed') throw new Error('Revised Why confirmation fixture failed.');
+    const storage = new ReducerStorage(confirm.map);
+    const loader = await createMethodModuleLoader();
+    const prepared = await refreshMethodState(storage, loader, 'explorer-1');
+    expect(prepared.checkpoint.review).toMatchObject({ targetKind: 'path-set', targetId: 'set-1' });
+    expect(toolNamesForCheckpoint(prepared.checkpoint)).toEqual(['resolve_basis_review']);
+    const tools = createMethodTools({
+      ...runtime(storage), loader, surface: 'agent-turn', prepared: { current: prepared },
+      timing: { turnSequence: 6, occurredAt: at(6) },
+      currentMessage: 'Yes, I want to make new paths for that North Star.',
+    });
+    expect(await tools.resolve_basis_review.execute?.({
+      targetKind: 'path-set', targetId: 'set-1', targetRevision: 1, resolution: 'replaced',
+    }, { toolCallId: 'resolve-old-paths', messages: [] } as never)).toMatchObject({ status: 'committed' });
+    expect(storage.map.pathSets[0]?.status).toBe('superseded');
+    expect(deriveMethodCheckpoint(storage.map).availableOperations).toContain('propose-purpose-paths');
   });
 
   it('rejects ambiguous assent and multiple confirmation targets at the strict schema boundary', async () => {

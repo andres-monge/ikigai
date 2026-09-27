@@ -46,6 +46,17 @@ function appendWhy(lines: string[], map: CareerMap): void {
   }
 }
 
+function appendFoundationContext(lines: string[], map: CareerMap, forPaths: boolean): void {
+  lines.push(forPaths ? '## Current North Star evidence and reality boundary' : '## Current North Star evidence');
+  for (const evidence of selectCurrentFoundationEvidence(map.foundation)) {
+    lines.push(`- ${evidence.category}: ${evidence.content} (${evidence.id}@${evidence.revision})`);
+  }
+  for (const constraint of selectCurrentRealityConstraints(map.foundation)) {
+    const label = forPaths ? constraint.kind : `Reality boundary — ${constraint.kind}`;
+    lines.push(`- ${label}: ${constraint.description}`);
+  }
+}
+
 function exactRevision<T extends { id: string; revision: number }>(
   records: T[],
   id: string,
@@ -471,16 +482,11 @@ function renderCareerMapBriefing(
 
   switch (checkpoint.module) {
     case 'form-foundation': {
-      lines.push('## Current North Star evidence');
-      for (const evidence of selectCurrentFoundationEvidence(map.foundation)) {
-        lines.push(`- ${evidence.category}: ${evidence.content} (${evidence.id}@${evidence.revision})`);
-      }
-      for (const constraint of selectCurrentRealityConstraints(map.foundation)) {
-        lines.push(`- Reality boundary — ${constraint.kind}: ${constraint.description}`);
-      }
+      appendFoundationContext(lines, map, false);
       break;
     }
     case 'create-purpose-paths':
+      appendFoundationContext(lines, map, true);
       break;
     case 'design-path-project':
     case 'guide-path-project':

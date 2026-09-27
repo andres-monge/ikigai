@@ -193,8 +193,8 @@ function operationsForDecision(map: CareerMap, decision: PendingDecision): Caree
       'confirm-why',
       'open-foundation-revision-focus',
     ];
-    case 'path-selection': return ['replace-purpose-path', 'revise-purpose-paths', 'combine-purpose-paths', 'select-purpose-path', 'open-path-revision-focus'];
-    case 'path-revision-confirmation': return ['replace-purpose-path', 'revise-purpose-paths', 'combine-purpose-paths', 'confirm-purpose-path-revision', 'select-purpose-path', 'open-path-revision-focus'];
+    case 'path-selection': return ['replace-purpose-path', 'revise-purpose-paths', 'combine-purpose-paths', 'select-purpose-path', 'open-path-revision-focus', 'open-foundation-revision-focus'];
+    case 'path-revision-confirmation': return ['replace-purpose-path', 'revise-purpose-paths', 'combine-purpose-paths', 'confirm-purpose-path-revision', 'select-purpose-path', 'open-path-revision-focus', 'open-foundation-revision-focus'];
     case 'first-project-confirmation': {
       const project = map.projects.find((item) => (
         item.id === decision.targetId && item.revision === decision.targetRevision

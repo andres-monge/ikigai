@@ -68,6 +68,34 @@ describe('Method checkpoint selector', () => {
     expect(deriveMethodCheckpoint(map)).toMatchObject({ module: 'create-purpose-paths', pendingDecision: { kind: 'path-selection' } });
   });
 
+  it('can reconsider the North Star from either pending Purpose Path decision', () => {
+    let map = createCareerMap('explorer-reconsider-why');
+    map = commit(map, 'propose-why', { why: { id: 'why-1', revision: 1, statement: 'Make difficult choices actionable.', serves: 'People in transition', pointOfView: 'Clarity must change action' }, presentation: presentation(1) });
+    map = commit(map, 'confirm-why', { whyId: 'why-1', whyRevision: 1, action: action(2) });
+    map = commit(map, 'propose-purpose-paths', { setId: 'set-1', setRevision: 1, paths, presentation: presentation(3) });
+    expect(deriveMethodCheckpoint(map).availableOperations).toContain('open-foundation-revision-focus');
+
+    map = commit(map, 'open-foundation-revision-focus', { reason: 'A new interest may suggest serving a different group.', action: action(4) });
+    expect(deriveMethodCheckpoint(map)).toMatchObject({ module: 'form-foundation', focus: { kind: 'foundation-revision' }, pendingDecision: null });
+    expect(map.foundation.whyRevisions.findLast((why) => why.status === 'confirmed')?.id).toBe('why-1');
+    map = commit(map, 'close-focus', { action: action(5) });
+    expect(deriveMethodCheckpoint(map).pendingDecision?.kind).toBe('path-selection');
+
+    map = commit(map, 'select-purpose-path', { setId: 'set-1', setRevision: 1, pathId: 'path-1', pathRevision: 1, action: action(6) });
+    map = commit(map, 'replace-purpose-path', {
+      sourceSetId: 'set-1', sourceSetRevision: 1, replacedPathId: 'path-2',
+      replacementSetId: 'set-2', replacementSetRevision: 1,
+      replacement: { ...paths[1], id: 'path-4', name: 'Another way' },
+      presentation: presentation(7),
+    });
+    expect(deriveMethodCheckpoint(map).pendingDecision?.kind).toBe('path-revision-confirmation');
+    expect(deriveMethodCheckpoint(map).availableOperations).toContain('open-foundation-revision-focus');
+
+    map = commit(map, 'open-foundation-revision-focus', { reason: 'The new direction may change who the work serves.', action: action(8) });
+    expect(deriveMethodCheckpoint(map)).toMatchObject({ module: 'form-foundation', focus: { kind: 'foundation-revision' }, pendingDecision: null });
+    expect(map.pathSets.findLast((set) => set.status === 'suggested')?.id).toBe('set-2');
+  });
+
   it('applies KTD2 precedence: invalidation, focus, pending, peer guard, lifecycle', () => {
     let map = createCareerMap('explorer-selector');
     map = commit(map, 'propose-why', { why: { id: 'why-1', revision: 1, statement: 'Make difficult choices actionable.', serves: 'People in transition', pointOfView: 'Clarity must change action' }, presentation: presentation(1) });

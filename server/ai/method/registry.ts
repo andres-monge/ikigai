@@ -10,12 +10,12 @@ export const METHOD_MODULE_REGISTRY = {
   'form-foundation': {
     key: 'form-foundation',
     directory: 'form-foundation',
-    contentVersion: '1.1.7',
+    contentVersion: '1.1.11',
   },
   'create-purpose-paths': {
     key: 'create-purpose-paths',
     directory: 'create-purpose-paths',
-    contentVersion: '1.1.4',
+    contentVersion: '1.1.6',
   },
   'design-path-project': {
     key: 'design-path-project',
