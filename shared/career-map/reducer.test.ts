@@ -308,11 +308,24 @@ describe('Method reducer', () => {
     expect(secondWrite.map).toEqual(intermediate);
     expect(secondWrite.map.pathSets).toHaveLength(2);
 
-    map = commit(map, 'revise-purpose-paths', {
+    const revisionOperation = operation(map, 'revise-purpose-paths', {
       sourceSetId: 'paths-1', sourceSetRevision: 1,
       replacementSetId: 'paths-2', replacementSetRevision: 1,
       paths: revisedPaths, presentation: presentation(4),
     });
+    const revisionResult = applyCareerMapOperation(map, revisionOperation);
+    expect(revisionResult.status).toBe('committed');
+    map = revisionResult.map;
+
+    const replayedRevision = applyCareerMapOperation(map, revisionOperation);
+    expect(replayedRevision.status).toBe('replayed');
+    expect(replayedRevision.map).toEqual(map);
+    const reusedSource = applyCareerMapOperation(original, {
+      ...revisionOperation, sourceId: original.operationHistory.at(-1)!.sourceId,
+    });
+    expect(reusedSource.status).toBe('rejected');
+    if (reusedSource.status === 'rejected') expect(reusedSource.error.code).toBe('source-id-reused');
+    expect(reusedSource.map).toEqual(original);
 
     expect(map.pathSets).toHaveLength(2);
     expect(map.pathSets[0].status).toBe('superseded');
