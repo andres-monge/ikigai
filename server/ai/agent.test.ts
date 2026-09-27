@@ -429,7 +429,7 @@ describe('amended Method agent core loop', () => {
     expect(model.doStreamCalls[0]?.tools?.map((candidate) => candidate.name)).toContain('web_search');
     expect(model.doStreamCalls[0]?.providerOptions?.openai).toMatchObject({
       conversation: 'conversation-server-owned', store: true,
-      parallelToolCalls: false, reasoningEffort: 'medium',
+      parallelToolCalls: false, reasoningEffort: 'low',
     });
     expect(model.doStreamCalls[0]?.providerOptions?.openai?.instructions).toContain(
       'Record supported canonical evidence and decisions through tools before summarizing.',
@@ -997,7 +997,7 @@ describe('amended Method agent core loop', () => {
       { type: 'compaction', compactThreshold: 200_000 },
     ]);
     expect(model.doStreamCalls.every((call) => call.maxOutputTokens === REVELIO_MAX_OUTPUT_TOKENS)).toBe(true);
-    expect(model.doStreamCalls.every((call) => call.providerOptions?.openai?.reasoningEffort === 'medium')).toBe(true);
+    expect(model.doStreamCalls.every((call) => call.providerOptions?.openai?.reasoningEffort === 'low')).toBe(true);
     expect(REVELIO_MAX_OUTPUT_TOKENS).toBeGreaterThanOrEqual(25_000);
     expect(model.doStreamCalls[1]?.providerOptions?.openai).not.toHaveProperty('contextManagement');
     expect(model.doStreamCalls.every((call) => {

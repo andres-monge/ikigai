@@ -52,7 +52,7 @@ import { REVISE_PURPOSE_PATHS_TOOL_DESCRIPTION, normalizeRevisedPurposePathRevis
 const allowedModels = new Set(['gpt-6-sol']);
 const modelId = process.env.REVELIO_METHOD_MODEL || 'gpt-6-sol';
 const apiKey = process.env.OPENAI_API_KEY;
-const reasoningEffort = process.env.REVELIO_METHOD_REASONING_EFFORT || 'medium';
+const reasoningEffort = process.env.REVELIO_METHOD_REASONING_EFFORT || 'low';
 const requestTimeoutMs = Number(process.env.REVELIO_METHOD_TIMEOUT_MS || 60_000);
 const runStartedAt = new Date().toISOString();
 
