@@ -470,7 +470,6 @@ describe('protected Method routes', () => {
           stream: simulateReadableStream({ chunks: [
             { type: 'stream-start', warnings: [] },
             { type: 'tool-call', toolCallId: 'revise-two-paths', toolName: 'revise_purpose_paths', input: JSON.stringify({
-              sourceSetId: 'set-1', sourceSetRevision: 1,
               replacementSetId: 'set-2', replacementSetRevision: 1,
               paths: [
                 { ...toInput(original[0]), id: 'path-4', name: 'RL research' },

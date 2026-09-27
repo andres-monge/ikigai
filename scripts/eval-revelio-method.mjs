@@ -7,6 +7,8 @@
  * Use --adaptive-revision-only=original|clarified to run one revision turn.
  * Use --adaptive-revision-concurrent=original|clarified to inspect only the
  * revision result while the other adaptive fixtures run alongside it.
+ * Use --adaptive-mismatch-only to test a clear contribution mismatch in one turn.
+ * Set REVELIO_METHOD_REASONING_EFFORT=low|medium for a controlled comparison.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -45,11 +47,12 @@ import {
 } from '../server/ai/method/evaluation.ts';
 import { createMethodModuleLoader } from '../server/ai/method/loader.ts';
 import { compileCareerMapBriefing } from '../server/ai/briefing.ts';
-import { REVISE_PURPOSE_PATHS_TOOL_DESCRIPTION, revisePurposePathsToolInputSchema } from '../server/ai/tools.ts';
+import { REVISE_PURPOSE_PATHS_TOOL_DESCRIPTION, normalizeRevisedPurposePathRevisions, revisePurposePathsToolInputSchema } from '../server/ai/tools.ts';
 
 const allowedModels = new Set(['gpt-6-sol']);
 const modelId = process.env.REVELIO_METHOD_MODEL || 'gpt-6-sol';
 const apiKey = process.env.OPENAI_API_KEY;
+const reasoningEffort = process.env.REVELIO_METHOD_REASONING_EFFORT || 'medium';
 const requestTimeoutMs = Number(process.env.REVELIO_METHOD_TIMEOUT_MS || 60_000);
 const runStartedAt = new Date().toISOString();
 
@@ -66,6 +69,9 @@ function assert(condition, message) {
 
 if (!allowedModels.has(modelId)) {
   throw new EvaluationAssertionError(`REVELIO_METHOD_MODEL must be ${[...allowedModels].join(' or ')}; received ${modelId}.`);
+}
+if (!['low', 'medium'].includes(reasoningEffort)) {
+  throw new EvaluationAssertionError('REVELIO_METHOD_REASONING_EFFORT must be low or medium.');
 }
 if (!Number.isSafeInteger(requestTimeoutMs) || requestTimeoutMs <= 0) {
   throw new EvaluationAssertionError('REVELIO_METHOD_TIMEOUT_MS must be a positive integer.');
@@ -370,7 +376,9 @@ function visibleAssistantText(result) {
 function stepDiagnostics(result) {
   return result.steps.map((step) => ({
     finishReason: step.finishReason ?? null,
+    inputTokens: step.usage?.inputTokens ?? null,
     outputTokens: step.usage?.outputTokens ?? null,
+    reasoningTokens: step.usage?.outputTokenDetails?.reasoningTokens ?? null,
     toolNames: (step.toolCalls ?? []).map((call) => call.toolName),
   }));
 }
@@ -902,6 +910,51 @@ function adaptiveRevisionScenario(seed, requestKind = 'clarified') {
   };
 }
 
+function adaptiveMismatchScenario(seed) {
+  return {
+    id: 'adaptive-unsolicited-mismatch', initialMap: seed.map, useProductionBriefing: true,
+    initialMessages: seed.priorMessages,
+    turnSequenceStart: seed.currentTurnSequence,
+    maxSteps: 6, maxOutputTokens: 650,
+    turns: [
+      'I do not want Decision Tools. Protecting future generations from AI risks has started to matter much more to me than helping small teams decide together. I am curious where that could lead.',
+    ],
+  };
+}
+
+function adaptiveMismatchDiagnostic(result, seed) {
+  const turn = result.turns[0];
+  const reply = turn?.replyText ?? '';
+  const question = reply.split(/\n+/).findLast((line) => line.includes('?')) ?? '';
+  return {
+    operations: result.operations.map(({ type, status }) => ({ type, status })),
+    initialRevision: seed.map.revision,
+    finalRevision: result.map.revision,
+    initialSets: seed.map.pathSets.length,
+    finalSets: result.map.pathSets.length,
+    steps: turn?.stepDiagnostics ?? [],
+    replyShape: turn?.replyShape ?? null,
+    mentionsFutureImpact: /future generations|AI risks/i.test(reply),
+    mentionsCurrentContribution: /North Star|small teams/i.test(reply),
+    namesTension: /different|disconnect|tension|shift|change|rather than|instead of|away from|no longer|not the same|may not fit/i.test(reply),
+    invitesReflection: /revisit|reconsider|reflect|explore|look at|look again/i.test(reply),
+    asksContributionQuestion: /\?/.test(question) && /what|how|which|where/i.test(question)
+      && /future|AI risk|small team|North Star|contribution|protect|serve|matter|draw/i.test(question),
+  };
+}
+
+function assertAdaptiveMismatch(result, seed) {
+  const diagnostic = adaptiveMismatchDiagnostic(result, seed);
+  assert(result.operations.length === 0, `An unsolicited North Star mismatch changed canonical state without an explorer request: ${JSON.stringify(diagnostic)}.`);
+  assert(result.map.revision === seed.map.revision && isDeepStrictEqual(result.map.foundation.whyRevisions, seed.map.foundation.whyRevisions) && isDeepStrictEqual(result.map.pathSets, seed.map.pathSets), `Unsolicited mismatch silently changed the North Star or Purpose Paths: ${JSON.stringify(diagnostic)}.`);
+  assert(diagnostic.mentionsFutureImpact && diagnostic.mentionsCurrentContribution, `Unsolicited mismatch response did not name both sides of the specific tension: ${JSON.stringify(diagnostic)}.`);
+  assert(diagnostic.invitesReflection || diagnostic.asksContributionQuestion, `Unsolicited mismatch response did not invite North Star reflection or ask a useful contribution question: ${JSON.stringify(diagnostic)}.`);
+  assert((result.turns[0]?.replyShape.questions ?? 0) <= 1, `Unsolicited mismatch response asked too many questions: ${JSON.stringify(diagnostic)}.`);
+  const reply = result.turns[0]?.replyText ?? '';
+  assert(!/which (?:one|interest|path).{0,55}(?:choose|pick|prefer)|(?:choose|pick) (?:one|between)/i.test(reply), `Unsolicited mismatch pushed a path choice: ${JSON.stringify(diagnostic)}.`);
+  return diagnostic;
+}
+
 function revisionInputShape(map, payload) {
   const source = map.pathSets.find((set) => set.id === payload.sourceSetId && set.revision === payload.sourceSetRevision);
   const pathInput = (path) => {
@@ -984,15 +1037,7 @@ async function runAdaptivePathsFixtures(loader, model, revisionRequestKind = 'cl
       'On reflection, my existing North Star still fits. Keep it as it is and return to the three paths.',
     ],
     }, loader, model).run(),
-    createSyntheticHarness({
-    id: 'adaptive-unsolicited-mismatch', initialMap: unsolicitedMismatchSeed.map, useProductionBriefing: true,
-    initialMessages: unsolicitedMismatchSeed.priorMessages,
-    turnSequenceStart: unsolicitedMismatchSeed.currentTurnSequence,
-    maxSteps: 6, maxOutputTokens: 650,
-    turns: [
-      'I do not want Decision Tools. Protecting future generations from AI risks has started to matter much more to me than helping small teams decide together. I am curious where that could lead.',
-    ],
-    }, loader, model).run(),
+    createSyntheticHarness(adaptiveMismatchScenario(unsolicitedMismatchSeed), loader, model).run(),
   ];
   if (revisionOnly) {
     const outcomes = await Promise.allSettled(fixtureRuns);
@@ -1023,11 +1068,7 @@ async function runAdaptivePathsFixtures(loader, model, revisionRequestKind = 'cl
   assert(mismatch.operations.some(({ turnIndex, type }) => turnIndex === 1 && type === 'close-focus'), 'Explorer could not return from North Star reflection to the pending paths.');
   assert(!mismatch.operations.some(({ type }) => type === 'revise-why'), 'North Star reflection revised a direction the explorer chose to keep.');
   assert(deriveMethodCheckpoint(mismatch.map).pendingDecision?.kind === 'path-selection', 'Closing Foundation reflection did not restore the pending path choice.');
-  assert(unsolicitedMismatch.operations.length === 0, 'An unsolicited North Star mismatch changed canonical state without an explorer request.');
-  const unsolicitedText = unsolicitedMismatch.turns[0]?.replyText ?? '';
-  assert(/future generations|AI risks/i.test(unsolicitedText) && /North Star|small teams/i.test(unsolicitedText), 'Unsolicited mismatch response did not name the specific tension.');
-  assert(/(?:revisit|reconsider|reflect|explore|look at|look again)/i.test(unsolicitedText), 'Unsolicited mismatch response did not invite North Star reflection.');
-  assert(!/which (?:one|interest|path).{0,55}(?:choose|pick|prefer)|(?:choose|pick) (?:one|between)/i.test(unsolicitedText), 'Unsolicited mismatch pushed a path choice.');
+  const unsolicitedDiagnostic = assertAdaptiveMismatch(unsolicitedMismatch, unsolicitedMismatchSeed);
   return {
     discussion: { operations: discussion.operations.map(({ type }) => type), questionCount: replyShape(discussionText).questions },
     revision: {
@@ -1036,7 +1077,7 @@ async function runAdaptivePathsFixtures(loader, model, revisionRequestKind = 'cl
       modelOfferMatched: revision.turns[0]?.modelOfferMatched,
     },
     mismatch: { operations: mismatch.operations.map(({ type }) => type), module: deriveMethodCheckpoint(mismatch.map).module },
-    unsolicitedMismatch: { operations: unsolicitedMismatch.operations.map(({ type }) => type), questionCount: replyShape(unsolicitedText).questions },
+    unsolicitedMismatch: { operations: unsolicitedMismatch.operations.map(({ type }) => type), questionCount: unsolicitedDiagnostic.replyShape.questions },
   };
 }
 
@@ -1391,10 +1432,17 @@ function createSyntheticHarness(scenario, loader, model) {
     revise_purpose_paths: tool({
       description: REVISE_PURPOSE_PATHS_TOOL_DESCRIPTION,
       inputSchema: revisePurposePathsToolInputSchema,
-      execute: (input, { toolCallId }) => commit('revise-purpose-paths', {
-        ...input,
-        presentation: presentation(),
-      }, toolCallId),
+      execute: (input, { toolCallId }) => {
+        const set = currentPathSet();
+        assert(set, `${scenario.id}: no path set is available to revise.`);
+        return commit('revise-purpose-paths', {
+          ...input,
+          sourceSetId: set.id,
+          sourceSetRevision: set.revision,
+          paths: normalizeRevisedPurposePathRevisions(map, input.paths),
+          presentation: presentation(),
+        }, toolCallId);
+      },
     }),
     combine_purpose_paths: tool({
       description: 'Combine two current paths and atomically preserve one sibling plus a merged path and a new third path.',
@@ -1589,7 +1637,7 @@ function createSyntheticHarness(scenario, loader, model) {
         providerOptions: {
           openai: {
             store: false,
-            reasoningEffort: 'low',
+            reasoningEffort,
             instructions,
           },
         },
@@ -1641,8 +1689,10 @@ function createSyntheticHarness(scenario, loader, model) {
       const turnPreparations = preparations.slice(preparationStart);
       turns.push({
         turnIndex,
-        ...(scenario.id === 'adaptive-two-path-revision' ? {
+        ...(['adaptive-two-path-revision', 'adaptive-unsolicited-mismatch'].includes(scenario.id) ? {
           stepDiagnostics: stepDiagnostics(result),
+        } : {}),
+        ...(scenario.id === 'adaptive-two-path-revision' ? {
           modelOfferMatched: canonicalPathOffer ? modelText.trim() === PURPOSE_PATHS_OFFER_ENGLISH : null,
         } : {}),
         initialModule: turnPreparations[0]?.module ?? null,
@@ -1849,6 +1899,13 @@ async function main() {
   const loader = await createMethodModuleLoader();
   const openai = createOpenAI({ apiKey });
   const model = openai.responses(modelId);
+  if (process.argv.includes('--adaptive-mismatch-only')) {
+    const seed = createSemanticIntentSeed({ label: 'adaptive-paths', state: 'pending-path' }, 203);
+    const result = await createSyntheticHarness(adaptiveMismatchScenario(seed), loader, model).run();
+    const diagnostic = assertAdaptiveMismatch(result, seed);
+    console.log(JSON.stringify({ status: 'pass', model: modelId, reasoningEffort, baseInstructions: BASE_INSTRUCTIONS_VERSION, mismatch: diagnostic }, null, 2));
+    return;
+  }
   const revisionOnlyArgument = process.argv.find((argument) => argument.startsWith('--adaptive-revision-only='));
   if (revisionOnlyArgument) {
     const requestKind = revisionOnlyArgument.slice('--adaptive-revision-only='.length);
@@ -1856,7 +1913,7 @@ async function main() {
     const seed = createSemanticIntentSeed({ label: 'adaptive-paths', state: 'pending-path' }, 201);
     const result = await createSyntheticHarness(adaptiveRevisionScenario(seed, requestKind), loader, model).run();
     const diagnostic = assertAdaptiveRevision(result, seed, requestKind);
-    console.log(JSON.stringify({ status: 'pass', model: modelId, baseInstructions: BASE_INSTRUCTIONS_VERSION, revision: diagnostic }, null, 2));
+    console.log(JSON.stringify({ status: 'pass', model: modelId, reasoningEffort, baseInstructions: BASE_INSTRUCTIONS_VERSION, revision: diagnostic }, null, 2));
     return;
   }
   const concurrentRevisionArgument = process.argv.find((argument) => argument.startsWith('--adaptive-revision-concurrent='));
@@ -1864,7 +1921,7 @@ async function main() {
     const requestKind = concurrentRevisionArgument.slice('--adaptive-revision-concurrent='.length);
     assert(Object.hasOwn(adaptiveRevisionRequests, requestKind), `Unknown concurrent adaptive revision request: ${requestKind}.`);
     const revision = await runAdaptivePathsFixtures(loader, model, requestKind, true);
-    console.log(JSON.stringify({ status: 'pass', model: modelId, baseInstructions: BASE_INSTRUCTIONS_VERSION, revision }, null, 2));
+    console.log(JSON.stringify({ status: 'pass', model: modelId, reasoningEffort, baseInstructions: BASE_INSTRUCTIONS_VERSION, revision }, null, 2));
     return;
   }
   if (process.argv.includes('--adaptive-paths-checkpoint')) {

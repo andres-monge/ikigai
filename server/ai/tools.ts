@@ -1,4 +1,5 @@
 import { tool, type ToolSet } from 'ai';
+import { isDeepStrictEqual } from 'node:util';
 import { z } from 'zod';
 import {
   deriveMethodCheckpoint,
@@ -130,13 +131,24 @@ const pathToolInputSchema = purposePathInputSchema.superRefine((path, context) =
   }
 });
 export const revisePurposePathsToolInputSchema = z.object({
-  sourceSetId: entityIdSchema,
-  sourceSetRevision: revisionSchema,
   replacementSetId: entityIdSchema,
   replacementSetRevision: revisionSchema,
   paths: z.array(pathToolInputSchema).length(3),
 }).strict();
-export const REVISE_PURPOSE_PATHS_TOOL_DESCRIPTION = 'Revise multiple paths in one atomic three-path set. Include all three paths in their existing order and copy each unchanged path exactly, including its ID and revision.';
+export const REVISE_PURPOSE_PATHS_TOOL_DESCRIPTION = 'Revise multiple paths in one atomic three-path set. The application supplies the current source set. Include all three paths in their existing order. Copy each unchanged path exactly, including its ID and revision. For each changed path, use a new ID or increment its revision; never change content while reusing the same ID and revision.';
+export function normalizeRevisedPurposePathRevisions(map: CareerMap, paths: z.infer<typeof pathToolInputSchema>[]) {
+  const existing = map.pathSets.flatMap((set) => set.paths);
+  return paths.map((path) => {
+    const prior = existing.find((candidate) => candidate.id === path.id && candidate.revision === path.revision);
+    if (!prior) return path;
+    const { selection: _selection, equalWeight: _equalWeight, ...priorInput } = prior;
+    if (isDeepStrictEqual(priorInput, path)) return path;
+    return {
+      ...path,
+      revision: Math.max(...existing.filter((candidate) => candidate.id === path.id).map((candidate) => candidate.revision)) + 1,
+    };
+  });
+}
 const projectToolInputSchema = pathProjectInputSchema;
 const evidenceToolInputSchema = foundationEvidenceSchema
   .omit({ provenance: true, supersedesEvidenceId: true })
@@ -586,7 +598,17 @@ export function createMethodTools(runtime: MethodToolRuntime): ToolSet {
       return { ...input, presentation: context().presentation };
     }),
     revise_purpose_paths: operationTool(runtime, 'revise-purpose-paths', REVISE_PURPOSE_PATHS_TOOL_DESCRIPTION, revisePurposePathsToolInputSchema, (input) => {
-      return { ...input, presentation: context().presentation };
+      const pathSets = runtime.prepared.current?.map.pathSets ?? [];
+      const source = pathSets.findLast((set) => set.status === 'suggested')
+        ?? pathSets.findLast((set) => set.status === 'active');
+      if (!source) throw new Error('No current Purpose Path set is available to revise.');
+      return {
+        ...input,
+        sourceSetId: source.id,
+        sourceSetRevision: source.revision,
+        paths: normalizeRevisedPurposePathRevisions(runtime.prepared.current!.map, input.paths),
+        presentation: context().presentation,
+      };
     }),
     combine_purpose_paths: operationTool(runtime, 'combine-purpose-paths', 'Combine exactly two paths and preserve an exact-three equal-weight set.', z.object({ sourceSetId: entityIdSchema, sourceSetRevision: revisionSchema, combinedPathIds: z.array(entityIdSchema).length(2), replacementSetId: entityIdSchema, replacementSetRevision: revisionSchema, paths: z.array(pathToolInputSchema).length(3) }).strict(), (input) => {
       return { ...input, presentation: context().presentation };

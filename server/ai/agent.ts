@@ -525,7 +525,7 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
             conversation: options.conversationId,
             store: true,
             parallelToolCalls: false,
-            reasoningEffort: 'low',
+            reasoningEffort: 'medium',
             instructions: requestInstructions(state),
             ...(stepNumber === 0
               ? { contextManagement: [{ type: 'compaction', compactThreshold: REVELIO_COMPACT_THRESHOLD }] }

@@ -16,6 +16,7 @@ import {
   createMethodResponseOperationGuard,
   executeMethodOperation,
   executeWorkspaceTool,
+  normalizeRevisedPurposePathRevisions,
   refreshMethodState,
   toolNamesForCheckpoint,
   workspaceOperationRequestSchema,
@@ -945,16 +946,27 @@ describe('strict state-specific Method tools', () => {
     const revised = (source: typeof unchanged, id: string) => ({
       ...source, id, name: `${source.name} revised`,
     });
-
-    const result = await tools.revise_purpose_paths.execute?.({
-      sourceSetId: 'set-1', sourceSetRevision: 1,
+    const revisionInput = {
       replacementSetId: 'set-revised', replacementSetRevision: 1,
       paths: [
         revised(toInput(original[0]), 'path-4'),
         unchanged,
         revised(toInput(original[2]), 'path-5'),
       ],
-    }, { toolCallId: 'one-revision-response', messages: [] } as never);
+    };
+    const schema = tools.revise_purpose_paths.inputSchema as z.ZodTypeAny;
+    expect(schema.safeParse(revisionInput).success).toBe(true);
+    expect(schema.safeParse({ ...revisionInput, sourceSetId: 'wrong-set', sourceSetRevision: 99 }).success).toBe(false);
+    const reusedRevision = normalizeRevisedPurposePathRevisions(storage.map, [
+      revised(toInput(original[0]), original[0].id),
+      unchanged,
+      revised(toInput(original[2]), original[2].id),
+    ]);
+    expect(reusedRevision.map((path) => [path.id, path.revision])).toEqual([
+      ['path-1', 2], ['path-2', 1], ['path-3', 2],
+    ]);
+
+    const result = await tools.revise_purpose_paths.execute?.(revisionInput, { toolCallId: 'one-revision-response', messages: [] } as never);
 
     expect(result).toMatchObject({ status: 'committed', authoritativeRevision: 4 });
     expect(storage.persist).toHaveBeenCalledOnce();
