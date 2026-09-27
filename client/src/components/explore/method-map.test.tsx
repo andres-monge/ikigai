@@ -51,7 +51,7 @@ describe('MethodMap', () => {
     expect(within(checkpoint).getByText('Pending decision: Choose a Purpose Path')).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Your North Star' })).toBeTruthy();
     expect(within(checkpoint).getByText('Current focus')).toBeTruthy();
-    expect(screen.getByText('Confirmed')).toBeTruthy();
+    expect(screen.queryByText('Confirmed')).toBeNull();
     expect(screen.queryByText('Inspect Your North Star')).toBeNull();
     expect(screen.queryByText('People using them.')).toBeNull();
     expect(screen.getByText('Complexity is a choice.')).toBeTruthy();

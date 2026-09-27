@@ -291,7 +291,6 @@ export function MethodMap({ map }: MethodMapProps) {
       ) : null}
       {why ? (
         <section className="max-w-3xl border-2 border-black bg-white p-5 shadow-[4px_4px_0_rgba(0,0,0,0.65)]">
-          <p className="method-map-label">{why.status === 'confirmed' ? 'Confirmed' : 'Suggested'}</p>
           <h2 className="text-2xl font-black">Your North Star</h2>
           <p className="mt-3 text-lg font-medium leading-7">{why.statement}</p>
           <div className="mt-4 border-t border-slate-300 pt-3">
