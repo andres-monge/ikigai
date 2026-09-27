@@ -798,6 +798,40 @@ describe('strict state-specific Method tools', () => {
     expect(storage.map.pathSets).toHaveLength(2);
     expect(storage.map.pathSets.at(-1)?.id).toBe('set-2');
   });
+  it('saves a two-card revision of paths one and three as one atomic suggested set', async () => {
+    const storage = new ReducerStorage(pendingPaths());
+    const loader = await createMethodModuleLoader();
+    const tools = createMethodTools({
+      ...runtime(storage), loader, surface: 'agent-turn',
+      prepared: { current: await refreshMethodState(storage, loader, 'explorer-1') },
+      timing: { turnSequence: 4, occurredAt: at(4) },
+    });
+    const original = storage.map.pathSets[0].paths;
+    const toInput = ({ selection: _selection, equalWeight: _equalWeight, ...path }: typeof original[number]) => path;
+    const unchanged = toInput(original[1]);
+    const revised = (source: typeof unchanged, id: string) => ({
+      ...source, id, name: `${source.name} revised`,
+    });
+
+    const result = await tools.revise_purpose_paths.execute?.({
+      sourceSetId: 'set-1', sourceSetRevision: 1,
+      replacementSetId: 'set-revised', replacementSetRevision: 1,
+      paths: [
+        revised(toInput(original[0]), 'path-4'),
+        unchanged,
+        revised(toInput(original[2]), 'path-5'),
+      ],
+    }, { toolCallId: 'one-revision-response', messages: [] } as never);
+
+    expect(result).toMatchObject({ status: 'committed', authoritativeRevision: 4 });
+    expect(storage.persist).toHaveBeenCalledOnce();
+    expect(storage.map.pathSets).toHaveLength(2);
+    expect(storage.map.pathSets[0].status).toBe('superseded');
+    expect(storage.map.pathSets[1]).toMatchObject({
+      id: 'set-revised', status: 'suggested', changeKind: 'revision',
+      paths: [{ id: 'path-4' }, { id: 'path-2' }, { id: 'path-5' }],
+    });
+  });
   it('combines both requested plural numeric aliases while allowing the separately named preserved sibling', async () => {
     const storage = new ReducerStorage(pendingPaths());
     const loader = await createMethodModuleLoader();

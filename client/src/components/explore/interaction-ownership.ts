@@ -23,6 +23,7 @@ export const interactionOwnership = {
   'confirm-why': { owner: 'conversation-only', affordance: 'Chat composer', reason: 'The main agent judges later-turn North Star confirmation in context.' },
   'propose-purpose-paths': { owner: 'conversation-only', affordance: 'Chat composer', reason: 'The agent must produce a validated exact-three set grounded in the confirmed North Star.' },
   'replace-purpose-path': { owner: 'conversation-only', affordance: 'Replace', reason: 'The UI names one path; the agent designs its replacement and atomically preserves exact three.' },
+  'revise-purpose-paths': { owner: 'conversation-only', affordance: 'Chat composer', reason: 'The agent revises multiple paths in one complete three-path set while preserving unchanged siblings.' },
   'combine-purpose-paths': { owner: 'conversation-only', affordance: 'Combine two paths', reason: 'The agent clarifies the pair and creates a distinct third path atomically.' },
   'select-purpose-path': { owner: 'deterministic-ui', affordance: 'Start this path', reason: 'One exact member of a completed initial presentation can be selected directly.' },
   'confirm-purpose-path-revision': { owner: 'deterministic-ui', affordance: 'Start this path on a revised set', reason: 'A revised exact-three set still requires one explicit choice.' },

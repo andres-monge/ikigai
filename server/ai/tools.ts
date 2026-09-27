@@ -496,6 +496,7 @@ export const OPERATION_TO_TOOL_NAME = {
   'confirm-why': 'confirm_why',
   'propose-purpose-paths': 'propose_purpose_paths',
   'replace-purpose-path': 'replace_purpose_path',
+  'revise-purpose-paths': 'revise_purpose_paths',
   'combine-purpose-paths': 'combine_purpose_paths',
   'select-purpose-path': 'select_purpose_path',
   'confirm-purpose-path-revision': 'confirm_purpose_path_revision',
@@ -556,6 +557,9 @@ export function createMethodTools(runtime: MethodToolRuntime): ToolSet {
       return { setId, setRevision, paths, presentation: context().presentation };
     }),
     replace_purpose_path: operationTool(runtime, 'replace-purpose-path', 'Replace exactly one path while preserving the other two.', z.object({ sourceSetId: entityIdSchema, sourceSetRevision: revisionSchema, replacedPathId: entityIdSchema, replacementSetId: entityIdSchema, replacementSetRevision: revisionSchema, replacement: pathToolInputSchema }).strict(), (input) => {
+      return { ...input, presentation: context().presentation };
+    }),
+    revise_purpose_paths: operationTool(runtime, 'revise-purpose-paths', 'Revise multiple paths in one atomic three-path set. Include all three paths in their existing order and copy each unchanged path exactly, including its ID and revision.', z.object({ sourceSetId: entityIdSchema, sourceSetRevision: revisionSchema, replacementSetId: entityIdSchema, replacementSetRevision: revisionSchema, paths: z.array(pathToolInputSchema).length(3) }).strict(), (input) => {
       return { ...input, presentation: context().presentation };
     }),
     combine_purpose_paths: operationTool(runtime, 'combine-purpose-paths', 'Combine exactly two paths and preserve an exact-three equal-weight set.', z.object({ sourceSetId: entityIdSchema, sourceSetRevision: revisionSchema, combinedPathIds: z.array(entityIdSchema).length(2), replacementSetId: entityIdSchema, replacementSetRevision: revisionSchema, paths: z.array(pathToolInputSchema).length(3) }).strict(), (input) => {

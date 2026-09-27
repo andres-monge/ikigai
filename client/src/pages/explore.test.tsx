@@ -2,7 +2,7 @@
 
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createCareerMap, type CareerMap } from '@shared/career-map';
+import { applyCareerMapOperation, createCareerMap, type CareerMap } from '@shared/career-map';
 import type { NormalizedHistoryMessage } from '@/components/explore/explore-state';
 import { _resetBrowserSupportCache } from '@/hooks/use-speech-to-text';
 import { attachPurposePathSets, Explore } from './explore';
@@ -188,6 +188,54 @@ describe('Explore U6 conversation-first workspace', () => {
       parts: [{ type: 'text', text: 'Partial prose' }],
     }];
     expect(attachPurposePathSets(failedWithoutFinal, map.pathSets).size).toBe(0);
+  });
+
+  it('attaches one three-card presentation after an atomic revision of paths one and three', async () => {
+    const original = suggestedPathsMap();
+    const toInput = ({ selection: _selection, equalWeight: _equalWeight, ...path }: CareerMap['pathSets'][number]['paths'][number]) => path;
+    const [first, second, third] = original.pathSets[0].paths;
+    const result = applyCareerMapOperation(original, {
+      type: 'revise-purpose-paths', sourceId: 'two-path-revision', expectedRevision: original.revision,
+      occurredAt: '2030-01-01T00:00:04.000Z',
+      payload: {
+        sourceSetId: 'set-1', sourceSetRevision: 1,
+        replacementSetId: 'set-revised', replacementSetRevision: 1,
+        paths: [
+          { ...toInput(first), id: 'path-4', name: 'Explore RL and alignment' },
+          toInput(second),
+          { ...toInput(third), id: 'path-5', name: 'Create AI art with TouchDesigner' },
+        ],
+        presentation: { ...presentation, assistantTurnId: 'turn-revised', turnSequence: 4 },
+      },
+    });
+    expect(result.status).toBe('committed');
+    if (result.status !== 'committed') return;
+    expect(result.map.pathSets).toHaveLength(2);
+
+    const messages: NormalizedHistoryMessage[] = [
+      ...historyMessages(),
+      { id: 'revised-final', role: 'assistant', turn: { turnId: 'turn-revised', status: 'completed' },
+        isFinalAssistantItem: true, parts: [{ type: 'text', text: 'Here are three revised paths.' }] },
+    ];
+    const attached = attachPurposePathSets(messages, result.map.pathSets);
+    expect(attached.get('revised-final')).toHaveLength(1);
+    expect(attached.get('revised-final')?.[0].paths.map((path) => path.name)).toEqual([
+      'Explore RL and alignment', 'Path 2', 'Create AI art with TouchDesigner',
+    ]);
+
+    vi.mocked(fetch).mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/history')) return jsonResponse({ status: 'ready', messages });
+      if (url.includes('/workspace')) return jsonResponse({ status: 'ready', map: result.map });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    render(<Explore {...props()} />);
+    const chat = screen.getByRole('tabpanel', { name: 'Chat' });
+    await within(chat).findByText('Explore RL and alignment');
+    const revisedSet = within(chat).getByText('Explore RL and alignment').closest('[data-path-set="set-revised@1"]');
+    expect(revisedSet).not.toBeNull();
+    expect(within(revisedSet as HTMLElement).getAllByTestId('purpose-path-card')).toHaveLength(3);
+    expect(within(chat).getAllByText('Explore RL and alignment')).toHaveLength(1);
   });
 
   it('attaches the shared cards after final prose in Chat and keeps Your Map action-free', async () => {

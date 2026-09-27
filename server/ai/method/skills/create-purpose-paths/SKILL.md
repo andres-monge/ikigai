@@ -1,7 +1,7 @@
 ---
 name: create-purpose-paths
 description: Create and revise exactly three distinct Purpose Paths with equal weight and explorer-owned choice.
-version: 1.1.3
+version: 1.1.4
 ---
 # Create Purpose Paths
 
@@ -29,6 +29,7 @@ The set must contain exactly three distinct mechanisms for serving the same Nort
 
 - Let the explorer question, rewrite, combine, or replace paths before choosing.
 - For a replacement, replace only the requested path and preserve the other two unchanged. Commit a complete three-path set atomically and verify that all three remain distinct.
+- When two or three paths need revision, use one `revise-purpose-paths` operation with the complete set. Preserve every unchanged path exactly, including its position, ID, and revision. Do not save an intermediate set while working through multiple changes.
 - When you combine paths, commit one complete three-path set atomically: preserve the uncombined sibling, add the merged path, and add a genuinely new third path. Combining never implicitly selects a path.
 - If prestige, status, or an attractive identity is carrying a path, investigate that distortion and revise or replace the path without ranking the alternatives.
 - Only an explicit explorer choice may activate one path. Do not treat interest, generic assent, or your own recommendation as selection.
@@ -36,13 +37,13 @@ The set must contain exactly three distinct mechanisms for serving the same Nort
 
 ## State operations
 
-- Use `propose-purpose-paths`, `replace-purpose-path`, or `combine-purpose-paths` only when that exact operation is currently exposed.
+- Use `propose-purpose-paths`, `replace-purpose-path`, `revise-purpose-paths`, or `combine-purpose-paths` only when that exact operation is currently exposed.
 - Do not include `rank`, `score`, `equalWeight`, `selection`, or confirmation fields in model-authored path input. The deterministic reducer owns equal weighting, availability, activation, parking, lineage, and validation.
 - Use `select-purpose-path` or `confirm-purpose-path-revision` only for the exact path and set the explorer explicitly chose after a completed prior presentation.
 - After any operation, wait for the authoritative result. Reload the map, checkpoint, active tools, and module before continuing.
 
 ## Reply discipline
 
-After `propose-purpose-paths`, `replace-purpose-path`, or `combine-purpose-paths` commits, final visible prose is only this framing immediately before the application-owned cards: “Here are three possible paths to pursue your North Star. Each begins with a small, low-commitment project. Think of it like a date. The aim is to learn whether you want to keep going, not to make the project succeed.”
+After `propose-purpose-paths`, `replace-purpose-path`, `revise-purpose-paths`, or `combine-purpose-paths` commits, final visible prose is only this framing immediately before the application-owned cards: “Here are three possible paths to pursue your North Star. Each begins with a small, low-commitment project. Think of it like a date. The aim is to learn whether you want to keep going, not to make the project succeed.”
 
 Do not repeat path names or any of the seven structured card fields in prose. Add no summary, recommendation, question, or footer invitation after the cards. Discussion-only replies may use normal concise prose while leaving every choice with the explorer.

@@ -60,6 +60,14 @@ export const pathOperationSchemas = {
     replacement: purposePathInputSchema,
     presentation: modelPresentationSchema,
   }).strict()),
+  'revise-purpose-paths': operationSchema('revise-purpose-paths', z.object({
+    sourceSetId: entityIdSchema,
+    sourceSetRevision: revisionSchema,
+    replacementSetId: entityIdSchema,
+    replacementSetRevision: revisionSchema,
+    paths: exactThree(purposePathInputSchema),
+    presentation: modelPresentationSchema,
+  }).strict()),
   'combine-purpose-paths': operationSchema('combine-purpose-paths', z.object({
     sourceSetId: entityIdSchema,
     sourceSetRevision: revisionSchema,

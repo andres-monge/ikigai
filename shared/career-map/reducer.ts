@@ -389,6 +389,31 @@ function applyDomainOperation(map: CareerMap, operation: CareerMapOperation): Ca
       });
       return;
     }
+    case 'revise-purpose-paths': {
+      assertFirstPathSetInTurn(map, operation.payload.presentation);
+      const source = map.pathSets.find((set) => sameRevision(set, operation.payload.sourceSetId, operation.payload.sourceSetRevision));
+      assert(source && source.status !== 'superseded', 'Purpose Path source set is stale.', 'stale-target');
+      const sourceIds = new Set(source.paths.map((path) => path.id));
+      const changed = operation.payload.paths.filter((path, index) => {
+        assert(!sourceIds.has(path.id) || path.id === source.paths[index].id, 'Retained Purpose Paths must keep their original order.');
+        return canonicalJson(path) !== canonicalJson(pathInput(source.paths[index]));
+      });
+      assert(changed.length >= 2, 'A full-set revision must change at least two Purpose Paths.');
+      ensureUniqueIds(operation.payload.paths, 'Purpose Paths');
+      assertPathRevisionConsistency(map, operation.payload.paths);
+      for (const set of map.pathSets.filter((item) => item.status === 'suggested')) set.status = 'superseded';
+      map.pathSets.push({
+        id: operation.payload.replacementSetId,
+        revision: operation.payload.replacementSetRevision,
+        status: 'suggested',
+        basisWhy: source.basisWhy,
+        paths: operation.payload.paths.map((path) => asPath(path)) as PurposePathSet['paths'],
+        presentation: operation.payload.presentation,
+        supersedesSetId: source.id,
+        changeKind: 'revision',
+      });
+      return;
+    }
     case 'combine-purpose-paths': {
       assertFirstPathSetInTurn(map, operation.payload.presentation);
       const source = map.pathSets.find((set) => sameRevision(set, operation.payload.sourceSetId, operation.payload.sourceSetRevision));

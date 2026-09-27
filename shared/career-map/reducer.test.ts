@@ -281,6 +281,57 @@ describe('Method reducer', () => {
     expect(combined.map).toEqual(map);
   });
 
+  it('saves the founder’s RL/alignment and AI-art/TouchDesigner revisions together while preserving path two', () => {
+    let map = withConfirmedWhy();
+    map = commit(map, 'propose-purpose-paths', {
+      setId: 'paths-1', setRevision: 1, paths: paths(), presentation: presentation(3),
+    });
+    const original = map;
+    const preserved = map.pathSets[0].paths[1];
+    const revisedPaths: [PurposePathInput, PurposePathInput, PurposePathInput] = [
+      { ...paths('revised')[0], id: 'path-4', name: 'Explore RL and alignment' },
+      paths()[1],
+      { ...paths('revised')[2], id: 'path-5', name: 'Create AI art with TouchDesigner' },
+    ];
+
+    const intermediate = commit(original, 'replace-purpose-path', {
+      sourceSetId: 'paths-1', sourceSetRevision: 1, replacedPathId: 'path-1',
+      replacementSetId: 'paths-intermediate', replacementSetRevision: 1,
+      replacement: revisedPaths[0], presentation: presentation(4),
+    });
+    const secondWrite = applyCareerMapOperation(intermediate, operation(intermediate, 'replace-purpose-path', {
+      sourceSetId: 'paths-intermediate', sourceSetRevision: 1, replacedPathId: 'path-3',
+      replacementSetId: 'paths-2', replacementSetRevision: 1,
+      replacement: revisedPaths[2], presentation: presentation(4),
+    }));
+    expect(secondWrite.status).toBe('rejected');
+    expect(secondWrite.map).toEqual(intermediate);
+    expect(secondWrite.map.pathSets).toHaveLength(2);
+
+    map = commit(map, 'revise-purpose-paths', {
+      sourceSetId: 'paths-1', sourceSetRevision: 1,
+      replacementSetId: 'paths-2', replacementSetRevision: 1,
+      paths: revisedPaths, presentation: presentation(4),
+    });
+
+    expect(map.pathSets).toHaveLength(2);
+    expect(map.pathSets[0].status).toBe('superseded');
+    expect(map.pathSets[1]).toMatchObject({
+      status: 'suggested', changeKind: 'revision', supersedesSetId: 'paths-1',
+      paths: [{ id: 'path-4', name: 'Explore RL and alignment' }, { id: preserved.id, revision: preserved.revision }, { id: 'path-5', name: 'Create AI art with TouchDesigner' }],
+    });
+    expect(map.pathSets[1].paths[1]).toEqual(preserved);
+    expect(deriveMethodCheckpoint(map).pendingDecision?.targetId).toBe('paths-2');
+
+    const duplicate = applyCareerMapOperation(map, operation(map, 'replace-purpose-path', {
+      sourceSetId: 'paths-2', sourceSetRevision: 1, replacedPathId: 'path-4',
+      replacementSetId: 'paths-3', replacementSetRevision: 1,
+      replacement: { ...paths('extra')[0], id: 'path-6' }, presentation: presentation(4),
+    }));
+    expect(duplicate.status).toBe('rejected');
+    expect(duplicate.map).toEqual(map);
+  });
+
   it('requires a new revision whenever Purpose Path content changes', () => {
     let map = withConfirmedWhy();
     map = commit(map, 'propose-purpose-paths', {

@@ -109,6 +109,7 @@ const operationToTool = {
   'confirm-why': 'confirm_why',
   'propose-purpose-paths': 'propose_purpose_paths',
   'replace-purpose-path': 'replace_purpose_path',
+  'revise-purpose-paths': 'revise_purpose_paths',
   'combine-purpose-paths': 'combine_purpose_paths',
   'select-purpose-path': 'select_purpose_path',
   'confirm-purpose-path-revision': 'confirm_purpose_path_revision',
@@ -1188,6 +1189,30 @@ function createSyntheticHarness(scenario, loader, model) {
           replacementSetId: nextId('path-set'),
           replacementSetRevision: 1,
           replacement: { id: nextId('path'), revision: 1, ...replacement },
+          presentation: presentation(),
+        }, toolCallId);
+      },
+    }),
+    revise_purpose_paths: tool({
+      description: 'Revise two or three current paths as one complete three-path set, preserving unchanged siblings.',
+      inputSchema: z.object({ revisions: z.array(z.object({ pathId: z.string().min(1), replacement: pathInputSchema }).strict()).min(2).max(3) }).strict(),
+      execute: ({ revisions }, { toolCallId }) => {
+        const set = currentPathSet();
+        assert(set, `${scenario.id}: no path set is available to revise.`);
+        const byId = new Map(revisions.map((item) => [item.pathId, item.replacement]));
+        assert(byId.size === revisions.length && revisions.every((item) => set.paths.some((path) => path.id === item.pathId)), `${scenario.id}: invalid revision targets.`);
+        const paths = set.paths.map((path) => {
+          const replacement = byId.get(path.id);
+          if (replacement) return { id: nextId('path'), revision: 1, ...replacement };
+          const { selection: _selection, equalWeight: _equalWeight, ...preserved } = path;
+          return preserved;
+        });
+        return commit('revise-purpose-paths', {
+          sourceSetId: set.id,
+          sourceSetRevision: set.revision,
+          replacementSetId: nextId('path-set'),
+          replacementSetRevision: 1,
+          paths,
           presentation: presentation(),
         }, toolCallId);
       },
