@@ -1,6 +1,6 @@
 # U7 founder dogfood before reset
 
-**Status:** Historical run recorded before a proposed reset. The founder has not yet accepted the attended U7 qualitative gate. No reset is authorized or recorded here.
+**Status:** Historical run, reset on 2026-09-29. The founder has not yet accepted the attended U7 qualitative gate.
 
 **Setup:** Local Revelio at `http://localhost:5001`, branch `codex/revelio-revamp-integration`, Node `v24.19.0`, GPT-6 Sol at low reasoning effort, existing project `.env`. The last application change before this record was `3b81ba6`. The server was restarted after the Method integration and returned HTTP 200; this does not establish a successful founder journey.
 
@@ -27,7 +27,7 @@ The first path cards also had learning questions framed around project or busine
 
 ## Fresh-run gate
 
-Preserve this record before using the [founder reset](method-reset.md). A reset removes the current Method map and OpenAI Conversation while preserving the sign-in identity. Take the reset's dry run and verify its exact target before any execution; this document is not permission to execute it.
+This record was preserved before using the [founder reset](method-reset.md). The founder authorized the reset in chat. The development dry run matched the intended account and canonical Neon database, with one career map, 19 history entries, 12 turns, one conversation mapping, and no active leases. The strict reset completed, including provider conversation cleanup. A fresh dry run showed zero Method rows, no cleanup marker, and the same sign-in user, linked account, and six sessions. The local app still returned HTTP 200. No raw transcript or confirmation token was stored here.
 
 The next run should answer naturally through Foundation, accept or revise a North Star once, and inspect the first three paths for real decision utility. At the path checkpoint, make one grounded request to change two paths. Revelio should help interpret uncertainty, save one revised three-card set, show it once, and keep the other card unchanged. Then continue to one first Path Project and assess whether it is a feasible, low-commitment way to learn about the chosen path. That first-project step is part of U7; reaching three paths alone is not a pass.
 
