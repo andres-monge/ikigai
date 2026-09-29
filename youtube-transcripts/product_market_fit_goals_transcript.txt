@@ -1,0 +1,277 @@
+So, do you think that your product is helping them in any way in their business, in their like in their goals?
+
+>> [music]
+
+>> And that they give me they give me that look. They're like, Is that what products are supposed [laughter] to I thought we're supposed to be growing 7% a week over week. This is Dalton and Michael and today we're going to talk about setting goals as a pre-product-market-fit company. So, Dalton, we just launched and I know that if we're not growing 7% week over week, we're failing. Right?
+
+I mean, let me let me I'll just start you with a banger.
+
+>> [laughter]
+
+>> Uh let me let me attack this from a different direction. Let's say you used to work at Google or Meta
+
+>> Mhm.
+
+>> or whatever and you know a lot about product and analytics
+
+>> Yes.
+
+>> and you're used to like working in those environments and you get into YC
+
+>> Yeah.
+
+>> and you launch and you come in and you want to show show me some graphs and you want to tell me about your AB test and all this stuff. And I'm like, "How many users do you have?" And they're like, "Three."
+
+>> Yeah.
+
+>> And I'm like, "Okay, never show me these graphs again. Like graphs are a waste of time. Measuring weekly growth when you have zero users like they're like, "We have three users." and they all churned.
+
+>> [laughter]
+
+>> So, you're what you're saying is you have zero users.
+
+>> Yes.
+
+>> Let's not talk about weekly growth.
+
+>> Yes.
+
+>> And and so where I'm going with this and I know we're on the same page
+
+>> is that the tactics and skills that you have working at a post-PMF company have no relation
+
+>> No.
+
+>> to tracking progress and goals in an early-stage company. If anything, I noticed that college kids that knew nothing about analytics were sometimes ahead of the game cuz I they didn't have to unlearn all this crap
+
+>> No.
+
+>> of like how they were trained at Meta to establish if a product is working or not, right?
+
+>> run an AB test on 1% of Utah and like
+
+>> Right. Like at Meta they have [laughter] all these great you know, it's great. And if you work at Meta, you know, good for you that you have this stuff. It does not help you when you have no users.
+
+>> No. But I think you're I think you you you dodged the the gotcha question. Go ahead. I think the gotcha question is I think growing 7% week over week is great or horrible depending on how you do it. I think the genius of that advice is that when you're small growing 7% week over week is not actually
+
+>> hard
+
+>> adding that many users, right? I think the other genius of that advice is that it's a lot harder to grow 7% week over week if you're churning all your users every week.
+
+>> You and I both know and this is where we're going. What people do is they choose metrics that cheat.
+
+>> Yes.
+
+>> And they're like, oh, we're not going to do uh DAU. We're going to use cumulative users that ever signed up and we're not going to worry about if they're using the product. Like they basically founders, I think the term is good hearting. What they'll do is just like find a way to doctor the metric so that they hit it. And all you're doing is screwing yourself.
+
+>> Well, because the the I because it's like I think that growing 7% week over week is a result of doing a lot of things right.
+
+>> Yeah.
+
+>> Whereas they think it is the cause of the company working. And it's just like like when you mix those things up, you really screw up. The number of times I talk to a founder where I'll be like these users do you have? How many of them spent more than 5 minutes in your product? Actually, no.
+
+The first question because it's a gotcha. It's like to get value out of your product in a week, let's say, how much time should your users be spending in the product? And they'll always be like, oh, you know, like an hour a day. Like this is a core workflow. Like this is really important to them.
+
+They're like And then I'll be like, great. So, how much time are they spending in the product? And there's always like two answers I love. One, we're not measuring.
+
+>> They're like, oh, we'll have to get back to you.
+
+>> Yeah. It's like you only have like six you like You don't know? And then two oh, it's like an hour a week. And you're like, so you said that to get value out of the product they have to be using it this much. Are they getting value?
+
+I don't know. And then, you know, I like to pile it on. It's like, so do you think that your product is helping them in any way in their business, in their like in their goals? And that they give they give me that look. They're like, is that our product that's supposed to help like I thought we're supposed to be growing 7% weekly [laughter] growth.
+
+>> Yeah. Can we get back to the point?
+
+>> And again, where we're going with this is you do this line of thinking and you know where we end up, which is we have zero users. Like [laughter] like basically you you go through this line of questioning and and it's like we actually
+
+>> [laughter]
+
+>> we have zero users. And you're like, okay, well, I'm glad we had that little chat. And and so where this goes is
+
+>> [laughter]
+
+>> it's Yeah, it's too true. Um where this goes is you don't worry about the graph when you have zero users.
+
+>> Yes.
+
+>> And you're not helping anyone. And you're just you just want to make something that a few people think is awesome.
+
+>> Yes.
+
+>> And you don't need a graph to know that. You're like, cuz you're talking to them.
+
+>> You have three people
+
+>> that love your thing.
+
+>> Yeah.
+
+>> Do you have five people that love your thing? And that and I always think you should start with that. Don't even worry about graphs and charts and weekly growth. Just get something that someone loves.
+
+>> Right?
+
+>> It's almost impossible in my experience to have something that a hundred people love that's like somehow not growing.
+
+>> Yep.
+
+>> You're either lying about the love or you're not looking at the growing. Like it's really really hard. And I would say that the sad truth of the 7% is that like sometimes it takes time to get someone to love it. Sometimes it gets time for you to figure out what the hell to build that someone would love.
+
+>> You know, we we speak about him a lot, but our colleague uh Paul Buchheit created Gmail.
+
+>> Yeah. And this is how he created Gmail. Just in case you haven't heard the story, friends. Um he built it for himself and he was the first user.
+
+>> Yes.
+
+>> And then he gave it to other people internally at Google. He would only add one or two people a week. He would ask them what he needs to add to to Gmail. And so it went through this state for months and months and months where it had less than 100 users, but he wanted to build something that people loved.
+
+>> What I love about that story is by the time Gmail was betaing, right? It wasn't even open distribution, it had hundreds of people who loved it.
+
+>> They love And they again, love is the word. They weren't like, "Oh, I guess I could take it or leave it."
+
+>> client.
+
+>> They ran their life off it. And so when you think about it, this is the most popular consumer product in the world. I use every day, use it every day. How did that product come to life?
+
+>> Yes.
+
+>> It was someone that wasn't trying to get a hockey stick graph within 2 seconds of building it. It was someone that took the time and the care to make something that a small number of people loved and and were willing to run their life on. And again, I can't emphasize this enough. This is how you build great products.
+
+>> But Dalton, I have to fund raise in n months, and you know that investors love graphs. It's going to take too much time. It's going to take too much time to build something that people like. You're not solving my immediate problem, which is how do I build something that investors will give money to?
+
+>> Yeah. [laughter] I think that's just the classic self-defeating mentality where you what you're saying, founder, is that you're building something for investors and not for users.
+
+>> Build something investors love. That's our motto.
+
+>> just [laughter] You just made the pitch that your actual customer is an investor.
+
+>> Yeah.
+
+>> And nothing good will come of that. Again, like this is These are not the droids you're looking for. If you start thinking this way that your entire startup is a product made to convince investors, you will not win.
+
+>> You will not win. Well, okay. No, no, no, no, no, no. You will win in the short term. Yeah?
+
+I bet you I I I If you're smart and somewhat capable, you could probably win in your seed round. But what I love about that seed round, what's the winning percentage of ultimately winning when you raise your seed round?
+
+>> It's not It's I mean it's better than zero, but you know
+
+>> [laughter]
+
+>> 2% chance?
+
+>> Yeah.
+
+>> Okay, so you just took your odds down to 98% chance of failure. What if instead you spent that same amount of time actually interacting with your customers?
+
+>> Right?
+
+>> Learning what they needed. Learning whether any of your hypotheses are right. Learning how to make their businesses better, their lives better.
+
+>> And how many stories do we have of founders that did a poor job of fundraising at demo day, but they had a half million dollars from YC and they just powered through, and then a year later they followed this advice we're giving, and they're doing phenomenally well, way better than their batchmates that were actually they weren't making something that people want, they were making something for investors. Make something investors want. And competing for the highest price.
+
+>> Right?
+
+>> Yeah. There's nothing good comes of that, friends. One to your point about like that's habit-forming in a negative way. Like you don't want your culture
+
+>> No.
+
+>> Oh, we're just going to worry about investors now, but after we raise money, then we'll worry about the
+
+>> yada yada yada, we'll talk [laughter] to users. Yeah, whatever, guys. Um let me give you another example. Stripe is a company that we talk about a lot at YC. Phenomenal company.
+
+It's a hundred-billion-dollar company, you know, just nip What a lot of people don't understand is that they they didn't launch for something like two years. They weren't in the batch growing 7% week over week and like No, I mean, that's not how they built Stripe, man. It was invite-only, it was beta-only. They built it for themselves for a side product and they only added customers super slow. And I again, it was 2 years plus before they publicly launched, right?
+
+>> Yep.
+
+>> And I remember back then um cuz they pitched us at at Justin.tv to use it and and it it wasn't good enough. Like we didn't use it. And it turns out to make a payments product that like we had a global audience. Like to make a payment product that could accept payments around the world. That
+
+>> You don't just MVP that. Yeah, I know.
+
+>> [laughter]
+
+>> And and they did all this amazing stuff where we talk about the Collison install where they would come and sit down with you at your computer and help you implement Stripe into the payments flow.
+
+>> Yeah.
+
+>> They were that customer obsessed. I was actually an early Stripe customer in my startup. We were
+
+>> Yeah.
+
+>> probably the first couple hundred customers.
+
+>> Yeah.
+
+>> And I remember Patrick would send me messages in Google Talk all the time. And so I had my new friend Patrick Collison.
+
+>> Yes.
+
+>> Um because I was an early customer, I'd probably talk to him like every day.
+
+>> Yeah.
+
+>> And he'd be like, "How's it going?" Like like we were an important customer to them. And how cool was that for me as a consequence of being an early customer to feel like my payments provider cared about me that much that I had a relationship with the CEO.
+
+>> Yes.
+
+>> And that he really cared if we were happy. And if something went wrong, I could just boom. I could just, you know, message him.
+
+>> Yeah.
+
+>> No, I think that that is a superpower that founders never want to tell. And here's what I'll say. This will be my closing point. Pre-AI, it was hard to do research on how companies won. Right?
+
+Like you have to go through articles. You have to listen to a bunch of podcasts. Like if you want to hear the early early stories of Stripe, it might take a couple hours, and maybe that's too hard. And certainly if you want to hear the early stories for 50 companies, that that's that's a lot of research. It's a lot easier to accept like the pop knowledge.
+
+I don't know. You're like with with AI, research is easy now. You can hear about the companies that you like. You can learn about what they were like when they were small. And I just like I challenge you to take whatever assumptions you have about early-stage startups and test them against your top 10 favorite companies.
+
+>> did it take for them to launch from when they created the company? How long did it take them to get 100 users? How long did it take to get them to a million in revenue?
+
+>> Yeah.
+
+>> And you're going to be shocked.
+
+>> Shocked.
+
+>> That the real stories are not what you think they are.
+
+>> And like that doesn't mean you have to do it the same way, but it's just like hey, just get that stuff in your head. Cuz I I You see that graph where it's like the companies that are fastest to 100 million in revenue. It's like is that the race that we're That's not the race, guys.
+
+>> It's long-term value, right? Like it's That's the
+
+>> ultimate thing we're trying to do here is to create enduring value to help customers and to build enduring businesses and not flash-in-the-pan type stuff, right? Or at least that's why I'm here. Um
+
+>> Well, not only that, even if you're like let's just say you're agnostic.
+
+>> Yeah, you're like either way either way, right? Like
+
+>> this is the way that is a higher likelihood of success. Like so like yeah, you can like it because like yeah, you like helping people or you can like helping people cuz like that's going to get you richer. Like either way
+
+>> Yeah.
+
+>> [laughter]
+
+>> you get to the same answer.
+
+>> you should do person watching this video is to be really honest with yourself. Do I have any users that love my product? And I would use that word. How many love my product? If they don't, what can I do to cause them to love my product?
+
+And just break it down and think about it that way instead of just staring at graphs all day. Cuz that's that's dehumanizing to your users. Again, if you're if you're meta, I get it that you stare at graphs all day. But if you're dehumanizing your user base and staring at graphs and you're not thinking about the people that you're serving and whether they love you or not, you're hurting yourself.
+
+>> So I have a controversial question to ask you at the end here. We started this with how we should set goals as a pre-product market company. Have we answered that question?
+
+>> it's Do you have more than zero users? So again, this is what we do at YC. Is do you have one real user with no asterisks? You know, like
+
+>> Yes.
+
+>> Okay, then I'd say okay, do you have 10? And then I would say, do you have 50? And then I would say, do you have 100? Yes. And if you could get 100 users or customers that love you, that is an awesome goal, and that's when I would start to graduate to graphs.
+
+Like that's that's kind of the point where you're like, okay, now let's start talking about graphs.
+
+>> Yes. And I think the only thing I would add is like, I love talking to startups, but how do we define love? Especially early, because like, so we don't cheat it. And the second thing that I like to think about is that is there any way you can measure the benefit that you're providing the customer? Right?
+
+Like, you worked with Whatnot. In a marketplace, it's really easy, right? The GMV is the benefit.
+
+>> sellers were making so much money. It was life-changing. So yeah, with Whatnot, so when we start selling on Whatnot, you could see how much money they were making, and it was like, wow. These people are like earning a crazy living on this thing. It was obvious they were providing value.
+
+>> I mean, DoorDash, similar example, like you wake up and DoorDash is a third of your restaurant's revenue. Okay, like you might have opinions, but for us at Twitch, like streamers, they could quit their jobs. That's the thing that I wish I said more in years past was that like, can some part of love, can you quantify the actual benefit of the customer as opposed to just time with you or that kind of stuff. Like, if we could put a dollar amount on the benefit of the customer, now we're cooking with gas. All right.
+
+Good chat. Good luck with your goals.
+
+>> Sounds good. Thanks, Michael.
