@@ -26,7 +26,7 @@ import {
   type NativeSearchStep,
 } from './research.js';
 
-export const REVELIO_AGENT_MODEL = 'gpt-6-sol';
+export const REVELIO_AGENT_MODEL = 'gpt-6.1-sol';
 export const REVELIO_AGENT_PROVIDER = 'openai-responses';
 // Keep routine turns below the compaction trigger while retaining ample room
 // in Sol's context window for the response and tool continuation.

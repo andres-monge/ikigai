@@ -50,8 +50,8 @@ import { compileCareerMapBriefing } from '../server/ai/briefing.ts';
 import { REVISE_PURPOSE_PATHS_TOOL_DESCRIPTION, normalizeRevisedPurposePathRevisions, revisePurposePathsToolInputSchema } from '../server/ai/tools.ts';
 import { firstRejectedOperationDiagnostic } from './eval-revelio-rejection-diagnostic.mjs';
 
-const allowedModels = new Set(['gpt-6-sol']);
-const modelId = process.env.REVELIO_METHOD_MODEL || 'gpt-6-sol';
+const allowedModels = new Set(['gpt-6.1-sol']);
+const modelId = process.env.REVELIO_METHOD_MODEL || 'gpt-6.1-sol';
 const apiKey = process.env.OPENAI_API_KEY;
 const reasoningEffort = process.env.REVELIO_METHOD_REASONING_EFFORT || 'low';
 const requestTimeoutMs = Number(process.env.REVELIO_METHOD_TIMEOUT_MS || 60_000);
