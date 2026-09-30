@@ -456,6 +456,44 @@ function request(app: express.Express) {
 }
 
 describe('protected Method routes', () => {
+  it('emits opt-in numeric latency data without private request or provider text', async () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    vi.stubEnv('REVELIO_LATENCY_TRACE', '1');
+    try {
+      const logs: Array<Record<string, unknown>> = [];
+      const response = await request(testApp({
+        storage: createStorage({ getConversationMapping: vi.fn(async () => 'latency-conversation') }),
+        requireAuth: authenticated,
+        agentEnabled: true,
+        model: new MockLanguageModelV4({ doStream: textStream(SENTINEL) as never }),
+        conversationClient: {
+          listItems: vi.fn(async () => ({
+            data: [internalContextItem('latency-context', 'latency-marker')],
+            hasMore: false,
+          })),
+        },
+        internalContextMarker: () => 'latency-marker',
+        operationalLog: (entry) => logs.push(entry),
+      })).post('/api/agent').send({ id: 'latency-client-message', message: SENTINEL });
+
+      expect(response.status).toBe(200);
+      const latency = logs.at(-1)?.latency as Record<string, unknown>;
+      expect(latency).toMatchObject({
+        mapReadyMs: expect.any(Number),
+        leaseReadyMs: expect.any(Number),
+        providerStartMs: expect.any(Number),
+        safeTextMs: expect.any(Number),
+        terminalStartMs: expect.any(Number),
+        terminalDoneMs: expect.any(Number),
+        steps: expect.any(Array),
+      });
+      expect(JSON.stringify(logs)).not.toContain(SENTINEL);
+      expect(JSON.stringify(logs)).not.toContain('latency-conversation');
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('binds a revised path offer to provider prose while streaming canonical copy', async () => {
     const map = pendingPaths();
     const original = map.pathSets[0].paths;

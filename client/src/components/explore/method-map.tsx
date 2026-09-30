@@ -4,7 +4,6 @@ import {
   selectCurrentRealityConstraints,
   type CareerMap,
   type MethodModule,
-  type PendingDecision,
 } from '@shared/career-map';
 import { humanizeStatus, PurposePathCard } from './purpose-path-card';
 
@@ -22,21 +21,6 @@ const moduleLabels: Record<MethodModule, string> = {
   'enter-side-doors': 'Enter Through Side Doors',
 };
 
-const decisionLabels: Record<PendingDecision['kind'], string> = {
-  'why-confirmation': 'Confirm your North Star',
-  'path-selection': 'Choose a Purpose Path',
-  'path-revision-confirmation': 'Confirm the revised Purpose Paths',
-  'first-project-confirmation': 'Accept the first Path Project',
-  'project-revision-confirmation': 'Confirm the revised Path Project',
-  'follow-on-project-selection': 'Choose the next Path Project',
-  'continue-choice': 'Decide whether you want to continue',
-  'next-move': 'Choose your Next Move',
-  'peer-insight-confirmation': 'Confirm the peer insight',
-  'commitment-completion': 'Complete the provisional commitment',
-  'proof-confirmation': 'Confirm the proof inventory',
-  'side-door-selection': 'Choose a Side Door',
-};
-
 function SelectionLabel({ selection }: { selection: 'available' | 'active' | 'parked' }) {
   return (
     <span className="inline-block border border-black bg-white px-2 py-1 text-xs font-black uppercase tracking-[0.08em] text-black">
@@ -51,15 +35,6 @@ function CheckpointSummary({ map }: { map: CareerMap }) {
     <section data-testid="method-checkpoint" className="border-2 border-black bg-black p-5 text-white shadow-[4px_4px_0_rgba(77,182,172,0.8)]">
       <p className="text-xs font-black uppercase tracking-[0.12em] text-[#ffc107]">Current focus</p>
       <h2 className="mt-2 font-display text-2xl font-black">{moduleLabels[checkpoint.module]}</h2>
-      <p className="mt-2 text-sm font-semibold">
-        {checkpoint.pendingDecision
-          ? `Pending decision: ${decisionLabels[checkpoint.pendingDecision.kind]}`
-          : checkpoint.review
-            ? `Review needed: ${humanizeStatus(checkpoint.review.targetKind)}`
-            : checkpoint.focus
-              ? `Focused review: ${humanizeStatus(checkpoint.focus.kind)}`
-              : 'No formal decision is pending.'}
-      </p>
     </section>
   );
 }
@@ -275,35 +250,10 @@ export function MethodMap({ map }: MethodMapProps) {
     <div className="min-w-0">
       <CheckpointSummary map={map} />
       <div className="mt-8 space-y-8">
-      {!why && (currentEvidence.length > 0 || currentConstraints.length > 0) ? (
-        <section className="max-w-3xl border-2 border-black bg-white p-5 shadow-[4px_4px_0_rgba(0,0,0,0.65)]">
-          <p className="method-map-label">Your North Star in progress</p>
-          <h2 className="text-2xl font-black">What we know so far</h2>
-          {currentEvidence.length > 0 ? (
-            <ul className="mt-4 list-disc space-y-2 pl-5 text-sm">
-              {currentEvidence.map((item) => <li key={`${item.id}-${item.revision}`}>{item.content}</li>)}
-            </ul>
-          ) : null}
-          {currentConstraints.length > 0 ? (
-            <p className="mt-4 text-sm"><strong>Practical reality:</strong> {currentConstraints.map((item) => item.description).join(' · ')}</p>
-          ) : null}
-        </section>
-      ) : null}
       {why ? (
         <section className="max-w-3xl border-2 border-black bg-white p-5 shadow-[4px_4px_0_rgba(0,0,0,0.65)]">
           <h2 className="text-2xl font-black">Your North Star</h2>
           <p className="mt-3 text-lg font-medium leading-7">{why.statement}</p>
-          <div className="mt-4 border-t border-slate-300 pt-3">
-            <p className="mt-3 text-sm"><strong>Point of view:</strong> {why.pointOfView}</p>
-            {currentEvidence.length > 0 ? (
-              <ul className="mt-3 list-disc space-y-1 pl-5 text-sm">
-                {currentEvidence.map((item) => <li key={`${item.id}-${item.revision}`}>{item.content}</li>)}
-              </ul>
-            ) : null}
-            {currentConstraints.length > 0 ? (
-              <p className="mt-3 text-sm"><strong>Practical reality:</strong> {currentConstraints.map((item) => item.description).join(' · ')}</p>
-            ) : null}
-          </div>
         </section>
       ) : null}
 

@@ -45,16 +45,24 @@ function pathMap(status: 'suggested' | 'active' = 'suggested'): CareerMap {
 }
 
 describe('MethodMap', () => {
-  it('keeps canonical checkpoint/status text and a readable North Star context', () => {
-    render(<MethodMap map={pathMap()} />);
+  it('shows only the stage and North Star statement without internal details', () => {
+    const map = pathMap();
+    const provenance = { kind: 'user-message' as const, actionId: 'evidence', turnId: 'turn-evidence', turnSequence: 1, occurredAt: presentation.presentedAt };
+    map.foundation.evidence.push({ id: 'evidence-1', revision: 1, category: 'fascination', content: 'A previous answer.', provenance });
+    map.foundation.constraints.push({ id: 'constraint-1', revision: 1, kind: 'time', description: 'A practical limit.', provenance });
+    render(<MethodMap map={map} />);
     const checkpoint = screen.getByTestId('method-checkpoint');
-    expect(within(checkpoint).getByText('Pending decision: Choose a Purpose Path')).toBeTruthy();
+    expect(checkpoint.textContent).toBe('Current focusCreate Purpose Paths');
     expect(screen.getByRole('heading', { name: 'Your North Star' })).toBeTruthy();
     expect(within(checkpoint).getByText('Current focus')).toBeTruthy();
     expect(screen.queryByText('Confirmed')).toBeNull();
     expect(screen.queryByText('Inspect Your North Star')).toBeNull();
     expect(screen.queryByText('People using them.')).toBeNull();
-    expect(screen.getByText('Complexity is a choice.')).toBeTruthy();
+    expect(screen.queryByText('Complexity is a choice.')).toBeNull();
+    const northStar = screen.getByRole('heading', { name: 'Your North Star' }).closest('section')!;
+    expect(northStar.textContent).toBe('Your North StarMake difficult systems humane.');
+    expect(screen.queryByText('A previous answer.')).toBeNull();
+    expect(screen.queryByText('A practical limit.')).toBeNull();
     expect(document.body.textContent).not.toMatch(/\bFoundation\b|Why I Work/);
     expect(screen.getAllByTestId('purpose-path-card')).toHaveLength(3);
     const grid = document.querySelector('.purpose-path-comparison > .method-path-grid');
@@ -101,6 +109,7 @@ describe('MethodMap', () => {
 
     const { rerender } = render(<MethodMap map={map} />);
     expect(screen.getByText('Protect future generations from AI risks.')).toBeTruthy();
+    expect(screen.getByTestId('method-checkpoint').textContent).toBe('Current focusCreate Purpose Paths');
     expect(screen.getByText(/paths were created for your previous North Star/i)).toBeTruthy();
     expect(screen.queryByText('Three equal ways to serve your North Star, shown without ranking.')).toBeNull();
     expect(screen.queryByRole('heading', { name: 'First Path Project' })).toBeNull();
@@ -130,7 +139,24 @@ describe('MethodMap', () => {
     });
     render(<MethodMap map={map} />);
     expect(screen.getByRole('heading', { name: 'Form Your North Star' })).toBeTruthy();
-    expect(screen.getByText('Your North Star in progress')).toBeTruthy();
+    expect(screen.queryByText('Your North Star in progress')).toBeNull();
+    expect(screen.queryByText('Making complexity useful.')).toBeNull();
     expect(document.body.textContent).not.toMatch(/\bFoundation\b|Why I Work/);
+  });
+
+  it('shows the North Star stage without exposing an internal revision focus', () => {
+    const map = createCareerMap('foundation-review');
+    map.foundation.evidence.push({
+      id: 'evidence-1', revision: 1, category: 'fascination', content: 'Making complexity useful.',
+      provenance: { kind: 'user-message', actionId: 'message-1', turnId: 'turn-1', turnSequence: 1, occurredAt: presentation.presentedAt },
+    });
+    map.focus = {
+      kind: 'foundation-revision', reason: 'Revisit direction',
+      openedBy: { kind: 'user-message', actionId: 'message-2', turnId: 'turn-2', turnSequence: 2, occurredAt: presentation.presentedAt },
+    };
+    render(<MethodMap map={map} />);
+    const checkpoint = screen.getByTestId('method-checkpoint');
+    expect(within(checkpoint).getByRole('heading', { name: 'Form Your North Star' })).toBeTruthy();
+    expect(checkpoint.textContent).toBe('Current focusForm Your North Star');
   });
 });

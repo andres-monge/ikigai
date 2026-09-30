@@ -74,6 +74,8 @@ export interface CreateMethodAgentOptions {
   onError?: (error: unknown) => void;
   onPreparedStep?: (trace: MethodPreparedStepTrace) => void;
   onTurnDiagnostics?: (diagnostics: MethodAgentTurnDiagnostics) => void;
+  onLatencyStep?: (stepNumber: number, phase: 'prepare-start' | 'prepare-end' | 'step-start' | 'step-finish' | 'search-start' | 'search-end' | 'tool-start' | 'tool-end') => void;
+  onLatencySafeText?: () => void;
   onOperationStatus?: (event: MethodOperationLifecycleEvent) => void | Promise<void>;
   operationIdForToolCall?: (toolCallId: string) => string;
   internalContextMarker?: (responseIndex: number) => string;
@@ -478,6 +480,7 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
     // is intentionally not registered in this three-module build.
     stopWhen: [() => firstProjectAccepted, stepCountIs(REVELIO_MAX_AGENT_STEPS)],
     prepareStep: async ({ stepNumber, messages }) => {
+      options.onLatencyStep?.(stepNumber, 'prepare-start');
       throwIfAborted(requestAbortSignal);
       const state = await refreshMethodState(options.storage, options.loader, options.userId);
       prepared.current = state;
@@ -514,6 +517,7 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
         activeTools,
         compaction: stepNumber === 0,
       });
+      options.onLatencyStep?.(stepNumber, 'prepare-end');
       return {
         messages: stepNumber === 0
           ? [context, ...messagesWithoutPriorInternalContext]
@@ -568,7 +572,21 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
                   abortSignal: signal,
                 });
             const rawParts: TextStreamPart<ToolSet>[] = [];
-            for await (const part of result.stream) rawParts.push(part);
+            let stepNumber = 0;
+            for await (const part of result.stream) {
+              rawParts.push(part);
+              if (part.type === 'start-step') options.onLatencyStep?.(stepNumber, 'step-start');
+              if (part.type === 'finish-step') {
+                options.onLatencyStep?.(stepNumber, 'step-finish');
+                stepNumber += 1;
+              }
+              if (part.type === 'tool-call') {
+                options.onLatencyStep?.(stepNumber, part.toolName === 'web_search' ? 'search-start' : 'tool-start');
+              }
+              if (part.type === 'tool-result' || part.type === 'tool-error') {
+                options.onLatencyStep?.(stepNumber, part.toolName === 'web_search' ? 'search-end' : 'tool-end');
+              }
+            }
             const steps = await result.steps;
 
             const outerStart = rawParts.find((part) => part.type === 'start');
@@ -630,6 +648,7 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
               const id = 'canonical-purpose-paths-offer';
               controller.enqueue({ type: 'text-start', id });
               controller.enqueue({ type: 'text-delta', id, text: PURPOSE_PATHS_OFFER_ENGLISH });
+              options.onLatencySafeText?.();
               input.onTextDelta?.(PURPOSE_PATHS_OFFER_ENGLISH);
               controller.enqueue({ type: 'text-end', id });
               canonicalInserted = true;
@@ -653,7 +672,10 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
               for (const part of displayParts(group, hasClientTool, normalizedCitations)) {
                 if (canonicalPathOffer && (part.type === 'text-start' || part.type === 'text-delta' || part.type === 'text-end' || part.type === 'source')) continue;
                 if (canonicalPathOffer && !canonicalInserted && index === displayGroups.length - 1 && part.type === 'finish-step') emitCanonicalOffer();
-                if (part.type === 'text-delta') input.onTextDelta?.(part.text);
+                if (part.type === 'text-delta') {
+                  input.onTextDelta?.(part.text);
+                  options.onLatencySafeText?.();
+                }
                 controller.enqueue(part);
               }
               visibleOffset += displayText.length;

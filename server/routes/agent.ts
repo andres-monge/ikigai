@@ -28,6 +28,7 @@ import {
   type MethodAgentTurnStreamResult,
 } from '../ai/agent.js';
 import { createMethodModuleLoader, type MethodModuleLoader } from '../ai/method/loader.js';
+import { MethodLatencyTrace, methodLatencyEnabled } from './agent-latency.js';
 import {
   OpenAIConversationClient,
   createConversationHistoryCursorCodec,
@@ -605,6 +606,10 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
   router.use((request, response, next) => {
     const startedAt = Date.now();
     const requestId = nextId();
+    const route = methodRouteLabel(request.method, `${request.baseUrl}${request.path}`);
+    const latency = methodLatencyEnabled() && (route === 'agent-turn' || route === 'workspace-operation')
+      ? new MethodLatencyTrace() : undefined;
+    response.locals.methodLatency = latency;
     response.setHeader('x-request-id', requestId);
     response.setHeader('cache-control', 'no-store');
     response.on('finish', () => {
@@ -612,9 +617,10 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
       log({
         type: 'method_request',
         requestId,
-        route: methodRouteLabel(request.method, `${request.baseUrl}${request.path}`),
+        route,
         status: response.statusCode,
         durationMs: Date.now() - startedAt,
+        ...(latency ? { latency: latency.summary() } : {}),
         ...(metadata ?? {}),
       });
     });
@@ -702,6 +708,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
       return;
     }
     const identity = getProtectedIdentity(response);
+    const latency = response.locals.methodLatency as MethodLatencyTrace | undefined;
     const abort = attachAbort(request, response);
     if (clientDisconnected(request, response, abort.signal)) {
       abort.detach();
@@ -820,6 +827,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
     try {
       throwIfRouteAborted(abort.signal);
       const map = await storage.getOrCreateCareerMap(identity.userId);
+      latency?.mark('map-ready');
       if (map.status !== 'ready') {
         response.status(409).json({ status: map.status });
         return;
@@ -840,6 +848,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
         return;
       }
       turn = begun.turn;
+      latency?.mark('lease-ready');
       const leasedState = await storage.loadCareerMap(identity.userId);
       if (leasedState.status !== 'ready') throw new Error('CareerMapUnavailableAfterLease');
       startingRevision = leasedState.map.revision;
@@ -925,6 +934,8 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
                 ...methodTurnDiagnosticLog(diagnostics),
               };
             },
+            onLatencyStep: latency ? (index, phase) => latency.step(index, phase) : undefined,
+            onLatencySafeText: latency ? () => latency.mark('safe-text') : undefined,
             onOperationStatus: async (event) => {
               if (event.phase === 'terminal' && event.status === 'saved') {
                 continuationOperationSaved = true;
@@ -964,6 +975,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
               };
             },
           });
+          latency?.mark('provider-start');
           methodResult = await agent.stream({
             continueFromConversation: true,
             abortSignal: abort.signal,
@@ -1022,6 +1034,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
         },
       });
       const terminalGatedStream = gateTerminalUIStream(uiStream, async (terminalType) => {
+        latency?.mark('terminal-start');
         let terminalFailure: unknown;
         try {
           if (streamError || terminalType === 'error') {
@@ -1119,6 +1132,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
             .then(() => true)
             .catch(() => false);
         }
+        latency?.mark('terminal-done');
         return terminalFailureClass
           ? { type: 'error', errorText: 'The agent request failed.' }
           : undefined;
@@ -1225,6 +1239,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
       return;
     }
     const identity = getProtectedIdentity(response);
+    const latency = response.locals.methodLatency as MethodLatencyTrace | undefined;
     const abort = attachAbort(request, response);
     if (clientDisconnected(request, response, abort.signal)) {
       abort.detach();
@@ -1369,6 +1384,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
     try {
       throwIfRouteAborted(abort.signal);
       const map = await storage.getOrCreateCareerMap(identity.userId);
+      latency?.mark('map-ready');
       if (map.status !== 'ready') {
         response.status(409).json({ status: map.status });
         return;
@@ -1397,6 +1413,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
         return;
       }
       turn = begun.turn;
+      latency?.mark('lease-ready');
       const leasedState = await storage.loadCareerMap(identity.userId);
       if (leasedState.status !== 'ready') throw new Error('CareerMapUnavailableAfterLease');
       startingRevision = leasedState.map.revision;
@@ -1517,6 +1534,8 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
                 ...methodTurnDiagnosticLog(diagnostics),
               };
             },
+            onLatencyStep: latency ? (index, phase) => latency.step(index, phase) : undefined,
+            onLatencySafeText: latency ? () => latency.mark('safe-text') : undefined,
             onOperationStatus: async (event) => {
               if (event.phase === 'terminal' && event.status === 'saved') {
                 operationSaved = true;
@@ -1557,6 +1576,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
               };
             },
           });
+          latency?.mark('provider-start');
           methodResult = await agent.stream({
             prompt: parsed.data.message,
             abortSignal: abort.signal,
@@ -1609,6 +1629,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
         },
       });
       const terminalGatedStream = gateTerminalUIStream(uiStream, async (terminalType) => {
+        latency?.mark('terminal-start');
         let terminalFailure: unknown;
         try {
           if (streamError || terminalType === 'error') {
@@ -1714,6 +1735,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
           await storage.releaseTurnLease(identity.userId, turn!.turnId, turn!.leaseId).catch(() => false);
           leaseFinalized = true;
         }
+        latency?.mark('terminal-done');
         return terminalFailureClass
           ? { type: 'error', errorText: 'The agent request failed.' }
           : undefined;

@@ -17,6 +17,7 @@ import { SafeMessage } from '@/components/explore/safe-message';
 import { MethodMap } from '@/components/explore/method-map';
 import { PurposePathCard } from '@/components/explore/purpose-path-card';
 import { ActivityIndicator } from '@/components/explore/activity-indicator';
+import { createClientLatencyTrace, type ClientLatencyTrace } from './explore-latency';
 
 type LoadState = 'loading' | 'empty' | 'ready' | 'error';
 type WorkspaceLoadState = LoadState | 'repair-required';
@@ -173,6 +174,7 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
   const renderedMessageCountRef = useRef(0);
   const tabRefs = useRef<Record<Panel, HTMLButtonElement | null>>({ chat: null, map: null });
   const streamStateRef = useRef<AgentStreamState>({ text: '', citations: [], operationEvents: [], providerFailed: false });
+  const latencyTraceRef = useRef<ClientLatencyTrace | undefined>(undefined);
   const processedOperationEventsRef = useRef(0);
   const pendingAttemptsRef = useRef(new Map<string, PendingAttempt>());
   const savingTimersRef = useRef(new Map<string, number>());
@@ -182,6 +184,10 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
   const turnCanStop = turnPhase === 'active';
   const refreshDisabled = refreshBusy || turnBusy;
   const bootstrapPending = historyState === 'loading' || workspaceState === 'loading';
+
+  useLayoutEffect(() => {
+    if (streamedText) latencyTraceRef.current?.mark('first-render');
+  }, [streamedText]);
 
   const setPersistenceError = useCallback((error: PersistenceError | null) => {
     setPersistenceErrorState(error);
@@ -470,6 +476,7 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
 
   function absorbStreamState(next: AgentStreamState) {
     if (!mountedRef.current) return;
+    if (next.text) latencyTraceRef.current?.mark('first-text');
     streamStateRef.current = next;
     setStreamedText(next.text);
     for (const event of next.operationEvents.slice(processedOperationEventsRef.current)) {
@@ -496,8 +503,13 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
+    let sawByte = false;
     while (true) {
       const { done, value } = await reader.read();
+      if (!done && value?.length && !sawByte) {
+        sawByte = true;
+        latencyTraceRef.current?.mark('first-byte');
+      }
       buffer += decoder.decode(value, { stream: !done });
       const lines = buffer.split('\n');
       buffer = lines.pop() ?? '';
@@ -598,6 +610,8 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
     }
     const message = draft.trim();
     if (!message || turnBusy || bootstrapPending) return;
+    const latency = createClientLatencyTrace('agent-turn');
+    latencyTraceRef.current = latency;
     if (incompleteTranscriptWarning) clearIncompleteTranscriptWarning();
     refreshGenerationRef.current += 1;
     const messageId = newOpaqueId('message');
@@ -626,6 +640,8 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
         body: JSON.stringify({ id: messageId, message }),
         signal: controller.signal,
       });
+      latency?.mark('headers');
+      latency?.requestId(response.headers.get('x-request-id'));
       if (!mountedRef.current) return;
       const contentType = response.headers.get('content-type') ?? '';
       if (contentType.includes('application/json')) {
@@ -639,6 +655,7 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
         throw new Error('AgentRequestFailed');
       } else {
         await consumeStream(response);
+        latency?.mark('response-end');
         if (!mountedRef.current) return;
         if (streamStateRef.current.providerFailed) {
           const restored = !draftValueRef.current.trim();
@@ -669,9 +686,11 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
           : 'Revelio is temporarily unavailable. Your current draft is unchanged.');
       }
     } finally {
+      latency?.mark('refetch-start');
       if (abortRef.current === controller) abortRef.current = null;
       if (!beginFinishing()) return;
       const snapshot = await refreshNewest();
+      latency?.mark('refetch-end');
       if (mountedRef.current) {
         reconcileAttempts(snapshot, {
           providerFailed: streamStateRef.current.providerFailed,
@@ -682,11 +701,15 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
         setSubmittedDraft(null);
         scheduleFocus(() => draftRef.current);
       }
+      latency?.finish();
+      if (latencyTraceRef.current === latency) latencyTraceRef.current = undefined;
     }
   }
 
   async function runOperation(operation: DeterministicOperationRequest) {
     if (!map || turnBusy || unresolvedOperationCount > 0 || !terminalValidated) return;
+    const latency = createClientLatencyTrace('workspace-operation');
+    latencyTraceRef.current = latency;
     refreshGenerationRef.current += 1;
     const sourceMessageId = typeof operation.input.sourceMessageId === 'string'
       ? operation.input.sourceMessageId
@@ -723,6 +746,8 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
         }),
         signal: controller.signal,
       });
+      latency?.mark('headers');
+      latency?.requestId(response.headers.get('x-request-id'));
       if (!mountedRef.current) return;
       const contentType = response.headers.get('content-type') ?? '';
       if (contentType.includes('application/json')) {
@@ -748,15 +773,18 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
         throw new Error('WorkspaceOperationContinuationFailed');
       } else {
         await consumeStream(response);
+        latency?.mark('response-end');
         replyFailed = streamStateRef.current.providerFailed;
       }
     } catch {
       attempt.cancelled = controller.signal.aborted;
       replyFailed = !controller.signal.aborted;
     } finally {
+      latency?.mark('refetch-start');
       if (abortRef.current === controller) abortRef.current = null;
       if (!beginFinishing()) return;
       const snapshot = await refreshNewest();
+      latency?.mark('refetch-end');
       if (mountedRef.current) {
         reconcileAttempts(snapshot, {
           providerFailed: replyFailed,
@@ -766,6 +794,8 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
         setTurnPhase('idle');
         if (activePanelRef.current === 'chat') scheduleFocus(() => draftRef.current);
       }
+      latency?.finish();
+      if (latencyTraceRef.current === latency) latencyTraceRef.current = undefined;
     }
   }
 
@@ -1024,15 +1054,11 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
                   Recording stopped at the size/time limit; this transcript may be incomplete. Review before sending.
                 </p>
               ) : null}
-              {speech.recordingState === 'requesting' ? (
-                <p role="status" aria-live="polite" className="text-xs font-bold text-stone-700">Waiting for microphone permission… You can cancel.</p>
-              ) : speech.recordingState === 'recording' ? (
-                <p role="status" aria-live="polite" className="text-xs font-bold text-stone-700">Recording… Choose Stop to transcribe or Cancel to discard.</p>
-              ) : speech.recordingState === 'processing' ? (
-                <p role="status" aria-live="polite" className="text-xs font-bold text-stone-700">Transcribing… Your words will be added to the draft for review. You can cancel.</p>
+              {speech.recordingState === 'recording' ? (
+                <p role="status" aria-live="polite" className="text-xs font-bold text-stone-700">Recording…</p>
               ) : null}
               {voiceBusy ? (
-                <p id="voice-send-block-reason" className="text-xs font-bold text-stone-700">
+                <p id="voice-send-block-reason" className="sr-only">
                   Finish or cancel recording before sending.
                 </p>
               ) : null}

@@ -468,9 +468,15 @@ describe('Explore U6 conversation-first workspace', () => {
       const textbox = await screen.findByRole('textbox', { name: 'Message Revelio' });
       fireEvent.click(screen.getByRole('button', { name: 'Record a message' }));
 
-      expect(await screen.findByText('Recording… Choose Stop to transcribe or Cancel to discard.')).toBeTruthy();
+      await screen.findByRole('button', { name: 'Stop recording' });
+      expect(screen.getByText('Recording…')).toBeTruthy();
+      expect(screen.queryByText(/Choose Stop|Waiting for microphone permission|Transcribing…/)).toBeNull();
+      expect(screen.getByRole('button', { name: 'Cancel recording' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Send' }).getAttribute('aria-describedby')).toBe('voice-send-block-reason');
+      expect(screen.getByText('Finish or cancel recording before sending.').classList.contains('sr-only')).toBe(true);
       fireEvent.click(screen.getByRole('button', { name: 'Stop recording' }));
-      expect(await screen.findByText('Transcribing… Your words will be added to the draft for review. You can cancel.')).toBeTruthy();
+      expect(await screen.findByRole('button', { name: 'Cancel transcription' })).toBeTruthy();
+      expect(screen.queryByText(/Recording…|Waiting for microphone permission|Transcribing…/)).toBeNull();
 
       await act(async () => {
         transcription.resolve(jsonResponse({ text: 'Speech stays editable.' }));
@@ -602,6 +608,11 @@ describe('Explore U6 conversation-first workspace', () => {
         if (phase === 'processing') {
           fireEvent.click(screen.getByRole('button', { name: 'Stop recording' }));
           await screen.findByRole('button', { name: 'Cancel transcription' });
+        }
+        if (phase === 'recording') {
+          expect(screen.getByText('Recording…')).toBeTruthy();
+        } else {
+          expect(screen.queryByText(/Recording…|Waiting for microphone permission|Transcribing…/)).toBeNull();
         }
 
         const send = screen.getByRole('button', { name: 'Send' });
