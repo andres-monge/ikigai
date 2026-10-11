@@ -220,6 +220,31 @@ describe('Method reducer', () => {
     expect(rejected.map).toEqual(base);
   });
 
+  it('accepts new cards without possibility and preserves legacy siblings on replacement', () => {
+    const withoutPossibility = ({ possibility: _legacy, ...path }: PurposePathInput) => path;
+    const newPaths = paths().map(withoutPossibility) as [PurposePathInput, PurposePathInput, PurposePathInput];
+    const proposed = applyCareerMapOperation(withConfirmedWhy(), operation(withConfirmedWhy(), 'propose-purpose-paths', {
+      setId: 'new-paths', setRevision: 1, paths: newPaths, presentation: presentation(3),
+    }));
+    expect(proposed.status).toBe('committed');
+    expect(proposed.map.pathSets.at(-1)?.paths.every((path) => !('possibility' in path))).toBe(true);
+    expect(careerMapSchema.safeParse(proposed.map).success).toBe(true);
+
+    let legacy = commit(withConfirmedWhy(), 'propose-purpose-paths', {
+      setId: 'paths-1', setRevision: 1, paths: paths(), presentation: presentation(3),
+    });
+    const originalSet = structuredClone(legacy.pathSets[0]);
+    legacy = commit(legacy, 'replace-purpose-path', {
+      sourceSetId: 'paths-1', sourceSetRevision: 1, replacedPathId: 'path-1',
+      replacementSetId: 'paths-2', replacementSetRevision: 1,
+      replacement: { ...withoutPossibility(paths()[0]), id: 'path-4' }, presentation: presentation(4),
+    });
+    expect(legacy.pathSets[0]).toEqual({ ...originalSet, status: 'superseded' });
+    expect(legacy.pathSets[1].paths.slice(1)).toEqual(originalSet.paths.slice(1));
+    expect(legacy.pathSets[1].supersedesSetId).toBe('paths-1');
+    expect(legacy.pathSets[1].paths[0]).not.toHaveProperty('possibility');
+  });
+
   it('replaces and combines paths as complete unranked sets without implicit activation', () => {
     let map = withConfirmedWhy();
     map = commit(map, 'propose-purpose-paths', { setId: 'paths-1', setRevision: 1, paths: paths(), presentation: presentation(3) });

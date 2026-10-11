@@ -4,6 +4,7 @@ These records help future agents investigate observed behavior and plan retests.
 
 - [U7 founder run before reset](2026-09-29-u7-founder-run-before-reset.md): observations, diagnosed failures, shipped changes, and the fresh-run gate.
 - [U7 local UI and latency integration](2026-09-30-u7-ui-latency-integration.md): nonpersonal review and verification of the founder-approved display changes and opt-in diagnostics.
+- [Private founder replay](replay.md): isolated production-agent checkpoint testing and its review gate.
 - [Founder Method reset](method-reset.md): the exact-account dry-run and reset procedure. Reading this guide does not authorize a reset.
 
 Keep new run records here with the tested commit and outcome. Do not commit raw conversations, personal Foundation answers, credentials, signed reset tokens, or unfiltered server logs.

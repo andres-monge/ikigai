@@ -55,6 +55,8 @@ export interface MethodSkillsRootOptions {
 
 export interface CreateMethodModuleLoaderOptions extends MethodSkillsRootOptions {
   readonly skillsRoot?: string;
+  /** Private replay bundles may version content independently of the production registry. */
+  readonly versionPolicy?: 'registry' | 'candidate';
 }
 
 interface ParsedSkillFile {
@@ -147,6 +149,7 @@ function validateRegistry(): void {
 async function readRegisteredBundle(
   key: RegisteredMethodModuleKey,
   skillsRoot: string,
+  versionPolicy: 'registry' | 'candidate',
 ): Promise<LoadedMethodModule> {
   const registration = METHOD_MODULE_REGISTRY[key];
   const sourcePath = path.resolve(skillsRoot, registration.directory, 'SKILL.md');
@@ -166,7 +169,10 @@ async function readRegisteredBundle(
   if (metadata.name !== key) {
     throw new MethodModuleLoadError('invalid-bundle', `${key} SKILL.md name does not match registry identity.`);
   }
-  if (metadata.version !== registration.contentVersion || !contentVersionPattern.test(metadata.version)) {
+  if (!contentVersionPattern.test(metadata.version)) {
+    throw new MethodModuleLoadError('invalid-bundle', `${key} SKILL.md content version must use major.minor.patch numbers.`);
+  }
+  if (versionPolicy === 'registry' && metadata.version !== registration.contentVersion) {
     throw new MethodModuleLoadError('invalid-bundle', `${key} SKILL.md content version does not match registry.`);
   }
 
@@ -185,9 +191,12 @@ export async function createMethodModuleLoader(
   options: CreateMethodModuleLoaderOptions = {},
 ): Promise<MethodModuleLoader> {
   validateRegistry();
+  if (options.versionPolicy === 'candidate' && !options.skillsRoot) {
+    throw new MethodModuleLoadError('invalid-bundle', 'Candidate bundles require an explicit skills root.');
+  }
   const skillsRoot = path.resolve(options.skillsRoot ?? resolveMethodSkillsRoot(options));
   const bundles = await Promise.all(
-    METHOD_MODULE_KEYS.map(async (key) => [key, await readRegisteredBundle(key, skillsRoot)] as const),
+    METHOD_MODULE_KEYS.map(async (key) => [key, await readRegisteredBundle(key, skillsRoot, options.versionPolicy ?? 'registry')] as const),
   );
   const cache = new Map<RegisteredMethodModuleKey, LoadedMethodModule>(bundles);
   const loaded = new Set<RegisteredMethodModuleKey>();

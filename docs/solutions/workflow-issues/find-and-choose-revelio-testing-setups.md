@@ -38,7 +38,7 @@ Search `docs/solutions/` before reconstructing old sessions. A useful starting q
 | `tests/journey.spec.ts` | **Existing legacy browser journey.** It navigates to `/legacy`. | Its passing result does not establish current Revelio Method E2E coverage. |
 | `AgentRouterOptions` in `server/routes/agent.ts` | **Existing test seams.** `requireAuth`, `storage`, `model`, and `conversationClient` can be injected. | These seams support component and route testing. A full isolated browser app with a separate synthetic user and real provider was **proposed only**, not built or verified. |
 
-The scoped historical report is `/Users/andresm/Andres/Revelio Dogfood/2026-09-20-u7-qa/report.md`. Read its summaries and verification sections when provenance is needed; do not copy private transcripts or credentials into learnings. Historical UI evidence can explain what was verified then, but cannot establish the profile's current login or today's app behavior.
+The scoped historical report is `.context/revelio/dogfood/2026-09-20-u7-qa/report.md`. Read its summaries and verification sections when provenance is needed; do not copy private transcripts or credentials into learnings. Historical UI evidence can explain what was verified then, but cannot establish the profile's current login or today's app behavior.
 
 For example, a Purpose Path save assertion in the synthetic harness calls for reducer and operation diagnostics; persistence requires storage evidence, and visible saved cards require app presentation evidence. The separate learning `docs/solutions/workflow-issues/diagnose-purpose-path-revision-save-anomalies.md` covers that diagnosis rather than setup discovery.
 

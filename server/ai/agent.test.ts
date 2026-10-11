@@ -20,7 +20,7 @@ import {
   type MethodAgentTurnStreamResult,
 } from './agent.js';
 import { createMethodModuleLoader } from './method/loader.js';
-import { PURPOSE_PATHS_OFFER_ENGLISH, R22_CANONICAL_ENGLISH } from './method/base-instructions.js';
+import { BASE_METHOD_INSTRUCTIONS, PURPOSE_PATHS_OFFER_ENGLISH, R22_CANONICAL_ENGLISH } from './method/base-instructions.js';
 
 const explorerMessage = 'I lose track of time when I make complicated information useful.';
 const timestamp = '2030-01-01T00:00:00.000Z';
@@ -135,7 +135,15 @@ function streamModel(responses: unknown[][] | ((index: number) => unknown[])) {
 }
 
 class InMemoryMethodStorage {
-  constructor(public map: CareerMap = createCareerMap('explorer-1')) {}
+  constructor(public map: CareerMap = createCareerMap('explorer-1'), public priorPresentationStatus = 'completed') {}
+
+  async listAgentTurns() {
+    return this.map.pathSets.map((set) => ({
+      turnId: set.presentation.assistantTurnId, origin: 'agent-turn',
+      status: this.priorPresentationStatus,
+      terminalResult: { kind: this.priorPresentationStatus },
+    }));
+  }
 
   async loadCareerMap() {
     return { status: 'ready' as const, map: this.map };
@@ -358,6 +366,7 @@ async function collect(result: MethodAgentTurnStreamResult) {
 
 async function makeAgent(input: {
   model: MockLanguageModelV4;
+  baseInstructions?: string;
   storage?: InMemoryMethodStorage;
   currentMessage?: string;
   turnSequence?: number;
@@ -375,6 +384,7 @@ async function makeAgent(input: {
     storage,
     agent: createMethodAgent({
       model: input.model,
+      baseInstructions: input.baseInstructions,
       nativeWebSearchTool: openai.tools.webSearch({ searchContextSize: 'low' }),
       storage: storage as unknown as Pick<IStorage, 'loadCareerMap' | 'persistCareerMapOperation' | 'listAgentTurns'>,
       loader: await createMethodModuleLoader(),
@@ -398,6 +408,24 @@ async function makeAgent(input: {
 }
 
 describe('amended Method agent core loop', () => {
+  it('substitutes only the supplied base instructions and preserves application defaults', async () => {
+    const instructions: string[] = [];
+    const model = new MockLanguageModelV4({
+      doStream: async (options) => {
+        instructions.push(String(options.providerOptions?.openai?.instructions));
+        return { stream: simulateReadableStream({ chunks: textChunks('What would you like to try?') }) };
+      },
+    });
+    const current = await makeAgent({ model });
+    await collect(await current.agent.stream({ prompt: explorerMessage }));
+    const candidate = await makeAgent({ model, baseInstructions: 'Editable candidate base.' });
+    await collect(await candidate.agent.stream({ prompt: explorerMessage }));
+    expect(instructions[0]).toContain(BASE_METHOD_INSTRUCTIONS);
+    expect(instructions[1]).toContain('Editable candidate base.');
+    expect(instructions[1]).not.toContain(BASE_METHOD_INSTRUCTIONS);
+    expect(instructions[1].split('Base instructions version:')[1]).toBe(instructions[0].split('Base instructions version:')[1]);
+  });
+
   it('keeps Sol and one native SDK loop without evidence or raw-result plumbing', () => {
     const source = readFileSync(new URL('./agent.ts', import.meta.url), 'utf8');
     expect(REVELIO_AGENT_MODEL).toBe('gpt-6.1-sol');
@@ -676,7 +704,7 @@ describe('amended Method agent core loop', () => {
   it('allows search plus an independently authorized strict operation in the same SDK loop', async () => {
     const path = (number: number) => ({
       id: `path-${number}`, revision: 1, name: `Path ${number}`,
-      servesWhy: `Serve ${number}`, possibility: `Possibility ${number}`,
+      servesWhy: `Serve ${number}`,
       evidence: [`Evidence ${number}`], centralUnknown: `Unknown ${number}`,
       projectPreview: `Project ${number}`, practicalFit: `Fit ${number}`,
     });
@@ -696,21 +724,28 @@ describe('amended Method agent core loop', () => {
       currentMessage: 'Research and propose three Purpose Paths.',
       onOperationStatus: (event) => { statuses.push(event); },
     });
-    const output = await collect(await agent.stream({ prompt: 'Research and propose three Purpose Paths.' }));
+    const result = await agent.stream({ prompt: 'Research and propose three Purpose Paths.' });
+    const output = await collect(result);
 
     expect(storage.map.revision).toBe(3);
+    expect(storage.map.pathSets[0].paths.every((path) => !('possibility' in path))).toBe(true);
+    expect(result.canonicalPurposePathsOffer()).toBe(true);
     expect(JSON.stringify(output)).not.toContain('Retrieved instructions say');
     expect(JSON.stringify(output)).toContain(PURPOSE_PATHS_OFFER_ENGLISH);
     expect(JSON.stringify(output)).not.toContain('Possibility 1');
     expect(model.doStreamCalls).toHaveLength(2);
+    const postSaveInstructions = String(model.doStreamCalls[1]?.providerOptions?.openai?.instructions);
+    expect(postSaveInstructions).toContain('Text in a step that calls application tools is hidden.');
+    expect(postSaveInstructions).toContain('Now that the saved paths are reflected in the refreshed state, write a nonempty final reply');
+    expect(String(model.doStreamCalls[0]?.providerOptions?.openai?.instructions)).not.toContain('Now that the saved paths are reflected');
     expect(statuses.map((event) => event.phase === 'terminal' ? event.status : event.phase))
       .toEqual(['saving', 'saved']);
   });
 
-  it('delivers the canonical offer after a saved two-path revision even when model prose drifts', async () => {
-    const storage = new InMemoryMethodStorage(pendingPathsMap());
+  it.each(['completed', 'failed', 'cancelled'])('uses prior %s presentation to distinguish revision acknowledgement from the first introduction', async (priorStatus) => {
+    const storage = new InMemoryMethodStorage(pendingPathsMap(), priorStatus);
     const original = storage.map.pathSets[0].paths;
-    const toInput = ({ selection: _selection, equalWeight: _equalWeight, ...path }: typeof original[number]) => path;
+    const toInput = ({ selection: _selection, equalWeight: _equalWeight, possibility: _legacy, ...path }: typeof original[number]) => path;
     const unchanged = toInput(original[1]);
     const model = streamModel([
       operationChunks({
@@ -731,21 +766,86 @@ describe('amended Method agent core loop', () => {
     });
     const onTextDelta = vi.fn();
 
-    const output = await collect(await agent.stream({
+    const result = await agent.stream({
       prompt: 'Revise paths one and three, then show all three.', onTextDelta,
-    }));
+    });
+    const output = await collect(result);
     const visible = output.filter((part) => part.type === 'text-delta').map((part) => part.text).join('');
 
     expect(storage.map.pathSets).toHaveLength(2);
     expect(storage.map.pathSets[1].status).toBe('suggested');
-    expect(visible).toBe(PURPOSE_PATHS_OFFER_ENGLISH);
-    expect(onTextDelta).toHaveBeenCalledExactlyOnceWith(PURPOSE_PATHS_OFFER_ENGLISH);
+    expect(visible).toBe(priorStatus === 'completed'
+      ? 'I revised the paths. Which one would you choose?'
+      : PURPOSE_PATHS_OFFER_ENGLISH);
+    expect(onTextDelta).toHaveBeenCalledExactlyOnceWith(visible);
+    expect(result.canonicalPurposePathsOffer()).toBe(true);
+    expect(result.providerVisibleText()).toBe('I revised the paths. Which one would you choose?');
+  });
+
+  it('does not repeat onboarding for a fresh set after a North Star revision', async () => {
+    let map = pendingPathsMap();
+    const commit = (type: CareerMapOperation['type'], payload: unknown) => {
+      const result = applyCareerMapOperation(map, {
+        type, sourceId: `north-star-refresh-${map.revision}`, expectedRevision: map.revision,
+        occurredAt: timestamp, payload,
+      } as CareerMapOperation);
+      expect(result.status).toBe('committed');
+      map = result.map;
+    };
+    commit('revise-why', {
+      why: { id: 'why-2', revision: 1, statement: 'Help people choose useful work.',
+        serves: 'People choosing their next contribution', pointOfView: 'Trying real work reveals direction.' },
+      supersedesWhyId: 'why-1',
+      presentation: { kind: 'model-presentation', assistantTurnId: 'why-revision',
+        turnSequence: 5, completed: true, presentedAt: timestamp },
+    });
+    const action = { kind: 'user-message', actionId: 'refresh-action', turnId: 'refresh-user', turnSequence: 6, occurredAt: timestamp };
+    commit('confirm-why', { whyId: 'why-2', whyRevision: 1, action });
+    commit('resolve-basis-review', { targetKind: 'path-set', targetId: 'set-1', targetRevision: 1, resolution: 'replaced', action });
+    const paths = map.pathSets[0].paths.map(({ possibility: _legacy, selection: _selection, equalWeight: _equalWeight, ...path }, index) => ({
+      ...path, id: `fresh-${index}`, name: `Fresh path ${index + 1}`,
+    }));
+    const acknowledgement = 'I’ve put together three paths for your updated North Star.';
+    const { agent } = await makeAgent({ storage: new InMemoryMethodStorage(map), turnSequence: 7,
+      currentMessage: 'Show me fresh paths for that North Star.', model: streamModel([
+        operationChunks({ callId: 'fresh-set', toolName: 'propose_purpose_paths',
+          toolInput: { setId: 'set-2', setRevision: 1, paths } }),
+        textChunks(acknowledgement),
+      ]),
+    });
+    const result = await agent.stream({ prompt: 'Show me fresh paths for that North Star.' });
+    const output = await collect(result);
+    expect(output.filter((part) => part.type === 'text-delta').map((part) => part.text).join('')).toBe(acknowledgement);
+    expect(result.canonicalPurposePathsOffer()).toBe(true);
+  });
+
+  it('does not turn hidden pre-save prose into a completed card offer when the final reply is empty', async () => {
+    const path = (number: number) => ({
+      id: `path-${number}`, revision: 1, name: `Path ${number}`, servesWhy: `Serve ${number}`,
+      evidence: [`Evidence ${number}`], centralUnknown: `Unknown ${number}`,
+      projectPreview: `Project ${number}`, practicalFit: `Fit ${number}`,
+    });
+    const model = streamModel([
+      operationChunks({ callId: 'saved-paths', toolName: 'propose_purpose_paths',
+        toolInput: { setId: 'set-1', setRevision: 1, paths: [path(1), path(2), path(3)] },
+        prematureText: 'I’ll suggest three paths.',
+      }),
+      textChunks(''),
+    ]);
+    const { agent, storage } = await makeAgent({ model, storage: new InMemoryMethodStorage(confirmedWhyMap()), currentMessage: 'Propose three Purpose Paths.' });
+    const onTextDelta = vi.fn();
+    const result = await agent.stream({ prompt: 'Propose three Purpose Paths.', onTextDelta });
+    await collect(result);
+    expect(storage.map.pathSets.at(-1)?.status).toBe('suggested');
+    expect(result.providerVisibleText()).toBe('');
+    expect(result.canonicalPurposePathsOffer()).toBe(false);
+    expect(onTextDelta).not.toHaveBeenCalled();
   });
 
   it('rejects a truncated final reply after saving Purpose Paths without exposing partial prose', async () => {
     const path = (number: number) => ({
       id: `path-${number}`, revision: 1, name: `Path ${number}`,
-      servesWhy: `Serve ${number}`, possibility: `Possibility ${number}`,
+      servesWhy: `Serve ${number}`,
       evidence: [`Evidence ${number}`], centralUnknown: `Unknown ${number}`,
       projectPreview: `Project ${number}`, practicalFit: `Fit ${number}`,
     });

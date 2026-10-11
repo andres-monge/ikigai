@@ -116,7 +116,7 @@
 
     .method-path-card {
       grid-template-rows: subgrid;
-      grid-row: span 7;
+      grid-row: span 5;
     }
   }
 

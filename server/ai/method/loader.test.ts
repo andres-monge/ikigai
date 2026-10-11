@@ -35,6 +35,16 @@ function checkpoint(module: string): Pick<MethodCheckpoint, 'module'> {
 }
 
 describe('repository-owned Method module loader', () => {
+  it('permits valid independent versions only in explicitly rooted candidate bundles', async () => {
+    const root = await copySkillsFixture();
+    const file = path.join(root, 'create-purpose-paths/SKILL.md');
+    await writeFile(file, (await readFile(file, 'utf8')).replace(/version:.*\n/, 'version: 1.1.7\n'));
+    await expect(createMethodModuleLoader({ skillsRoot: root })).rejects.toThrow(/content version does not match registry/i);
+    const loader = await createMethodModuleLoader({ skillsRoot: root, versionPolicy: 'candidate' });
+    expect(loader.load(checkpoint('create-purpose-paths')).contentVersion).toBe('1.1.7');
+    await expect(createMethodModuleLoader({ versionPolicy: 'candidate' })).rejects.toThrow(/explicit skills root/i);
+  });
+
   it('validates the fixed first-three registry and loads exactly the canonical checkpoint module', async () => {
     const loader = await createMethodModuleLoader();
 

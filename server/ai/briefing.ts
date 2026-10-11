@@ -77,7 +77,7 @@ function appendExactPath(
   if (!path) throw new CareerMapBriefingError();
   lines.push(`Purpose Path: ${path.name} (${path.id}@${path.revision}; ${path.selection})`);
   lines.push(`Serves North Star: ${path.servesWhy}`);
-  lines.push(`Possibility: ${path.possibility}`);
+  if (path.possibility !== undefined) lines.push(`Possibility: ${path.possibility}`);
   lines.push(`Evidence: ${path.evidence.join('; ')}`);
   lines.push(`Central unknown: ${path.centralUnknown}`);
   lines.push(`Path Project preview: ${path.projectPreview}`);
@@ -266,7 +266,7 @@ function appendPath(
   for (const path of paths) {
     lines.push(`### ${path.name} (${path.id}@${path.revision}; ${path.selection})`);
     lines.push(`Serves North Star: ${path.servesWhy}`);
-    lines.push(`Possibility: ${path.possibility}`);
+    if (path.possibility !== undefined) lines.push(`Possibility: ${path.possibility}`);
     lines.push(`Evidence: ${path.evidence.join('; ')}`);
     lines.push(`Central unknown: ${path.centralUnknown}`);
     lines.push(`Path Project preview: ${path.projectPreview}`);

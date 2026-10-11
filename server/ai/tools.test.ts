@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
+import { asSchema } from '@ai-sdk/provider-utils';
 import {
   applyCareerMapOperation,
   createCareerMap,
@@ -804,6 +805,23 @@ describe('strict state-specific Method tools', () => {
     }).success).toBe(false);
   });
 
+  it('exposes only required current card fields in strict provider schemas', async () => {
+    const storage = new ReducerStorage(pendingPaths());
+    const loader = await createMethodModuleLoader();
+    const tools = createMethodTools({
+      ...runtime(storage), loader, surface: 'agent-turn',
+      prepared: { current: await refreshMethodState(storage, loader, 'explorer-1') },
+    });
+    for (const name of ['propose_purpose_paths', 'replace_purpose_path', 'revise_purpose_paths', 'combine_purpose_paths']) {
+      const json = asSchema(tools[name].inputSchema).jsonSchema as any;
+      const pathSchema = json.properties.replacement ?? json.properties.paths.items;
+      expect(tools[name].strict).toBe(true);
+      expect(pathSchema.properties).not.toHaveProperty('possibility');
+      expect([...pathSchema.required].sort()).toEqual(Object.keys(pathSchema.properties).sort());
+      expect(pathSchema.additionalProperties).toBe(false);
+    }
+  });
+
   it('rejects obsolete source and handle fields at every strict proposal schema boundary', async () => {
     const storage = new ReducerStorage(confirmedWhy());
     const loader = await createMethodModuleLoader();
@@ -814,7 +832,7 @@ describe('strict state-specific Method tools', () => {
     });
     const path = (number: number) => ({
       id: `path-${number}`, revision: 1, name: `Path ${number}`,
-      servesWhy: `Serve ${number}`, possibility: `Possibility ${number}`,
+      servesWhy: `Serve ${number}`,
       evidence: [`Evidence ${number}`], centralUnknown: `Unknown ${number}`,
       projectPreview: `Project ${number}`, practicalFit: `Fit ${number}`,
     });
@@ -860,7 +878,7 @@ describe('strict state-specific Method tools', () => {
     });
     const path = (number: number) => ({
       id: `path-${number}`, revision: 1, name: `Path ${number}`,
-      servesWhy: `Serve ${number}`, possibility: `Possibility ${number}`,
+      servesWhy: `Serve ${number}`,
       evidence: [`Evidence ${number}`], centralUnknown: `Unknown ${number}`,
       projectPreview: `Project ${number}`, practicalFit: `Fit ${number}`,
     });
@@ -886,7 +904,7 @@ describe('strict state-specific Method tools', () => {
     });
     const replacement = {
       id: 'path-4', revision: 1, name: 'Replacement Path',
-      servesWhy: 'Serve another way', possibility: 'A distinct possibility',
+      servesWhy: 'Serve another way',
       evidence: ['Evidence 4'], centralUnknown: 'Unknown 4',
       projectPreview: 'Project 4', practicalFit: 'Fit 4',
     };
@@ -911,7 +929,7 @@ describe('strict state-specific Method tools', () => {
     });
     const replacement = (id: string) => ({
       id, revision: 1, name: `Replacement ${id}`,
-      servesWhy: 'Serve another way', possibility: 'A distinct possibility',
+      servesWhy: 'Serve another way',
       evidence: ['Evidence'], centralUnknown: 'Unknown',
       projectPreview: 'Project', practicalFit: 'Fit',
     });
@@ -941,7 +959,7 @@ describe('strict state-specific Method tools', () => {
       timing: { turnSequence: 4, occurredAt: at(4) },
     });
     const original = storage.map.pathSets[0].paths;
-    const toInput = ({ selection: _selection, equalWeight: _equalWeight, ...path }: typeof original[number]) => path;
+    const toInput = ({ selection: _selection, equalWeight: _equalWeight, possibility: _legacy, ...path }: typeof original[number]) => path;
     const unchanged = toInput(original[1]);
     const revised = (source: typeof unchanged, id: string) => ({
       ...source, id, name: `${source.name} revised`,
@@ -972,6 +990,8 @@ describe('strict state-specific Method tools', () => {
     expect(storage.persist).toHaveBeenCalledOnce();
     expect(storage.map.pathSets).toHaveLength(2);
     expect(storage.map.pathSets[0].status).toBe('superseded');
+    expect(storage.map.pathSets[1].paths[1]).toEqual(original[1]);
+    expect(storage.map.pathSets[1].paths[0]).not.toHaveProperty('possibility');
     expect(storage.map.pathSets[1]).toMatchObject({
       id: 'set-revised', status: 'suggested', changeKind: 'revision',
       paths: [{ id: 'path-4' }, { id: 'path-2' }, { id: 'path-5' }],
@@ -988,12 +1008,12 @@ describe('strict state-specific Method tools', () => {
     });
     const merged = {
       id: 'path-4', revision: 1, name: 'Merged Path', servesWhy: 'Serve through a synthesis',
-      possibility: 'A merged possibility', evidence: ['Evidence 1', 'Evidence 2'],
+      evidence: ['Evidence 1', 'Evidence 2'],
       centralUnknown: 'Merged unknown', projectPreview: 'Merged project', practicalFit: 'Merged fit',
     };
     const newThird = {
       id: 'path-5', revision: 1, name: 'New Third Path', servesWhy: 'Serve another way',
-      possibility: 'A distinct possibility', evidence: ['Evidence 5'], centralUnknown: 'Unknown 5',
+      evidence: ['Evidence 5'], centralUnknown: 'Unknown 5',
       projectPreview: 'Project 5', practicalFit: 'Fit 5',
     };
     const preserved = storage.map.pathSets.at(-1)!.paths[2];
@@ -1003,7 +1023,7 @@ describe('strict state-specific Method tools', () => {
       replacementSetId: 'set-combined', replacementSetRevision: 1,
       paths: [merged, newThird, {
         id: preserved.id, revision: preserved.revision, name: preserved.name,
-        servesWhy: preserved.servesWhy, possibility: preserved.possibility,
+        servesWhy: preserved.servesWhy,
         evidence: preserved.evidence, centralUnknown: preserved.centralUnknown,
         projectPreview: preserved.projectPreview, practicalFit: preserved.practicalFit,
       }],
@@ -1011,6 +1031,8 @@ describe('strict state-specific Method tools', () => {
 
     expect(result).toMatchObject({ status: 'committed', authoritativeRevision: 4 });
     expect(storage.map.pathSets.at(-1)?.combinedFromPathIds).toEqual(['path-1', 'path-2']);
+    expect(storage.map.pathSets.at(-1)?.paths[2]).toEqual(preserved);
+    expect(storage.map.pathSets.at(-1)?.paths[0]).not.toHaveProperty('possibility');
   });
 
   it('allows the three adaptive U7 same-turn Suggested transitions only from canonical current-action evidence', async () => {
@@ -1075,7 +1097,7 @@ describe('strict state-specific Method tools', () => {
     });
     const path = (number: number) => ({
       id: `auto-path-${number}`, revision: 1, name: `Auto Path ${number}`,
-      servesWhy: `Serve ${number}`, possibility: `Possibility ${number}`,
+      servesWhy: `Serve ${number}`,
       evidence: [`Evidence ${number}`], centralUnknown: `Unknown ${number}`,
       projectPreview: `Project ${number}`, practicalFit: `Fit ${number}`,
     });

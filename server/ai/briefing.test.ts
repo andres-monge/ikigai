@@ -262,6 +262,18 @@ function withCompletedSideDoors(): CareerMap {
 }
 
 describe('compileCareerMapBriefing', () => {
+  it('briefs new cards without undefined legacy possibility while keeping evidence and feasibility separate', () => {
+    const newPaths = paths().map(({ possibility: _legacy, ...path }) => path) as [PurposePathInput, PurposePathInput, PurposePathInput];
+    const map = commit(withConfirmedWhy(), 'propose-purpose-paths', {
+      setId: 'new-paths', setRevision: 1, paths: newPaths, presentation: presentation(3),
+    });
+    const briefing = compileCareerMapBriefing(map);
+    expect(briefing.markdown).not.toContain('Possibility:');
+    expect(briefing.markdown).not.toContain('undefined');
+    expect(briefing.markdown).toContain('Evidence: Builds tools voluntarily');
+    expect(briefing.markdown).toContain('Practical fit: Can start beside current work');
+  });
+
   it('projects a validated empty map without exposing operation history', () => {
     const briefing = compileCareerMapBriefing(createCareerMap('u4-briefing-owner'));
     expect(briefing.module).toBe('form-foundation');

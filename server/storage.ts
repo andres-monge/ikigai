@@ -585,7 +585,7 @@ function preserveConversationProvisioning(
     : next;
 }
 
-function confirmationPresentationTurnId(
+export function confirmationPresentationTurnId(
   map: CareerMap,
   operation: CareerMapOperation,
 ): string | undefined {

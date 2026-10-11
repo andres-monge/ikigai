@@ -494,10 +494,10 @@ describe('protected Method routes', () => {
     }
   });
 
-  it('binds a revised path offer to provider prose while streaming canonical copy', async () => {
+  it('binds a revised path offer to its concise provider acknowledgement', async () => {
     const map = pendingPaths();
     const original = map.pathSets[0].paths;
-    const toInput = ({ selection: _selection, equalWeight: _equalWeight, ...path }: typeof original[number]) => path;
+    const toInput = ({ selection: _selection, equalWeight: _equalWeight, possibility: _legacyPossibility, ...path }: typeof original[number]) => path;
     const rawReply = 'I revised the paths. Which one would you choose?';
     const userText = 'Revise paths one and three, and show the full set.';
     let providerCall = 0;
@@ -521,7 +521,10 @@ describe('protected Method routes', () => {
         return textStream(rawReply);
       },
     });
-    const storage = createStorage({ getConversationMapping: vi.fn(async () => 'revised-paths-conversation') }, map);
+    const storage = createStorage({
+      getConversationMapping: vi.fn(async () => 'revised-paths-conversation'),
+      listAgentTurns: vi.fn(async () => [completedPathPresentationTurn()]),
+    }, map);
     const conversationClient = { listItems: vi.fn(async () => ({
       data: [
         { id: 'revision-assistant', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: rawReply }] },
@@ -535,8 +538,8 @@ describe('protected Method routes', () => {
     })).post('/api/agent').send({ id: 'client-message-1', message: userText });
 
     expect(response.status).toBe(200);
-    expect(response.text).toContain(PURPOSE_PATHS_OFFER_ENGLISH);
-    expect(response.text).not.toContain(rawReply);
+    expect(response.text).not.toContain(PURPOSE_PATHS_OFFER_ENGLISH);
+    expect(response.text).toContain(rawReply);
     expect(storage.completeAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
       result: expect.objectContaining({
         canonicalPurposePathsOffer: true,
@@ -549,7 +552,7 @@ describe('protected Method routes', () => {
   it('fails a truncated path offer after saving cards without completing or showing partial prose', async () => {
     const map = pendingPaths();
     const original = map.pathSets[0].paths;
-    const toInput = ({ selection: _selection, equalWeight: _equalWeight, ...path }: typeof original[number]) => path;
+    const toInput = ({ selection: _selection, equalWeight: _equalWeight, possibility: _legacyPossibility, ...path }: typeof original[number]) => path;
     const partialReply = 'Here are the revised paths, and the first';
     let providerCall = 0;
     const model = new MockLanguageModelV4({
@@ -1347,7 +1350,7 @@ describe('protected Method routes', () => {
     });
     const path = (number: number) => ({
       id: `reused-path-${number}`, revision: 1, name: `Path ${number}`,
-      servesWhy: `Serve ${number}`, possibility: `Possibility ${number}`,
+      servesWhy: `Serve ${number}`,
       evidence: [`Evidence ${number}`], centralUnknown: `Unknown ${number}`,
       projectPreview: `Project ${number}`, practicalFit: `Fit ${number}`,
     });

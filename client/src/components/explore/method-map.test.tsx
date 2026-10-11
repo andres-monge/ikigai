@@ -72,7 +72,7 @@ describe('MethodMap', () => {
     expect(screen.queryByRole('textbox')).toBeNull();
   });
 
-  it('renders active and parked paths through the same seven-band cards without actions', () => {
+  it('renders active and parked paths through the same five-band cards without actions', () => {
     render(<MethodMap map={pathMap('active')} />);
     const cards = screen.getAllByTestId('purpose-path-card');
     expect(cards).toHaveLength(3);

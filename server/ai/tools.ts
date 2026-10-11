@@ -120,7 +120,7 @@ export type MethodToolRuntime = Omit<MethodOperationExecutorOptions, 'sourceId' 
   onOperationStatus?: (event: MethodOperationLifecycleEvent) => void | Promise<void>;
 };
 
-const pathToolInputSchema = purposePathInputSchema.superRefine((path, context) => {
+const pathToolInputSchema = purposePathInputSchema.omit({ possibility: true }).superRefine((path, context) => {
   for (const [field, value] of Object.entries(path)) {
     const values = Array.isArray(value) ? value : [value];
     values.forEach((item, index) => {
@@ -142,7 +142,8 @@ export function normalizeRevisedPurposePathRevisions(map: CareerMap, paths: z.in
     const prior = existing.find((candidate) => candidate.id === path.id && candidate.revision === path.revision);
     if (!prior) return path;
     const { selection: _selection, equalWeight: _equalWeight, ...priorInput } = prior;
-    if (isDeepStrictEqual(priorInput, path)) return path;
+    const { possibility: _legacyPossibility, ...priorCurrentInput } = priorInput;
+    if (isDeepStrictEqual(priorCurrentInput, path)) return priorInput;
     return {
       ...path,
       revision: Math.max(...existing.filter((candidate) => candidate.id === path.id).map((candidate) => candidate.revision)) + 1,
@@ -611,7 +612,11 @@ export function createMethodTools(runtime: MethodToolRuntime): ToolSet {
       };
     }),
     combine_purpose_paths: operationTool(runtime, 'combine-purpose-paths', 'Combine exactly two paths and preserve an exact-three equal-weight set.', z.object({ sourceSetId: entityIdSchema, sourceSetRevision: revisionSchema, combinedPathIds: z.array(entityIdSchema).length(2), replacementSetId: entityIdSchema, replacementSetRevision: revisionSchema, paths: z.array(pathToolInputSchema).length(3) }).strict(), (input) => {
-      return { ...input, presentation: context().presentation };
+      return {
+        ...input,
+        paths: normalizeRevisedPurposePathRevisions(runtime.prepared.current!.map, input.paths),
+        presentation: context().presentation,
+      };
     }),
     select_purpose_path: operationTool(runtime, 'select-purpose-path', 'Select one exact pending Purpose Path from a completed prior presentation.', targetSelectionSchema, (input) => {
       const set = runtime.prepared.current?.map.pathSets.find((item) => item.id === input.setId && item.revision === input.setRevision);

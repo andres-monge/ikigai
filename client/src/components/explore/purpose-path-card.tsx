@@ -45,27 +45,24 @@ export function PurposePathCard({
           <SelectionLabel selection={path.selection} />
         </div>
         <h3 className="mt-3 text-xl font-black leading-tight">{stripProviderCitationMarkers(path.name)}</h3>
+        <h4 className="method-map-label mt-3 !text-black">How it serves the North Star</h4>
         <p className="mt-2 text-sm font-semibold leading-6">{stripProviderCitationMarkers(path.servesWhy)}</p>
       </header>
-      <section data-path-band="possibility" className="method-path-band">
-        <h4 className="method-map-label">What could become possible</h4>
-        <p className="text-sm leading-6">{stripProviderCitationMarkers(path.possibility)}</p>
-      </section>
-      <section data-path-band="evidence" className="method-path-band">
-        <h4 className="method-map-label">Evidence it may fit</h4>
-        <p className="text-sm leading-6">{path.evidence.map(stripProviderCitationMarkers).join(' · ')}</p>
-      </section>
       <section data-path-band="unknown" className="method-path-band border-y-2 !border-black bg-ikigai-cream">
-        <h4 className="method-map-label !text-black">What do you need to learn?</h4>
+        <h4 className="method-map-label !text-black">What you need to learn</h4>
         <p className="font-display text-lg font-extrabold leading-6">{stripProviderCitationMarkers(path.centralUnknown)}</p>
       </section>
       <section data-path-band="project" className={`method-path-band border-y-2 !border-black ${style.project}`}>
         <h4 className="method-map-label !text-black">First project</h4>
         <p className="text-sm leading-6">{stripProviderCitationMarkers(path.projectPreview)}</p>
       </section>
-      <section data-path-band="practical-fit" className="method-path-band">
-        <h4 className="method-map-label">How it could fit your life</h4>
-        <p className="text-sm leading-6">{stripProviderCitationMarkers(path.practicalFit)}</p>
+      <section data-path-band="fit" className="method-path-band">
+        <h4 className="method-map-label">Why it may fit</h4>
+        <ul className="list-disc space-y-2 pl-5 text-sm leading-6">
+          {[...path.evidence, path.practicalFit].map((point, index) => (
+            <li key={index}>{stripProviderCitationMarkers(point)}</li>
+          ))}
+        </ul>
       </section>
       <footer data-path-band="action" className="method-path-band flex flex-wrap items-end gap-2">
         {onStart ? (

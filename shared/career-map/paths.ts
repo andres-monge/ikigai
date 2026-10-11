@@ -25,7 +25,8 @@ export const purposePathInputSchema = z.object({
   revision: revisionSchema,
   name: z.string().min(1).max(300),
   servesWhy: z.string().min(1).max(2_000),
-  possibility: z.string().min(1).max(2_000),
+  // Retained only for reading historical cards and preserving unchanged siblings.
+  possibility: z.string().min(1).max(2_000).optional(),
   evidence: z.array(z.string().min(1).max(2_000)).min(1),
   centralUnknown: z.string().min(1).max(2_000),
   projectPreview: z.string().min(1).max(2_000),

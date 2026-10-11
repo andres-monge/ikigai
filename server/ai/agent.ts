@@ -61,6 +61,8 @@ export interface MethodAgentTurnDiagnostics {
 
 export interface CreateMethodAgentOptions {
   model: LanguageModel;
+  /** Request-scoped instruction source for isolated local replay; app callers use the default. */
+  baseInstructions?: string;
   nativeWebSearchTool: ToolSet[string];
   storage: Pick<IStorage, 'loadCareerMap' | 'persistCareerMapOperation' | 'listAgentTurns'>;
   loader: MethodModuleLoader;
@@ -265,9 +267,9 @@ function pendingPresentationTurn(state: PreparedMethodState): string | undefined
   }
 }
 
-function requestInstructions(state: PreparedMethodState): string {
+function requestInstructions(state: PreparedMethodState, baseInstructions = BASE_METHOD_INSTRUCTIONS): string {
   return [
-    BASE_METHOD_INSTRUCTIONS,
+    baseInstructions,
     `Base instructions version: ${BASE_INSTRUCTIONS_VERSION}.`,
     `Active Method module: ${state.module.key}@${state.module.contentVersion} (${state.module.contentDigest}).`,
     state.module.instructions,
@@ -422,6 +424,7 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
   const prepared: { current?: PreparedMethodState } = {};
   const operationGuard = createMethodResponseOperationGuard();
   let savedPathSet = false;
+  let hadCompletedPathPresentation = false;
   const timing: MethodProvenanceTiming = {
     turnSequence: options.turnSequence,
     occurredAt: options.occurredAt,
@@ -481,6 +484,17 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
       throwIfAborted(requestAbortSignal);
       const state = await refreshMethodState(options.storage, options.loader, options.userId);
       prepared.current = state;
+      if (stepNumber === 0 && state.map.pathSets.length > 0) {
+        const priorTurns = await options.storage.listAgentTurns(options.userId);
+        hadCompletedPathPresentation = state.map.pathSets.some((set) => (
+          set.presentation.completed && priorTurns.some((turn) => (
+            turn.turnId === set.presentation.assistantTurnId
+            && turn.origin === 'agent-turn'
+            && turn.status === 'completed'
+            && turn.terminalResult?.kind === 'completed'
+          ))
+        ));
+      }
       operationGuard.reset();
       const activeTools = ['web_search', ...toolNamesForCheckpoint(state.checkpoint, options.turnSequence)];
       const priorMarkers = new Set(markers);
@@ -527,7 +541,12 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
             store: true,
             parallelToolCalls: false,
             reasoningEffort: 'low',
-            instructions: requestInstructions(state),
+            instructions: [
+              requestInstructions(state, options.baseInstructions),
+              ...(savedPathSet ? [
+                'Text in a step that calls application tools is hidden. Now that the saved paths are reflected in the refreshed state, write a nonempty final reply with the brief introduction or revision acknowledgment required by the active module. Do not repeat the card fields.',
+              ] : []),
+            ].join('\n\n'),
             ...(stepNumber === 0
               ? { contextManagement: [{ type: 'compaction', compactThreshold: REVELIO_COMPACT_THRESHOLD }] }
               : {}),
@@ -620,8 +639,9 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
               signal?.aborted,
             ) && modelVisibleText.trim().length > 0;
             canonicalPurposePathsOffer = canonicalPathOffer;
+            const canonicalFirstIntroduction = canonicalPathOffer && !hadCompletedPathPresentation;
             const finalVisibleText = truncatedPathOffer ? ''
-              : canonicalPathOffer ? PURPOSE_PATHS_OFFER_ENGLISH : modelVisibleText;
+              : canonicalFirstIntroduction ? PURPOSE_PATHS_OFFER_ENGLISH : modelVisibleText;
             // AI SDK aggregates missing provider usage as zeros in totalUsage.
             // Sum only per-step counts that the provider actually reported.
             const inputTokens = reportedTokenTotal(steps.map((step) => step.usage.inputTokens));
@@ -651,10 +671,10 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
               canonicalInserted = true;
             };
             for (const [index, { group, hasClientTool, step }] of displayGroups.entries()) {
-              const displayText = hasClientTool || canonicalPathOffer
+              const displayText = hasClientTool || canonicalFirstIntroduction
                 ? ''
                 : group.flatMap((part) => part.type === 'text-delta' ? [part.text] : []).join('');
-              const citations = hasClientTool || canonicalPathOffer || !step
+              const citations = hasClientTool || canonicalFirstIntroduction || !step
                 ? []
                 : extractNativeSearchDisplayCitations(step as NativeSearchStep);
               const normalizedCitations = citations.map((citation) => ({
@@ -667,8 +687,8 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
                 input.onCitation?.(citation);
               }
               for (const part of displayParts(group, hasClientTool, normalizedCitations)) {
-                if (canonicalPathOffer && (part.type === 'text-start' || part.type === 'text-delta' || part.type === 'text-end' || part.type === 'source')) continue;
-                if (canonicalPathOffer && !canonicalInserted && index === displayGroups.length - 1 && part.type === 'finish-step') emitCanonicalOffer();
+                if (canonicalFirstIntroduction && (part.type === 'text-start' || part.type === 'text-delta' || part.type === 'text-end' || part.type === 'source')) continue;
+                if (canonicalFirstIntroduction && !canonicalInserted && index === displayGroups.length - 1 && part.type === 'finish-step') emitCanonicalOffer();
                 if (part.type === 'text-delta') {
                   input.onTextDelta?.(part.text);
                   options.onLatencySafeText?.();
@@ -677,7 +697,7 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
               }
               visibleOffset += displayText.length;
             }
-            if (canonicalPathOffer && !canonicalInserted) emitCanonicalOffer();
+            if (canonicalFirstIntroduction && !canonicalInserted) emitCanonicalOffer();
             if (outerFinish) controller.enqueue(outerFinish);
             controller.close();
           } catch (error) {
