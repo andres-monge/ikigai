@@ -749,3 +749,10 @@ Braindump disposition map — where each theme cluster landed:
 | First customers: individuals vs schools, feedback loop | Beachhead decision (Key Decisions) plus Step 5 (R16) |
 | Outreach: Stanford, Gurley, friend-or-foe timing | R15 gate |
 | Craft: skills, structured outputs, deterministic visuals, evals | Method R41–R47; U2–U6; deterministic tests plus golden transcripts in the Verification Contract |
+
+
+### 2026-10-11: approved V6 production adoption checkpoint
+
+The founder approved adopting Paths V6 and accepted voice V4 after the retained HIGH creative and travel comparisons, with the health LOW pass retained. Experiment Step 3 integrates these instructions into the actual app, preserving newer approved Shared and Foundation audit work. Every provider request derives effort from the refreshed canonical checkpoint: `create-purpose-paths` uses HIGH; other modules use LOW, including same-turn transitions. The model remains `gpt-6.1-sol`. Replay-only fixed effort overrides are not user request controls.
+
+Step 3 integration is implemented; its verification and local delivery receipt is `docs/dogfood/2026-10-11-u7-v6-integration.md`. Step 4 attended actual-app dogfood remains pending: the founder must sign in, choose a current path, refine and accept its first project, and verify persistence after reload. This is an experiment adoption checkpoint, not acceptance of U7 or completion of the roadmap's pilot phase. U7 remains open and U8 remains gated. No additional paid synthetic matrix was run.

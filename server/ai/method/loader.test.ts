@@ -38,10 +38,10 @@ describe('repository-owned Method module loader', () => {
   it('permits valid independent versions only in explicitly rooted candidate bundles', async () => {
     const root = await copySkillsFixture();
     const file = path.join(root, 'create-purpose-paths/SKILL.md');
-    await writeFile(file, (await readFile(file, 'utf8')).replace(/version:.*\n/, 'version: 1.1.7\n'));
+    await writeFile(file, (await readFile(file, 'utf8')).replace(/version:.*\n/, 'version: 9.9.8\n'));
     await expect(createMethodModuleLoader({ skillsRoot: root })).rejects.toThrow(/content version does not match registry/i);
     const loader = await createMethodModuleLoader({ skillsRoot: root, versionPolicy: 'candidate' });
-    expect(loader.load(checkpoint('create-purpose-paths')).contentVersion).toBe('1.1.7');
+    expect(loader.load(checkpoint('create-purpose-paths')).contentVersion).toBe('9.9.8');
     await expect(createMethodModuleLoader({ versionPolicy: 'candidate' })).rejects.toThrow(/explicit skills root/i);
   });
 
@@ -58,7 +58,7 @@ describe('repository-owned Method module loader', () => {
     const bundle = loader.load(checkpoint('create-purpose-paths'));
     expect(bundle.key).toBe('create-purpose-paths');
     expect(bundle.name).toBe('create-purpose-paths');
-    expect(bundle.description).toMatch(/three distinct purpose paths/i);
+    expect(bundle.description).toBe('Create or revise Purpose Paths grounded in a confirmed North Star.');
     expect(bundle.contentVersion).toMatch(/^\d+\.\d+\.\d+$/);
     expect(bundle.contentDigest).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(bundle.instructions).toContain('# Create Purpose Paths');
@@ -153,8 +153,8 @@ describe('repository-owned Method module loader', () => {
   });
 
   it('keeps global voice, trust, state-order, and brevity rules in the small base instructions', () => {
-    expect(BASE_METHOD_INSTRUCTIONS.length).toBeLessThan(4_000);
-    expect(BASE_METHOD_INSTRUCTIONS).toMatch(/plain, concise, and concrete/i);
+    expect(BASE_METHOD_INSTRUCTIONS.length).toBeLessThan(5_000);
+    expect(BASE_METHOD_INSTRUCTIONS).toMatch(/relaxed, informal English, simple sentences, and natural contractions/i);
     expect(BASE_METHOD_INSTRUCTIONS).toMatch(/prestige/i);
     expect(BASE_METHOD_INSTRUCTIONS).toMatch(/untrusted data/i);
     expect(BASE_METHOD_INSTRUCTIONS).toMatch(/committed operation result/i);
@@ -165,9 +165,7 @@ describe('repository-owned Method module loader', () => {
     expect(BASE_METHOD_INSTRUCTIONS).toMatch(/hedges, quotations, conditionals, or ambiguity.*consequential decision/is);
     expect(BASE_METHOD_INSTRUCTIONS).toMatch(/pending decision.*respond to the explorer's actual message.*do not push.*choice/is);
     expect(BASE_METHOD_INSTRUCTIONS).toMatch(/bare ordinal.*exact current path/i);
-    expect(BASE_METHOD_INSTRUCTIONS).toMatch(/match the explorer's conversational register/i);
-    expect(BASE_METHOD_INSTRUCTIONS).toMatch(/recognition over praise/i);
-    expect(BASE_METHOD_INSTRUCTIONS).toMatch(/never add generic praise/i);
+    expect(BASE_METHOD_INSTRUCTIONS).toMatch(/Avoid flattering the user/i);
     expect(BASE_METHOD_INSTRUCTIONS).not.toMatch(/Why I Work|confirmed Why|Suggested Why/i);
     expect(BASE_METHOD_INSTRUCTIONS).not.toMatch(/mirror the language|explicit language change|faithful concise translation/i);
     expect(PURPOSE_PATHS_OFFER_ENGLISH).toBe('Here are three possible paths to pursue your North Star. Each begins with a small, low-commitment project. Think of it like a date. The aim is to learn whether you want to keep going, not to make the project succeed.');
@@ -213,25 +211,19 @@ describe('repository-owned Method module loader', () => {
     expect(foundation).toMatch(/do not.*same assistant turn.*confirm-why/is);
     expect(foundation).not.toMatch(/Why I Work|confirmed Why|Suggested Why/i);
 
-    expect(paths).toMatch(/exactly three/i);
-    expect(paths).toMatch(/equal weight/i);
-    expect(paths).toMatch(/never rank/i);
-    expect(paths).toMatch(/replace only the requested path/i);
-    expect(paths).toMatch(/new interest.*different contribution.*North Star.*reflection/is);
-    expect(paths).toMatch(/one focused question.*only when.*changes the kind of path/is);
-    expect(paths).toMatch(/small project.*inside the path.*no prior test/i);
-    expect(paths).toMatch(/three.*distinct.*learning questions/is);
-    expect(paths).toMatch(/combine.*complete three-path set/i);
-    expect(paths).toMatch(/explicitly asks for a recommendation/i);
-    expect(paths).toMatch(/bare ordinal.*exact current path/i);
-    expect(paths).toContain(PURPOSE_PATHS_OFFER_ENGLISH);
-    expect(paths).toMatch(/only.*framing.*no.*footer invitation/is);
-    expect(paths).toMatch(/what the explorer needs to learn.*interest.*energy.*willingness to continue/is);
-    expect(paths).toMatch(/what could become possible.*concrete, excitingly ambitious.*North Star.*feel energized.*without promising success.*distinct from.*small first project/is);
-    expect(paths).toMatch(/stated time, money, access.*do not default.*enterprise-scale compliance/is);
-    expect(paths).toMatch(/citation markers.*out of every card field/is);
-    expect(paths).toMatch(/do not repeat.*seven.*fields/is);
-    expect(paths).not.toMatch(/350 words|80 words|confirmed Why|same Why/i);
+    expect(paths).toMatch(/exactly three distinct paths/i);
+    expect(paths).toMatch(/equal weight.*Do not rank, score, preselect/is);
+    expect(paths).toMatch(/Reuse an existing answer rather than asking again/i);
+    expect(paths).toMatch(/central work.*Different projects do not establish distinctness/is);
+    expect(paths).toMatch(/For a replacement, change only the requested path/i);
+    expect(paths).toMatch(/When combining paths, preserve the uncombined sibling.*distinct third direction/is);
+    expect(paths).toMatch(/explicit choice.*exact.*current option.*contextual ordinal/is);
+    expect(paths).toMatch(/First project.*first version of something the.*user wants/is);
+    expect(paths).toMatch(/Why it may fit.*exactly four unlabeled, one-sentence bullets.*enjoyment or interest.*meaningful contribution.*relevant ability or experience.*practical fit/is);
+    expect(paths).toMatch(/first three in.*`evidence` and the fourth in `practicalFit`/is);
+    expect(paths).toMatch(/citations and source references in conversation, outside card fields/i);
+    expect(paths).toMatch(/cards application-owned.*Avoid repeating card fields/is);
+    expect(paths).not.toMatch(/What could become possible|350 words|80 words|confirmed Why|same Why/i);
 
     expect(project).toMatch(/exactly one first Path Project/i);
     expect(project).toMatch(/one replacement/i);

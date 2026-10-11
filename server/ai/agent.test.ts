@@ -988,7 +988,7 @@ describe('amended Method agent core loop', () => {
     expect(JSON.stringify(storage.map)).not.toMatch(/"(?:rank|score|recommendation|preselected)"/);
     expect(statuses).not.toHaveBeenCalled();
     expect(String(model.doStreamCalls[0]?.providerOptions?.openai?.instructions))
-      .toContain('unless the explorer explicitly asks for a recommendation');
+      .toMatch(/Do not rank, score, preselect, or\s+recommend one unless the user asks/);
   });
 
   it('emits the exact English R22 framing once, persists it through refresh, and requires later acceptance', async () => {

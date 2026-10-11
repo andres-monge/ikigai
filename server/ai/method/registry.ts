@@ -15,7 +15,7 @@ export const METHOD_MODULE_REGISTRY = {
   'create-purpose-paths': {
     key: 'create-purpose-paths',
     directory: 'create-purpose-paths',
-    contentVersion: '1.1.6',
+    contentVersion: '1.1.7',
   },
   'design-path-project': {
     key: 'design-path-project',

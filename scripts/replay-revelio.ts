@@ -121,7 +121,7 @@ export interface ReplayCase {
 
 
 
-export async function runReplay(options: { casePath: string; instructionsPath: string; outputPath: string; envPath: string; captureContinuation?: boolean; deadlineMs?: number; reasoningEffort?: 'high' }) {
+export async function runReplay(options: { casePath: string; instructionsPath: string; outputPath: string; envPath: string; captureContinuation?: boolean; deadlineMs?: number; reasoningEffort?: 'low' | 'high' }) {
   const reasoningEffort = options.reasoningEffort ?? 'low';
   const replayStarted = performance.now();
   const casePath = await privateArtifactPath(options.casePath);
@@ -201,7 +201,7 @@ export async function runReplay(options: { casePath: string; instructionsPath: s
     model: openai.responses(REVELIO_AGENT_MODEL), nativeWebSearchTool: openai.tools.webSearch(),
     storage, loader, userId: turn.userId, conversationId: conversation.id, turn,
     turnSequence: nextMethodTurnSequence(fixture.initialMap), occurredAt: new Date().toISOString(),
-    currentMessage: fixture.currentMessage, baseInstructions, replayReasoningEffort: options.reasoningEffort,
+    currentMessage: fixture.currentMessage, baseInstructions, replayReasoningEffort: reasoningEffort,
     abortSignal: deadlineSignal,
     onPreparedStep: (trace) => traces.push(trace), onTurnDiagnostics: (value) => { diagnostics = value; },
     onError: (error) => errors.push(error instanceof Error ? error.name : 'UnknownError'),
