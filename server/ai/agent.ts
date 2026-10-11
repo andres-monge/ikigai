@@ -63,6 +63,8 @@ export interface CreateMethodAgentOptions {
   model: LanguageModel;
   /** Request-scoped instruction source for isolated local replay; app callers use the default. */
   baseInstructions?: string;
+  /** Explicit isolated replay override; main application callers keep LOW. */
+  replayReasoningEffort?: 'high';
   nativeWebSearchTool: ToolSet[string];
   storage: Pick<IStorage, 'loadCareerMap' | 'persistCareerMapOperation' | 'listAgentTurns'>;
   loader: MethodModuleLoader;
@@ -540,7 +542,7 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
             conversation: options.conversationId,
             store: true,
             parallelToolCalls: false,
-            reasoningEffort: 'low',
+            reasoningEffort: options.replayReasoningEffort ?? 'low',
             instructions: [
               requestInstructions(state, options.baseInstructions),
               ...(savedPathSet ? [

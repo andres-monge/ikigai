@@ -121,7 +121,9 @@ export interface ReplayCase {
 
 
 
-export async function runReplay(options: { casePath: string; instructionsPath: string; outputPath: string; envPath: string; captureContinuation?: boolean; deadlineMs?: number }) {
+export async function runReplay(options: { casePath: string; instructionsPath: string; outputPath: string; envPath: string; captureContinuation?: boolean; deadlineMs?: number; reasoningEffort?: 'high' }) {
+  const reasoningEffort = options.reasoningEffort ?? 'low';
+  const replayStarted = performance.now();
   const casePath = await privateArtifactPath(options.casePath);
   const instructionsPath = await privateArtifactPath(options.instructionsPath);
   const outputPath = await privateArtifactPath(options.outputPath);
@@ -140,6 +142,7 @@ export async function runReplay(options: { casePath: string; instructionsPath: s
   const loader = await createMethodModuleLoader({ skillsRoot: path.join(outputPath, 'instructions/skills'), versionPolicy: 'candidate' });
   const traces: MethodPreparedStepTrace[] = [];
   const providerRequests: Array<Record<string, unknown>> = [];
+  const modelCalls: Array<{ requestIndex: number; startedAt: string; durationMs?: number; status?: number }> = [];
   let diagnostics: unknown;
   const errors: string[] = [];
   const transport: typeof fetch = async (input, init) => {
@@ -147,7 +150,18 @@ export async function runReplay(options: { casePath: string; instructionsPath: s
     if (new URL(request.url).pathname === '/v1/responses') {
       const payload = await request.clone().json();
       // Full exact request is deliberately retained only in the private result directory.
+      if (payload.reasoning?.effort !== reasoningEffort) throw new Error('Outgoing replay effort differs from requested effort.');
       providerRequests.push(payload);
+      const call = { requestIndex: providerRequests.length - 1, startedAt: new Date().toISOString() } as typeof modelCalls[number];
+      modelCalls.push(call);
+      const started = performance.now();
+      const response = await fetch(request);
+      call.status = response.status;
+      if (!response.body) { call.durationMs = performance.now() - started; return response; }
+      return new Response(response.body.pipeThrough(new TransformStream({
+        transform(chunk, controller) { controller.enqueue(chunk); },
+        flush() { call.durationMs = performance.now() - started; },
+      })), { status: response.status, statusText: response.statusText, headers: response.headers });
     }
     return fetch(request);
   };
@@ -187,7 +201,7 @@ export async function runReplay(options: { casePath: string; instructionsPath: s
     model: openai.responses(REVELIO_AGENT_MODEL), nativeWebSearchTool: openai.tools.webSearch(),
     storage, loader, userId: turn.userId, conversationId: conversation.id, turn,
     turnSequence: nextMethodTurnSequence(fixture.initialMap), occurredAt: new Date().toISOString(),
-    currentMessage: fixture.currentMessage, baseInstructions,
+    currentMessage: fixture.currentMessage, baseInstructions, replayReasoningEffort: options.reasoningEffort,
     abortSignal: deadlineSignal,
     onPreparedStep: (trace) => traces.push(trace), onTurnDiagnostics: (value) => { diagnostics = value; },
     onError: (error) => errors.push(error instanceof Error ? error.name : 'UnknownError'),
@@ -213,7 +227,7 @@ export async function runReplay(options: { casePath: string; instructionsPath: s
 
   const report = {
     runId, label: fixture.label, sourceDigest: digest(sourceText), model: REVELIO_AGENT_MODEL,
-    reasoningEffort: 'low', baseVersion: BASE_INSTRUCTIONS_VERSION, baseDigest: digest(baseInstructions),
+    reasoningEffort, modelCalls, replayThroughGenerationMs: performance.now() - replayStarted, baseVersion: BASE_INSTRUCTIONS_VERSION, baseDigest: digest(baseInstructions),
     modules: Object.fromEntries(loader.registeredKeys.map((key) => { const module = loader.load({ module: key }); return [key, { version: module.contentVersion, digest: module.contentDigest }]; })),
     provenance: fixture.provenance, traces, diagnostics, errors,
     historicalReply: fixture.historicalReply, reply, providerVisibleReply: result.providerVisibleText(),
@@ -225,7 +239,7 @@ export async function runReplay(options: { casePath: string; instructionsPath: s
   await writeFile(path.join(outputPath, 'result.json'), JSON.stringify(report, null, 2), { mode: 0o600 });
   await writeFile(path.join(outputPath, 'final-map.json'), JSON.stringify(finalMap, null, 2), { mode: 0o600 });
   await writeFile(path.join(outputPath, 'provider-requests.json'), JSON.stringify(providerRequests, null, 2), { mode: 0o600 });
-  await writeFile(path.join(outputPath, 'comparison.md'), `# ${fixture.label}\n\nHistorical reply:\n\n${fixture.historicalReply}\n\nCandidate (${REVELIO_AGENT_MODEL}, low effort; frozen current instructions):\n\n${reply}\n`, { mode: 0o600 });
+  await writeFile(path.join(outputPath, 'comparison.md'), `# ${fixture.label}\n\nHistorical reply:\n\n${fixture.historicalReply}\n\nCandidate (${REVELIO_AGENT_MODEL}, ${reasoningEffort} effort; frozen current instructions):\n\n${reply}\n`, { mode: 0o600 });
   if (options.captureContinuation) {
     deadlineSignal.throwIfAborted();
     // Bind the completed branch through the same provider projection used by the app.
