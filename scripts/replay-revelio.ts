@@ -20,6 +20,20 @@ const digest = (value: string) => createHash('sha256').update(value).digest('hex
 // One local comparison may include several model steps and history pages.
 const REPLAY_DEADLINE_MS = 15 * 60 * 1000;
 
+export function replayPrefixPreserved(seeded: Record<string, unknown>[], prior: Record<string, unknown>[]) {
+  const contentOnly = (item: Record<string, unknown>) => {
+    const { id: _id, status: _status, ...content } = item;
+    // Conversations supplies these empty defaults when synthetic assistant text
+    // omits them. Keep nonempty values and every other field in the comparison.
+    if (content.type === 'message' && Array.isArray(content.content)) {
+      content.content = content.content.map(part => part?.type === 'output_text'
+        ? { annotations: [], logprobs: [], ...part } : part);
+    }
+    return content;
+  };
+  return isDeepStrictEqual(seeded.map(contentOnly), prior.map(contentOnly));
+}
+
 export function createReplayStorage(source: CareerMap, priorTurns: AgentTurnRecord[], turn: ReplayTurn) {
   let map = careerMapSchema.parse(structuredClone(source));
   const operations: Array<{ operation: PersistInput['operation']; status: string }> = [];
@@ -160,8 +174,7 @@ export async function runReplay(options: { casePath: string; instructionsPath: s
     seededItems.push(...result.data);
   }
   await writeFile(path.join(outputPath, 'seeded-items.json'), JSON.stringify(seededItems, null, 2), { mode: 0o600 });
-  const contentOnly = (item: Record<string, unknown>) => { const { id: _id, status: _status, ...content } = item; return content; };
-  const prefixPreserved = isDeepStrictEqual(seededItems.map(contentOnly), fixture.priorItems.map(contentOnly));
+  const prefixPreserved = replayPrefixPreserved(seededItems, fixture.priorItems);
   if (options.captureContinuation && seededItems.some((item, index) => fixture.priorItems[index].id && item.id !== fixture.priorItems[index].id)) throw new Error('Seeded provider identities changed; cannot safely continue.');
   if (!prefixPreserved) throw new Error('Provider did not preserve the exact seeded prefix.');
   const turn: ReplayTurn = {
