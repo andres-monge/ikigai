@@ -1,0 +1,55 @@
+{
+  "name": "Paths V6",
+  "candidateId": "candidate_88ecd5f8-ce0f-4841-871c-15bbd2ebe86f",
+  "candidateVersion": "9b33af96979afede9156abe7ff91d4ff07a00b92a7e075527aaddf6306eef5dd",
+  "sourceJobId": "job_9f2701c7-bf6a-44d6-802c-5b8a6e1f5d6f",
+  "sourceParentJobId": "job_c718f2a2-74d3-4bb1-9279-f6c205097fa8",
+  "model": "gpt-6.1-sol",
+  "reasoningEffort": "low",
+  "sha256": {
+    "accepted-voice.txt": "1b4bc345c2ed94d9352ff7921f6cc5595d7e5b82d3b80c1c0d4526b177f33d0f",
+    "instructions/base.txt": "8e16185bcd86d4d2efc570d88384366a41b33caecb5f143ee4d75cfbc5a8ab05",
+    "instructions/skills/create-purpose-paths/SKILL.md": "6ace85a8705b9a9cfdb4d3a5e09426a1347e1626465fbe88d38b9ca999d36c22",
+    "instructions/skills/design-path-project/SKILL.md": "d8f4fb853f47fc8018efe3f74126f209273bd4a2284afcdac9c7281a0382003e",
+    "instructions/skills/form-foundation/SKILL.md": "774ab7859afe43ddbd129bf85ca405f3ef0c81d5f28ce753770794e950de3f46",
+    "shared-rules.txt": "54a5aa5c3dc1d1b1467b6855eb4e0bc32ba1bdacb91b8f8f0ab848cec958a423"
+  },
+  "productionAdoption": "pending founder review; this bundle is not loaded by the production application",
+  "provenance": "Exact instructions copied from the successful founder branch. No conversation, map, cards or feedback included.",
+  "base": {
+    "version": "1.1.7",
+    "digest": "8e16185bcd86d4d2efc570d88384366a41b33caecb5f143ee4d75cfbc5a8ab05"
+  },
+  "modules": {
+    "form-foundation": {
+      "version": "1.1.12",
+      "digest": "sha256:774ab7859afe43ddbd129bf85ca405f3ef0c81d5f28ce753770794e950de3f46"
+    },
+    "create-purpose-paths": {
+      "version": "1.1.7",
+      "digest": "sha256:6ace85a8705b9a9cfdb4d3a5e09426a1347e1626465fbe88d38b9ca999d36c22"
+    },
+    "design-path-project": {
+      "version": "1.2.1",
+      "digest": "sha256:d8f4fb853f47fc8018efe3f74126f209273bd4a2284afcdac9c7281a0382003e"
+    }
+  },
+  "providerSettings": {
+    "model": "gpt-6.1-sol",
+    "max_output_tokens": 25000,
+    "parallel_tool_calls": false,
+    "store": true,
+    "context_management": [
+      {
+        "type": "compaction",
+        "compact_threshold": 200000
+      }
+    ],
+    "reasoning": {
+      "effort": "low",
+      "summary": "detailed"
+    },
+    "tool_choice": "auto",
+    "stream": true
+  }
+}
