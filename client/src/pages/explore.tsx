@@ -16,6 +16,7 @@ import {
 import { SafeMessage } from '@/components/explore/safe-message';
 import { MethodMap } from '@/components/explore/method-map';
 import { PurposePathCard } from '@/components/explore/purpose-path-card';
+import { ChatProjectBrief } from '@/components/explore/project-brief';
 import { ActivityIndicator } from '@/components/explore/activity-indicator';
 import { createClientLatencyTrace, type ClientLatencyTrace } from './explore-latency';
 
@@ -124,6 +125,30 @@ export function attachPurposePathSets(
       if (seen.has(key) || set.presentation.assistantTurnId !== message.turn.turnId) continue;
       seen.add(key);
       attached.set(message.id, [...(attached.get(message.id) ?? []), set]);
+    }
+  }
+  return attached;
+}
+
+export function attachProjectBriefs(
+  messages: readonly NormalizedHistoryMessage[],
+  projects: readonly CareerMap['projects'][number][],
+): Map<string, CareerMap['projects'][number][]> {
+  const attached = new Map<string, CareerMap['projects'][number][]>();
+  const seen = new Set<string>();
+  for (const message of messages) {
+    if (message.role !== 'assistant' || !message.isFinalAssistantItem || message.turn?.status !== 'completed') continue;
+    for (const project of projects) {
+      const framing = project.acceptanceFraming;
+      const delivery = framing?.presentation;
+      if (project.briefFormat !== 'simple-v1' || framing?.framingFormat !== 'natural-v1'
+        || framing.status !== 'delivered' || !delivery?.completed
+        || delivery.assistantTurnId !== framing.assistantTurnId
+        || delivery.assistantTurnId !== message.turn.turnId) continue;
+      const key = `${project.id}@${project.revision}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      attached.set(message.id, [...(attached.get(message.id) ?? []), project]);
     }
   }
   return attached;
@@ -825,6 +850,10 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
     () => attachPurposePathSets(messages, map?.pathSets ?? []),
     [messages, map?.pathSets],
   );
+  const projectBriefAttachments = useMemo(
+    () => attachProjectBriefs(messages, map?.projects ?? []),
+    [messages, map?.projects],
+  );
   const checkpoint = map ? deriveMethodCheckpoint(map) : null;
   const currentSuggestedSet = map?.pathSets.findLast((set) => set.status === 'suggested');
   const directOperationType = checkpoint?.pendingDecision?.kind === 'path-selection'
@@ -981,6 +1010,9 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
               ) : null}
               {displayedMessages.map((message) => (
                 <div key={message.id} className="w-full space-y-5">
+                  {(projectBriefAttachments.get(message.id) ?? []).map((project) => (
+                    <ChatProjectBrief key={`${project.id}@${project.revision}`} project={project} />
+                  ))}
                   <SafeMessage message={message} />
                   {(pathSetAttachments.get(message.id) ?? []).map((set) => {
                     const startAvailable = canStartFromSet(set, message);

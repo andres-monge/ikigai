@@ -2,10 +2,11 @@
 
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { applyCareerMapOperation, createCareerMap, type CareerMap } from '@shared/career-map';
+import { applyCareerMapOperation, createCareerMap, type CareerMap, type CareerMapOperation } from '@shared/career-map';
 import type { NormalizedHistoryMessage } from '@/components/explore/explore-state';
+import { ChatProjectBrief } from '@/components/explore/project-brief';
 import { _resetBrowserSupportCache } from '@/hooks/use-speech-to-text';
-import { attachPurposePathSets, Explore } from './explore';
+import { attachProjectBriefs, attachPurposePathSets, Explore } from './explore';
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -101,6 +102,37 @@ const historyMessages = (): NormalizedHistoryMessage[] => [
   { id: 'assistant-final', role: 'assistant', turn: { turnId: 'turn-paths', status: 'completed' }, isFinalAssistantItem: true, parts: [{ type: 'text', text: 'Compare them below.' }] },
 ];
 
+const projectSupport = 'We can work out the next steps together. Tell me what you would change.';
+function deliveredProjectMap(): CareerMap {
+  let map = suggestedPathsMap();
+  const commit = (operation: CareerMapOperation) => {
+    const result = applyCareerMapOperation(map, operation);
+    expect(result.status).toBe('committed');
+    if (result.status !== 'committed') throw new Error('Project fixture did not commit');
+    map = result.map;
+  };
+  const projectPresentation = { ...presentation, assistantTurnId: 'turn-proposal', turnSequence: 4 };
+  const deliveryPresentation = { ...presentation, assistantTurnId: 'turn-delivery', turnSequence: 5 };
+  commit({ type: 'select-purpose-path', sourceId: 'select', expectedRevision: map.revision, occurredAt: presentation.presentedAt,
+    payload: { setId: 'set-1', setRevision: 1, pathId: 'path-1', pathRevision: 1,
+      action: { kind: 'user-message', actionId: 'select', turnId: 'turn-selection', turnSequence: 4, occurredAt: presentation.presentedAt } } });
+  commit({ type: 'propose-first-project', sourceId: 'proposal', expectedRevision: map.revision, occurredAt: presentation.presentedAt,
+    payload: { project: { id: 'simple-project', revision: 1, briefFormat: 'simple-v1', relationship: 'linked',
+      title: 'Make one useful guide', learningGoal: 'Notice whether explaining one difficult idea gives you energy.',
+      firstVersion: 'One rough illustrated page; stop after one reader tries it.', firstStep: 'Open a blank document and sketch one confusing moment.' }, presentation: projectPresentation } });
+  commit({ type: 'present-first-project-framing', sourceId: 'framing', expectedRevision: map.revision, occurredAt: presentation.presentedAt,
+    payload: { projectId: 'simple-project', projectRevision: 1, framingFormat: 'natural-v1', framingText: projectSupport,
+      locale: 'en', moduleVersion: '1.3.0', presentation: deliveryPresentation } });
+  commit({ type: 'deliver-first-project-framing', sourceId: 'delivery', expectedRevision: map.revision, occurredAt: presentation.presentedAt,
+    payload: { projectId: 'simple-project', projectRevision: 1, assistantText: projectSupport, presentation: deliveryPresentation } });
+  return map;
+}
+
+function projectMessage(id = 'project-final', turnId = 'turn-delivery'): NormalizedHistoryMessage {
+  return { id, role: 'assistant', turn: { turnId, status: 'completed' }, isFinalAssistantItem: true,
+    parts: [{ type: 'text', text: projectSupport }] };
+}
+
 function props() {
   return { userEmail: 'explorer@example.com', isSigningOut: false, signOutError: null, onSignOut: vi.fn() };
 }
@@ -173,6 +205,93 @@ describe('Explore U6 conversation-first workspace', () => {
     _resetBrowserSupportCache();
     vi.useRealTimers();
     vi.unstubAllGlobals();
+  });
+
+  it('shows the saved simple brief before support-only final prose in the same Chat message', async () => {
+    const map = deliveredProjectMap();
+    vi.mocked(fetch).mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/history')) return jsonResponse({ status: 'ready', messages: [projectMessage()] });
+      if (url.includes('/workspace')) return jsonResponse({ status: 'ready', map });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    render(<Explore {...props()} />);
+    const chat = screen.getByRole('tabpanel', { name: 'Chat' });
+    const title = await within(chat).findByRole('heading', { name: map.projects[0].title });
+    const brief = title.closest('[data-project-brief]')!;
+    expect([...brief.querySelectorAll('h3')].map((heading) => heading.textContent)).toEqual([
+      "What you'll learn", "What you'll make", 'Suggested starting point',
+    ]);
+    for (const value of [map.projects[0].title, map.projects[0].learningGoal, map.projects[0].firstVersion, map.projects[0].firstStep]) {
+      expect(within(chat).getAllByText(value)).toHaveLength(1);
+    }
+    const support = within(chat).getByText(projectSupport);
+    expect(brief.parentElement?.contains(support)).toBe(true);
+    expect(brief.parentElement?.querySelectorAll('article')).toHaveLength(1);
+    expect(brief.compareDocumentPosition(support) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(brief.querySelector('button')).toBeNull();
+    expect(brief.textContent).not.toMatch(/Agreement:|Work:|delivered|simple-v1/);
+  });
+
+  it('attaches each historical brief once to its exact framing delivery final item', () => {
+    let map = deliveredProjectMap();
+    const replacementPresentation = { ...presentation, assistantTurnId: 'turn-replacement', turnSequence: 6 };
+    const commit = (operation: CareerMapOperation) => {
+      const result = applyCareerMapOperation(map, operation);
+      expect(result.status).toBe('committed');
+      if (result.status !== 'committed') throw new Error('Replacement fixture did not commit');
+      map = result.map;
+    };
+    commit({ type: 'replace-project-proposal', sourceId: 'replace', expectedRevision: map.revision, occurredAt: presentation.presentedAt,
+      payload: { projectId: 'simple-project', projectRevision: 1,
+        replacement: { id: 'simple-project', revision: 2, briefFormat: 'simple-v1', title: 'A revised guide',
+          learningGoal: 'Notice whether illustrating the idea feels energizing.', firstVersion: 'One illustrated page.', firstStep: 'Draw one example.' },
+        presentation: replacementPresentation } });
+    commit({ type: 'present-first-project-framing', sourceId: 'replacement-framing', expectedRevision: map.revision, occurredAt: presentation.presentedAt,
+      payload: { projectId: 'simple-project', projectRevision: 2, locale: 'en', framingFormat: 'natural-v1', framingText: projectSupport,
+        moduleVersion: '1.3.0', presentation: replacementPresentation } });
+    commit({ type: 'deliver-first-project-framing', sourceId: 'replacement-delivery', expectedRevision: map.revision, occurredAt: presentation.presentedAt,
+      payload: { projectId: 'simple-project', projectRevision: 2, assistantText: projectSupport, presentation: replacementPresentation } });
+    const [original, replacement] = map.projects;
+    expect(original.agreementStatus).toBe('superseded');
+    const messages = [projectMessage('proposal', 'turn-proposal'), { ...projectMessage('nonfinal'), isFinalAssistantItem: undefined },
+      projectMessage(), projectMessage('duplicate'), projectMessage('replacement-final', 'turn-replacement')];
+    const attached = attachProjectBriefs(messages, [original, replacement, structuredClone(original)]);
+    expect([...attached.keys()]).toEqual(['project-final', 'replacement-final']);
+    expect(attached.get('project-final')).toEqual([original]);
+    expect(attached.get('replacement-final')).toEqual([replacement]);
+    expect(attachProjectBriefs([...messages, ...messages], map.projects)).toEqual(attached);
+  });
+
+  it('does not attach pending, incomplete, legacy or unhosted project briefs', () => {
+    const project = deliveredProjectMap().projects[0];
+    const variants = [
+      { ...project, briefFormat: undefined },
+      { ...project, acceptanceFraming: undefined },
+      { ...project, acceptanceFraming: { ...project.acceptanceFraming!, status: 'pending' as const } },
+      { ...project, acceptanceFraming: { ...project.acceptanceFraming!, framingFormat: undefined } },
+      { ...project, acceptanceFraming: { ...project.acceptanceFraming!, presentation: undefined } },
+      { ...project, acceptanceFraming: { ...project.acceptanceFraming!,
+        presentation: { ...project.acceptanceFraming!.presentation!, assistantTurnId: 'wrong-delivery' } } },
+    ];
+    for (const variant of variants) expect(attachProjectBriefs([projectMessage()], [variant]).size).toBe(0);
+    for (const status of ['failed', 'cancelled'] as const) {
+      expect(attachProjectBriefs([{ ...projectMessage(), turn: { turnId: 'turn-delivery', status } }], [project]).size).toBe(0);
+    }
+    expect(attachProjectBriefs([{ ...projectMessage(), turn: undefined, isFinalAssistantItem: undefined }], [project]).size).toBe(0);
+    expect(attachProjectBriefs([projectMessage('other', 'another-turn')], [project]).size).toBe(0);
+    expect(attachProjectBriefs([], [project]).size).toBe(0);
+  });
+
+  it('renders unrelated project fields as text without markup, status copy or actions', () => {
+    const project = { ...deliveredProjectMap().projects[0], relationship: 'unrelated' as const,
+      title: '<script>Title</script>', firstStep: '<img src=x onerror=alert(1)>Open a document.' };
+    const { container } = render(<ChatProjectBrief project={project} />);
+    expect(screen.getByRole('heading', { name: project.title })).toBeTruthy();
+    expect(screen.getByText(project.firstStep)).toBeTruthy();
+    expect(screen.getByText('Intentionally unrelated to your current Purpose Path.')).toBeTruthy();
+    expect(container.querySelector('script, img, a, button')).toBeNull();
+    expect(container.textContent).not.toMatch(/Agreement:|Work:|delivered|simple-v1/);
   });
 
   it('joins canonical sets only to the exact final assistant item and deduplicates set revisions', () => {

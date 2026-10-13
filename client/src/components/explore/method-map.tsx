@@ -9,6 +9,7 @@ import {
   type MethodModule,
 } from '@shared/career-map';
 import { humanizeStatus, PurposePathCard } from './purpose-path-card';
+import { projectBriefSections } from './project-brief';
 
 interface MethodMapProps {
   map: CareerMap;
@@ -64,9 +65,9 @@ function ProjectCard({
         <p className="mt-3 text-sm leading-6">Intentionally unrelated to your current Purpose Path.</p>
       ) : null}
       <dl className="mt-4 space-y-4 text-sm leading-6">
-        <div><dt className="method-map-label">What you'll learn</dt><dd className="mt-1 whitespace-pre-wrap">{project.learningGoal}</dd></div>
-        <div><dt className="method-map-label">What you'll make</dt><dd className="mt-1 whitespace-pre-wrap">{project.firstVersion}</dd></div>
-        <div><dt className="method-map-label">Suggested starting point</dt><dd className="mt-1 whitespace-pre-wrap">{project.firstStep}</dd></div>
+        {projectBriefSections(project).map(({ label, text }) => (
+          <div key={label}><dt className="method-map-label">{label}</dt><dd className="mt-1 whitespace-pre-wrap">{text}</dd></div>
+        ))}
       </dl>
       {!project.briefFormat ? (
         <details className="mt-4 border-t border-slate-300 pt-3">
