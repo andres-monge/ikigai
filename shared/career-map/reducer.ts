@@ -14,10 +14,10 @@ import {
   type CareerMapOperationType,
 } from './operations';
 import type { PurposePath, PurposePathInput, PurposePathSet } from './paths';
-import type { ProjectOptionSet } from './projects';
+import { pathProjectInputSchema, type PathProjectInput, type ProjectOptionSet } from './projects';
 import { isExactFirstProjectFramingDelivery } from './authority';
 import type { SideDoorInput, SideDoorSet } from './side-doors';
-import { selectActivePurposePath, selectCurrentPathSelectionSourceId, selectProjectDecisionBasis, hasCompletedLearningLoop, isActiveBasisReview, selectEarliestActiveReview, selectLatestAcceptedProject } from './selector';
+import { selectActivePurposePath, selectCurrentProjectLearning, selectCurrentPathSelectionSourceId, selectProjectDecisionBasis, hasCompletedLearningLoop, isActiveBasisReview, selectEarliestActiveReview, selectLatestAcceptedProject } from './selector';
 
 type RejectionCode =
   | 'invalid-map'
@@ -85,6 +85,11 @@ function currentPathSet(map: CareerMap) {
   return map.pathSets.findLast((set) => set.status === 'active');
 }
 
+function parkPendingProjects(map: CareerMap): void {
+  for (const project of map.projects) if (project.agreementStatus === 'suggested') project.agreementStatus = 'parked';
+  for (const set of map.projectOptionSets) if (set.status === 'suggested') set.status = 'superseded';
+}
+
 function latestNextMove(map: CareerMap) {
   return map.nextMoves.at(-1);
 }
@@ -119,14 +124,20 @@ function assertPathRevisionConsistency(map: CareerMap, paths: PurposePathInput[]
   }
 }
 
-function assertProjectRevisionConsistency(map: CareerMap, candidates: CareerMap['projectOptionSets'][number]['projects'][number][] | Array<{ id:string; revision:number }>): void {
+const projectBriefKeys = Object.keys(pathProjectInputSchema.shape) as Array<keyof PathProjectInput>;
+
+function projectBriefContent(project: PathProjectInput) {
+  return Object.fromEntries(projectBriefKeys
+    .filter((key) => project[key] !== undefined)
+    .map((key) => [key, project[key]]));
+}
+
+function assertProjectRevisionConsistency(map: CareerMap, candidates: PathProjectInput[]): void {
   const inputs = [...map.projects, ...map.projectOptionSets.flatMap((set) => set.projects)];
   for (const candidate of candidates) {
     const existing = inputs.find((project) => sameRevision(project, candidate.id, candidate.revision));
     if (!existing) continue;
-    const keys = ['id','revision','briefFormat','relationship','title','learningGoal','firstVersion','firstStep','outcome','audience','whyWanted','decisionQuestion','evidenceCue'];
-    const content = (project: unknown) => Object.fromEntries(keys.filter((key) => (project as Record<string,unknown>)[key] !== undefined).map((key) => [key,(project as Record<string,unknown>)[key]]));
-    assert(canonicalJson(content(existing)) === canonicalJson(content(candidate)), 'Project content changes require a new identity or revision.', 'revision-conflict');
+    assert(canonicalJson(projectBriefContent(existing)) === canonicalJson(projectBriefContent(candidate)), 'Project content changes require a new identity or revision.', 'revision-conflict');
   }
 }
 
@@ -319,7 +330,11 @@ function nextProjectNumber(map: CareerMap): number {
 function applyDomainOperation(map: CareerMap, operation: CareerMapOperation): CareerMapOperationEffects | undefined {
   ensureNoPendingReview(map, operation.type);
   if ('project' in operation.payload) assertProjectRevisionConsistency(map, [operation.payload.project]);
-  if ('replacement' in operation.payload && ['replace-project-proposal','propose-project-revision','replace-follow-on-project'].includes(operation.type)) assertProjectRevisionConsistency(map, [operation.payload.replacement]);
+  if ('replacement' in operation.payload && (
+    operation.type === 'replace-project-proposal'
+    || operation.type === 'propose-project-revision'
+    || operation.type === 'replace-follow-on-project'
+  )) assertProjectRevisionConsistency(map, [operation.payload.replacement]);
   if ('projects' in operation.payload) assertProjectRevisionConsistency(map, operation.payload.projects);
 
   switch (operation.type) {
@@ -479,8 +494,7 @@ function applyDomainOperation(map: CareerMap, operation: CareerMapOperation): Ca
       set.paths = set.paths.map((path) => ({ ...path, selection: path.id === selected.id && path.revision === selected.revision ? 'active' : 'parked' })) as PurposePathSet['paths'];
       if (priorSet && priorSet !== set) priorSet.status = 'superseded';
       if (map.focus?.kind === 'path-revision') delete map.focus;
-      for (const project of map.projects) if (project.agreementStatus === 'suggested') project.agreementStatus = 'parked';
-      for (const options of map.projectOptionSets) if (options.status === 'suggested') options.status = 'superseded';
+      parkPendingProjects(map);
       if (priorPath && (priorPath.id !== selected.id || priorPath.revision !== selected.revision)) {
         invalidateFromPath(map, priorPath.id, priorPath.revision);
       }
@@ -512,6 +526,7 @@ function applyDomainOperation(map: CareerMap, operation: CareerMapOperation): Ca
       auditableConfirmation({ id: replacement.id, revision: replacement.revision, presentation: replacement.presentation }, operation.payload.action);
       source.status = 'superseded';
       map.pathSets.push(replacement);
+      parkPendingProjects(map);
       invalidateFromPath(map, priorPath.id, priorPath.revision);
       if (map.focus?.kind === 'path-revision') delete map.focus;
       return;
@@ -520,8 +535,7 @@ function applyDomainOperation(map: CareerMap, operation: CareerMapOperation): Ca
       assert(selectActivePurposePath(map), 'A project request requires a selected path as context.');
       assert(!map.focus || map.focus.kind === 'peers' || map.focus.kind === 'reflection', 'Finish the active direction discussion before requesting a project.');
       if (map.focus?.kind === 'reflection' || map.focus?.kind === 'peers') delete map.focus;
-      for (const project of map.projects) if (project.agreementStatus === 'suggested') project.agreementStatus = 'parked';
-      for (const set of map.projectOptionSets) if (set.status === 'suggested') set.status = 'superseded';
+      parkPendingProjects(map);
       return;
     }
     case 'record-path-focus':
@@ -758,7 +772,9 @@ function applyDomainOperation(map: CareerMap, operation: CareerMapOperation): Ca
     case 'open-reflection': {
       const project = map.projects.find((item) => sameRevision(item, operation.payload.projectId, operation.payload.projectRevision));
       assert(project?.agreementStatus === 'accepted' && selectLatestAcceptedProject(map)?.id === project.id, 'Reflection requires an accepted project.', 'stale-target');
-      assert(!map.focus, 'Close the current focus before opening reflection.');
+      assert(!map.focus || map.focus.kind === 'peers'
+        || (map.focus.kind === 'reflection' && selectCurrentProjectLearning(map).reflection?.id !== map.focus.reflectionId),
+      'Close the current focus before opening reflection.');
       map.reflections.push({
         id: operation.payload.reflectionId,
         revision: operation.payload.revision,
@@ -788,7 +804,6 @@ function applyDomainOperation(map: CareerMap, operation: CareerMapOperation): Ca
         revision: operation.payload.newReflectionRevision,
         evidence: [...reflection.evidence, operation.payload.evidence],
       });
-      if (map.focus?.kind === 'reflection' && map.focus.reflectionId === reflection.id) map.focus.reflectionId = reflection.id;
       const hasDownstreamChoice = map.continueChoices.some((choice) => choice.reflectionBasis.id === reflection.id && choice.reflectionBasis.revision === reflection.revision);
       if (hasDownstreamChoice) {
         invalidateFromLearning(map, [reflection], 'learning', operation.payload.evidence.id, operation.payload.evidence.revision);
@@ -1013,15 +1028,13 @@ function applyDomainOperation(map: CareerMap, operation: CareerMapOperation): Ca
     }
     case 'open-foundation-revision-focus': {
       assert(!map.focus || map.focus.kind === 'peers' || map.focus.kind === 'reflection', 'Close the current focus before opening Foundation revision.');
-      for (const project of map.projects) if (project.agreementStatus === 'suggested') project.agreementStatus = 'parked';
-      for (const set of map.projectOptionSets) if (set.status === 'suggested') set.status = 'superseded';
+      parkPendingProjects(map);
       map.focus = { kind: 'foundation-revision', reason: operation.payload.reason, openedBy: operation.payload.action };
       return;
     }
     case 'open-path-revision-focus': {
       assert(!map.focus || map.focus.kind === 'peers' || map.focus.kind === 'reflection', 'Close the current focus before opening path revision.');
-      for (const project of map.projects) if (project.agreementStatus === 'suggested') project.agreementStatus = 'parked';
-      for (const set of map.projectOptionSets) if (set.status === 'suggested') set.status = 'superseded';
+      parkPendingProjects(map);
       map.focus = { kind: 'path-revision', reason: operation.payload.reason, openedBy: operation.payload.action };
       return;
     }

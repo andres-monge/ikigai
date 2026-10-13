@@ -118,7 +118,13 @@ function commit<T extends CareerMapOperation['type']>(
 ): CareerMap {
   const result = applyCareerMapOperation(map, operation(map, type, payload, sourceId));
   expect(result.status).toBe('committed');
-  return result.map;
+  const loaded = readCareerMap(JSON.parse(JSON.stringify(result.map)));
+  expect(loaded).toEqual(result.map);
+  expect(loaded.explorerId).toBe(map.explorerId);
+  expect(loaded.revision).toBe(map.revision + 1);
+  expect(loaded.operationHistory).toEqual(result.map.operationHistory);
+  expect(deriveMethodCheckpoint(loaded)).toEqual(deriveMethodCheckpoint(result.map));
+  return loaded;
 }
 
 function withConfirmedWhy(): CareerMap {
@@ -612,6 +618,77 @@ describe('Method reducer', () => {
     expect(deriveMethodCheckpoint(map).module).toBe('guide-path-project');
   });
 
+  it('recovers a fresh three-option decision after abandoning Foundation reconsideration on a new path', () => {
+    let map = withCompletedLearningLoop('return-to-paths');
+    map = commit(map, 'choose-parked-purpose-path', {
+      sourceSetId: 'paths-1', sourceSetRevision: 1, replacementSetId: 'paths-2', replacementSetRevision: 1,
+      pathId: 'path-1', pathRevision: 1, action: action(12),
+    });
+    for (const [index, review] of map.invalidations.entries()) {
+      map = commit(map, 'resolve-basis-review', { targetKind: review.targetKind, targetId: review.targetId, targetRevision: review.targetRevision, resolution: 'reaffirmed', action: action(13 + index) });
+    }
+    const savedLearning = { projects: map.projects, reflections: map.reflections, choices: map.continueChoices, moves: map.nextMoves };
+    map = commit(map, 'propose-follow-on-projects', {
+      setId: 'abandoned-options', setRevision: 1,
+      projects: [project('abandoned-1'), project('abandoned-2'), project('abandoned-3')], presentation: presentation(16),
+    });
+    const abandoned = map.projectOptionSets.at(-1)!;
+    map = commit(map, 'open-foundation-revision-focus', { reason: 'Reconsider my contribution', action: action(17) });
+    map = commit(map, 'close-focus', { action: action(18) });
+    expect(map.projectOptionSets.at(-1)).toEqual({ ...abandoned, status: 'superseded' });
+    expect({ projects: map.projects, reflections: map.reflections, choices: map.continueChoices, moves: map.nextMoves }).toEqual(savedLearning);
+    const resumed = deriveMethodCheckpoint(map);
+    expect(resumed.availableOperations).not.toContain('propose-first-project');
+    expect(resumed.availableOperations).not.toContain('propose-follow-on-projects');
+    expect(resumed.availableOperations).toContain('request-new-project');
+    map = commit(map, 'request-new-project', { action: action(19) });
+    expect(deriveMethodCheckpoint(map).availableOperations).toContain('propose-follow-on-projects');
+    map = commit(map, 'propose-follow-on-projects', {
+      setId: 'fresh-options', setRevision: 1,
+      projects: [project('fresh-1'), project('fresh-2'), project('fresh-3')], presentation: presentation(20),
+    });
+    expect(map.projectOptionSets.at(-1)?.projects).toHaveLength(3);
+    expect(map.projectOptionSets.at(-1)?.basisAction?.sourceId).not.toBe(abandoned.basisAction?.sourceId);
+    expect(map.projectOptionSets[0]).toEqual({ ...abandoned, status: 'superseded' });
+  });
+
+  it('keeps abandoned options historical after directly leaving and returning to a parked path', () => {
+    let map = withCompletedLearningLoop('return-to-paths');
+    map = commit(map, 'choose-parked-purpose-path', {
+      sourceSetId: 'paths-1', sourceSetRevision: 1, replacementSetId: 'paths-2', replacementSetRevision: 1,
+      pathId: 'path-1', pathRevision: 1, action: action(12),
+    });
+    for (const [index, review] of map.invalidations.entries()) {
+      map = commit(map, 'resolve-basis-review', { targetKind: review.targetKind, targetId: review.targetId, targetRevision: review.targetRevision, resolution: 'reaffirmed', action: action(13 + index) });
+    }
+    const savedProject = map.projects[0];
+    map = commit(map, 'propose-follow-on-projects', {
+      setId: 'options-a', setRevision: 1,
+      projects: [project('a-1'), project('a-2'), project('a-3')], presentation: presentation(16),
+    });
+    const abandoned = map.projectOptionSets.at(-1)!;
+    expect(deriveMethodCheckpoint(map).availableOperations).toContain('choose-parked-purpose-path');
+    map = commit(map, 'choose-parked-purpose-path', {
+      sourceSetId: 'paths-2', sourceSetRevision: 1, replacementSetId: 'paths-3', replacementSetRevision: 1,
+      pathId: 'path-3', pathRevision: 1, action: action(17),
+    });
+    expect(map.projectOptionSets[0]).toEqual({ ...abandoned, status: 'superseded' });
+    map = commit(map, 'choose-parked-purpose-path', {
+      sourceSetId: 'paths-3', sourceSetRevision: 1, replacementSetId: 'paths-4', replacementSetRevision: 1,
+      pathId: 'path-1', pathRevision: 1, action: action(18),
+    });
+    expect(deriveMethodCheckpoint(map).pendingDecision).toBeNull();
+    expect(deriveMethodCheckpoint(map).availableOperations).toContain('propose-follow-on-projects');
+    map = commit(map, 'propose-follow-on-projects', {
+      setId: 'fresh-options-a', setRevision: 1,
+      projects: [project('fresh-a-1'), project('fresh-a-2'), project('fresh-a-3')], presentation: presentation(19),
+    });
+    expect(map.projects[0]).toEqual(savedProject);
+    expect(map.projectOptionSets[0]).toEqual({ ...abandoned, status: 'superseded' });
+    expect(map.projectOptionSets.at(-1)?.projects).toHaveLength(3);
+    expect(map.projectOptionSets.at(-1)?.basisAction?.sourceId).not.toBe(abandoned.basisAction?.sourceId);
+  });
+
   it('selects one Side Door and parks two atomically while keeping route evidence separate', () => {
     let map = readCareerMap(legacyCommitment);
     map = commit(map, 'propose-proof-inventory', { proof: { id: 'proof-1', revision: 1, artifacts: ['Decision aid prototype'], problemsSolved: ['Turned ambiguity into a usable flow'], peopleHelped: ['One colleague'], usefulQualities: ['Synthesis'], knowledge: ['Decision design'], relationships: ['Practitioner peer'], pointsOfView: ['Clarity must change action'], shareableMaterial: ['Anonymized case study'] }, presentation: presentation(15) });
@@ -650,7 +727,12 @@ describe('Method reducer', () => {
     map = commit(map, 'propose-side-doors', { setId: 'doors-1', setRevision: 1, doors: doors(), presentation: presentation(17) });
     map = commit(map, 'select-side-door', { setId: 'doors-1', setRevision: 1, doorId: 'door-1', doorRevision: 1, action: action(18) });
     map = commit(map, 'record-route-outcome', { id: 'outcome-1', revision: 1, doorId: 'door-1', doorRevision: 1, result: 'positive-response', learning: 'The contribution opened a useful conversation', action: action(19) });
-    const evidenceBefore = map.reflections;
+    const evidenceBefore = structuredClone(map.reflections);
+    const deferredBefore = structuredClone({
+      peerExposures: map.peerExposures, commitmentIntent: map.commitmentIntent,
+      provisionalCommitment: map.provisionalCommitment, proofRevisions: map.proofRevisions,
+      sideDoorSets: map.sideDoorSets, routeOutcomes: map.routeOutcomes,
+    });
 
     const revise = operation(map, 'revise-why', {
       why: { id: 'why-2', revision: 1, statement: 'I work to help small groups act on difficult choices.', serves: 'Small groups facing consequential choices', pointOfView: 'Shared clarity should unlock an owned next move' },
@@ -668,7 +750,11 @@ describe('Method reducer', () => {
     if (replayed.status !== 'replayed') throw new Error('Deep Why revision replay fixture failed.');
     expect(replayed.effects).toEqual(revised.effects);
     expect(replayed.map).toEqual(revised.map);
-    map = replayed.map;
+    map = readCareerMap(JSON.parse(JSON.stringify(replayed.map)));
+    expect(map).toEqual(replayed.map);
+    expect(map.operationHistory).toEqual(replayed.map.operationHistory);
+    expect(deriveMethodCheckpoint(map)).toEqual(deriveMethodCheckpoint(replayed.map));
+    expect(deriveMethodCheckpoint(map).pendingDecision?.kind).toBe('why-confirmation');
     map = commit(map, 'confirm-why', { whyId: 'why-2', whyRevision: 1, action: action(21) });
 
     expect(map.reflections).toEqual(evidenceBefore);
@@ -676,6 +762,47 @@ describe('Method reducer', () => {
       new Set(['path-set', 'project', 'reflection', 'next-move', 'peer-exposure', 'commitment', 'proof', 'side-door-set', 'route-outcome']),
     );
     expect(careerMapSchema.safeParse(map).success).toBe(true);
+    let sequence = 22;
+    const activeReviews: string[] = [];
+    while (deriveMethodCheckpoint(map).review) {
+      const review = deriveMethodCheckpoint(map).review!;
+      activeReviews.push(review.targetKind);
+      const loaded = readCareerMap(JSON.parse(JSON.stringify(map)));
+      expect(loaded).toEqual(map);
+      expect(deriveMethodCheckpoint(loaded)).toEqual(deriveMethodCheckpoint(map));
+      map = commit(loaded, 'resolve-basis-review', {
+        targetKind: review.targetKind, targetId: review.targetId, targetRevision: review.targetRevision,
+        resolution: 'replaced', action: action(sequence++),
+      });
+    }
+    expect(activeReviews).toEqual(['path-set', 'project', 'reflection', 'next-move']);
+    expect(new Set(map.invalidations.filter(item => item.status === 'pending').map(item => item.targetKind))).toEqual(new Set([
+      'peer-exposure', 'commitment', 'proof', 'side-door-set', 'route-outcome',
+    ]));
+    expect(deriveMethodCheckpoint(map).availableOperations).toContain('propose-purpose-paths');
+    const newPaths = paths().map(path => ({ ...path, id: `new-${path.id}` })) as ReturnType<typeof paths>;
+    map = commit(map, 'propose-purpose-paths', { setId: 'paths-new', setRevision: 1, paths: newPaths, presentation: presentation(sequence++) });
+    map = readCareerMap(JSON.parse(JSON.stringify(map)));
+    map = commit(map, 'select-purpose-path', { setId: 'paths-new', setRevision: 1, pathId: 'new-path-2', pathRevision: 1, action: action(sequence++) });
+    expect(deriveMethodCheckpoint(map).availableOperations).toContain('propose-follow-on-projects');
+    map = commit(map, 'propose-follow-on-projects', {
+      setId: 'projects-new', setRevision: 1,
+      projects: [project('project-new-1'), project('project-new-2'), project('project-new-3')],
+      presentation: presentation(sequence++),
+    });
+    const pending = structuredClone(map);
+    map = readCareerMap(JSON.parse(JSON.stringify(map)));
+    expect(map).toEqual(pending);
+    map = commit(map, 'select-follow-on-project', { setId: 'projects-new', setRevision: 1, projectId: 'project-new-2', projectRevision: 1, action: action(sequence++) });
+    expect(deriveMethodCheckpoint(map).module).toBe('guide-path-project');
+    expect(map.projects.at(-1)?.basisPath).toEqual({ id: 'new-path-2', revision: 1 });
+    expect(map.reflections).toEqual(evidenceBefore);
+    expect({
+      peerExposures: map.peerExposures, commitmentIntent: map.commitmentIntent,
+      provisionalCommitment: map.provisionalCommitment, proofRevisions: map.proofRevisions,
+      sideDoorSets: map.sideDoorSets, routeOutcomes: map.routeOutcomes,
+    }).toEqual(deferredBefore);
+    expect(readCareerMap(JSON.parse(JSON.stringify(map)))).toEqual(map);
   });
 
   it('derives exact Why-revision invalidation classes before confirmation without storing a preview', () => {

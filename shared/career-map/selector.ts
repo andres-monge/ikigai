@@ -144,9 +144,10 @@ export function isActiveBasisReview(map: CareerMap, item: Invalidation): boolean
     case 'project': return sameRef(project, { id: item.targetId, revision: item.targetRevision }) || map.projects.some((candidate) => candidate.agreementStatus === 'suggested' && sameRef(candidate.basisPath, selectActivePurposePath(map)) && sameRef(candidate, { id: item.targetId, revision: item.targetRevision }));
     case 'reflection': return map.reflections.some((candidate) => sameRef(candidate.projectBasis, project) && sameRef(candidate, { id: item.targetId, revision: item.targetRevision }));
     case 'next-move': return map.nextMoves.some((candidate) => {
+      if (!sameRef(candidate, { id: item.targetId, revision: item.targetRevision })) return false;
       const choice = map.continueChoices.find((record) => sameRef(record, candidate.continueChoiceBasis));
       const basisReflection = choice && map.reflections.find((record) => sameRef(record, choice.reflectionBasis));
-      return sameRef(basisReflection?.projectBasis, project) && sameRef(candidate, { id: item.targetId, revision: item.targetRevision });
+      return sameRef(basisReflection?.projectBasis, project);
     });
     default: return false;
   }
@@ -313,7 +314,9 @@ function normalLifecycle(map: CareerMap): { module: MethodModule; operations: Ca
     }
   }
   if (!project || !sameRef(project.basisPath, path) || basis) {
-    return { module: 'design-path-project', operations: hasCompletedLearningLoop(map) && basis ? ['propose-follow-on-projects'] : ['propose-first-project'] };
+    return { module: 'design-path-project', operations: hasCompletedLearningLoop(map)
+      ? (basis ? ['propose-follow-on-projects'] : [])
+      : ['propose-first-project'] };
   }
 
   return {
@@ -328,10 +331,10 @@ function withHelpOperations(map: CareerMap, operations: CareerMapOperationType[]
   if (map.foundation.whyRevisions.some((why) => why.status === 'confirmed')) extras.push('open-path-revision-focus');
   if (path && !map.foundation.whyRevisions.some((why) => why.status === 'suggested') && !map.pathSets.some((set) => set.status === 'suggested')) {
     if (map.focus?.kind === 'path-revision' || selectCurrentProjectLearning(map).move?.kind === 'return-to-paths') extras.push('choose-parked-purpose-path');
-    if ((!map.focus || map.focus.kind === 'reflection') && !selectCurrentPathFocus(map)) extras.push('record-path-focus');
+    if ((!map.focus || map.focus.kind === 'peers' || map.focus.kind === 'reflection') && !selectCurrentPathFocus(map)) extras.push('record-path-focus');
     const tenure = map.operationHistory.find((item) => item.sourceId === selectCurrentPathSelectionSourceId(map));
-    if ((!map.focus || map.focus.kind === 'reflection') && map.commitmentIntent && map.commitmentIntent.status !== 'completed' && sameRef(map.commitmentIntent.basisPath, path) && tenure?.confirmationProvenance && tenure.confirmationProvenance.turnSequence <= map.commitmentIntent.action.turnSequence && !selectCurrentPathFocus(map)) extras.push('confirm-legacy-path-focus');
-    if ((!map.focus || map.focus.kind === 'reflection') && sameRef(selectCurrentProjectLearning(map).project?.basisPath, path)) extras.push('request-new-project');
+    if ((!map.focus || map.focus.kind === 'peers' || map.focus.kind === 'reflection') && map.commitmentIntent && map.commitmentIntent.status !== 'completed' && sameRef(map.commitmentIntent.basisPath, path) && tenure?.confirmationProvenance && tenure.confirmationProvenance.turnSequence <= map.commitmentIntent.action.turnSequence && !selectCurrentPathFocus(map)) extras.push('confirm-legacy-path-focus');
+    if (!map.focus || map.focus.kind === 'peers' || map.focus.kind === 'reflection') extras.push('request-new-project');
   }
   return [...new Set([...operations, ...extras])];
 }

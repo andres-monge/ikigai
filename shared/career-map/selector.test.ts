@@ -97,6 +97,25 @@ describe('Method checkpoint selector', () => {
     expect(map.pathSets.findLast((set) => set.status === 'suggested')?.id).toBe('set-2');
   });
 
+  it('allows a fresh project request without an accepted project, after direction discussion ends', () => {
+    let map = withSelectedPath('explorer-project-request');
+    expect(map.projects).toHaveLength(0);
+    expect(deriveMethodCheckpoint(map).availableOperations).toContain('request-new-project');
+    map = commit(map, 'open-path-revision-focus', { reason: 'Consider another path', action: action(5) });
+    expect(deriveMethodCheckpoint(map).availableOperations).not.toContain('request-new-project');
+    map = commit(map, 'replace-purpose-path', {
+      sourceSetId: 'set-1', sourceSetRevision: 1, replacedPathId: 'path-2',
+      replacementSetId: 'set-2', replacementSetRevision: 1,
+      replacement: { ...paths[1], id: 'path-4' }, presentation: presentation(6),
+    });
+    map = commit(map, 'close-focus', { action: action(7) });
+    expect(deriveMethodCheckpoint(map).availableOperations).not.toContain('request-new-project');
+    map = commit(map, 'confirm-purpose-path-revision', { setId: 'set-2', setRevision: 1, pathId: 'path-1', pathRevision: 1, action: action(8) });
+    expect(deriveMethodCheckpoint(map).availableOperations).toContain('request-new-project');
+    map = commit(map, 'request-new-project', { action: action(9) });
+    expect(deriveMethodCheckpoint(map).availableOperations).toContain('propose-first-project');
+  });
+
   it('keeps a replacement for an unaccepted first project in first-project confirmation', () => {
     let map = withSelectedPath('explorer-first-project-replacement');
     map = commit(map, 'propose-first-project', { project: project(), presentation: presentation(5) });

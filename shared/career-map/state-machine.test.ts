@@ -5,6 +5,7 @@ import {
   createCareerMap,
   deriveMethodCheckpoint,
   isOperationTypeAvailable,
+  readCareerMap,
   type CareerMap,
   type CareerMapOperation,
   type PurposePathInput,
@@ -36,7 +37,16 @@ function committed(map: CareerMap, operation: CareerMapOperation): CareerMap {
   for (const type of checkpoint.availableOperations) {
     expect(isOperationTypeAvailable(result.map, type)).toBe(true);
   }
-  return result.map;
+  const loaded = readCareerMap(JSON.parse(JSON.stringify(result.map)));
+  expect(loaded).toEqual(result.map);
+  expect(loaded.explorerId).toBe(map.explorerId);
+  expect(loaded.revision).toBe(map.revision + 1);
+  expect(loaded.operationHistory).toEqual(result.map.operationHistory);
+  expect(deriveMethodCheckpoint(loaded)).toEqual(checkpoint);
+  const replay = applyCareerMapOperation(loaded, operation);
+  expect(replay.status).toBe('replayed');
+  expect(replay.map).toEqual(loaded);
+  return loaded;
 }
 
 describe('model-based Method state machine', () => {
