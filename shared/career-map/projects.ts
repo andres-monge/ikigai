@@ -15,14 +15,16 @@ export const pathProjectInputSchema = z.object({
   id: entityIdSchema,
   revision: revisionSchema,
   title: z.string().min(1).max(500),
-  outcome: z.string().min(1).max(3_000),
-  audience: z.string().min(1).max(2_000),
-  whyWanted: z.string().min(1).max(2_000),
+  briefFormat: z.literal('simple-v1').optional(),
+  relationship: z.enum(['linked', 'unrelated']).optional(),
+  outcome: z.string().min(1).max(3_000).optional(),
+  audience: z.string().min(1).max(2_000).optional(),
+  whyWanted: z.string().min(1).max(2_000).optional(),
   learningGoal: z.string().min(1).max(2_000),
   firstVersion: z.string().min(1).max(3_000),
   firstStep: z.string().min(1).max(2_000),
-  decisionQuestion: z.string().min(1).max(2_000),
-  evidenceCue: z.string().min(1).max(2_000),
+  decisionQuestion: z.string().min(1).max(2_000).optional(),
+  evidenceCue: z.string().min(1).max(2_000).optional(),
 }).strict();
 
 export const projectWorkStatusSchema = z.enum(['not-started', 'in-progress', 'stopped', 'completed']);
@@ -45,8 +47,9 @@ export const projectAcceptanceQuestionSchema = z.string().min(1).max(240)
 export const projectAcceptanceFramingSchema = z.object({
   locale: languageTagSchema,
   framingText: z.string().min(1).max(2_000),
-  acceptancePhrase: projectAcceptancePhraseSchema,
-  acceptanceQuestion: projectAcceptanceQuestionSchema,
+  framingFormat: z.literal('natural-v1').optional(),
+  acceptancePhrase: projectAcceptancePhraseSchema.optional(),
+  acceptanceQuestion: projectAcceptanceQuestionSchema.optional(),
   moduleVersion: z.string().min(1).max(80),
   status: z.enum(['pending', 'delivered']),
   assistantTurnId: entityIdSchema,
@@ -57,6 +60,7 @@ export const projectAcceptanceFramingSchema = z.object({
 
 export const pathProjectSchema = pathProjectInputSchema.extend({
   number: z.number().int().positive(),
+  basisAction: z.object({ sourceId: entityIdSchema, action: userActionProvenanceSchema }).strict().optional(),
   basisPath: revisionRefSchema,
   agreementStatus: z.enum(['suggested', 'accepted', 'parked', 'superseded']),
   workStatus: projectWorkStatusSchema,
@@ -78,12 +82,20 @@ export const projectOptionSetSchema = z.object({
   revision: revisionSchema,
   status: z.enum(['suggested', 'selected', 'superseded']),
   projectNumber: z.number().int().positive(),
+  supersedesSetId: entityIdSchema.optional(),
   basisPath: revisionRefSchema,
-  basisNextMove: revisionRefSchema,
+  basisNextMove: revisionRefSchema.optional(),
+  basisAction: z.object({ sourceId: entityIdSchema, action: userActionProvenanceSchema }).strict().optional(),
   projects: exactThree(projectOptionSchema),
   presentation: modelPresentationSchema,
   confirmation: confirmationSchema.optional(),
 }).strict();
+
+export function validateProjectBrief(project: z.infer<typeof pathProjectInputSchema>, context: z.RefinementCtx) {
+  if (!project.briefFormat && ['outcome','audience','whyWanted','decisionQuestion','evidenceCue'].some((key) => !project[key as keyof typeof project])) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: 'Legacy detailed briefs require every detailed field; simple briefs require briefFormat.' });
+  }
+}
 
 export type PathProjectInput = z.infer<typeof pathProjectInputSchema>;
 export type PathProject = z.infer<typeof pathProjectSchema>;

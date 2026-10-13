@@ -1,13 +1,15 @@
 import {
-  careerMapSchema,
+  readCareerMap,
   deriveMethodCheckpoint,
   exactFirstProjectFramingReply,
   selectActivePurposePath,
   selectCurrentFoundationEvidence,
   selectCurrentRealityConstraints,
-  selectLatestAcceptedProject,
+  selectCurrentProjectLearning,
+  selectCurrentPathFocus,
   type CareerMap,
   type MethodCheckpoint,
+  type PathProjectInput,
 } from '../../shared/career-map/index.js';
 
 export class CareerMapBriefingError extends Error {
@@ -84,19 +86,38 @@ function appendExactPath(
   lines.push(`Practical fit: ${path.practicalFit}`);
 }
 
+function appendProjectBrief(lines: string[], project: PathProjectInput): void {
+  lines.push(`Relationship to Purpose Path: ${project.relationship ?? 'linked'}`);
+  if (project.relationship === 'unrelated') {
+    lines.push('This project is intentionally unrelated to the selected path. Its path basis records historical selection context only. Its learning informs this project; do not infer a decision about that path or rewrite the North Star.');
+  }
+  if (project.outcome !== undefined) lines.push(`Outcome: ${project.outcome}`);
+  if (project.audience !== undefined) lines.push(`Audience: ${project.audience}`);
+  if (project.whyWanted !== undefined) lines.push(`Why wanted: ${project.whyWanted}`);
+  lines.push(`Learning goal: ${project.learningGoal}`);
+  lines.push(`First version: ${project.firstVersion}`);
+  if (project.decisionQuestion !== undefined) lines.push(`Learning question: ${project.decisionQuestion}`);
+  if (project.evidenceCue !== undefined) lines.push(`Evidence cue: ${project.evidenceCue}`);
+  lines.push(`First step: ${project.firstStep}`);
+}
+
+function appendProjectWork(lines: string[], project: CareerMap['projects'][number]): void {
+  if (!project.workUpdates.length) return;
+  lines.push('Work updates reported by the explorer:');
+  for (const update of project.workUpdates) {
+    lines.push(`- ${update.status} (user turn ${update.action.turnSequence}; ${update.action.occurredAt})`);
+  }
+}
+
 function appendExactProject(
   lines: string[],
   project: CareerMap['projects'][number] | undefined,
 ): void {
   if (!project) throw new CareerMapBriefingError();
   lines.push(`Project ${project.number}: ${project.title} (${project.id}@${project.revision}; ${project.agreementStatus}; ${project.workStatus})`);
-  lines.push(`Outcome: ${project.outcome}`);
-  lines.push(`Audience: ${project.audience}`);
-  lines.push(`Why wanted: ${project.whyWanted}`);
-  lines.push(`First version: ${project.firstVersion}`);
-  lines.push(`Learning question: ${project.decisionQuestion}`);
-  lines.push(`Evidence cue: ${project.evidenceCue}`);
-  lines.push(`First step: ${project.firstStep}`);
+  lines.push(`Path basis${project.relationship === 'unrelated' ? ' (historical context only)' : ''}: ${project.basisPath.id}@${project.basisPath.revision}`);
+  appendProjectBrief(lines, project);
+  appendProjectWork(lines, project);
   appendFirstProjectFraming(lines, project);
 }
 
@@ -105,13 +126,22 @@ function appendFirstProjectFraming(
   project: CareerMap['projects'][number],
 ): void {
   const framing = project.acceptanceFraming;
+  if (project.briefFormat === 'simple-v1' || (framing && !framing.acceptanceQuestion)) {
+    if (!framing) lines.push('Project presentation: not yet delivered.');
+    else if (framing.status === 'pending') {
+      lines.push(`Project presentation: pending delivery in ${framing.assistantTurnId}.`);
+      lines.push(`Project presentation text: ${JSON.stringify(framing.framingText)}`);
+    }
+    else lines.push(`Project presentation: delivered in ${framing.presentation!.assistantTurnId}. A later unambiguous semantic acceptance may accept; exact text matching is not required.`);
+    return;
+  }
   if (!framing) {
     lines.push('First-project framing: not yet presented.');
     return;
   }
   if (framing.status === 'pending') {
     lines.push(`First-project framing: pending delivery in this assistant turn (${framing.assistantTurnId}; locale ${framing.locale}).`);
-    lines.push(`The complete visible reply must equal exactly: ${JSON.stringify(exactFirstProjectFramingReply(framing))}`);
+    lines.push(`The complete visible reply must equal exactly: ${JSON.stringify(exactFirstProjectFramingReply({ ...framing, acceptanceQuestion: framing.acceptanceQuestion! }))}`);
     return;
   }
   lines.push(`First-project framing: delivered once in ${framing.presentation!.assistantTurnId}; locale ${framing.locale}. Do not repeat it.`);
@@ -280,25 +310,21 @@ function appendProject(
   selectedProject?: CareerMap['projects'][number],
 ): void {
   const suggested = map.projects.findLast((item) => item.agreementStatus === 'suggested');
-  const project = selectedProject ?? suggested ?? selectLatestAcceptedProject(map);
-  if (!project) return;
-  lines.push('## Active Path Project');
-  lines.push(`Project ${project.number}: ${project.title} (${project.id}@${project.revision}; ${project.agreementStatus}; ${project.workStatus})`);
-  lines.push(`Path basis: ${project.basisPath.id}@${project.basisPath.revision}`);
-  lines.push(`Outcome: ${project.outcome}`);
-  lines.push(`Audience: ${project.audience}`);
-  lines.push(`Why wanted: ${project.whyWanted}`);
-  lines.push(`First version: ${project.firstVersion}`);
-  lines.push(`Learning question: ${project.decisionQuestion}`);
-  lines.push(`Evidence cue: ${project.evidenceCue}`);
-  lines.push(`First step: ${project.firstStep}`);
-  appendFirstProjectFraming(lines, project);
+  const project = selectedProject ?? suggested ?? selectCurrentProjectLearning(map).project;
+  if (project) {
+    lines.push('## Active Path Project');
+    appendExactProject(lines, project);
+  }
 
   const options = map.projectOptionSets.findLast((set) => set.status === 'suggested');
   if (options) {
     lines.push('### Pending equal-weight Path Project options');
+    lines.push(`Set: ${options.id}@${options.revision}; project number ${options.projectNumber}; historical path context ${options.basisPath.id}@${options.basisPath.revision}`);
+    if (options.basisNextMove) lines.push(`Project decision basis: Next Move ${options.basisNextMove.id}@${options.basisNextMove.revision}`);
+    if (options.basisAction) lines.push(`Project decision basis: explorer action ${options.basisAction.sourceId}; user turn ${options.basisAction.action.turnSequence}`);
     for (const option of options.projects) {
-      lines.push(`- ${option.title} (${option.id}@${option.revision}; ${option.selection}) — ${option.decisionQuestion}`);
+      lines.push(`#### ${option.title} (${option.id}@${option.revision}; ${option.selection}; equal weight)`);
+      appendProjectBrief(lines, option);
     }
   }
 }
@@ -334,14 +360,14 @@ function appendReflection(
     (item) => item.reflectionBasis.id === reflection.id
       && item.reflectionBasis.revision === reflection.revision,
   );
-  if (choice) lines.push(`Continue choice: ${choice.wantsToContinue ? 'continue' : 'return to paths'} (${choice.id}@${choice.revision})`);
+  if (choice) lines.push(`Continue choice: ${choice.wantsToContinue ? 'continue' : 'return to paths'} (${choice.id}@${choice.revision}; scope ${choice.scope ?? 'path'}; reflection basis ${choice.reflectionBasis.id}@${choice.reflectionBasis.revision})`);
   const move = choice
     ? map.nextMoves.findLast(
       (item) => item.continueChoiceBasis.id === choice.id
         && item.continueChoiceBasis.revision === choice.revision,
     )
     : undefined;
-  if (move) lines.push(`Next Move: ${move.kind} (${move.id}@${move.revision})`);
+  if (move) lines.push(`Next Move: ${move.kind} (${move.id}@${move.revision}); continue-choice basis ${move.continueChoiceBasis.id}@${move.continueChoiceBasis.revision}; scope ${choice!.scope ?? 'path'}`);
 }
 
 function reflectionAndProjectForCheckpoint(
@@ -352,7 +378,7 @@ function reflectionAndProjectForCheckpoint(
   project?: CareerMap['projects'][number];
 } {
   const reflections = latestReflectionRevisions(map);
-  const currentProject = selectLatestAcceptedProject(map);
+  const currentProject = selectCurrentProjectLearning(map).project;
   const reflectionFocus = checkpoint.focus?.kind === 'reflection' ? checkpoint.focus : undefined;
   const reflection = reflectionFocus
     ? reflections.find((item) => item.id === reflectionFocus.reflectionId)
@@ -387,8 +413,8 @@ function appendProjectLearningEvidence(
   lines.push('## Accepted Path Project evidence for proof');
   for (const project of projects) {
     lines.push(`### Project ${project.number}: ${project.title} (${project.id}@${project.revision}; ${project.workStatus})`);
-    lines.push(`Outcome: ${project.outcome}`);
-    lines.push(`Learning question: ${project.decisionQuestion}`);
+    appendProjectBrief(lines, project);
+    appendProjectWork(lines, project);
     const projectReflections = reflectionsByProject.get(JSON.stringify([project.id, project.revision])) ?? [];
     for (const reflection of projectReflections) {
       lines.push(`Reflection ${reflection.id}@${reflection.revision} (${reflection.status}):`);
@@ -480,6 +506,13 @@ function renderCareerMapBriefing(
     appendPath(lines, map, includeAlternatives);
   }
 
+  const pathFocus = selectCurrentPathFocus(map);
+  if (pathFocus && checkpoint.module !== 'form-foundation') {
+    lines.push('## Current path focus');
+    lines.push(`${pathFocus.id}@${pathFocus.revision}; path ${pathFocus.basisPath.id}@${pathFocus.basisPath.revision}; chosen in user turn ${pathFocus.action.turnSequence}`);
+    lines.push('This focus records the explorer’s current wish to pursue this path. Guidance, further projects, reflection and changes of direction remain available.');
+  }
+
   switch (checkpoint.module) {
     case 'form-foundation': {
       appendFoundationContext(lines, map, false);
@@ -489,11 +522,16 @@ function renderCareerMapBriefing(
       appendFoundationContext(lines, map, true);
       break;
     case 'design-path-project':
-    case 'guide-path-project':
+    case 'guide-path-project': {
+      appendFoundationContext(lines, map, true);
       appendProject(lines, map);
+      const relevant = reflectionAndProjectForCheckpoint(map, checkpoint);
+      appendReflection(lines, map, relevant.reflection);
       break;
+    }
     case 'interpret-path-project':
       {
+        appendFoundationContext(lines, map, true);
         const relevant = reflectionAndProjectForCheckpoint(map, checkpoint);
         appendProject(lines, map, relevant.project);
         appendReflection(lines, map, relevant.reflection);
@@ -514,9 +552,12 @@ function renderCareerMapBriefing(
 }
 
 export function compileCareerMapBriefing(input: unknown): CareerMapBriefing {
-  const parsed = careerMapSchema.safeParse(input);
-  if (!parsed.success) throw new CareerMapBriefingError();
-  const map = parsed.data;
+  let map: CareerMap;
+  try {
+    map = readCareerMap(input);
+  } catch {
+    throw new CareerMapBriefingError();
+  }
   const checkpoint = deriveMethodCheckpoint(map);
   const markdown = renderCareerMapBriefing(map, checkpoint);
 

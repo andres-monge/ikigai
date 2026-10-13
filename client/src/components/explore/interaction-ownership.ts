@@ -15,6 +15,9 @@ export interface InteractionOwnership {
  * first-project acceptance operations; later lifecycle operations stay closed.
  */
 export const interactionOwnership = {
+  'request-new-project': { owner: 'conversation-only', affordance: 'Chat composer', reason: 'A new project requires the explorer’s explicit request.' },
+  'record-path-focus': { owner: 'conversation-only', affordance: 'Chat composer', reason: 'Focus records the explorer’s current path choice.' },
+  'confirm-legacy-path-focus': { owner: 'conversation-only', affordance: 'Chat composer', reason: 'Historical intent requires a fresh explicit focus choice.' },
   'append-foundation-evidence': { owner: 'conversation-only', affordance: 'Chat composer', reason: 'The explorer’s own words and context are the evidence payload.' },
   'correct-foundation-evidence': { owner: 'conversation-only', affordance: 'Chat composer', reason: 'A correction must identify the exact user-authored evidence and replacement text.' },
   'record-reality-constraint': { owner: 'conversation-only', affordance: 'Chat composer', reason: 'Constraints are explorer-authored facts, not inferred form values.' },

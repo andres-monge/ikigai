@@ -43,6 +43,7 @@ import {
   applyCareerMapOperation as reduceCareerMapOperation,
   CAREER_MAP_SCHEMA_VERSION,
   careerMapSchema,
+  readCareerMap,
   createCareerMap,
   operationReceiptSchema,
   opaqueClientMessageIdSchema,
@@ -683,7 +684,7 @@ function validateCareerMapRow(
   row: CareerMapRow,
   history: CareerMapHistoryRow[],
 ): Extract<CareerMapLoadResult, { status: 'ready' | 'repair-required' }> {
-  if (row.schemaVersion !== CURRENT_CAREER_MAP_SCHEMA_VERSION) {
+  if (row.schemaVersion !== 2 && row.schemaVersion !== CURRENT_CAREER_MAP_SCHEMA_VERSION) {
     return {
       status: 'repair-required',
       reason: 'unsupported-schema',
@@ -691,7 +692,10 @@ function validateCareerMapRow(
       revision: row.revision,
     };
   }
-  const parsed = careerMapSchema.safeParse(row.document);
+  const parsed = (() => {
+    try { return { success: true as const, data: readCareerMap(row.document) }; }
+    catch { return { success: false as const }; }
+  })();
   if (!parsed.success) {
     return {
       status: 'repair-required',
@@ -708,7 +712,7 @@ function validateCareerMapRow(
       revision: row.revision,
     };
   }
-  if (parsed.data.schemaVersion !== row.schemaVersion || parsed.data.revision !== row.revision) {
+  if ((row.document as { schemaVersion?: unknown } | null)?.schemaVersion !== row.schemaVersion || parsed.data.revision !== row.revision) {
     return {
       status: 'repair-required',
       reason: 'row-document-mismatch',

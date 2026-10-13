@@ -1,0 +1,137 @@
+import { z } from 'zod';
+
+export const entityIdSchema = z.string().min(1).max(160);
+/**
+ * Client-supplied durable message identities are opaque transport tokens, not
+ * display text. Keeping them to a single-line ASCII grammar prevents them from
+ * becoming an instruction, log, or storage-protocol injection surface while
+ * retaining UUID, AI SDK, and existing `message-*`/`msg_*` formats.
+ */
+export const opaqueClientMessageIdSchema = z.string()
+  .min(1)
+  .max(160)
+  .regex(/^[A-Za-z0-9][A-Za-z0-9._:~-]*$/, 'Client message id must be an opaque token.');
+export const revisionSchema = z.number().int().positive();
+export const mapRevisionSchema = z.number().int().nonnegative();
+export const timestampSchema = z.string().datetime({ offset: true });
+export const languageTagSchema = z.string().min(2).max(35).refine((value) => {
+  try {
+    Intl.getCanonicalLocales(value);
+    return true;
+  } catch {
+    return false;
+  }
+}, 'Locale must be a valid BCP 47 language tag.');
+
+export const modelPresentationSchema = z.object({
+  kind: z.literal('model-presentation'),
+  assistantTurnId: entityIdSchema,
+  turnSequence: z.number().int().nonnegative(),
+  completed: z.literal(true),
+  presentedAt: timestampSchema,
+}).strict();
+
+export const userActionProvenanceSchema = z.object({
+  kind: z.enum(['user-message', 'ui-action']),
+  actionId: entityIdSchema,
+  turnId: entityIdSchema,
+  turnSequence: z.number().int().nonnegative(),
+  occurredAt: timestampSchema,
+}).strict();
+
+export const userEvidenceProvenanceSchema = z.discriminatedUnion('kind', [
+  userActionProvenanceSchema.extend({ kind: z.literal('user-message') }).strict(),
+  userActionProvenanceSchema.extend({ kind: z.literal('ui-action') }).strict(),
+  z.object({
+    kind: z.literal('user-source'),
+    actionId: entityIdSchema,
+    sourceLabel: z.string().min(1).max(500),
+    occurredAt: timestampSchema,
+  }).strict(),
+]);
+
+export const confirmationSchema = z.object({
+  targetId: entityIdSchema,
+  targetRevision: revisionSchema,
+  presentedInTurnId: entityIdSchema,
+  confirmedBy: userActionProvenanceSchema,
+}).strict();
+
+export const revisionRefSchema = z.object({
+  id: entityIdSchema,
+  revision: revisionSchema,
+}).strict();
+
+export const methodModuleSchema = z.enum([
+  'form-foundation',
+  'create-purpose-paths',
+  'design-path-project',
+  'guide-path-project',
+  'find-relevant-peers',
+  'interpret-path-project',
+  'enter-side-doors',
+]);
+
+export const operationReceiptSchema = z.object({
+  sourceId: entityIdSchema,
+  operationType: z.string().min(1),
+  payloadFingerprint: z.string().min(1),
+  resultRevision: revisionSchema,
+  committedAt: timestampSchema,
+  confirmationProvenance: userActionProvenanceSchema.nullable(),
+  moduleVersion: z.string().min(1).nullable(),
+}).strict();
+
+export const invalidationTargetKindSchema = z.enum([
+  'path-set',
+  'project',
+  'reflection',
+  'next-move',
+  'peer-exposure',
+  'commitment',
+  'proof',
+  'side-door-set',
+  'route-outcome',
+]);
+
+export const invalidationSchema = z.object({
+  id: entityIdSchema,
+  basisKind: z.enum(['why', 'purpose-path', 'project', 'learning', 'peer-exposure', 'commitment', 'proof']),
+  basisId: entityIdSchema,
+  basisRevision: revisionSchema,
+  targetKind: invalidationTargetKindSchema,
+  targetId: entityIdSchema,
+  targetRevision: revisionSchema,
+  createdAtRevision: revisionSchema,
+  status: z.enum(['pending', 'resolved']),
+  resolution: z.object({
+    kind: z.enum(['reaffirmed', 'revised', 'replaced']),
+    action: userActionProvenanceSchema,
+  }).strict().optional(),
+}).strict();
+
+export type ModelPresentation = z.infer<typeof modelPresentationSchema>;
+export type UserActionProvenance = z.infer<typeof userActionProvenanceSchema>;
+export type UserEvidenceProvenance = z.infer<typeof userEvidenceProvenanceSchema>;
+export type Confirmation = z.infer<typeof confirmationSchema>;
+export type RevisionRef = z.infer<typeof revisionRefSchema>;
+export type OperationReceipt = z.infer<typeof operationReceiptSchema>;
+export type Invalidation = z.infer<typeof invalidationSchema>;
+export type InvalidationTargetKind = z.infer<typeof invalidationTargetKindSchema>;
+export type LanguageTag = z.infer<typeof languageTagSchema>;
+
+export const invalidationTargetOrder = [
+  'path-set',
+  'project',
+  'reflection',
+  'next-move',
+  'peer-exposure',
+  'commitment',
+  'proof',
+  'side-door-set',
+  'route-outcome',
+] as const satisfies readonly InvalidationTargetKind[];
+
+export function exactThree<T extends z.ZodTypeAny>(item: T) {
+  return z.tuple([item, item, item]);
+}

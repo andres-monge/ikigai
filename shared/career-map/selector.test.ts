@@ -7,6 +7,7 @@ import {
   type CareerMapOperation,
   type PurposePathInput,
 } from './index';
+import { hasCompletedLearningLoop, selectCurrentProjectLearning, selectCurrentPathFocus, selectCurrentPathSelectionSourceId, selectProjectDecisionBasis, selectEarliestActiveReview } from './selector';
 
 const at = (n: number) => `2026-08-31T11:${String(n).padStart(2, '0')}:00.000Z`;
 const presentation = (n: number) => ({ kind: 'model-presentation' as const, assistantTurnId: `a-${n}`, turnSequence: n, completed: true as const, presentedAt: at(n) });
@@ -96,43 +97,6 @@ describe('Method checkpoint selector', () => {
     expect(map.pathSets.findLast((set) => set.status === 'suggested')?.id).toBe('set-2');
   });
 
-  it('applies KTD2 precedence: invalidation, focus, pending, peer guard, lifecycle', () => {
-    let map = createCareerMap('explorer-selector');
-    map = commit(map, 'propose-why', { why: { id: 'why-1', revision: 1, statement: 'Make difficult choices actionable.', serves: 'People in transition', pointOfView: 'Clarity must change action' }, presentation: presentation(1) });
-
-    map = commit(map, 'open-peer-focus', { reason: 'Inspect the working environment', action: action(2) });
-    expect(deriveMethodCheckpoint(map)).toMatchObject({ module: 'find-relevant-peers', focus: { kind: 'peers' } });
-
-    map = commit(map, 'close-focus', { action: action(3) });
-    expect(deriveMethodCheckpoint(map).pendingDecision?.kind).toBe('why-confirmation');
-
-    map = commit(map, 'confirm-why', { whyId: 'why-1', whyRevision: 1, action: action(4) });
-    map = commit(map, 'propose-purpose-paths', { setId: 'set-1', setRevision: 1, paths, presentation: presentation(5) });
-    map = commit(map, 'select-purpose-path', { setId: 'set-1', setRevision: 1, pathId: 'path-1', pathRevision: 1, action: action(6) });
-    map = commit(map, 'propose-first-project', { project: { id: 'project-1', revision: 1, title: 'Build an aid', outcome: 'One person uses it', audience: 'A real colleague', whyWanted: 'Reduce decision waste', learningGoal: 'Learn whether iteration pulls me in', firstVersion: 'One-page prototype', firstStep: 'Interview the colleague', decisionQuestion: 'Do I want another iteration?', evidenceCue: 'Notice voluntary pull' }, presentation: presentation(7) });
-    map = commit(map, 'present-first-project-framing', framing('project-1', 8));
-    map = commit(map, 'deliver-first-project-framing', delivery('project-1', 8));
-    map = commit(map, 'accept-first-project', { projectId: 'project-1', projectRevision: 1, action: action(9) });
-    expect(deriveMethodCheckpoint(map).module).toBe('guide-path-project');
-
-    map = commit(map, 'open-foundation-revision-focus', { reason: 'New firsthand evidence changed the Why', action: action(9) });
-    expect(deriveMethodCheckpoint(map).module).toBe('form-foundation');
-    map = commit(map, 'close-focus', { action: action(10) });
-    expect(deriveMethodCheckpoint(map).module).toBe('guide-path-project');
-  });
-
-  it('recomputes after focus closes instead of restoring a stale checkpoint', () => {
-    let map = createCareerMap('explorer-selector');
-    map = commit(map, 'open-peer-focus', { reason: 'Look at real practice', action: action(1) });
-    map = commit(map, 'propose-why', { why: { id: 'why-1', revision: 1, statement: 'Help people act on complexity.', serves: 'People facing complexity', pointOfView: 'Actionable clarity beats diagnosis' }, presentation: presentation(2) });
-    map = commit(map, 'close-focus', { action: action(3) });
-
-    const checkpoint = deriveMethodCheckpoint(map);
-    expect(checkpoint.module).toBe('form-foundation');
-    expect(checkpoint.pendingDecision?.kind).toBe('why-confirmation');
-    expect(checkpoint.focus).toBeNull();
-  });
-
   it('keeps a replacement for an unaccepted first project in first-project confirmation', () => {
     let map = withSelectedPath('explorer-first-project-replacement');
     map = commit(map, 'propose-first-project', { project: project(), presentation: presentation(5) });
@@ -146,13 +110,13 @@ describe('Method checkpoint selector', () => {
     expect(deriveMethodCheckpoint(map)).toMatchObject({
       module: 'design-path-project',
       pendingDecision: { kind: 'first-project-confirmation', targetId: 'project-2', targetRevision: 1 },
-      availableOperations: ['replace-project-proposal', 'present-first-project-framing'],
+      availableOperations: expect.arrayContaining(['replace-project-proposal', 'present-first-project-framing']),
     });
 
     map = commit(map, 'present-first-project-framing', framing('project-2', 7));
-    expect(deriveMethodCheckpoint(map).availableOperations).toEqual([]);
+    expect(deriveMethodCheckpoint(map).availableOperations).not.toContain('accept-first-project');
     map = commit(map, 'deliver-first-project-framing', delivery('project-2', 7));
-    expect(deriveMethodCheckpoint(map).availableOperations).toEqual(['replace-project-proposal', 'accept-first-project']);
+    expect(deriveMethodCheckpoint(map).availableOperations).toEqual(expect.arrayContaining(['replace-project-proposal', 'accept-first-project']));
     map = commit(map, 'accept-first-project', { projectId: 'project-2', projectRevision: 1, action: action(8) });
     expect(deriveMethodCheckpoint(map)).toMatchObject({ module: 'guide-path-project', pendingDecision: null });
   });
@@ -173,7 +137,7 @@ describe('Method checkpoint selector', () => {
     expect(deriveMethodCheckpoint(map)).toMatchObject({
       module: 'design-path-project',
       pendingDecision: { kind: 'project-revision-confirmation', targetId: 'project-2', targetRevision: 2 },
-      availableOperations: ['replace-project-proposal', 'confirm-project-revision'],
+      availableOperations: expect.arrayContaining(['replace-project-proposal', 'confirm-project-revision']),
     });
 
     map = commit(map, 'confirm-project-revision', { projectId: 'project-2', projectRevision: 2, action: action(8) });
@@ -181,52 +145,89 @@ describe('Method checkpoint selector', () => {
     expect(map.projects.find((item) => item.id === 'project-2')?.agreementStatus).toBe('accepted');
   });
 
-  it('routes the earliest unresolved basis before an explicit focus', () => {
-    const map = createCareerMap('explorer-selector');
-    const invalid: CareerMap = {
-      ...map,
-      focus: { kind: 'peers', reason: 'Later interrupt', openedBy: action(3) },
-      invalidations: [
-        { id: 'review-project', basisKind: 'purpose-path', basisId: 'path-old', basisRevision: 1, targetKind: 'project', targetId: 'project-old', targetRevision: 1, createdAtRevision: 5, status: 'pending' },
-        { id: 'review-path', basisKind: 'why', basisId: 'why-new', basisRevision: 2, targetKind: 'path-set', targetId: 'paths-old', targetRevision: 1, createdAtRevision: 5, status: 'pending' },
-      ],
+  it('ignores deferred legacy focus, pending decisions, and reviews', () => {
+    const map: CareerMap = {
+      ...createCareerMap('legacy-tail'),
+      focus: { kind: 'peers', reason: 'Preserved context', openedBy: action(3) },
+      invalidations: [{ id: 'review-peer', basisKind: 'purpose-path', basisId: 'path-old', basisRevision: 1, targetKind: 'peer-exposure', targetId: 'peer-old', targetRevision: 1, createdAtRevision: 5, status: 'pending' }],
     };
-    expect(deriveMethodCheckpoint(invalid)).toMatchObject({
-      module: 'create-purpose-paths',
-      review: { targetKind: 'path-set', targetId: 'paths-old' },
-    });
+    expect(deriveMethodCheckpoint(map)).toMatchObject({ module: 'form-foundation', focus: null, review: null });
+    expect(deriveMethodCheckpoint(map).availableOperations).not.toContain('open-peer-focus');
   });
 
-  it('derives peer guard, commitment, proof, and Side Door pending decisions from canonical records', () => {
-    let map = createCareerMap('explorer-deep');
-    map = commit(map, 'propose-why', { why: { id: 'why-1', revision: 1, statement: 'Make difficult choices actionable.', serves: 'People in transition', pointOfView: 'Clarity must change action' }, presentation: presentation(1) });
-    map = commit(map, 'confirm-why', { whyId: 'why-1', whyRevision: 1, action: action(2) });
-    map = commit(map, 'propose-purpose-paths', { setId: 'set-1', setRevision: 1, paths, presentation: presentation(3) });
-    map = commit(map, 'select-purpose-path', { setId: 'set-1', setRevision: 1, pathId: 'path-1', pathRevision: 1, action: action(4) });
-    map = commit(map, 'propose-first-project', { project: { id: 'project-1', revision: 1, title: 'Build a real aid', outcome: 'One colleague uses it', audience: 'A real colleague', whyWanted: 'Reduce decision waste', learningGoal: 'Learn whether iteration pulls me in', firstVersion: 'One-page prototype', firstStep: 'Interview the colleague', decisionQuestion: 'Do I want another iteration?', evidenceCue: 'Notice voluntary pull' }, presentation: presentation(5) });
+  it('allows direction changes while first-project framing is pending', () => {
+    let map = withSelectedPath('direction-during-framing');
+    map = commit(map, 'propose-first-project', { project: project(), presentation: presentation(5) });
+    map = commit(map, 'present-first-project-framing', framing('project-1', 6));
+    expect(deriveMethodCheckpoint(map).availableOperations).toContain('open-path-revision-focus');
+    expect(deriveMethodCheckpoint(map).availableOperations).not.toContain('choose-parked-purpose-path');
+    expect(deriveMethodCheckpoint(map).availableOperations).not.toContain('accept-first-project');
+  });
+  it('ignores a historical reflection after a later project is accepted', () => {
+    let map = withSelectedPath('historical-reflection');
+    map = commit(map, 'propose-first-project', { project: project(), presentation: presentation(5) });
     map = commit(map, 'present-first-project-framing', framing('project-1', 6));
     map = commit(map, 'deliver-first-project-framing', delivery('project-1', 6));
     map = commit(map, 'accept-first-project', { projectId: 'project-1', projectRevision: 1, action: action(7) });
-    map = commit(map, 'open-reflection', { reflectionId: 'reflection-1', revision: 1, projectId: 'project-1', projectRevision: 1, action: action(7) });
-    map = commit(map, 'append-reflection-evidence', { reflectionId: 'reflection-1', reflectionRevision: 1, evidence: { id: 'evidence-1', revision: 1, observation: 'Iteration created voluntary pull.', signal: 'voluntary-pull', interpretation: 'The path deserves a provisional commitment test', provenance: action(8) } });
-    map = commit(map, 'close-reflection', { reflectionId: 'reflection-1', reflectionRevision: 1, action: action(9) });
-    map = commit(map, 'record-continue-choice', { id: 'continue-1', revision: 1, reflectionId: 'reflection-1', reflectionRevision: 1, wantsToContinue: true, action: action(10) });
-    map = commit(map, 'record-next-move', { id: 'move-1', revision: 1, continueChoiceId: 'continue-1', continueChoiceRevision: 1, kind: 'commit-provisionally', action: action(11) });
-    expect(deriveMethodCheckpoint(map)).toMatchObject({ module: 'find-relevant-peers', pendingDecision: null });
-
-    map = commit(map, 'record-peer-exposure', { exposure: { id: 'peer-1', revision: 1, subjectKind: 'first-person-source', subject: 'Practitioner journal', insight: 'The environment rewards facilitation under ambiguity' }, presentation: presentation(12) });
-    expect(deriveMethodCheckpoint(map).pendingDecision?.kind).toBe('peer-insight-confirmation');
-    map = commit(map, 'confirm-peer-exposure', { exposureId: 'peer-1', exposureRevision: 1, action: action(13) });
-    expect(deriveMethodCheckpoint(map).pendingDecision?.kind).toBe('commitment-completion');
-    map = commit(map, 'complete-provisional-commitment', { id: 'commitment-1', revision: 1, intentId: map.commitmentIntent!.id, action: action(14) });
-    expect(deriveMethodCheckpoint(map)).toMatchObject({ module: 'enter-side-doors', pendingDecision: null });
-
-    map = commit(map, 'propose-proof-inventory', { proof: { id: 'proof-1', revision: 1, artifacts: ['Prototype'], problemsSolved: ['Decision friction'], peopleHelped: ['Colleague'], usefulQualities: ['Synthesis'], knowledge: ['Decision design'], relationships: ['Practitioner'], pointsOfView: ['Action over abstraction'], shareableMaterial: ['Case note'] }, presentation: presentation(15) });
-    expect(deriveMethodCheckpoint(map).pendingDecision?.kind).toBe('proof-confirmation');
-    map = commit(map, 'confirm-proof-inventory', { proofId: 'proof-1', proofRevision: 1, action: action(16) });
-    map = commit(map, 'propose-side-doors', { setId: 'doors-1', setRevision: 1, doors: [1, 2, 3].map((n) => ({ id: `door-${n}`, revision: 1, name: `Door ${n}`, target: `Target ${n}`, proofValue: `Proof value ${n}`, contribution: `Contribution ${n}`, firstMove: `Move ${n}`, accessConstraints: [`Constraint ${n}`] })) as never, presentation: presentation(17) });
-    expect(deriveMethodCheckpoint(map).pendingDecision?.kind).toBe('side-door-selection');
-    map = commit(map, 'select-side-door', { setId: 'doors-1', setRevision: 1, doorId: 'door-2', doorRevision: 1, action: action(18) });
-    expect(deriveMethodCheckpoint(map)).toMatchObject({ module: 'enter-side-doors', pendingDecision: null });
+    const historical = { id: 'reflection-old', revision: 1, projectBasis: { id: 'project-old', revision: 1 }, status: 'closed' as const, openedBy: action(1), closedBy: action(2), evidence: [] };
+    map.reflections.push(historical);
+    expect(selectCurrentProjectLearning(map).reflection).toBeUndefined();
+    expect(deriveMethodCheckpoint(map).module).toBe('guide-path-project');
+    expect(hasCompletedLearningLoop(map)).toBe(false);
   });
+
+  it('scopes path focus to its selection tenure and active path', () => {
+    const map = withSelectedPath('focus-tenure');
+    const sourceId = selectCurrentPathSelectionSourceId(map)!;
+    const focus = { id: 'focus-1', revision: 1, basisPath: { id: 'path-1', revision: 1 }, selectionSourceId: sourceId, action: action(5) };
+    map.pathFocusCommitments.push(focus);
+    expect(selectCurrentPathFocus(map)).toBe(focus);
+    map.pathFocusCommitments[0] = { ...focus, selectionSourceId: 'previous-selection' };
+    expect(selectCurrentPathFocus(map)).toBeUndefined();
+  });
+
+  it('finds the current active review and ignores orphan and deferred reviews', () => {
+    const map = withSelectedPath('review-selection');
+    const review = { id: 'review-path', basisKind: 'why' as const, basisId: 'why-1', basisRevision: 1, targetKind: 'path-set' as const, targetId: 'set-1', targetRevision: 1, createdAtRevision: 5, status: 'pending' as const };
+    map.invalidations.push({ ...review, id: 'orphan', targetId: 'missing-set' }, review);
+    expect(selectEarliestActiveReview(map)).toBe(review);
+    expect(deriveMethodCheckpoint(map).availableOperations).toEqual(['resolve-basis-review']);
+  });
+
+  it('uses the explicit selected direction as a follow-on basis', () => {
+    const map = withSelectedPath('selection-basis');
+    const basis = selectProjectDecisionBasis(map);
+    expect(basis).toEqual({ basisAction: { sourceId: selectCurrentPathSelectionSourceId(map), action: action(4) } });
+    map.projectOptionSets.push({ id: 'consumed', revision: 1, status: 'superseded', projectNumber: 2, basisPath: { id: 'path-1', revision: 1 }, ...basis, projects: [1, 2, 3].map((n) => ({ ...project(`project-${n}`), equalWeight: true, selection: 'available' })) as never, presentation: presentation(5) });
+    expect(selectProjectDecisionBasis(map)).toBeUndefined();
+  });
+
+  it('preserves focus when only a sibling path changes, and expires it after leaving and returning', () => {
+    let map = withSelectedPath('uninterrupted-focus');
+    const selectionSourceId = selectCurrentPathSelectionSourceId(map);
+    map = commit(map, 'record-path-focus', { id: 'focus-1', revision: 1, pathId: 'path-1', pathRevision: 1, action: action(5) });
+    map = commit(map, 'open-path-revision-focus', { reason: 'Improve another option', action: action(6) });
+    map = commit(map, 'replace-purpose-path', { sourceSetId: 'set-1', sourceSetRevision: 1, replacedPathId: 'path-2', replacementSetId: 'set-2', replacementSetRevision: 1, replacement: { ...paths[1], id: 'path-4' }, presentation: presentation(7) });
+    map = commit(map, 'confirm-purpose-path-revision', { setId: 'set-2', setRevision: 1, pathId: 'path-1', pathRevision: 1, action: action(8) });
+    expect(selectCurrentPathSelectionSourceId(map)).toBe(selectionSourceId);
+    expect(selectCurrentPathFocus(map)?.id).toBe('focus-1');
+    map = commit(map, 'open-path-revision-focus', { reason: 'Try the other path', action: action(9) });
+    map = commit(map, 'choose-parked-purpose-path', { sourceSetId: 'set-2', sourceSetRevision: 1, replacementSetId: 'set-3', replacementSetRevision: 1, pathId: 'path-3', pathRevision: 1, action: action(10) });
+    expect(selectCurrentPathFocus(map)).toBeUndefined();
+    map = commit(map, 'open-path-revision-focus', { reason: 'Return to the original path', action: action(11) });
+    map = commit(map, 'choose-parked-purpose-path', { sourceSetId: 'set-3', sourceSetRevision: 1, replacementSetId: 'set-4', replacementSetRevision: 1, pathId: 'path-1', pathRevision: 1, action: action(12) });
+    expect(selectCurrentPathSelectionSourceId(map)).not.toBe(selectionSourceId);
+    expect(selectCurrentPathFocus(map)).toBeUndefined();
+  });
+
+  it('expires path focus when Foundation confirmation invalidates its path basis', () => {
+    let map = withSelectedPath('foundation-focus-expiry');
+    map = commit(map, 'record-path-focus', { id: 'focus-1', revision: 1, pathId: 'path-1', pathRevision: 1, action: action(5) });
+    map = commit(map, 'open-foundation-revision-focus', { reason: 'Change who the work serves', action: action(6) });
+    map = commit(map, 'revise-why', { supersedesWhyId: 'why-1', why: { id: 'why-2', revision: 2, statement: 'Make group decisions actionable.', serves: 'Teams in transition', pointOfView: 'Shared clarity must change action' }, presentation: presentation(7) });
+    map = commit(map, 'confirm-why', { whyId: 'why-2', whyRevision: 2, action: action(8) });
+    expect(selectCurrentPathFocus(map)).toBeUndefined();
+    expect(selectEarliestActiveReview(map)?.targetKind).toBe('path-set');
+  });
+
 });

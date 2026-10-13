@@ -1,0 +1,535 @@
+{
+  "schemaVersion": 2,
+  "explorerId": "explorer-1",
+  "revision": 16,
+  "foundation": {
+    "evidence": [],
+    "constraints": [],
+    "whyRevisions": [
+      {
+        "id": "why-1",
+        "revision": 1,
+        "statement": "I work to make complex choices more humane.",
+        "serves": "People facing consequential choices",
+        "pointOfView": "Clarity should produce action, not dependence",
+        "status": "confirmed",
+        "presentation": {
+          "kind": "model-presentation",
+          "assistantTurnId": "assistant-1",
+          "turnSequence": 1,
+          "completed": true,
+          "presentedAt": "2026-08-31T10:01:00.000Z"
+        },
+        "confirmation": {
+          "targetId": "why-1",
+          "targetRevision": 1,
+          "presentedInTurnId": "assistant-1",
+          "confirmedBy": {
+            "kind": "user-message",
+            "actionId": "action-2",
+            "turnId": "user-2",
+            "turnSequence": 2,
+            "occurredAt": "2026-08-31T10:02:00.000Z"
+          }
+        }
+      }
+    ]
+  },
+  "pathSets": [
+    {
+      "id": "paths-1",
+      "revision": 1,
+      "status": "active",
+      "basisWhy": {
+        "id": "why-1",
+        "revision": 1
+      },
+      "paths": [
+        {
+          "id": "path-1",
+          "revision": 1,
+          "name": "Make knowledge useful",
+          "servesWhy": "Turn complexity into practical understanding",
+          "possibility": "People act with more confidence",
+          "evidence": [
+            "The explorer repeatedly explains complex systems"
+          ],
+          "centralUnknown": "Whether facilitation stays energizing",
+          "projectPreview": "Run a decision workshop",
+          "practicalFit": "Can begin beside current work",
+          "selection": "parked",
+          "equalWeight": true
+        },
+        {
+          "id": "path-2",
+          "revision": 1,
+          "name": "Build humane tools",
+          "servesWhy": "Encode practical understanding into tools",
+          "possibility": "Small teams make better decisions",
+          "evidence": [
+            "The explorer builds internal tools voluntarily"
+          ],
+          "centralUnknown": "Whether product iteration is absorbing",
+          "projectPreview": "Build one decision aid",
+          "practicalFit": "A low-cost prototype is feasible",
+          "selection": "active",
+          "equalWeight": true
+        },
+        {
+          "id": "path-3",
+          "revision": 1,
+          "name": "Investigate better systems",
+          "servesWhy": "Find and publish better ways to decide",
+          "possibility": "Useful methods spread",
+          "evidence": [
+            "The explorer follows research questions for fun"
+          ],
+          "centralUnknown": "Whether sustained inquiry feels alive",
+          "projectPreview": "Publish a field note",
+          "practicalFit": "Can be tested with one case",
+          "selection": "parked",
+          "equalWeight": true
+        }
+      ],
+      "presentation": {
+        "kind": "model-presentation",
+        "assistantTurnId": "assistant-3",
+        "turnSequence": 3,
+        "completed": true,
+        "presentedAt": "2026-08-31T10:03:00.000Z"
+      },
+      "confirmation": {
+        "targetId": "paths-1",
+        "targetRevision": 1,
+        "presentedInTurnId": "assistant-3",
+        "confirmedBy": {
+          "kind": "user-message",
+          "actionId": "action-4",
+          "turnId": "user-4",
+          "turnSequence": 4,
+          "occurredAt": "2026-08-31T10:04:00.000Z"
+        }
+      },
+      "changeKind": "initial"
+    }
+  ],
+  "projects": [
+    {
+      "id": "project-1",
+      "revision": 1,
+      "title": "Build a real decision aid",
+      "outcome": "A colleague can use it for a current decision",
+      "audience": "A colleague with a live decision",
+      "whyWanted": "The explorer wants less wasteful decision work",
+      "learningGoal": "Learn whether product iteration creates voluntary pull",
+      "firstVersion": "A one-page interactive prototype",
+      "firstStep": "Interview one colleague about a live decision",
+      "decisionQuestion": "Do I want to keep improving tools like this?",
+      "evidenceCue": "Notice whether iteration creates energy or resistance",
+      "number": 1,
+      "basisPath": {
+        "id": "path-2",
+        "revision": 1
+      },
+      "agreementStatus": "accepted",
+      "workStatus": "not-started",
+      "workUpdates": [],
+      "presentation": {
+        "kind": "model-presentation",
+        "assistantTurnId": "assistant-5",
+        "turnSequence": 5,
+        "completed": true,
+        "presentedAt": "2026-08-31T10:05:00.000Z"
+      },
+      "acceptanceFraming": {
+        "locale": "en",
+        "framingText": "The point of a project is not to succeed, it's to learn if it's something you'd want to pursue. Think of projects like dating: you start with something chill and low commitment, then invest more only if each date makes you want another.",
+        "acceptancePhrase": "I explicitly accept this Path Project.",
+        "acceptanceQuestion": "Will you explicitly accept this Path Project by replying “I explicitly accept this Path Project.”?",
+        "moduleVersion": "1.1.1",
+        "status": "delivered",
+        "assistantTurnId": "assistant-6",
+        "turnSequence": 6,
+        "initiatedAt": "2026-08-31T10:06:00.000Z",
+        "presentation": {
+          "kind": "model-presentation",
+          "assistantTurnId": "assistant-6",
+          "turnSequence": 6,
+          "completed": true,
+          "presentedAt": "2026-08-31T10:06:00.000Z"
+        }
+      },
+      "confirmation": {
+        "targetId": "project-1",
+        "targetRevision": 1,
+        "presentedInTurnId": "assistant-6",
+        "confirmedBy": {
+          "kind": "user-message",
+          "actionId": "action-7",
+          "turnId": "user-7",
+          "turnSequence": 7,
+          "occurredAt": "2026-08-31T10:07:00.000Z"
+        }
+      }
+    }
+  ],
+  "projectOptionSets": [],
+  "reflections": [
+    {
+      "id": "reflection-1",
+      "revision": 1,
+      "projectBasis": {
+        "id": "project-1",
+        "revision": 1
+      },
+      "status": "closed",
+      "openedBy": {
+        "kind": "user-message",
+        "actionId": "action-7",
+        "turnId": "user-7",
+        "turnSequence": 7,
+        "occurredAt": "2026-08-31T10:07:00.000Z"
+      },
+      "closedBy": {
+        "kind": "user-message",
+        "actionId": "action-9",
+        "turnId": "user-9",
+        "turnSequence": 9,
+        "occurredAt": "2026-08-31T10:09:00.000Z"
+      },
+      "evidence": [
+        {
+          "id": "learning-1",
+          "revision": 1,
+          "observation": "I kept improving the interaction after the useful version worked.",
+          "signal": "voluntary-pull",
+          "interpretation": "Iteration itself may be energizing",
+          "provenance": {
+            "kind": "user-message",
+            "actionId": "action-8",
+            "turnId": "user-8",
+            "turnSequence": 8,
+            "occurredAt": "2026-08-31T10:08:00.000Z"
+          }
+        }
+      ]
+    }
+  ],
+  "continueChoices": [
+    {
+      "id": "continue-1",
+      "revision": 1,
+      "reflectionBasis": {
+        "id": "reflection-1",
+        "revision": 1
+      },
+      "wantsToContinue": true,
+      "action": {
+        "kind": "user-message",
+        "actionId": "action-10",
+        "turnId": "user-10",
+        "turnSequence": 10,
+        "occurredAt": "2026-08-31T10:10:00.000Z"
+      }
+    }
+  ],
+  "nextMoves": [
+    {
+      "id": "move-1",
+      "revision": 1,
+      "continueChoiceBasis": {
+        "id": "continue-1",
+        "revision": 1
+      },
+      "kind": "commit-provisionally",
+      "action": {
+        "kind": "user-message",
+        "actionId": "action-11",
+        "turnId": "user-11",
+        "turnSequence": 11,
+        "occurredAt": "2026-08-31T10:11:00.000Z"
+      }
+    }
+  ],
+  "peerExposures": [
+    {
+      "id": "peer-1",
+      "revision": 1,
+      "subjectKind": "community",
+      "subject": "Decision practitioners",
+      "insight": "Credibility comes from concrete cases",
+      "basisPath": {
+        "id": "path-2",
+        "revision": 1
+      },
+      "status": "confirmed",
+      "presentation": {
+        "kind": "model-presentation",
+        "assistantTurnId": "assistant-12",
+        "turnSequence": 12,
+        "completed": true,
+        "presentedAt": "2026-08-31T10:12:00.000Z"
+      },
+      "confirmation": {
+        "targetId": "peer-1",
+        "targetRevision": 1,
+        "presentedInTurnId": "assistant-12",
+        "confirmedBy": {
+          "kind": "user-message",
+          "actionId": "action-13",
+          "turnId": "user-13",
+          "turnSequence": 13,
+          "occurredAt": "2026-08-31T10:13:00.000Z"
+        }
+      }
+    }
+  ],
+  "commitmentIntent": {
+    "id": "intent-move-1",
+    "revision": 1,
+    "basisPath": {
+      "id": "path-2",
+      "revision": 1
+    },
+    "basisNextMove": {
+      "id": "move-1",
+      "revision": 1
+    },
+    "status": "completed",
+    "action": {
+      "kind": "user-message",
+      "actionId": "action-11",
+      "turnId": "user-11",
+      "turnSequence": 11,
+      "occurredAt": "2026-08-31T10:11:00.000Z"
+    }
+  },
+  "provisionalCommitment": {
+    "id": "commitment-1",
+    "revision": 1,
+    "basisPath": {
+      "id": "path-2",
+      "revision": 1
+    },
+    "basisNextMove": {
+      "id": "move-1",
+      "revision": 1
+    },
+    "basisPeerExposure": {
+      "id": "peer-1",
+      "revision": 1
+    },
+    "status": "confirmed",
+    "action": {
+      "kind": "user-message",
+      "actionId": "action-14",
+      "turnId": "user-14",
+      "turnSequence": 14,
+      "occurredAt": "2026-08-31T10:14:00.000Z"
+    }
+  },
+  "proofRevisions": [],
+  "sideDoorSets": [],
+  "routeOutcomes": [],
+  "invalidations": [],
+  "operationHistory": [
+    {
+      "sourceId": "propose-why-1",
+      "operationType": "propose-why",
+      "payloadFingerprint": "u2-v1-f104235eba87dae893f1a2076fe99510",
+      "resultRevision": 1,
+      "committedAt": "2026-08-31T10:01:00.000Z",
+      "confirmationProvenance": null,
+      "moduleVersion": null
+    },
+    {
+      "sourceId": "confirm-why-2",
+      "operationType": "confirm-why",
+      "payloadFingerprint": "u2-v1-51cfe3ca69607606db94b11c5d266156",
+      "resultRevision": 2,
+      "committedAt": "2026-08-31T10:02:00.000Z",
+      "confirmationProvenance": {
+        "kind": "user-message",
+        "actionId": "action-2",
+        "turnId": "user-2",
+        "turnSequence": 2,
+        "occurredAt": "2026-08-31T10:02:00.000Z"
+      },
+      "moduleVersion": null
+    },
+    {
+      "sourceId": "propose-purpose-paths-3",
+      "operationType": "propose-purpose-paths",
+      "payloadFingerprint": "u2-v1-c04f2f173d8993dac6dda630b8b743bc",
+      "resultRevision": 3,
+      "committedAt": "2026-08-31T10:03:00.000Z",
+      "confirmationProvenance": null,
+      "moduleVersion": null
+    },
+    {
+      "sourceId": "select-purpose-path-4",
+      "operationType": "select-purpose-path",
+      "payloadFingerprint": "u2-v1-89b2a0fd05460a23c6c82d2eb1111221",
+      "resultRevision": 4,
+      "committedAt": "2026-08-31T10:04:00.000Z",
+      "confirmationProvenance": {
+        "kind": "user-message",
+        "actionId": "action-4",
+        "turnId": "user-4",
+        "turnSequence": 4,
+        "occurredAt": "2026-08-31T10:04:00.000Z"
+      },
+      "moduleVersion": null
+    },
+    {
+      "sourceId": "propose-first-project-5",
+      "operationType": "propose-first-project",
+      "payloadFingerprint": "u2-v1-4eb6b3fe59bc253b140013874504332a",
+      "resultRevision": 5,
+      "committedAt": "2026-08-31T10:05:00.000Z",
+      "confirmationProvenance": null,
+      "moduleVersion": null
+    },
+    {
+      "sourceId": "present-first-project-framing-6",
+      "operationType": "present-first-project-framing",
+      "payloadFingerprint": "u2-v1-ce6bdb4b28d9c0815594accac130a710",
+      "resultRevision": 6,
+      "committedAt": "2026-08-31T10:06:00.000Z",
+      "confirmationProvenance": null,
+      "moduleVersion": null
+    },
+    {
+      "sourceId": "deliver-first-project-framing-7",
+      "operationType": "deliver-first-project-framing",
+      "payloadFingerprint": "u2-v1-8d00cf55c07055a408478ec5cd25a914",
+      "resultRevision": 7,
+      "committedAt": "2026-08-31T10:07:00.000Z",
+      "confirmationProvenance": null,
+      "moduleVersion": null
+    },
+    {
+      "sourceId": "accept-first-project-8",
+      "operationType": "accept-first-project",
+      "payloadFingerprint": "u2-v1-85f397c078279a79933ce478752a00a1",
+      "resultRevision": 8,
+      "committedAt": "2026-08-31T10:08:00.000Z",
+      "confirmationProvenance": {
+        "kind": "user-message",
+        "actionId": "action-7",
+        "turnId": "user-7",
+        "turnSequence": 7,
+        "occurredAt": "2026-08-31T10:07:00.000Z"
+      },
+      "moduleVersion": null
+    },
+    {
+      "sourceId": "open-reflection-9",
+      "operationType": "open-reflection",
+      "payloadFingerprint": "u2-v1-a6d3c69d9d090642af25d61d3f556ec0",
+      "resultRevision": 9,
+      "committedAt": "2026-08-31T10:09:00.000Z",
+      "confirmationProvenance": {
+        "kind": "user-message",
+        "actionId": "action-7",
+        "turnId": "user-7",
+        "turnSequence": 7,
+        "occurredAt": "2026-08-31T10:07:00.000Z"
+      },
+      "moduleVersion": null
+    },
+    {
+      "sourceId": "append-reflection-evidence-10",
+      "operationType": "append-reflection-evidence",
+      "payloadFingerprint": "u2-v1-7693295bc0fee3c959a5c7673a6cdd11",
+      "resultRevision": 10,
+      "committedAt": "2026-08-31T10:10:00.000Z",
+      "confirmationProvenance": null,
+      "moduleVersion": null
+    },
+    {
+      "sourceId": "close-reflection-11",
+      "operationType": "close-reflection",
+      "payloadFingerprint": "u2-v1-78d348122e416d7191cbad365d7b81fd",
+      "resultRevision": 11,
+      "committedAt": "2026-08-31T10:11:00.000Z",
+      "confirmationProvenance": {
+        "kind": "user-message",
+        "actionId": "action-9",
+        "turnId": "user-9",
+        "turnSequence": 9,
+        "occurredAt": "2026-08-31T10:09:00.000Z"
+      },
+      "moduleVersion": null
+    },
+    {
+      "sourceId": "record-continue-choice-12",
+      "operationType": "record-continue-choice",
+      "payloadFingerprint": "u2-v1-ca0e97b376cf516e808297a5c1eaf026",
+      "resultRevision": 12,
+      "committedAt": "2026-08-31T10:12:00.000Z",
+      "confirmationProvenance": {
+        "kind": "user-message",
+        "actionId": "action-10",
+        "turnId": "user-10",
+        "turnSequence": 10,
+        "occurredAt": "2026-08-31T10:10:00.000Z"
+      },
+      "moduleVersion": null
+    },
+    {
+      "sourceId": "record-next-move-13",
+      "operationType": "record-next-move",
+      "payloadFingerprint": "u2-v1-3846098628c5effc383eed74676ae5f7",
+      "resultRevision": 13,
+      "committedAt": "2026-08-31T10:13:00.000Z",
+      "confirmationProvenance": {
+        "kind": "user-message",
+        "actionId": "action-11",
+        "turnId": "user-11",
+        "turnSequence": 11,
+        "occurredAt": "2026-08-31T10:11:00.000Z"
+      },
+      "moduleVersion": null
+    },
+    {
+      "sourceId": "record-peer-exposure-14",
+      "operationType": "record-peer-exposure",
+      "payloadFingerprint": "u2-v1-648576a7cbff2621b278787b429dc666",
+      "resultRevision": 14,
+      "committedAt": "2026-08-31T10:14:00.000Z",
+      "confirmationProvenance": null,
+      "moduleVersion": null
+    },
+    {
+      "sourceId": "confirm-peer-exposure-15",
+      "operationType": "confirm-peer-exposure",
+      "payloadFingerprint": "u2-v1-629c41d7b838802b6f5e8455265d56ee",
+      "resultRevision": 15,
+      "committedAt": "2026-08-31T10:15:00.000Z",
+      "confirmationProvenance": {
+        "kind": "user-message",
+        "actionId": "action-13",
+        "turnId": "user-13",
+        "turnSequence": 13,
+        "occurredAt": "2026-08-31T10:13:00.000Z"
+      },
+      "moduleVersion": null
+    },
+    {
+      "sourceId": "complete-provisional-commitment-16",
+      "operationType": "complete-provisional-commitment",
+      "payloadFingerprint": "u2-v1-58e69989e30340550dd5b7f5bd816bfe",
+      "resultRevision": 16,
+      "committedAt": "2026-08-31T10:16:00.000Z",
+      "confirmationProvenance": {
+        "kind": "user-message",
+        "actionId": "action-14",
+        "turnId": "user-14",
+        "turnSequence": 14,
+        "occurredAt": "2026-08-31T10:14:00.000Z"
+      },
+      "moduleVersion": null
+    }
+  ]
+}

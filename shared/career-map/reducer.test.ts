@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import legacyCommitment from './test-fixtures/legacy-commitment-v2.json';
+import { readCareerMap } from './model';
 import {
   applyCareerMapOperation,
   careerMapSchema,
@@ -486,39 +488,18 @@ describe('Method reducer', () => {
     },
   );
 
-  it('enforces Next Move branches and peer-gated provisional commitment', () => {
-    const noMap = withCompletedLearningLoop('return-to-paths');
-    expect(noMap.nextMoves.at(-1)?.kind).toBe('return-to-paths');
-
-    let map = withCompletedLearningLoop('commit-provisionally');
-    expect(map.commitmentIntent?.status).toBe('pending-peer-exposure');
+  it('enforces Next Move branches and saves peer-free focus inside the loop', () => {
+    expect(withCompletedLearningLoop('return-to-paths').nextMoves.at(-1)?.kind).toBe('return-to-paths');
+    const map = withCompletedLearningLoop('commit-provisionally');
+    expect(map.commitmentIntent).toBeUndefined();
     expect(map.provisionalCommitment).toBeUndefined();
-    expect(deriveMethodCheckpoint(map).availableOperations).not.toContain('propose-follow-on-projects');
-
-    const blocked = applyCareerMapOperation(map, operation(map, 'complete-provisional-commitment', { id: 'commitment-1', revision: 1, intentId: map.commitmentIntent!.id, action: action(12) }));
-    expect(blocked.status).toBe('rejected');
-
-    map = commit(map, 'defer-peer-exposure', { intentId: map.commitmentIntent!.id, action: action(12) });
-    expect(map.commitmentIntent?.status).toBe('peer-exposure-deferred');
+    expect(map.pathFocusCommitments).toHaveLength(1);
     expect(deriveMethodCheckpoint(map).module).toBe('guide-path-project');
-
-    map = commit(map, 'record-peer-exposure', {
-      exposure: { id: 'peer-1', revision: 1, subjectKind: 'first-person-source', subject: 'A practitioner field journal', insight: 'The work rewards repeated translation between evidence and action' },
-      presentation: presentation(12),
-    });
-    map = commit(map, 'confirm-peer-exposure', { exposureId: 'peer-1', exposureRevision: 1, action: action(13) });
-    map = commit(map, 'complete-provisional-commitment', { id: 'commitment-1', revision: 1, intentId: map.commitmentIntent!.id, action: action(14) });
-    expect(map.provisionalCommitment?.status).toBe('confirmed');
+    expect(deriveMethodCheckpoint(map).availableOperations).toContain('request-new-project');
   });
 
   it('invalidates commitment and later state when its confirmed peer-insight basis is revised', () => {
-    let map = withCompletedLearningLoop('commit-provisionally');
-    map = commit(map, 'record-peer-exposure', {
-      exposure: { id: 'peer-1', revision: 1, subjectKind: 'first-person-source', subject: 'Practitioner journal', insight: 'The work depends on repeated translation' },
-      presentation: presentation(12),
-    });
-    map = commit(map, 'confirm-peer-exposure', { exposureId: 'peer-1', exposureRevision: 1, action: action(13) });
-    map = commit(map, 'complete-provisional-commitment', { id: 'commitment-1', revision: 1, intentId: map.commitmentIntent!.id, action: action(14) });
+    let map = readCareerMap(legacyCommitment);
     map = commit(map, 'revise-peer-exposure', {
       exposure: { id: 'peer-2', revision: 1, subjectKind: 'first-person-source', subject: 'Practitioner journal', insight: 'The work depends on facilitation more than translation' },
       supersedesExposureId: 'peer-1', presentation: presentation(15),
@@ -544,7 +525,7 @@ describe('Method reducer', () => {
     map = commit(map, 'record-next-move', { id: 'move-1', revision: 1, continueChoiceId: 'continue-1', continueChoiceRevision: 1, kind: 'explore-further', action: action(12) });
     expect(deriveMethodCheckpoint(map)).toMatchObject({
       module: 'design-path-project',
-      availableOperations: ['propose-follow-on-projects'],
+      availableOperations: expect.arrayContaining(['propose-follow-on-projects']),
     });
 
     map = commit(map, 'propose-follow-on-projects', {
@@ -582,7 +563,7 @@ describe('Method reducer', () => {
     map = commit(map, 'resolve-basis-review', { targetKind: 'next-move', targetId: 'move-1', targetRevision: 1, resolution: 'reaffirmed', action: action(15) });
     expect(deriveMethodCheckpoint(map)).toMatchObject({
       module: 'design-path-project',
-      availableOperations: ['propose-follow-on-projects'],
+      availableOperations: expect.arrayContaining(['propose-follow-on-projects']),
     });
 
     map = commit(map, 'propose-follow-on-projects', {
@@ -598,10 +579,7 @@ describe('Method reducer', () => {
   });
 
   it('selects one Side Door and parks two atomically while keeping route evidence separate', () => {
-    let map = withCompletedLearningLoop('commit-provisionally');
-    map = commit(map, 'record-peer-exposure', { exposure: { id: 'peer-1', revision: 1, subjectKind: 'community', subject: 'Decision practitioners', insight: 'Credibility comes from concrete cases' }, presentation: presentation(12) });
-    map = commit(map, 'confirm-peer-exposure', { exposureId: 'peer-1', exposureRevision: 1, action: action(13) });
-    map = commit(map, 'complete-provisional-commitment', { id: 'commitment-1', revision: 1, intentId: map.commitmentIntent!.id, action: action(14) });
+    let map = readCareerMap(legacyCommitment);
     map = commit(map, 'propose-proof-inventory', { proof: { id: 'proof-1', revision: 1, artifacts: ['Decision aid prototype'], problemsSolved: ['Turned ambiguity into a usable flow'], peopleHelped: ['One colleague'], usefulQualities: ['Synthesis'], knowledge: ['Decision design'], relationships: ['Practitioner peer'], pointsOfView: ['Clarity must change action'], shareableMaterial: ['Anonymized case study'] }, presentation: presentation(15) });
     map = commit(map, 'confirm-proof-inventory', { proofId: 'proof-1', proofRevision: 1, action: action(16) });
     map = commit(map, 'propose-side-doors', { setId: 'doors-1', setRevision: 1, doors: doors(), presentation: presentation(17) });
@@ -632,10 +610,7 @@ describe('Method reducer', () => {
   });
 
   it('preserves history and marks the full downstream closure when Why changes', () => {
-    let map = withCompletedLearningLoop('commit-provisionally');
-    map = commit(map, 'record-peer-exposure', { exposure: { id: 'peer-1', revision: 1, subjectKind: 'real-person', subject: 'A working practitioner', insight: 'The work involves repeated facilitation under ambiguity' }, presentation: presentation(12) });
-    map = commit(map, 'confirm-peer-exposure', { exposureId: 'peer-1', exposureRevision: 1, action: action(13) });
-    map = commit(map, 'complete-provisional-commitment', { id: 'commitment-1', revision: 1, intentId: map.commitmentIntent!.id, action: action(14) });
+    let map = readCareerMap(legacyCommitment);
     map = commit(map, 'propose-proof-inventory', { proof: { id: 'proof-1', revision: 1, artifacts: ['Prototype'], problemsSolved: ['Decision friction'], peopleHelped: ['Colleague'], usefulQualities: ['Synthesis'], knowledge: ['Decision design'], relationships: ['Practitioner'], pointsOfView: ['Action over abstraction'], shareableMaterial: ['Case note'] }, presentation: presentation(15) });
     map = commit(map, 'confirm-proof-inventory', { proofId: 'proof-1', proofRevision: 1, action: action(16) });
     map = commit(map, 'propose-side-doors', { setId: 'doors-1', setRevision: 1, doors: doors(), presentation: presentation(17) });

@@ -15,6 +15,7 @@ import {
   projectAcceptancePhraseSchema,
   projectAcceptanceQuestionSchema,
   projectWorkStatusSchema,
+  validateProjectBrief,
 } from './projects';
 import { learningEvidenceSchema, nextMoveKindSchema } from './learning';
 import { peerExposureInputSchema } from './peers';
@@ -91,15 +92,17 @@ export const pathOperationSchemas = {
 } as const;
 
 export const projectOperationSchemas = {
-  'propose-first-project': operationSchema('propose-first-project', z.object({ project: pathProjectInputSchema, presentation: modelPresentationSchema }).strict()),
-  'replace-project-proposal': operationSchema('replace-project-proposal', z.object({ projectId: entityIdSchema, projectRevision: revisionSchema, replacement: pathProjectInputSchema, presentation: modelPresentationSchema }).strict()),
+  'request-new-project': operationSchema('request-new-project', z.object({ action: userActionProvenanceSchema }).strict()),
+  'propose-first-project': operationSchema('propose-first-project', z.object({ project: pathProjectInputSchema.superRefine(validateProjectBrief), presentation: modelPresentationSchema }).strict()),
+  'replace-project-proposal': operationSchema('replace-project-proposal', z.object({ projectId: entityIdSchema, projectRevision: revisionSchema, replacement: pathProjectInputSchema.superRefine(validateProjectBrief), presentation: modelPresentationSchema }).strict()),
   'present-first-project-framing': operationSchema('present-first-project-framing', z.object({
     projectId: entityIdSchema,
     projectRevision: revisionSchema,
     locale: languageTagSchema,
     framingText: z.string().min(1).max(2_000),
-    acceptancePhrase: projectAcceptancePhraseSchema,
-    acceptanceQuestion: projectAcceptanceQuestionSchema,
+    framingFormat: z.literal('natural-v1').optional(),
+    acceptancePhrase: projectAcceptancePhraseSchema.optional(),
+    acceptanceQuestion: projectAcceptanceQuestionSchema.optional(),
     moduleVersion: z.string().min(1).max(80),
     presentation: modelPresentationSchema,
   }).strict()),
@@ -115,20 +118,22 @@ export const projectOperationSchemas = {
     assistantTurnId: entityIdSchema,
   }).strict()),
   'accept-first-project': operationSchema('accept-first-project', z.object({ projectId: entityIdSchema, projectRevision: revisionSchema, action: userActionProvenanceSchema }).strict()),
-  'propose-project-revision': operationSchema('propose-project-revision', z.object({ projectId: entityIdSchema, projectRevision: revisionSchema, replacement: pathProjectInputSchema, presentation: modelPresentationSchema }).strict()),
+  'propose-project-revision': operationSchema('propose-project-revision', z.object({ projectId: entityIdSchema, projectRevision: revisionSchema, replacement: pathProjectInputSchema.superRefine(validateProjectBrief), presentation: modelPresentationSchema }).strict()),
   'confirm-project-revision': operationSchema('confirm-project-revision', z.object({ projectId: entityIdSchema, projectRevision: revisionSchema, action: userActionProvenanceSchema }).strict()),
   'update-project-work-status': operationSchema('update-project-work-status', z.object({ projectId: entityIdSchema, projectRevision: revisionSchema, status: projectWorkStatusSchema, action: userActionProvenanceSchema }).strict()),
-  'propose-follow-on-projects': operationSchema('propose-follow-on-projects', z.object({ setId: entityIdSchema, setRevision: revisionSchema, projects: exactThree(pathProjectInputSchema), presentation: modelPresentationSchema }).strict()),
-  'replace-follow-on-project': operationSchema('replace-follow-on-project', z.object({ sourceSetId: entityIdSchema, sourceSetRevision: revisionSchema, replacedProjectId: entityIdSchema, replacementSetId: entityIdSchema, replacementSetRevision: revisionSchema, replacement: pathProjectInputSchema, presentation: modelPresentationSchema }).strict()),
+  'propose-follow-on-projects': operationSchema('propose-follow-on-projects', z.object({ setId: entityIdSchema, setRevision: revisionSchema, projects: exactThree(pathProjectInputSchema.superRefine(validateProjectBrief)), presentation: modelPresentationSchema }).strict()),
+  'replace-follow-on-project': operationSchema('replace-follow-on-project', z.object({ sourceSetId: entityIdSchema, sourceSetRevision: revisionSchema, replacedProjectId: entityIdSchema, replacementSetId: entityIdSchema, replacementSetRevision: revisionSchema, replacement: pathProjectInputSchema.superRefine(validateProjectBrief), presentation: modelPresentationSchema }).strict()),
   'select-follow-on-project': operationSchema('select-follow-on-project', z.object({ setId: entityIdSchema, setRevision: revisionSchema, projectId: entityIdSchema, projectRevision: revisionSchema, action: userActionProvenanceSchema }).strict()),
 } as const;
 
 export const learningOperationSchemas = {
+  'record-path-focus': operationSchema('record-path-focus', z.object({ id: entityIdSchema, revision: revisionSchema, pathId: entityIdSchema, pathRevision: revisionSchema, action: userActionProvenanceSchema }).strict()),
+  'confirm-legacy-path-focus': operationSchema('confirm-legacy-path-focus', z.object({ id: entityIdSchema, revision: revisionSchema, intentId: entityIdSchema, intentRevision: revisionSchema, action: userActionProvenanceSchema }).strict()),
   'open-reflection': operationSchema('open-reflection', z.object({ reflectionId: entityIdSchema, revision: revisionSchema, projectId: entityIdSchema, projectRevision: revisionSchema, action: userActionProvenanceSchema }).strict()),
   'append-reflection-evidence': operationSchema('append-reflection-evidence', z.object({ reflectionId: entityIdSchema, reflectionRevision: revisionSchema, evidence: learningEvidenceSchema }).strict()),
   'revise-reflection-evidence': operationSchema('revise-reflection-evidence', z.object({ reflectionId: entityIdSchema, reflectionRevision: revisionSchema, newReflectionRevision: revisionSchema, evidence: learningEvidenceSchema, supersedesEvidenceId: entityIdSchema }).strict()),
   'close-reflection': operationSchema('close-reflection', z.object({ reflectionId: entityIdSchema, reflectionRevision: revisionSchema, action: userActionProvenanceSchema }).strict()),
-  'record-continue-choice': operationSchema('record-continue-choice', z.object({ id: entityIdSchema, revision: revisionSchema, reflectionId: entityIdSchema, reflectionRevision: revisionSchema, wantsToContinue: z.boolean(), action: userActionProvenanceSchema }).strict()),
+  'record-continue-choice': operationSchema('record-continue-choice', z.object({ id: entityIdSchema, revision: revisionSchema, reflectionId: entityIdSchema, reflectionRevision: revisionSchema, wantsToContinue: z.boolean(), scope: z.enum(['path', 'project']).optional(), action: userActionProvenanceSchema }).strict()),
   'record-next-move': operationSchema('record-next-move', z.object({ id: entityIdSchema, revision: revisionSchema, continueChoiceId: entityIdSchema, continueChoiceRevision: revisionSchema, kind: nextMoveKindSchema, action: userActionProvenanceSchema }).strict()),
 } as const;
 

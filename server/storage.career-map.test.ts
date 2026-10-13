@@ -35,6 +35,9 @@ import {
   type PurposePathInput,
   type SideDoorInput,
 } from '../shared/career-map/index.js';
+import legacyProof from '../shared/career-map/test-fixtures/legacy-proof-v2.json';
+import { readCareerMap } from '../shared/career-map/model';
+import { createCareerMap as createV2Map } from '../shared/career-map/legacy-v2/model';
 import { ConversationHistoryProviderError } from './ai/history.js';
 import {
   createMethodResetDependencies,
@@ -362,7 +365,7 @@ describe('PostgresStorage Method map, history, and ownership', () => {
     expect(loaded).toEqual(created);
     if (loaded.status === 'ready') {
       expect(loaded.map.explorerId).toBe(userId);
-      expect(loaded.map.schemaVersion).toBe(2);
+      expect(loaded.map.schemaVersion).toBe(3);
       expect(loaded.map.revision).toBe(0);
     }
     const missingOwner = owner('other');
@@ -374,6 +377,23 @@ describe('PostgresStorage Method map, history, and ownership', () => {
       turnId: id('missing-map-turn'),
       leaseId: id('missing-map-lease'),
     })).status).toBe('map-required');
+  });
+
+  it('loads V2 without writing a migration, then persists the next mutation as V3', async () => {
+    const userId = owner('legacy-v2');
+    await storage.getOrCreateCareerMap(userId);
+    const legacy = createV2Map(userId);
+    await db.update(careerMaps).set({ schemaVersion: 2, document: legacy as never }).where(eq(careerMaps.userId, userId));
+    const before = (await db.select().from(careerMaps).where(eq(careerMaps.userId, userId)))[0];
+    expect(await storage.loadCareerMap(userId)).toMatchObject({ status: 'ready', map: { schemaVersion: 3, revision: 0, pathFocusCommitments: [] } });
+    expect((await db.select().from(careerMaps).where(eq(careerMaps.userId, userId)))[0]).toEqual(before);
+    const turn = await beginTurn(userId, 'legacy-v2');
+    const result = await persist(userId, turn.leaseId, evidenceOperation(0, id('legacy-v2-source')));
+    expect(result.status).toBe('committed');
+    const persisted = (await db.select().from(careerMaps).where(eq(careerMaps.userId, userId)))[0];
+    expect(persisted.schemaVersion).toBe(3);
+    expect(persisted.revision).toBe(1);
+    expect(await storage.listCareerMapHistory(userId)).toHaveLength(1);
   });
 
   it('commits map CAS and matching append-only history atomically', async () => {
@@ -946,7 +966,7 @@ describe('PostgresStorage Method map, history, and ownership', () => {
     const loaded = await storage.loadCareerMap(userId);
     expect(loaded).toMatchObject({
       status: 'ready',
-      map: { schemaVersion: 2, projects: [expect.objectContaining({ id: projectId, agreementStatus: 'accepted' })] },
+      map: { schemaVersion: 3, projects: [expect.objectContaining({ id: projectId, agreementStatus: 'accepted' })] },
     });
     if (loaded.status === 'ready') {
       expect(loaded.map.projects.find((candidate) => candidate.id === projectId)?.acceptanceFraming)
@@ -957,26 +977,26 @@ describe('PostgresStorage Method map, history, and ownership', () => {
   it('persists Side Door selection with one active and two parked siblings atomically', async () => {
     const userId = owner('side-door-selection');
     await storage.getOrCreateCareerMap(userId);
-    const projectId = id('sd-project');
+    const legacy = structuredClone(legacyProof);
+    legacy.explorerId = userId;
+    legacy.revision = 18;
+    legacy.operationHistory = legacy.operationHistory.slice(0, 18).map((receipt) => ({ ...receipt, moduleVersion: 'method-test@1' }));
+    legacy.sideDoorSets = [];
+    const normalized = readCareerMap(legacy);
+    await db.update(careerMaps).set({ schemaVersion: 2, revision: legacy.revision, document: legacy as never }).where(eq(careerMaps.userId, userId));
+    await db.insert(careerMapHistory).values(normalized.operationHistory.map((receipt, index) => ({
+      userId,
+      operationSourceId: receipt.sourceId,
+      operationType: receipt.operationType,
+      payloadFingerprint: receipt.payloadFingerprint,
+      baseRevision: index,
+      resultRevision: receipt.resultRevision,
+      result: receipt,
+      confirmationProvenance: receipt.confirmationProvenance,
+      moduleVersion: receipt.moduleVersion!,
+      committedAt: new Date(receipt.committedAt),
+    })));
     const operations: CareerMapOperation[] = [
-      { type: 'propose-why', sourceId: id('sd-1'), expectedRevision: 0, occurredAt: at(1), payload: { why: { id: id('sd-why'), revision: 1, statement: 'Make complex work more useful.', serves: 'People doing consequential work', pointOfView: 'Evidence should change action.' }, presentation: presentation(1) } },
-      { type: 'confirm-why', sourceId: id('sd-2'), expectedRevision: 1, occurredAt: at(2), payload: { whyId: id('sd-why'), whyRevision: 1, action: action(2) } },
-      { type: 'propose-purpose-paths', sourceId: id('sd-3'), expectedRevision: 2, occurredAt: at(3), payload: { setId: id('sd-path-set'), setRevision: 1, paths: paths(), presentation: presentation(3) } },
-      { type: 'select-purpose-path', sourceId: id('sd-4'), expectedRevision: 3, occurredAt: at(4), payload: { setId: id('sd-path-set'), setRevision: 1, pathId: id('path-1'), pathRevision: 1, action: action(4) } },
-      { type: 'propose-first-project', sourceId: id('sd-5'), expectedRevision: 4, occurredAt: at(5), payload: { project: project(projectId), presentation: presentation(5) } },
-      { type: 'present-first-project-framing', sourceId: id('sd-6'), expectedRevision: 5, occurredAt: at(6), payload: { projectId, projectRevision: 1, locale: 'en', framingText, acceptancePhrase, acceptanceQuestion, moduleVersion: '1.1.1', presentation: presentation(6) } },
-      { type: 'deliver-first-project-framing', sourceId: id('sd-7'), expectedRevision: 6, occurredAt: at(7), payload: { projectId, projectRevision: 1, assistantText: `${framingText}\n\n${acceptanceQuestion}`, presentation: presentation(6) } },
-      { type: 'accept-first-project', sourceId: id('sd-8'), expectedRevision: 7, occurredAt: at(8), payload: { projectId, projectRevision: 1, action: action(8) } },
-      { type: 'open-reflection', sourceId: id('sd-9'), expectedRevision: 8, occurredAt: at(9), payload: { reflectionId: id('sd-reflection'), revision: 1, projectId, projectRevision: 1, action: action(9) } },
-      { type: 'append-reflection-evidence', sourceId: id('sd-10'), expectedRevision: 9, occurredAt: at(10), payload: { reflectionId: id('sd-reflection'), reflectionRevision: 1, evidence: { id: id('sd-learning'), revision: 1, observation: 'I kept iterating voluntarily.', signal: 'voluntary-pull', interpretation: 'The work may fit.', provenance: action(10) } } },
-      { type: 'close-reflection', sourceId: id('sd-11'), expectedRevision: 10, occurredAt: at(11), payload: { reflectionId: id('sd-reflection'), reflectionRevision: 1, action: action(11) } },
-      { type: 'record-continue-choice', sourceId: id('sd-12'), expectedRevision: 11, occurredAt: at(12), payload: { id: id('sd-continue'), revision: 1, reflectionId: id('sd-reflection'), reflectionRevision: 1, wantsToContinue: true, action: action(12) } },
-      { type: 'record-next-move', sourceId: id('sd-13'), expectedRevision: 12, occurredAt: at(13), payload: { id: id('sd-move'), revision: 1, continueChoiceId: id('sd-continue'), continueChoiceRevision: 1, kind: 'commit-provisionally', action: action(13) } },
-      { type: 'record-peer-exposure', sourceId: id('sd-14'), expectedRevision: 13, occurredAt: at(14), payload: { exposure: { id: id('sd-peer'), revision: 1, subjectKind: 'community', subject: 'Relevant practitioners', insight: 'Concrete cases create trust.' }, presentation: presentation(14) } },
-      { type: 'confirm-peer-exposure', sourceId: id('sd-15'), expectedRevision: 14, occurredAt: at(15), payload: { exposureId: id('sd-peer'), exposureRevision: 1, action: action(15) } },
-      { type: 'complete-provisional-commitment', sourceId: id('sd-16'), expectedRevision: 15, occurredAt: at(16), payload: { id: id('sd-commitment'), revision: 1, intentId: `intent-${id('sd-move')}`, action: action(16) } },
-      { type: 'propose-proof-inventory', sourceId: id('sd-17'), expectedRevision: 16, occurredAt: at(17), payload: { proof: { id: id('sd-proof'), revision: 1, artifacts: ['Prototype'], problemsSolved: ['Decision friction'], peopleHelped: ['One colleague'], usefulQualities: ['Synthesis'], knowledge: ['Decision design'], relationships: ['Practitioner'], pointsOfView: ['Evidence changes action'], shareableMaterial: ['Case note'] }, presentation: presentation(17) } },
-      { type: 'confirm-proof-inventory', sourceId: id('sd-18'), expectedRevision: 17, occurredAt: at(18), payload: { proofId: id('sd-proof'), proofRevision: 1, action: action(18) } },
       { type: 'propose-side-doors', sourceId: id('sd-19'), expectedRevision: 18, occurredAt: at(19), payload: { setId: id('sd-door-set'), setRevision: 1, doors: sideDoors(), presentation: presentation(19) } },
       { type: 'select-side-door', sourceId: id('sd-20'), expectedRevision: 19, occurredAt: at(20), payload: { setId: id('sd-door-set'), setRevision: 1, doorId: id('door-2'), doorRevision: 1, action: action(20) } },
     ];
@@ -1582,8 +1602,8 @@ describe('PostgresStorage repair, erasure, and integrity', () => {
 
   it.each([
     ['unsupported-schema', (document: Record<string, unknown>) => ({ rowVersion: 999, document: { ...document, schemaVersion: 999 } })],
-    ['invalid-document', (document: Record<string, unknown>) => ({ rowVersion: 2, document: { ...document, pathSets: [{ id: 'broken' }] } })],
-    ['owner-mismatch', (document: Record<string, unknown>) => ({ rowVersion: 2, document: { ...document, explorerId: id('someone-else') } })],
+    ['invalid-document', (document: Record<string, unknown>) => ({ rowVersion: 3, document: { ...document, pathSets: [{ id: 'broken' }] } })],
+    ['owner-mismatch', (document: Record<string, unknown>) => ({ rowVersion: 3, document: { ...document, explorerId: id('someone-else') } })],
   ] as const)('fails invalid persisted rows closed as repair-required: %s', async (reason, corrupt) => {
     const userId = owner(`repair-${reason}`);
     const created = await storage.getOrCreateCareerMap(userId);

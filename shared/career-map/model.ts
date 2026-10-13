@@ -4,16 +4,32 @@ import {
   invalidationSchema,
   mapRevisionSchema,
   operationReceiptSchema,
+  revisionRefSchema,
+  revisionSchema,
   userActionProvenanceSchema,
 } from './common';
 import { foundationStateSchema } from './foundation';
 import { purposePathSetSchema } from './paths';
-import { pathProjectSchema, projectOptionSetSchema } from './projects';
+import { pathProjectSchema, pathProjectInputSchema, projectOptionSetSchema, validateProjectBrief } from './projects';
 import { continueChoiceSchema, nextMoveSchema, reflectionSessionSchema } from './learning';
 import { commitmentIntentSchema, peerExposureSchema, provisionalCommitmentSchema } from './peers';
 import { proofInventorySchema, routeOutcomeSchema, sideDoorSetSchema } from './side-doors';
 
-export const CAREER_MAP_SCHEMA_VERSION = 2;
+import { careerMapSchema as careerMapV2Schema } from './legacy-v2/model';
+export { careerMapV2Schema };
+
+export const CAREER_MAP_SCHEMA_VERSION = 3;
+
+export const pathFocusCommitmentSchema = z.object({
+  id: entityIdSchema,
+  revision: revisionSchema,
+  basisPath: revisionRefSchema,
+  selectionSourceId: entityIdSchema,
+  action: userActionProvenanceSchema,
+  basisNextMove: revisionRefSchema.optional(),
+  basisLegacyIntent: revisionRefSchema.optional(),
+}).strict();
+export type PathFocusCommitment = z.infer<typeof pathFocusCommitmentSchema>;
 
 export const focusSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('reflection'), reflectionId: entityIdSchema, reason: z.string().min(1), openedBy: userActionProvenanceSchema }).strict(),
@@ -34,6 +50,7 @@ const composedCareerMapSchema = z.object({
   continueChoices: z.array(continueChoiceSchema),
   nextMoves: z.array(nextMoveSchema),
   peerExposures: z.array(peerExposureSchema),
+  pathFocusCommitments: z.array(pathFocusCommitmentSchema),
   commitmentIntent: commitmentIntentSchema.optional(),
   provisionalCommitment: provisionalCommitmentSchema.optional(),
   proofRevisions: z.array(proofInventorySchema),
@@ -78,6 +95,7 @@ export const careerMapSchema = composedCareerMapSchema.superRefine((map, context
     ['continueChoices', map.continueChoices],
     ['nextMoves', map.nextMoves],
     ['peerExposures', map.peerExposures],
+    ['pathFocusCommitments', map.pathFocusCommitments],
     ['proofRevisions', map.proofRevisions],
     ['sideDoorSets', map.sideDoorSets],
     ['routeOutcomes', map.routeOutcomes],
@@ -143,16 +161,39 @@ export const careerMapSchema = composedCareerMapSchema.superRefine((map, context
     }
   }
 
+  const projectSnapshots = new Map<string, string>();
+  const projectInputs = [
+    ...map.projects.map((project, index) => ({ project, path: ['projects', index] })),
+    ...map.projectOptionSets.flatMap((set, setIndex) => set.projects.map((project, index) => ({ project, path: ['projectOptionSets', setIndex, 'projects', index] }))),
+  ];
+  // Historical V2 briefs were not subject to immutable project snapshots.
+  // Enforce the stronger invariant for explicit V3 briefs without rewriting old content.
+  const simpleProjectKeys = new Set(projectInputs.filter(({ project }) => project.briefFormat === 'simple-v1').map(({ project }) => `${project.id}@${project.revision}`));
+  for (const { project, path } of projectInputs) {
+    const key = `${project.id}@${project.revision}`;
+    if (!simpleProjectKeys.has(key)) continue;
+    const snapshot = JSON.stringify(pathProjectInputSchema.strip().parse(project));
+    const previous = projectSnapshots.get(key);
+    if (previous && previous !== snapshot) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path, message: 'A project revision must have one immutable brief snapshot.' });
+    } else projectSnapshots.set(key, snapshot);
+  }
+
   const acceptedNumbers = map.projects.filter((project) => project.agreementStatus === 'accepted').map((project) => project.number);
   if (!unique(acceptedNumbers.map(String))) {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ['projects'], message: 'Only one accepted Path Project may occupy a project number.' });
   }
   for (const [projectIndex, project] of map.projects.entries()) {
+    validateProjectBrief(project, { ...context, addIssue: (issue) => context.addIssue({ ...issue, path: ['projects', projectIndex, ...(issue.path ?? [])] }) });
     if (!hasRevision(paths, project.basisPath)) {
       context.addIssue({ code: z.ZodIssueCode.custom, path: ['projects', projectIndex, 'basisPath'], message: 'Path Project basis is missing.' });
     }
     if (project.agreementStatus === 'accepted' && !project.confirmation) {
       context.addIssue({ code: z.ZodIssueCode.custom, path: ['projects', projectIndex], message: 'Accepted project requires auditable confirmation.' });
+    }
+    if (project.acceptanceFraming && !project.acceptanceFraming.framingFormat
+      && (!project.acceptanceFraming.acceptancePhrase || !project.acceptanceFraming.acceptanceQuestion)) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['projects', projectIndex, 'acceptanceFraming'], message: 'Legacy project framing requires its exact acceptance phrase and question.' });
     }
     if (project.acceptanceFraming?.status === 'delivered' && !project.acceptanceFraming.presentation) {
       context.addIssue({ code: z.ZodIssueCode.custom, path: ['projects', projectIndex, 'acceptanceFraming'], message: 'Delivered first-project framing requires completed presentation provenance.' });
@@ -160,18 +201,52 @@ export const careerMapSchema = composedCareerMapSchema.superRefine((map, context
     if (project.acceptanceFraming?.status === 'pending' && project.acceptanceFraming.presentation) {
       context.addIssue({ code: z.ZodIssueCode.custom, path: ['projects', projectIndex, 'acceptanceFraming'], message: 'Pending first-project framing cannot claim completed presentation.' });
     }
+    if (project.basisAction) {
+      const receipt = map.operationHistory.find((record) => record.sourceId === project.basisAction?.sourceId);
+      if (!receipt || !['request-new-project','select-purpose-path','confirm-purpose-path-revision','choose-parked-purpose-path'].includes(receipt.operationType) || JSON.stringify(receipt.confirmationProvenance) !== JSON.stringify(project.basisAction.action)) context.addIssue({ code:z.ZodIssueCode.custom, path:['projects',projectIndex,'basisAction'], message:'Project action basis must match its explicit user action receipt.' });
+    }
     const lastWorkStatus = project.workUpdates.at(-1)?.status ?? 'not-started';
     if (lastWorkStatus !== project.workStatus) {
       context.addIssue({ code: z.ZodIssueCode.custom, path: ['projects', projectIndex, 'workStatus'], message: 'Project work status must match its latest provenance record.' });
     }
   }
 
+  const optionBasisKey = (set: typeof map.projectOptionSets[number]) => set.basisAction
+    ? `action:${set.basisAction.sourceId}`
+    : set.basisNextMove ? `next-move:${set.basisNextMove.id}@${set.basisNextMove.revision}` : undefined;
+  const rootOptionBases = map.projectOptionSets.filter((set) => !set.supersedesSetId && (set.basisAction || set.projects.some((project) => project.briefFormat === 'simple-v1'))).map(optionBasisKey).filter((key): key is string => !!key);
+  if (!unique(rootOptionBases)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['projectOptionSets'], message: 'An authoritative project basis may be consumed only once.' });
+  }
   for (const [setIndex, set] of map.projectOptionSets.entries()) {
+    for (const [projectIndex, project] of set.projects.entries()) {
+      validateProjectBrief(project, { ...context, addIssue: (issue) => context.addIssue({ ...issue, path: ['projectOptionSets', setIndex, 'projects', projectIndex, ...(issue.path ?? [])] }) });
+    }
     if (!unique(set.projects.map((project) => project.id))) {
       context.addIssue({ code: z.ZodIssueCode.custom, path: ['projectOptionSets', setIndex, 'projects'], message: 'Follow-on projects must have distinct IDs.' });
     }
-    if (!hasRevision(paths, set.basisPath) || !hasRevision(map.nextMoves, set.basisNextMove)) {
+    if (!hasRevision(paths, set.basisPath)
+      || (set.basisNextMove && !hasRevision(map.nextMoves, set.basisNextMove))
+      || (!set.basisNextMove && !set.basisAction)) {
       context.addIssue({ code: z.ZodIssueCode.custom, path: ['projectOptionSets', setIndex], message: 'Follow-on project basis is missing.' });
+    }
+    if (set.supersedesSetId) {
+      const previous = map.projectOptionSets.find((record) => record.id === set.supersedesSetId);
+      if (!previous || previous.id === set.id || optionBasisKey(previous) !== optionBasisKey(set)
+        || JSON.stringify(previous.basisPath) !== JSON.stringify(set.basisPath)
+        || previous.projectNumber !== set.projectNumber) {
+        context.addIssue({ code: z.ZodIssueCode.custom, path: ['projectOptionSets', setIndex, 'supersedesSetId'], message: 'Replacement project options must preserve their original authoritative basis.' });
+      }
+    }
+    if (set.basisAction && set.basisNextMove) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['projectOptionSets', setIndex], message: 'Project options require exactly one authoritative basis.' });
+    }
+    if (set.basisAction) {
+      const receipt = map.operationHistory.find((record) => record.sourceId === set.basisAction?.sourceId);
+      if (!receipt || !['request-new-project', 'select-purpose-path', 'confirm-purpose-path-revision', 'choose-parked-purpose-path'].includes(receipt.operationType)
+        || JSON.stringify(receipt.confirmationProvenance) !== JSON.stringify(set.basisAction.action)) {
+        context.addIssue({ code: z.ZodIssueCode.custom, path: ['projectOptionSets', setIndex, 'basisAction'], message: 'Project option action basis must match an explicit user action receipt.' });
+      }
     }
     const activeCount = set.projects.filter((project) => project.selection === 'active').length;
     if (set.status === 'suggested' && set.projects.some((project) => project.selection !== 'available')) {
@@ -194,6 +269,35 @@ export const careerMapSchema = composedCareerMapSchema.superRefine((map, context
   for (const [index, choice] of map.continueChoices.entries()) {
     if (!hasRevision(map.reflections, choice.reflectionBasis)) {
       context.addIssue({ code: z.ZodIssueCode.custom, path: ['continueChoices', index], message: 'Continue choice reflection basis is missing.' });
+    }
+  }
+  for (const [index, choice] of map.continueChoices.entries()) {
+    const reflection = map.reflections.find((record) => record.id === choice.reflectionBasis.id && record.revision === choice.reflectionBasis.revision);
+    const project = reflection && map.projects.find((record) => record.id === reflection.projectBasis.id && record.revision === reflection.projectBasis.revision);
+    if (project && choice.scope && choice.scope !== (project.relationship === 'unrelated' ? 'project' : 'path')) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['continueChoices', index, 'scope'], message: 'Continue choice scope must match its reflected project relationship.' });
+    }
+  }
+  for (const [index, commitment] of map.pathFocusCommitments.entries()) {
+    const selection = map.operationHistory.find((receipt) => receipt.sourceId === commitment.selectionSourceId);
+    const selectedSet = selection && map.pathSets.find((set) => set.confirmation?.confirmedBy.actionId === selection.confirmationProvenance?.actionId && set.paths.some((path) => path.selection === 'active' && path.id === commitment.basisPath.id && path.revision === commitment.basisPath.revision));
+    const legacyIdentity = [map.provisionalCommitment, map.commitmentIntent].some((legacy) => legacy?.id === commitment.id && legacy.revision === commitment.revision);
+    const move = commitment.basisNextMove && map.nextMoves.find((candidate) => candidate.id === commitment.basisNextMove?.id && candidate.revision === commitment.basisNextMove.revision);
+    const choice = move && map.continueChoices.find((candidate) => candidate.id === move.continueChoiceBasis.id && candidate.revision === move.continueChoiceBasis.revision);
+    const reflection = choice && map.reflections.find((candidate) => candidate.id === choice.reflectionBasis.id && candidate.revision === choice.reflectionBasis.revision);
+    const project = reflection && map.projects.find((candidate) => candidate.id === reflection.projectBasis.id && candidate.revision === reflection.projectBasis.revision);
+    const expectedOperation = commitment.basisNextMove ? 'record-next-move' : commitment.basisLegacyIntent ? 'confirm-legacy-path-focus' : 'record-path-focus';
+    const actionReceipt = map.operationHistory.find((receipt) => receipt.operationType === expectedOperation && JSON.stringify(receipt.confirmationProvenance) === JSON.stringify(commitment.action));
+    if (legacyIdentity || !selectedSet || !actionReceipt || !selection?.confirmationProvenance || selection.confirmationProvenance.turnSequence > commitment.action.turnSequence
+      || (move && (move.kind !== 'commit-provisionally' || choice?.scope === 'project' || project?.basisPath.id !== commitment.basisPath.id || project?.basisPath.revision !== commitment.basisPath.revision || JSON.stringify(move.action) !== JSON.stringify(commitment.action)))
+      || (commitment.basisLegacyIntent && (map.commitmentIntent?.basisPath.id !== commitment.basisPath.id || map.commitmentIntent?.basisPath.revision !== commitment.basisPath.revision || map.commitmentIntent.action.turnSequence >= commitment.action.turnSequence))) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path:['pathFocusCommitments',index], message:'Path focus identity, selection, or explicit action authority is inconsistent.' });
+    }
+    if (!hasRevision(paths, commitment.basisPath)
+      || !selection || !['select-purpose-path', 'confirm-purpose-path-revision', 'choose-parked-purpose-path'].includes(selection.operationType)
+      || (commitment.basisNextMove && !hasRevision(map.nextMoves, commitment.basisNextMove))
+      || (commitment.basisLegacyIntent && (!map.commitmentIntent || !hasRevision([map.commitmentIntent], commitment.basisLegacyIntent)))) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['pathFocusCommitments', index], message: 'Path focus commitment basis is missing.' });
     }
   }
   for (const [index, move] of map.nextMoves.entries()) {
@@ -272,10 +376,24 @@ export function createCareerMap(explorerId: string): CareerMap {
     continueChoices: [],
     nextMoves: [],
     peerExposures: [],
+    pathFocusCommitments: [],
     proofRevisions: [],
     sideDoorSets: [],
     routeOutcomes: [],
     invalidations: [],
     operationHistory: [],
   });
+}
+
+/** Parse historical documents before adding any V3 defaults. The persisted input is never mutated. */
+export function readCareerMap(input: unknown): CareerMap {
+  if (typeof input === 'object' && input !== null && 'schemaVersion' in input && input.schemaVersion === 2) {
+    const legacy = careerMapV2Schema.parse(input);
+    return careerMapSchema.parse({
+      ...legacy,
+      schemaVersion: CAREER_MAP_SCHEMA_VERSION,
+      pathFocusCommitments: [],
+    });
+  }
+  return careerMapSchema.parse(input);
 }

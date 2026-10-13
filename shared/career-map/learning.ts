@@ -32,6 +32,7 @@ export const continueChoiceSchema = z.object({
   revision: revisionSchema,
   reflectionBasis: revisionRefSchema,
   wantsToContinue: z.boolean(),
+  scope: z.enum(['path', 'project']).optional(),
   action: userActionProvenanceSchema,
 }).strict();
 
