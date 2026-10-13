@@ -136,3 +136,8 @@ A nonmutating reload retained authentication and displayed existing canonical hi
 The founder can continue the signed-in app on main 5173: choose the intended current path, refine and accept a first project in ordinary conversation, receive guidance, report actual experience, reflect, choose what to try next and select among three later options. Reload during pending decisions and after acceptance to check persistence. Later focus commitment should keep guidance/reflection/projects available. These actions belong to the attended founder run; none was fabricated for this smoke.
 
 Attended U7 acceptance, qualitative U8-loop dogfood, manual screen-reader/release verification, separately authorized live-model evaluation, I3 real-account erasure and external deployment remain open. Local incorporation and authenticated read-only smoke are complete; they do not auto-accept those gates.
+
+
+## Founder selection recovery — 2026-10-13
+
+A later founder Path 1 selection committed but its first Design follow-up was rejected by the provider's strict function-schema validation. Reload also lost the in-memory recovery notice. The authorized `ce-debug` correction and actual account-preserving Browser recovery are recorded in [the debug receipt](2026-10-13-path-selection-recovery-debug.md): tool-only relationship requirement, durable exact-turn recovery, 304 targeted tests, typecheck/build, and one preserved suggested project at revision 28. The founder's selected path was not reset or reselected, and the project was not accepted. The additional display-only request made no canonical change. Initial reply completeness remains a qualitative limitation; actual acceptance and repeated-loop founder gates remain open.

@@ -1121,7 +1121,7 @@ describe('strict state-specific Method tools', () => {
       currentMessage: 'I choose Path 2.', timing: { turnSequence: 4, occurredAt: at(4) },
     });
     const project = await projectTools.propose_first_project.execute?.({
-      id: 'auto-project', revision: 1, briefFormat: 'simple-v1', title: 'Build a useful aid',
+      id: 'auto-project', revision: 1, briefFormat: 'simple-v1', relationship: 'linked', title: 'Build a useful aid',
       learningGoal: 'Learn whether iteration creates pull', firstVersion: 'One-page prototype',
       firstStep: 'Interview the colleague',
     }, { toolCallId: 'automatic-project', messages: [] } as never);
@@ -1352,10 +1352,11 @@ describe('strict state-specific Method tools', () => {
     const storage = new ReducerStorage(pendingProject(false));
     const loader = await createMethodModuleLoader();
     const tools = createMethodTools({ ...runtime(storage), loader, surface: 'agent-turn', prepared: { current: await refreshMethodState(storage, loader, 'explorer-1') } });
-    const simple = { id: 'simple', revision: 1, briefFormat: 'simple-v1', title: 'Try useful work', learningGoal: 'Notice energy', firstVersion: 'One useful version', firstStep: 'Start small' };
+    const simple = { id: 'simple', revision: 1, briefFormat: 'simple-v1', relationship: 'linked', title: 'Try useful work', learningGoal: 'Notice energy', firstVersion: 'One useful version', firstStep: 'Start small' };
     const projectSchema = tools.propose_first_project.inputSchema as z.ZodTypeAny;
     expect(projectSchema.safeParse(simple).success).toBe(true);
     expect(projectSchema.safeParse({ ...simple, briefFormat: undefined }).success).toBe(false);
+    expect(projectSchema.safeParse({ ...simple, relationship: undefined }).success).toBe(false);
     expect(projectSchema.safeParse({ ...simple, outcome: 'Legacy detail' }).success).toBe(false);
     const framingSchema = tools.present_first_project_framing.inputSchema as z.ZodTypeAny;
     const natural = { projectId: 'project-1', projectRevision: 1, locale: 'en', framingText: 'Start small.' };

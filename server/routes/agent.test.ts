@@ -116,7 +116,7 @@ function proposeFirstProjectThenTextModel(text = DIRECT_CONTINUATION_TEXT) {
               {
                 type: 'tool-call', toolCallId: 'direct-first-project-call', toolName: 'propose_first_project',
                 input: JSON.stringify({
-                  id: 'direct-project-1', revision: 1, briefFormat: 'simple-v1',
+                  id: 'direct-project-1', revision: 1, relationship: 'linked', briefFormat: 'simple-v1',
                   title: 'Test the selected path',
                   learningGoal: 'Learn whether this work creates voluntary pull',
                   firstVersion: 'One small useful version',
@@ -926,6 +926,45 @@ describe('protected Method routes', () => {
     expect(storage.backfillAgentTurnDisplayProjection).not.toHaveBeenCalled();
     expect(storage.listPendingConversationProvisioning).not.toHaveBeenCalled();
   });
+
+  it.each(['matching', 'wrong-turn', 'wrong-action', 'wrong-revision', 'future-revision', 'uncommitted', 'later-failed', 'later-completed', 'later-empty-completed'] as const)(
+    'projects committed continuation recovery on a fresh workspace read: %s', async (scenario) => {
+      const original = pendingPaths();
+      const action = { kind: 'ui-action' as const, actionId: 'selection-action', turnId: 'selection-turn', turnSequence: 4, occurredAt: timestamp(4) };
+      const selected = applyCareerMapOperation(original, {
+        type: 'select-purpose-path', sourceId: 'selection-operation', expectedRevision: original.revision,
+        occurredAt: timestamp(4), payload: { setId: 'set-1', setRevision: 1, pathId: 'path-1', pathRevision: 1, action },
+      });
+      expect(selected.status).toBe('committed');
+      if (selected.status !== 'committed') return;
+      const failed: AgentTurnRecord = {
+        ...turn('workspace-action', 'failed'), turnId: 'selection-turn', clientMessageId: 'selection-action',
+        createdAt: new Date(timestamp(4)), terminalAt: new Date(timestamp(5)),
+        terminalResult: { kind: 'failed', operationCommitted: true, revision: selected.map.revision, errorClass: 'private-provider-body' },
+      };
+      if (scenario === 'wrong-turn') failed.turnId = 'other-turn';
+      if (scenario === 'wrong-action') failed.clientMessageId = 'other-action';
+      if (scenario === 'wrong-revision') failed.terminalResult!.revision = selected.map.revision - 1;
+      if (scenario === 'future-revision') failed.terminalResult!.revision = selected.map.revision + 1;
+      if (scenario === 'uncommitted') failed.terminalResult!.operationCommitted = false;
+      const turns = [failed];
+      if (scenario.startsWith('later-')) turns.push({
+        ...turn('agent-turn', scenario === 'later-failed' ? 'failed' : 'completed'),
+        createdAt: new Date(timestamp(6)), terminalAt: new Date(timestamp(7)),
+        terminalResult: { kind: scenario === 'later-failed' ? 'failed' : 'completed',
+          displayProjection: { userItemId: 'later-user', assistantItemIds: scenario === 'later-empty-completed' ? [] : ['later-assistant'] } },
+      });
+      const storage = createStorage({ listAgentTurns: vi.fn(async () => turns) }, selected.map);
+      const response = await (await request(testApp({ storage, requireAuth: authenticated, agentEnabled: true, operationalLog: vi.fn() })))
+        .get('/api/agent/workspace');
+      expect(response.status).toBe(200);
+      expect(response.body.map.pathSets[0].paths[0].selection).toBe('active');
+      if (['matching', 'later-failed', 'later-empty-completed'].includes(scenario)) {
+        expect(response.body.recovery).toEqual({ kind: 'committed-follow-up-failed', turnId: 'selection-turn', revision: selected.map.revision });
+      } else expect(response.body.recovery).toBeUndefined();
+      expect(JSON.stringify(response.body)).not.toContain('private-provider-body');
+    },
+  );
 
   it('returns an empty workspace bootstrap and enforces the bounded agent message schema before storage', async () => {
     const storage = createStorage({ loadCareerMap: vi.fn(async () => ({ status: 'not-found' as const })) });
@@ -2591,7 +2630,7 @@ describe('protected Method routes', () => {
     const model = new MockLanguageModelV4({ doStream: async () => {
       providerCall += 1;
       if (providerCall === 1) return call('propose_first_project', {
-        id: 'simple-project', revision: 1, briefFormat: 'simple-v1', title: 'Build one useful aid',
+        id: 'simple-project', revision: 1, relationship: 'linked', briefFormat: 'simple-v1', title: 'Build one useful aid',
         learningGoal: 'Notice how making it feels', firstVersion: 'One rough page', firstStep: 'Sketch the page',
       });
       if (providerCall === 2) return call('present_first_project_framing', {

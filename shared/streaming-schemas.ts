@@ -288,9 +288,15 @@ export const conversationHistoryPageSchema = z.object({
 
 export type ConversationHistoryPageData = z.infer<typeof conversationHistoryPageSchema>;
 
+export const methodWorkspaceRecoverySchema = z.object({
+  kind: z.literal('committed-follow-up-failed'),
+  turnId: streamCorrelationIdSchema,
+  revision: z.number().int().positive(),
+}).strict();
+
 export const methodWorkspaceResponseSchema = z.discriminatedUnion('status', [
   z.object({ status: z.literal('empty'), map: z.null() }).strict(),
-  z.object({ status: z.literal('ready'), map: careerMapSchema }).strict(),
+  z.object({ status: z.literal('ready'), map: careerMapSchema, recovery: methodWorkspaceRecoverySchema.optional() }).strict(),
   z.object({ status: z.literal('repair-required') }).strict(),
 ]);
 

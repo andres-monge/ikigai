@@ -48,10 +48,11 @@ import {
   workspaceOperationRequestSchema,
   type MethodOperationEnvelope,
 } from '../ai/tools.js';
-import { invalidationTargetKindSchema, opaqueClientMessageIdSchema } from '../../shared/career-map/index.js';
+import { invalidationTargetKindSchema, opaqueClientMessageIdSchema, type CareerMap } from '../../shared/career-map/index.js';
 import {
   claimLinkedCitationStreamPartSchema,
   operationStatusStreamPartSchema,
+  methodWorkspaceRecoverySchema,
 } from '../../shared/streaming-schemas.js';
 import { methodRouteLabel } from './agent-logging.js';
 import {
@@ -349,6 +350,38 @@ function safeTerminalResult(turn: AgentTurnRecord): Record<string, unknown> {
     ...(terminal.displayProjection ? { displayReady: true } : {}),
     ...(terminal.displayRecovery && !terminal.displayProjection ? { historyProjection: 'pending' } : {}),
   };
+}
+
+// Recovery comes from the durable failed turn and its exact UI-action receipt,
+// even when the provider produced no display item. A later failed reply cannot
+// erase it; only a later completed conversation reply settles this guidance.
+function workspaceRecovery(map: CareerMap, turns: readonly AgentTurnRecord[]) {
+  const completedReply = z.object({
+    userItemId: z.string().min(1), assistantItemIds: z.array(z.string().min(1)).min(1),
+  });
+  const failures = turns.filter((turn) => {
+    const terminal = turn.terminalResult;
+    if (turn.origin !== 'workspace-action' || turn.status !== 'failed' || !turn.terminalAt
+      || terminal?.kind !== 'failed' || terminal.operationCommitted !== true
+      || !Number.isSafeInteger(terminal.revision) || Number(terminal.revision) > map.revision) return false;
+    return map.operationHistory.some((receipt) => receipt.operationType === 'select-purpose-path'
+      && receipt.resultRevision <= Number(terminal.revision)
+      && receipt.confirmationProvenance?.kind === 'ui-action'
+      && receipt.confirmationProvenance.turnId === turn.turnId
+      && receipt.confirmationProvenance.actionId === turn.clientMessageId);
+  }).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  for (const failed of failures) {
+    const settled = turns.some((turn) => turn.origin === 'agent-turn' && turn.status === 'completed'
+      && turn.createdAt > failed.createdAt && turn.terminalAt && turn.terminalAt > failed.terminalAt!
+      && turn.terminalResult?.kind === 'completed'
+      && completedReply.safeParse(turn.terminalResult.displayProjection).success);
+    if (settled) continue;
+    const parsed = methodWorkspaceRecoverySchema.safeParse({
+      kind: 'committed-follow-up-failed', turnId: failed.turnId, revision: failed.terminalResult!.revision,
+    });
+    if (parsed.success) return parsed.data;
+  }
+  return undefined;
 }
 
 function turnResponse(result: BeginAgentTurnResult, response: express.Response): boolean {
@@ -683,7 +716,13 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
       }
       if (result.status === 'ready') {
         response.locals.methodLog = { revision: result.map.revision };
-        response.json({ status: 'ready', map: result.map });
+        const hasDirectSelection = result.map.operationHistory.some((receipt) => (
+          receipt.operationType === 'select-purpose-path' && receipt.confirmationProvenance?.kind === 'ui-action'
+        ));
+        const recovery = hasDirectSelection
+          ? workspaceRecovery(result.map, await storage.listAgentTurns(identity.userId))
+          : undefined;
+        response.json({ status: 'ready', map: result.map, ...(recovery ? { recovery } : {}) });
         return;
       }
       response.locals.methodLog = { errorClass: result.status };

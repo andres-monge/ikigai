@@ -150,7 +150,10 @@ export function normalizeRevisedPurposePathRevisions(map: CareerMap, paths: z.in
 const projectToolInputSchema = pathProjectInputSchema.pick({
   id: true, revision: true, title: true, relationship: true,
   learningGoal: true, firstVersion: true, firstStep: true,
-}).extend({ briefFormat: z.literal('simple-v1') }).strict();
+}).extend({
+  briefFormat: z.literal('simple-v1'),
+  relationship: pathProjectInputSchema.shape.relationship.unwrap(),
+}).strict();
 const evidenceToolInputSchema = foundationEvidenceSchema
   .omit({ provenance: true, supersedesEvidenceId: true })
   .extend({

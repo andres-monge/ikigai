@@ -1,0 +1,43 @@
+# Path selection follow-up and reload recovery — 2026-10-13
+
+## Debug Summary
+
+**Problem:** Founder-selected Path 1 committed, but the agent follow-up failed. Reload removed the error notice and correctly removed Start, leaving no visible recovery guidance. This run uses `ce-debug` and authorized account-preserving Browser recovery. No issue of record was supplied; targeted GitHub issue/PR searches returned no matching work.
+
+**Root Cause:** The observed workspace-action turn failed after `select-purpose-path` committed revision 24→25. The exact selection receipt and Path 1 remained saved; no project existed. Its first Design request failed before output tokens. A single authorized diagnostic continuation captured HTTP 400 `invalid_function_parameters`: `propose_first_project` omitted `relationship` from `required`. `shared/career-map/projects.ts:19` intentionally keeps that field optional for saved compatibility; `server/ai/tools.ts:150` reused it in a model tool sent with `strict: true` (`operationTool`). The installed SDK forwards the schema unchanged. All five project-writing tools shared the invalid schema. The real outgoing-request tests mocked success without checking schema requirements.
+
+Reload exposed a separate recovery gap. `Explore` initialized its notice and pending attempts in memory; GET workspace returned only the map, while failed continuations without a provider assistant item had no visible history projection. The durable failed turn already recorded committed-operation truth. Removing Start was correct because the path was selected; Chat remained usable, but the existing continuation notice could not be restored.
+
+**Recommended Tests:** The outgoing Responses test now recursively checks required properties and closed objects across all five project tool families, including nested options. Existing agent/tool/route fixtures explicitly identify their linked relationship. Route tests verify exact failed-turn/UI-action receipt matching, action/turn/revision mismatches, later failed/empty/completed replies and private-detail exclusion. A real reducer-selected UI map verifies remount, no re-enabled Start, Continue focus, ordinary Chat submission and notice clearing. The strict workspace transport test rejects private extras and malformed recovery fields.
+
+**Fix:** Require an explicit linked/unrelated relationship in the tool-only schema using the existing enum. Persisted project schemas and strict V2 compatibility remain unchanged. Ready workspace responses may expose a bounded `recovery` value with kind, turn ID and revision, only when a durable failed workspace selection matches its exact UI-action receipt. Later failed attempts retain it; a later completed reply with a nonempty durable display projection settles it. Fresh workspace reads restore the existing notice and ordinary Continue-in-Chat action. No automatic retry, path reselection or model call occurs on reload.
+
+**Prevention:** The regression failed for the same missing `relationship` as the captured provider response, then passed after the tool-only correction. Three positive route cases failed with missing recovery before the transport change; the remount test lacked the notice before the UI change. Saved relationship optionality no longer silently weakens the provider contract. Recovery truth comes from durable provenance, not inference from a selected path or absent project.
+
+**Confidence:** High for the provider rejection and reload recovery. Actual browser recovery completes the first-project proposal. Initial natural-language presentation quality still needs founder review, described below.
+
+## Post-Fix Quality
+
+**Scope:** Fix-owned files only, against pre-fix HEAD `be4c55b`. Pre-existing dirty files were `AGENTS.md`, `server/auth.test.ts`, `server/auth.ts`, `server/index.ts`; none belongs to this fix. Their port/auth changes were ruled out by the observed provider schema rejection after a successful authenticated commit. No stash/reset/discard experiment was appropriate or used.
+
+**Simplify:** Actual `ce-simplify-code` with three full-rubric local reviewers completed. Applied one reuse finding (one typed committed-reply notice) and one efficiency finding (skip turn-history loading when no qualifying direct-selection receipt exists). Quality reviewer found no actionable change. Trust checks and exact semantics were retained.
+
+**Review:** Targeted manual due to unrelated branch work, plus an independent read-only review of the same fix-owned files. No file-scoped lightweight harness review tool is available; no duplicate whole-feature `ce-code-review` ran. Exact receipt/turn/action/revision matching, successful-visible continuation settlement, user isolation, browser-safe metadata and refresh generation guards were reviewed. No actionable residual code findings.
+
+**Residuals:** No unresolved required code finding. The first completed recovery reply showed support/acceptance copy while the full proposal was in Your Map; a separate display-only request was needed to show the saved brief in Chat. This live presentation limitation is recorded rather than claimed fixed by the schema correction. It remains part of attended U7/U8 qualitative review.
+
+**Re-verification:** Node24 `npm run check` passes. Six targeted files pass 304 tests: agent 54, tools 65, actual outgoing HTTP contracts 8, routes 123, Explore 45, streaming schemas 9. Tests use the existing synthetic environment and `--exclude '.context/**'`, avoiding private archived snapshots. Production build passes. Current fix diff whitespace check passes. No configured lint command. Logs: `/tmp/revelio-debug-schema-red.log`, `/tmp/revelio-debug-provider-tests.log`, `/tmp/revelio-debug-final-targeted.log`, `/tmp/revelio-debug-build.log`. The prior full MVP suite remains separate evidence; no duplicate broad run was added.
+
+## Account-preserving Browser recovery
+
+Existing signed-in Chrome tab on approved main `http://localhost:5173` was used through the enterprise-controlled Browser/Computer Use surface. No allowlist workaround or separate authentication was used. Main Node24 PID `11098` serves the integration checkout on 5173; unchanged lab PID `59614` remains available on 5174. Only the main integration process was restarted, with the existing project environment and both local latency flags preserved. A temporary fetch diagnostic preload captured only sanitized provider error fields in private Git metadata and was removed from the running process before successful recovery; no debug instrumentation enters the product diff.
+
+Three bounded Chat messages were submitted under the founder's explicit recovery authorization:
+
+1. `Please continue with my selected path and help me develop the first project.` The diagnostic attempt reproduced the HTTP 400, without a canonical write or output tokens.
+2. The same accurate request after the fix. The agent completed in three steps, including one native search and two application tool calls. One suggested simple project and its natural framing were saved; final framing delivery advanced the map to revision 28. Path 1 and its original selection receipt were byte-identical to the pre-failure snapshot. The project remained `suggested`, work `not-started`, framing `delivered`.
+3. `Please show me the existing saved project proposal: what I’ll learn, what I’ll make, and the suggested starting point. I’m not accepting it yet.` The one-step reply used no search or application tool and made no canonical change. It displayed the saved title and all three sections in Chat.
+
+Before successful recovery, reload visibly restored Continue in Chat while Start remained absent. After completion, the recovery notice disappeared, Your Map showed one suggested project with no action buttons, and Chat displayed the saved learning-first proposal. A further reload retained the title and all three sections, no stale recovery notice and no Start. Read-only database comparison confirmed the display-only request left the complete revision-28 map unchanged. No project acceptance, revision/replacement, direction change, execution, reset, sign-out or invented evidence occurred. Private account snapshots and diagnostics stay in `/Users/andresm/Documents/Cursor Projects/ikigai/.git/worktrees/ikigai/recovery/repeating-learning-incorporation-20261013`, outside tracked content; no raw conversation or personal project text is committed here.
+
+The browser is left on Chat at the displayed proposal. Founder refinement/acceptance is the next human action; attended U7 acceptance, U8 repeated-loop qualitative proof, manual accessibility, I3 real-account erasure and external release remain pending. No push, PR or deployment is authorized or performed.

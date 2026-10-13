@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { createCareerMap } from './career-map/index.js';
 import {
   browserSourceUrlPartSchema,
   citationToBrowserSourceUrlPart,
@@ -145,6 +146,15 @@ describe('browser-safe Method stream contracts', () => {
       ...message,
       turn: undefined,
     }).success).toBe(false);
+  });
+
+  it('allows only bounded browser-safe committed follow-up recovery on a ready workspace', () => {
+    const recovery = { kind: 'committed-follow-up-failed', turnId: 'selection-turn', revision: 1 };
+    const ready = { status: 'ready', map: createCareerMap('explorer-1'), recovery };
+    expect(methodWorkspaceResponseSchema.safeParse(ready).success).toBe(true);
+    expect(methodWorkspaceResponseSchema.safeParse({ ...ready, recovery: { ...recovery, errorClass: 'private provider detail' } }).success).toBe(false);
+    expect(methodWorkspaceResponseSchema.safeParse({ ...ready, recovery: { ...recovery, revision: -1 } }).success).toBe(false);
+    expect(methodWorkspaceResponseSchema.safeParse({ status: 'empty', map: null, recovery }).success).toBe(false);
   });
 
   it('fails closed on malformed history and unvalidated workspace state', () => {

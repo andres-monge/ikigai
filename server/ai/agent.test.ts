@@ -569,7 +569,7 @@ describe('amended Method agent core loop', () => {
 
   it('continues a direct selection without sending fabricated explorer text and keeps ui-action provenance', async () => {
     const project = {
-      id: 'project-direct-1', revision: 1, briefFormat: 'simple-v1', title: 'Build a useful test',
+      id: 'project-direct-1', revision: 1, briefFormat: 'simple-v1', relationship: 'linked', title: 'Build a useful test',
       learningGoal: 'Learn whether iteration creates voluntary pull',
       firstVersion: 'One-page prototype', firstStep: 'Interview the colleague',
     };
@@ -1126,7 +1126,7 @@ describe('amended Method agent core loop', () => {
           setId: 'set-1', setRevision: 1, pathId: 'path-1', pathRevision: 1, presentedInTurnId: 'paths-presentation', sourceMessageId: 'first-choice-message',
         }}),
         operationChunks({ callId: 'first-simple-project', toolName: 'propose_first_project', toolInput: {
-          id: 'first-simple', revision: 1, briefFormat: 'simple-v1', title: 'One useful page', learningGoal: 'Learn from a colleague', firstVersion: 'A page', firstStep: 'Sketch the page',
+          id: 'first-simple', revision: 1, briefFormat: 'simple-v1', relationship: 'linked', title: 'One useful page', learningGoal: 'Learn from a colleague', firstVersion: 'A page', firstStep: 'Sketch the page',
         }}),
         operationChunks({ callId: 'first-natural-framing', toolName: 'present_first_project_framing', toolInput: {
           projectId: 'first-simple', projectRevision: 1, locale: 'en', framingText,
@@ -1181,7 +1181,7 @@ describe('amended Method agent core loop', () => {
       model: streamModel([
         operationChunks({ callId: 'request-another', toolName: 'request_new_project', toolInput: {} }),
         operationChunks({ callId: 'new-before-learning', toolName: 'propose_first_project', toolInput: {
-          id: 'project-2', revision: 1, briefFormat: 'simple-v1', title: 'One new page',
+          id: 'project-2', revision: 1, briefFormat: 'simple-v1', relationship: 'linked', title: 'One new page',
           learningGoal: 'Try a different audience', firstVersion: 'A short page', firstStep: 'Draft a paragraph',
         }}), textChunks('Try a short page for a different audience.'),
       ]),

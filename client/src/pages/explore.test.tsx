@@ -1415,6 +1415,43 @@ describe('Explore U6 conversation-first workspace', () => {
     expect(historyReads).toBeGreaterThan(1);
   });
 
+  it('restores committed follow-up recovery after remount without reopening Start or blocking Chat', async () => {
+    const original = suggestedPathsMap();
+    const selected = applyCareerMapOperation(original, {
+      type: 'select-purpose-path', sourceId: 'selection-operation', expectedRevision: original.revision,
+      occurredAt: '2030-01-01T00:00:03.000Z', payload: {
+        setId: 'set-1', setRevision: 1, pathId: 'path-1', pathRevision: 1,
+        action: { kind: 'ui-action', actionId: 'selection-action', turnId: 'selection-turn', turnSequence: 4, occurredAt: '2030-01-01T00:00:03.000Z' },
+      },
+    });
+    expect(selected.status).toBe('committed');
+    if (selected.status !== 'committed') return;
+    let continued = false;
+    vi.mocked(fetch).mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/agent/history') return jsonResponse({ status: 'ready', messages: historyMessages() });
+      if (url === '/api/agent/workspace') return jsonResponse({ status: 'ready', map: selected.map,
+        ...(!continued ? { recovery: { kind: 'committed-follow-up-failed', turnId: 'selection-turn', revision: selected.map.revision } } : {}),
+      });
+      if (url === '/api/agent') { continued = true; return streamResponse([{ type: 'finish', finishReason: 'stop' }]); }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    const first = render(<Explore {...props()} />);
+    expect(await screen.findByText('Your map was updated, but Revelio’s follow-up reply did not finish.')).toBeTruthy();
+    first.unmount();
+    render(<Explore {...props()} />);
+    expect(await screen.findByText('Your map was updated, but Revelio’s follow-up reply did not finish.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Start path/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Continue in Chat' }));
+    const textbox = screen.getByRole('textbox', { name: 'Message Revelio' });
+    await waitFor(() => expect(document.activeElement).toBe(textbox));
+    fireEvent.change(textbox, { target: { value: 'Help me design a first project for this path.' } });
+    expect((screen.getByRole('button', { name: 'Send' }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(continued).toBe(true));
+    await waitFor(() => expect(screen.queryByText('Your map was updated, but Revelio’s follow-up reply did not finish.')).toBeNull());
+  });
+
   it('keeps a committed direct Start truthful when continuation fails before streaming', async () => {
     let workspaceReads = 0;
     let operationId = '';

@@ -48,6 +48,12 @@ interface PersistenceError {
   retryOperation?: DeterministicOperationRequest;
 }
 
+const committedReplyFailure: PersistenceError = {
+  kind: 'reply-failed',
+  message: 'Your map was updated, but Revelio’s follow-up reply did not finish.',
+  action: 'continue',
+};
+
 interface MicNotice {
   message: string;
   kind: 'status' | 'error';
@@ -176,6 +182,7 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
   const streamStateRef = useRef<AgentStreamState>({ text: '', citations: [], operationEvents: [], providerFailed: false });
   const latencyTraceRef = useRef<ClientLatencyTrace | undefined>(undefined);
   const processedOperationEventsRef = useRef(0);
+  const hydratedRecoveryTurnRef = useRef<string | null>(null);
   const pendingAttemptsRef = useRef(new Map<string, PendingAttempt>());
   const savingTimersRef = useRef(new Map<string, number>());
   const matureSavingAttemptsRef = useRef(new Set<string>());
@@ -306,6 +313,13 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
         if (value.status === 'ready') {
           setMap(value.map);
           setWorkspaceState('ready');
+          if (value.recovery) {
+            hydratedRecoveryTurnRef.current = value.recovery.turnId;
+            setPersistenceError(committedReplyFailure);
+          } else if (hydratedRecoveryTurnRef.current) {
+            hydratedRecoveryTurnRef.current = null;
+            setPersistenceErrorState((current) => current?.kind === 'reply-failed' ? null : current);
+          }
         } else if (value.status === 'repair-required') {
           setMap(null);
           setWorkspaceState('repair-required');
@@ -326,7 +340,7 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
       history: historyResult.status === 'fulfilled' ? historyResult.value : undefined,
       workspace: workspaceResult.status === 'fulfilled' ? workspaceResult.value : undefined,
     };
-  }, [loadHistory, loadWorkspace, withReadTimeout]);
+  }, [loadHistory, loadWorkspace, withReadTimeout, setPersistenceError]);
 
   const refreshNewestAndValidate = useCallback(async () => {
     const snapshot = await refreshNewest();
@@ -547,11 +561,7 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
       if (receiptMatchesAttempt) {
         finishAttempt(attempt.operationId);
         if (options.providerFailed || options.cancelled || attempt.cancelled) {
-          retainHighestPriorityError({
-            kind: 'reply-failed',
-            message: 'Your map was updated, but Revelio’s follow-up reply did not finish.',
-            action: 'continue',
-          });
+          retainHighestPriorityError(committedReplyFailure);
         }
         continue;
       }
