@@ -447,6 +447,40 @@ describe('Method reducer', () => {
     expect(ui.status).toBe('committed');
   });
 
+  it('registers natural framing in the exact proposal turn while retaining completed prior-turn acceptance', () => {
+    let map = withSelectedPath();
+    map = commit(map, 'propose-first-project', { project: project(), presentation: presentation(5) });
+    const natural = {
+      projectId: 'project-1', projectRevision: 1, locale: 'en', framingFormat: 'natural-v1' as const,
+      framingText: 'Start small and notice what you learn.', moduleVersion: '1.3.0', presentation: presentation(5),
+    };
+    const wrongIdentity = applyCareerMapOperation(map, operation(map, 'present-first-project-framing', {
+      ...natural, presentation: { ...presentation(5), assistantTurnId: 'another-assistant' },
+    }));
+    expect(wrongIdentity).toMatchObject({ status: 'rejected', error: { code: 'confirmation-not-auditable' } });
+    const earlier = applyCareerMapOperation(map, operation(map, 'present-first-project-framing', {
+      ...natural, presentation: presentation(4),
+    }));
+    expect(earlier).toMatchObject({ status: 'rejected', error: { code: 'confirmation-not-auditable' } });
+    const legacySameTurn = applyCareerMapOperation(map, operation(map, 'present-first-project-framing', framing('project-1', 5)));
+    expect(legacySameTurn).toMatchObject({ status: 'rejected', error: { code: 'confirmation-not-auditable' } });
+    map = commit(map, 'present-first-project-framing', natural);
+    const undelivered = applyCareerMapOperation(map, operation(map, 'accept-first-project', {
+      projectId: 'project-1', projectRevision: 1, action: action(6),
+    }));
+    expect(undelivered.status).toBe('rejected');
+    map = commit(map, 'deliver-first-project-framing', {
+      projectId: 'project-1', projectRevision: 1,
+      assistantText: `A small project to try.\n\n${natural.framingText}`, presentation: presentation(5),
+    });
+    const sameTurn = applyCareerMapOperation(map, operation(map, 'accept-first-project', {
+      projectId: 'project-1', projectRevision: 1, action: action(5),
+    }));
+    expect(sameTurn).toMatchObject({ status: 'rejected', error: { code: 'confirmation-not-auditable' } });
+    map = commit(map, 'accept-first-project', { projectId: 'project-1', projectRevision: 1, action: action(6) });
+    expect(map.projects.at(-1)?.confirmation?.presentedInTurnId).toBe('assistant-5');
+  });
+
   it('records the first-project framing once and requires a later acceptance against it', () => {
     let map = withSelectedPath();
     map = commit(map, 'propose-first-project', { project: project(), presentation: presentation(5) });

@@ -17,8 +17,6 @@ export interface PrivacySafeFoundationOperation {
   readonly combinedPathIds?: readonly string[];
   readonly projectId?: string | null;
   readonly replacementProjectId?: string | null;
-  readonly projectGroundingKind?: string | null;
-  readonly projectGroundingBasisProvided?: boolean;
 }
 
 export interface FoundationTraceSummary {
@@ -49,17 +47,12 @@ export interface FirstProjectReplacementSummary {
   readonly replacementTurn: number | null;
   readonly replacementOnExpectedTurn: boolean;
   readonly acceptedReplacement: boolean;
-  readonly groundedReplacement: boolean;
   readonly valid: boolean;
 }
 
-export interface R22PresentationSummary {
+export interface ProjectPresentationSummary {
   readonly framingOccurrences: number;
   readonly paragraphCount: number;
-  readonly framingIsFirstParagraph: boolean;
-  readonly questionCount: number;
-  readonly questionCharacters: number;
-  readonly shortQuestion: boolean;
   readonly valid: boolean;
 }
 
@@ -209,47 +202,28 @@ export function summarizeFirstProjectReplacement(
     replacement?.replacementProjectId
     && acceptance?.projectId === replacement.replacementProjectId,
   );
-  const groundedReplacement = Boolean(
-    replacement?.projectGroundingBasisProvided
-    && (
-      replacement.projectGroundingKind === 'explorer-wanted-outcome'
-      || replacement.projectGroundingKind === 'firsthand-beneficiary'
-    ),
-  );
 
   return {
     replacementCount: replacements.length,
     replacementTurn: replacement?.turnIndex ?? null,
     replacementOnExpectedTurn,
     acceptedReplacement,
-    groundedReplacement,
-    valid: replacementOnExpectedTurn && acceptedReplacement && groundedReplacement,
+    valid: replacementOnExpectedTurn && acceptedReplacement,
   };
 }
 
-export function summarizeR22Presentation(
+export function summarizeProjectPresentation(
   text: string,
   expectedFraming: string,
-): R22PresentationSummary {
+): ProjectPresentationSummary {
   const trimmed = text.trim();
   const paragraphs = trimmed ? trimmed.split(/\n\s*\n/) : [];
   const framingOccurrences = expectedFraming ? text.split(expectedFraming).length - 1 : 0;
-  const question = paragraphs[1]?.trim() ?? '';
-  const questionCount = (question.match(/\?/g) ?? []).length;
-  const framingIsFirstParagraph = paragraphs[0]?.trim() === expectedFraming;
-  const shortQuestion = paragraphs.length === 2
-    && questionCount === 1
-    && question.endsWith('?')
-    && question.length <= 160;
 
   return {
     framingOccurrences,
     paragraphCount: paragraphs.length,
-    framingIsFirstParagraph,
-    questionCount,
-    questionCharacters: question.length,
-    shortQuestion,
-    valid: framingOccurrences === 1 && framingIsFirstParagraph && shortQuestion,
+    valid: trimmed.length > 0 && framingOccurrences >= 1,
   };
 }
 import { minimumSufficientFoundationCategories } from '../../../shared/career-map/index.js';

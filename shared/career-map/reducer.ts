@@ -584,8 +584,13 @@ function applyDomainOperation(map: CareerMap, operation: CareerMapOperation): Ca
       assert(target?.agreementStatus === 'suggested', 'First project framing target is stale.', 'stale-target');
       assert(!target.acceptanceFraming, 'The first project framing was already presented.', 'stale-target');
       assert(
-        operation.payload.presentation.turnSequence > target.presentation.turnSequence,
-        'The first project framing requires a later completed assistant turn.',
+        operation.payload.presentation.turnSequence > target.presentation.turnSequence
+        || (
+          operation.payload.framingFormat === 'natural-v1'
+          && operation.payload.presentation.turnSequence === target.presentation.turnSequence
+          && operation.payload.presentation.assistantTurnId === target.presentation.assistantTurnId
+        ),
+        'Project framing requires a later assistant turn or the exact natural proposal turn.',
         'confirmation-not-auditable',
       );
       assert(operation.payload.framingFormat === 'natural-v1' || (operation.payload.acceptancePhrase && operation.payload.acceptanceQuestion), 'Legacy framing requires its phrase and question.');

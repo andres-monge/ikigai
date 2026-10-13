@@ -4,6 +4,7 @@ export interface MethodModuleRegistration {
   readonly key: MethodModule;
   readonly directory: string;
   readonly contentVersion: string;
+  readonly reasoningEffort: 'low' | 'medium' | 'high';
 }
 
 export const METHOD_MODULE_REGISTRY = {
@@ -11,16 +12,31 @@ export const METHOD_MODULE_REGISTRY = {
     key: 'form-foundation',
     directory: 'form-foundation',
     contentVersion: '1.1.13',
+    reasoningEffort: 'low',
   },
   'create-purpose-paths': {
     key: 'create-purpose-paths',
     directory: 'create-purpose-paths',
     contentVersion: '1.1.7',
+    reasoningEffort: 'high',
   },
   'design-path-project': {
     key: 'design-path-project',
     directory: 'design-path-project',
-    contentVersion: '1.2.1',
+    contentVersion: '1.3.0',
+    reasoningEffort: 'medium',
+  },
+  'guide-path-project': {
+    key: 'guide-path-project',
+    directory: 'guide-path-project',
+    contentVersion: '1.0.0',
+    reasoningEffort: 'low',
+  },
+  'interpret-path-project': {
+    key: 'interpret-path-project',
+    directory: 'interpret-path-project',
+    contentVersion: '1.0.0',
+    reasoningEffort: 'low',
   },
 } as const satisfies Partial<Record<MethodModule, MethodModuleRegistration>>;
 
@@ -34,4 +50,8 @@ export function isRegisteredMethodModule(
   module: MethodModule | string,
 ): module is RegisteredMethodModuleKey {
   return Object.prototype.hasOwnProperty.call(METHOD_MODULE_REGISTRY, module);
+}
+
+export function methodReasoningEffort(module: RegisteredMethodModuleKey): 'low' | 'medium' | 'high' {
+  return METHOD_MODULE_REGISTRY[module].reasoningEffort;
 }

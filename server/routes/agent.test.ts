@@ -116,16 +116,11 @@ function proposeFirstProjectThenTextModel(text = DIRECT_CONTINUATION_TEXT) {
               {
                 type: 'tool-call', toolCallId: 'direct-first-project-call', toolName: 'propose_first_project',
                 input: JSON.stringify({
-                  id: 'direct-project-1', revision: 1,
+                  id: 'direct-project-1', revision: 1, briefFormat: 'simple-v1',
                   title: 'Test the selected path',
-                  outcome: 'One real person uses a small result',
-                  audience: 'A firsthand beneficiary',
-                  whyWanted: 'Learn through a result that matters now',
                   learningGoal: 'Learn whether this work creates voluntary pull',
                   firstVersion: 'One small useful version',
                   firstStep: 'Ask one person what would help most',
-                  decisionQuestion: 'Do I want another iteration?',
-                  evidenceCue: 'Notice whether I choose to keep improving it',
                 }),
               },
               { type: 'finish', finishReason: { unified: 'tool-calls', raw: 'tool-calls' }, usage: usage() },
@@ -1767,10 +1762,17 @@ describe('protected Method routes', () => {
     expect(response.body.result).not.toHaveProperty('historyProjection');
   });
 
-  it('replays the stored workspace operation envelope without converting it to a generic completion', async () => {
+  it.each([
+    ['design-path-project', null],
+    ['guide-path-project', null],
+    ['design-path-project', { kind: 'project-revision-confirmation', targetId: 'project-2', targetRevision: 2 }],
+    ['design-path-project', { kind: 'follow-on-project-selection', targetId: 'options-2', targetRevision: 1 }],
+    ['interpret-path-project', { kind: 'continue-choice', targetId: 'reflection-2', targetRevision: 1 }],
+    ['interpret-path-project', { kind: 'next-move', targetId: 'choice-2', targetRevision: 1 }],
+  ])('replays the stored workspace envelope for %s and %j without converting it to generic completion', async (derivedModule, pendingDecision) => {
     const operationEnvelope = {
       status: 'committed', operation: 'select-purpose-path', authoritativeRevision: 4,
-      derivedModule: 'design-path-project', pendingDecision: null,
+      derivedModule, pendingDecision,
     };
     const storage = createPathSelectionStorage({
       beginWorkspaceActionTurn: vi.fn(async (): Promise<BeginAgentTurnResult> => ({
@@ -2457,6 +2459,171 @@ describe('protected Method routes', () => {
     }));
     expect(response.text).not.toContain('"type":"finish"');
     expect(response.text).toContain('The agent request failed.');
+  });
+
+  it.each([true, false])('terminalizes natural project framing from the actual displayed reply (framing included: %s)', async (includesFraming) => {
+    let map = pendingPaths();
+    const commit = (operation: CareerMapOperation) => {
+      const result = applyCareerMapOperation(map, operation);
+      expect(result.status).toBe('committed');
+      if (result.status === 'committed') map = result.map;
+    };
+    commit({
+      type: 'select-purpose-path', sourceId: 'select-path', expectedRevision: map.revision,
+      occurredAt: timestamp(4), payload: {
+        setId: 'set-1', setRevision: 1, pathId: 'path-1', pathRevision: 1,
+        action: { kind: 'user-message', actionId: 'select-message', turnId: 'select-turn', turnSequence: 4, occurredAt: timestamp(4) },
+      },
+    });
+    commit({
+      type: 'propose-first-project', sourceId: 'project-proposal', expectedRevision: map.revision,
+      occurredAt: timestamp(5), payload: {
+        project: { id: 'project-1', revision: 1, briefFormat: 'simple-v1', title: 'Build one useful aid', learningGoal: 'Notice how it feels', firstVersion: 'One rough page', firstStep: 'Sketch the page' },
+        presentation: { kind: 'model-presentation', assistantTurnId: 'project-proposal-turn', turnSequence: 5, completed: true, presentedAt: timestamp(5) },
+      },
+    });
+    const presentation = { kind: 'model-presentation' as const, assistantTurnId: 'agent-turn-turn', turnSequence: 6, completed: true as const, presentedAt: timestamp(6) };
+    const framingText = 'Try this and notice what you learn.';
+    commit({
+      type: 'present-first-project-framing', sourceId: 'natural-framing', expectedRevision: map.revision,
+      occurredAt: timestamp(6), payload: { projectId: 'project-1', projectRevision: 1, locale: 'en', framingFormat: 'natural-v1', framingText, moduleVersion: '2.0.0', presentation },
+    });
+    let delivery: ReturnType<typeof applyCareerMapOperation> | undefined;
+    const storage = createStorage({
+      getConversationMapping: vi.fn(async () => 'server-conversation'),
+      completeAgentTurn: vi.fn(async (input: { assistantText: string }) => {
+        delivery = applyCareerMapOperation(map, {
+          type: 'deliver-first-project-framing', sourceId: 'framing-delivery', expectedRevision: map.revision,
+          occurredAt: timestamp(6), payload: { projectId: 'project-1', projectRevision: 1, assistantText: input.assistantText, presentation },
+        });
+        if (delivery.status !== 'committed') {
+          const error = new Error('Framing was not displayed.');
+          error.name = 'FramingDeliveryError';
+          throw error;
+        }
+        map = delivery.map;
+        return turn('agent-turn', 'completed');
+      }),
+    }, map);
+    const assistantText = includesFraming
+      ? `Here is a manageable start. ${framingText} Let me know how it feels.`
+      : 'Here is a manageable start. Let me know how it feels.';
+    const response = await request(testApp({
+      storage, requireAuth: authenticated, agentEnabled: true,
+      model: new MockLanguageModelV4({ doStream: textStream(assistantText) as never }),
+      conversationClient: { listItems: vi.fn(async () => ({ data: [], hasMore: false })) },
+      operationalLog: vi.fn(),
+    })).post('/api/agent').send({ id: 'client-message-1', message: 'Show the project.' });
+
+    const displayedText = uiStreamChunks(response.text).filter((chunk) => chunk.type === 'text-delta').map((chunk) => chunk.delta).join('');
+    expect(displayedText).toBe(assistantText);
+    expect(storage.completeAgentTurn).toHaveBeenCalledWith(expect.objectContaining({ assistantText: displayedText }));
+    expect(delivery?.status).toBe(includesFraming ? 'committed' : 'rejected');
+    expect(map.projects[0].acceptanceFraming?.status).toBe(includesFraming ? 'delivered' : 'pending');
+    if (includesFraming) {
+      expect(storage.failAgentTurn).not.toHaveBeenCalled();
+      expect(response.text).toContain('"type":"finish"');
+    } else {
+      expect(storage.failAgentTurn).toHaveBeenCalledWith(expect.objectContaining({ errorClass: 'FramingDeliveryError' }));
+      expect(response.text).not.toContain('"type":"finish"');
+    }
+  });
+
+  it('proposes and displays natural project support in one turn, then accepts on later semantic assent', async () => {
+    let map = pendingPaths();
+    const selected = applyCareerMapOperation(map, {
+      type: 'select-purpose-path', sourceId: 'selected-before-project', expectedRevision: map.revision,
+      occurredAt: timestamp(4), payload: {
+        setId: 'set-1', setRevision: 1, pathId: 'path-1', pathRevision: 1,
+        action: { kind: 'user-message', actionId: 'prior-selection-message', turnId: 'prior-selection-turn', turnSequence: 4, occurredAt: timestamp(4) },
+      },
+    });
+    expect(selected.status).toBe('committed');
+    if (selected.status !== 'committed') throw new Error('Prior selection did not commit.');
+    map = selected.map;
+    const framingText = 'This is a small experiment to notice what you enjoy learning.';
+    const reply = `Here is one useful starting point. ${framingText} We can adapt it as you go.`;
+    let activeTurn: AgentTurnRecord;
+    const completedTurns: AgentTurnRecord[] = [];
+    const storage = createStorage({
+      loadCareerMap: vi.fn(async () => ({ status: 'ready' as const, map })),
+      getOrCreateCareerMap: vi.fn(async () => ({ status: 'ready' as const, map })),
+      getConversationMapping: vi.fn(async () => 'server-conversation'),
+      beginAgentTurn: vi.fn(async (input: { clientMessageId: string; requestFingerprint: string; turnId: string; leaseId: string }): Promise<BeginAgentTurnResult> => {
+        activeTurn = { ...turn('agent-turn'), ...input };
+        return { status: 'started', shouldInvokeModel: true, turn: activeTurn };
+      }),
+      persistCareerMapOperation: vi.fn(async (input: { operation: CareerMapOperation }) => {
+        const result = applyCareerMapOperation(map, input.operation);
+        expect(result.status, JSON.stringify(result)).toBe('committed');
+        if (result.status === 'committed' || result.status === 'replayed') map = result.map;
+        return result;
+      }),
+      listAgentTurns: vi.fn(async () => completedTurns),
+      completeAgentTurn: vi.fn(async (input: { assistantText: string; result: Record<string, unknown> }) => {
+        const project = map.projects.at(-1);
+        if (project?.acceptanceFraming?.status === 'pending') {
+          const framing = project.acceptanceFraming;
+          const delivered = applyCareerMapOperation(map, {
+            type: 'deliver-first-project-framing', sourceId: `delivery-${activeTurn.turnId}`, expectedRevision: map.revision,
+            occurredAt: timestamp(8), payload: {
+              projectId: project.id, projectRevision: project.revision, assistantText: input.assistantText,
+              presentation: { kind: 'model-presentation', assistantTurnId: activeTurn.turnId, turnSequence: framing.turnSequence, completed: true, presentedAt: timestamp(8) },
+            },
+          });
+          expect(delivered.status).toBe('committed');
+          if (delivered.status !== 'committed') throw new Error('Natural project support was not delivered.');
+          map = delivered.map;
+        }
+        const completed = { ...activeTurn, status: 'completed' as const, terminalResult: input.result };
+        completedTurns.push(completed);
+        return completed;
+      }),
+    }, map);
+    let providerCall = 0;
+    const call = (toolName: string, input: Record<string, unknown>) => ({
+      stream: simulateReadableStream({ chunks: [
+        { type: 'stream-start', warnings: [] },
+        { type: 'tool-call', toolCallId: `project-chain-${providerCall}`, toolName, input: JSON.stringify(input) },
+        { type: 'finish', finishReason: { unified: 'tool-calls', raw: 'tool-calls' }, usage: usage() },
+      ] as never }),
+    });
+    const model = new MockLanguageModelV4({ doStream: async () => {
+      providerCall += 1;
+      if (providerCall === 1) return call('propose_first_project', {
+        id: 'simple-project', revision: 1, briefFormat: 'simple-v1', title: 'Build one useful aid',
+        learningGoal: 'Notice how making it feels', firstVersion: 'One rough page', firstStep: 'Sketch the page',
+      });
+      if (providerCall === 2) return call('present_first_project_framing', {
+        projectId: 'simple-project', projectRevision: 1, locale: 'en', framingText,
+      });
+      if (providerCall === 3) return textStream(reply);
+      if (providerCall === 4) return call('accept_first_project', {
+        projectId: 'simple-project', projectRevision: 1,
+        presentedInTurnId: completedTurns[0]?.turnId, sourceMessageId: 'later-assent',
+      });
+      return textStream('Start with a quick sketch of that page.');
+    } });
+    let id = 0;
+    const app = testApp({
+      storage, requireAuth: authenticated, agentEnabled: true, model, now: () => new Date(timestamp(9)),
+      id: () => `natural-chain-${++id}`,
+      conversationClient: { listItems: vi.fn(async () => ({ data: [], hasMore: false })) }, operationalLog: vi.fn(),
+    });
+    const first = await request(app).post('/api/agent').send({ id: 'project-request', message: 'Show me a small project for this path.' });
+    const displayed = uiStreamChunks(first.text).filter((chunk) => chunk.type === 'text-delta').map((chunk) => chunk.delta).join('');
+    expect(displayed).toBe(reply);
+    expect(first.text).toContain('"type":"finish"');
+    const deliveredFraming = map.projects.at(-1)?.acceptanceFraming;
+    expect(deliveredFraming?.status).toBe('delivered');
+    expect(deliveredFraming?.presentation?.assistantTurnId).toBe(completedTurns[0]?.turnId);
+    expect(map.projects.at(-1)?.presentation.assistantTurnId).toBe(completedTurns[0]?.turnId);
+    const later = await request(app).post('/api/agent').send({ id: 'later-assent', message: 'Yes, that sounds useful. I want to try it.' });
+    expect(later.text).toContain('"type":"finish"');
+    expect(map.projects.at(-1)?.agreementStatus).toBe('accepted');
+    expect(map.projects.at(-1)?.confirmation?.confirmedBy.turnId).toBe(completedTurns[1]?.turnId);
+    expect(completedTurns[1]?.turnId).not.toBe(deliveredFraming?.presentation?.assistantTurnId);
+    expect(storage.failAgentTurn).not.toHaveBeenCalled();
   });
 
   it('bounds Conversation creation with a request-scoped provisioning timeout', async () => {

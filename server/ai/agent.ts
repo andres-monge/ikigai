@@ -11,6 +11,7 @@ import { APICallError } from '@ai-sdk/provider';
 import { createHash } from 'node:crypto';
 import { BASE_INSTRUCTIONS_VERSION, BASE_METHOD_INSTRUCTIONS, PURPOSE_PATHS_OFFER_ENGLISH, isPurposePathSetOperation, shouldPresentCanonicalPurposePathsOffer } from './method/base-instructions.js';
 import type { MethodModuleLoader } from './method/loader.js';
+import { methodReasoningEffort } from './method/registry.js';
 import type { DurableMethodTurnIdentity, IStorage, MethodProvenanceTiming } from '../storage.js';
 import {
   createMethodResponseOperationGuard,
@@ -64,7 +65,7 @@ export interface CreateMethodAgentOptions {
   /** Request-scoped instruction source for isolated local replay; app callers use the default. */
   baseInstructions?: string;
   /** Trusted isolated replay override; app callers use the current canonical checkpoint. */
-  replayReasoningEffort?: 'low' | 'high';
+  replayReasoningEffort?: 'low' | 'medium' | 'high';
   nativeWebSearchTool: ToolSet[string];
   storage: Pick<IStorage, 'loadCareerMap' | 'persistCareerMapOperation' | 'listAgentTurns'>;
   loader: MethodModuleLoader;
@@ -433,7 +434,6 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
   };
   const markers: string[] = [];
   let requestAbortSignal = options.abortSignal;
-  let firstProjectAccepted = false;
 
   const methodTools = createMethodTools({
     storage: options.storage,
@@ -447,11 +447,6 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
     operationGuard,
     operationIdForToolCall: options.operationIdForToolCall,
     onOperationStatus: async (event) => {
-      if (
-        event.phase === 'terminal'
-        && event.operation === 'accept-first-project'
-        && event.status === 'saved'
-      ) firstProjectAccepted = true;
       if (
         event.phase === 'terminal'
         && event.status === 'saved'
@@ -477,10 +472,7 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
     maxOutputTokens: REVELIO_MAX_OUTPUT_TOKENS,
     tools,
     toolChoice: 'auto',
-    // U7 deliberately ends at first-project acceptance. A committed
-    // acceptance derives guide-path-project, whose module is owned by U8 and
-    // is intentionally not registered in this three-module build.
-    stopWhen: [() => firstProjectAccepted, stepCountIs(REVELIO_MAX_AGENT_STEPS)],
+    stopWhen: [stepCountIs(REVELIO_MAX_AGENT_STEPS)],
     prepareStep: async ({ stepNumber, messages }) => {
       options.onLatencyStep?.(stepNumber, 'prepare-start');
       throwIfAborted(requestAbortSignal);
@@ -542,7 +534,7 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
             conversation: options.conversationId,
             store: true,
             parallelToolCalls: false,
-            reasoningEffort: options.replayReasoningEffort ?? (state.checkpoint.module === 'create-purpose-paths' ? 'high' : 'low'),
+            reasoningEffort: options.replayReasoningEffort ?? methodReasoningEffort(state.module.key),
             instructions: [
               requestInstructions(state, options.baseInstructions),
               ...(savedPathSet ? [

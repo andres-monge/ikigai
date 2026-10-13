@@ -569,13 +569,9 @@ describe('amended Method agent core loop', () => {
 
   it('continues a direct selection without sending fabricated explorer text and keeps ui-action provenance', async () => {
     const project = {
-      id: 'project-direct-1', revision: 1, title: 'Build a useful test',
-      outcome: 'One colleague uses a small result', audience: 'A colleague I know',
-      whyWanted: 'Learn from a result that matters',
+      id: 'project-direct-1', revision: 1, briefFormat: 'simple-v1', title: 'Build a useful test',
       learningGoal: 'Learn whether iteration creates voluntary pull',
       firstVersion: 'One-page prototype', firstStep: 'Interview the colleague',
-      decisionQuestion: 'Do I want another iteration?',
-      evidenceCue: 'Notice whether I keep improving it unprompted',
     };
     const storage = new InMemoryMethodStorage(selectedPathMap());
     const model = streamModel([
@@ -991,7 +987,9 @@ describe('amended Method agent core loop', () => {
       .toMatch(/Do not rank, score, preselect, or\s+recommend one unless the user asks/);
   });
 
-  it('emits the exact English R22 framing once, persists it through refresh, and requires later acceptance', async () => {
+  it('delivers natural project support with ordinary surrounding prose and requires later semantic assent', async () => {
+    const framingText = 'We can make this first version smaller together.';
+    const displayedReply = `Start with a one-page prototype. ${framingText} Tell me what you would change.`;
     const storage = new InMemoryMethodStorage(pendingFirstProjectMap(false));
     const framingRequest = '“Build a useful aid” is ready. Give me the required project framing and ask me to accept it, but do not accept it yet.';
     const framingAgent = await makeAgent({
@@ -1001,15 +999,15 @@ describe('amended Method agent core loop', () => {
           callId: 'present-project-framing', toolName: 'present_first_project_framing',
           toolInput: {
             projectId: 'project-1', projectRevision: 1, locale: 'en',
-            framingText: R22_CANONICAL_ENGLISH, acceptancePhrase, acceptanceQuestion,
+            framingText,
           },
         }),
-        textChunks(`${R22_CANONICAL_ENGLISH}\n\n${acceptanceQuestion}`),
+        textChunks(displayedReply),
       ]),
     });
     const framingOutput = await collect(await framingAgent.agent.stream({ prompt: framingRequest }));
     const deliveredText = JSON.stringify(framingOutput);
-    expect(deliveredText.split(R22_CANONICAL_ENGLISH)).toHaveLength(2);
+    expect(deliveredText.split(framingText)).toHaveLength(2);
     expect(storage.map.projects.at(-1)?.acceptanceFraming).toMatchObject({
       locale: 'en', status: 'pending', assistantTurnId: 'turn-1', turnSequence: 6,
     });
@@ -1017,7 +1015,7 @@ describe('amended Method agent core loop', () => {
       type: 'deliver-first-project-framing', sourceId: 'deliver-agent-framing',
       expectedRevision: storage.map.revision, occurredAt: timestamp, payload: {
         projectId: 'project-1', projectRevision: 1,
-        assistantText: `${R22_CANONICAL_ENGLISH}\n\n${acceptanceQuestion}`,
+        assistantText: displayedReply,
         presentation: {
           kind: 'model-presentation', assistantTurnId: 'turn-1',
           turnSequence: 6, completed: true, presentedAt: timestamp,
@@ -1037,14 +1035,14 @@ describe('amended Method agent core loop', () => {
           projectId: 'project-1', projectRevision: 1,
           presentedInTurnId: 'turn-1', sourceMessageId: 'message-2',
         },
-      })]),
+      }), textChunks('Start with the colleague interview you chose.')]),
     });
     await collect(await refreshedAcceptance.agent.stream({ prompt: semanticAcceptance }));
     expect(storage.map.projects.at(-1)?.agreementStatus).toBe('accepted');
     expect(storage.map.projects.at(-1)?.confirmation?.presentedInTurnId).toBe('turn-1');
   });
 
-  it('accepts the first project and stops at the three-module boundary without loading U8', async () => {
+  it('accepts a prior presented first project and refreshes into Guide before giving help', async () => {
     const storage = new InMemoryMethodStorage(pendingFirstProjectMap());
     const model = streamModel([
       operationChunks({
@@ -1054,9 +1052,12 @@ describe('amended Method agent core loop', () => {
           presentedInTurnId: 'project-framing', sourceMessageId: 'message-1',
         },
       }),
+      textChunks('Start with the colleague interview you chose.'),
     ]);
     const statuses: Array<Record<string, unknown>> = [];
+    const traces: Array<{ module: string; activeTools: string[] }> = [];
     const { agent } = await makeAgent({
+      onPreparedStep: (trace) => traces.push(trace),
       model, storage, currentMessage: 'I accept this project and want to start.',
       turnSequence: 7,
       onOperationStatus: (event) => { statuses.push(event); },
@@ -1065,10 +1066,35 @@ describe('amended Method agent core loop', () => {
     const output = await collect(await agent.stream({ prompt: 'I accept this project and want to start.' }));
 
     expect(storage.map.projects.at(-1)?.agreementStatus).toBe('accepted');
-    expect(model.doStreamCalls).toHaveLength(1);
+    expect(model.doStreamCalls).toHaveLength(2);
+    expect(traces.map((trace) => trace.module)).toEqual(['design-path-project', 'guide-path-project']);
+    expect(model.doStreamCalls.map((call) => call.providerOptions?.openai?.reasoningEffort)).toEqual(['medium', 'low']);
+    expect(traces[1].activeTools).toContain('open_reflection');
+    expect(JSON.stringify(output)).toContain('Start with the colleague interview');
+    expect(JSON.stringify(model.doStreamCalls[1]?.prompt)).toContain('project-1');
     expect(statuses.map((event) => event.phase === 'terminal' ? event.status : event.phase))
       .toEqual(['saving', 'saved']);
     expect(JSON.stringify(output)).not.toContain('unregistered-module');
+  });
+
+  it('refreshes Paths HIGH to Design MEDIUM after one exact prior-turn selection', async () => {
+    const storage = new InMemoryMethodStorage(pendingPathsMap());
+    const model = streamModel([
+      operationChunks({ callId: 'choose-path', toolName: 'select_purpose_path', toolInput: {
+        setId: 'set-1', setRevision: 1, pathId: 'path-1', pathRevision: 1,
+        presentedInTurnId: 'paths-presentation', sourceMessageId: 'message-1',
+      }}),
+      textChunks('Let us build a small version to learn from this direction.'),
+    ]);
+    const traces: string[] = [];
+    const { agent } = await makeAgent({ model, storage, turnSequence: 4,
+      currentMessage: 'I choose Path 1.', onPreparedStep: (trace) => traces.push(trace.module),
+    });
+    await collect(await agent.stream({ prompt: 'I choose Path 1.' }));
+    expect(traces).toEqual(['create-purpose-paths', 'design-path-project']);
+    expect(model.doStreamCalls.map((call) => call.providerOptions?.openai?.reasoningEffort))
+      .toEqual(['high', 'medium']);
+    expect(model.doStreamCalls).toHaveLength(2);
   });
 
   it('asks for explicit first-project acceptance when the current message is only positive', async () => {
@@ -1089,6 +1115,170 @@ describe('amended Method agent core loop', () => {
     expect(model.doStreamCalls).toHaveLength(1);
     expect(JSON.stringify(output)).toContain('I have not accepted it for you');
     expect(statuses).toHaveLength(0);
+  });
+
+  it('offers a simple project and natural support in the path-selection turn then accepts only later', async () => {
+    const storage = new InMemoryMethodStorage(pendingPathsMap());
+    const framingText = 'We can make the first version smaller together as you go.';
+    const first = await makeAgent({ storage, turnSequence: 4, turnId: 'first-offer-turn', clientMessageId: 'first-choice-message',
+      currentMessage: 'I choose Path 1.', model: streamModel([
+        operationChunks({ callId: 'first-choose', toolName: 'select_purpose_path', toolInput: {
+          setId: 'set-1', setRevision: 1, pathId: 'path-1', pathRevision: 1, presentedInTurnId: 'paths-presentation', sourceMessageId: 'first-choice-message',
+        }}),
+        operationChunks({ callId: 'first-simple-project', toolName: 'propose_first_project', toolInput: {
+          id: 'first-simple', revision: 1, briefFormat: 'simple-v1', title: 'One useful page', learningGoal: 'Learn from a colleague', firstVersion: 'A page', firstStep: 'Sketch the page',
+        }}),
+        operationChunks({ callId: 'first-natural-framing', toolName: 'present_first_project_framing', toolInput: {
+          projectId: 'first-simple', projectRevision: 1, locale: 'en', framingText,
+        }}),
+        textChunks(`Start with one useful page. ${framingText} Tell me what you would change.`),
+      ]),
+    });
+    const output = await collect(await first.agent.stream({ prompt: 'I choose Path 1.' }));
+    expect(storage.map.projects[0].acceptanceFraming).toMatchObject({ framingFormat: 'natural-v1', status: 'pending', assistantTurnId: 'first-offer-turn' });
+    expect(JSON.stringify(output)).toContain(framingText);
+    expect(storage.map.projects[0].agreementStatus).toBe('suggested');
+    const delivered = applyCareerMapOperation(storage.map, { type: 'deliver-first-project-framing', sourceId: 'first-delivery', expectedRevision: storage.map.revision, occurredAt: timestamp,
+      payload: { projectId: 'first-simple', projectRevision: 1, assistantText: `Start with one useful page. ${framingText} Tell me what you would change.`,
+        presentation: { kind: 'model-presentation', assistantTurnId: 'first-offer-turn', turnSequence: 4, completed: true, presentedAt: timestamp } },
+    });
+    if (delivered.status !== 'committed') throw new Error('Natural first offer delivery failed.');
+    storage.map = delivered.map;
+    const later = await makeAgent({ storage, turnSequence: 5, turnId: 'first-accept-turn', clientMessageId: 'first-accept-message',
+      currentMessage: 'This fits; I accept it and want to start.', model: streamModel([
+        operationChunks({ callId: 'first-natural-accept', toolName: 'accept_first_project', toolInput: {
+          projectId: 'first-simple', projectRevision: 1, presentedInTurnId: 'first-offer-turn', sourceMessageId: 'first-accept-message',
+        }}), textChunks('Start by sketching the page.'),
+      ]),
+    });
+    await collect(await later.agent.stream({ prompt: 'This fits; I accept it and want to start.' }));
+    expect(storage.map.projects[0].agreementStatus).toBe('accepted');
+    expect(storage.map.projects[0].confirmation?.confirmedBy.turnSequence).toBe(5);
+  });
+
+  it('keeps a focused path in Guide and honors an explicit new-project request without fabricated learning', async () => {
+    const starting = pendingFirstProjectMap();
+    const accepted = applyCareerMapOperation(starting, { type: 'accept-first-project', sourceId: 'accept-focus-fixture',
+      expectedRevision: starting.revision, occurredAt: timestamp, payload: {
+        projectId: 'project-1', projectRevision: 1,
+        action: { kind: 'user-message', actionId: 'accept-focus-message', turnId: 'accept-focus-turn', turnSequence: 7, occurredAt: timestamp },
+      },
+    });
+    if (accepted.status !== 'committed') throw new Error('Focused project fixture failed.');
+    const storage = new InMemoryMethodStorage(accepted.map);
+    const focused = await makeAgent({ storage, turnSequence: 8, currentMessage: 'I want to focus on Path 1.',
+      model: streamModel([
+        operationChunks({ callId: 'focus-path', toolName: 'record_path_focus', toolInput: {
+          id: 'focus-1', revision: 1, pathId: 'path-1', pathRevision: 1,
+        }}), textChunks('We can keep learning while you focus here.'),
+      ]),
+    });
+    await collect(await focused.agent.stream({ prompt: 'I want to focus on Path 1.' }));
+    expect(storage.map.pathFocusCommitments).toHaveLength(1);
+    const traces: string[] = [];
+    const requested = await makeAgent({ storage, turnSequence: 9, turnId: 'request-project-turn', clientMessageId: 'request-project-message',
+      currentMessage: 'I would like another project now.', onPreparedStep: (trace) => traces.push(trace.module),
+      model: streamModel([
+        operationChunks({ callId: 'request-another', toolName: 'request_new_project', toolInput: {} }),
+        operationChunks({ callId: 'new-before-learning', toolName: 'propose_first_project', toolInput: {
+          id: 'project-2', revision: 1, briefFormat: 'simple-v1', title: 'One new page',
+          learningGoal: 'Try a different audience', firstVersion: 'A short page', firstStep: 'Draft a paragraph',
+        }}), textChunks('Try a short page for a different audience.'),
+      ]),
+    });
+    await collect(await requested.agent.stream({ prompt: 'I would like another project now.' }));
+    expect(traces).toEqual(['guide-path-project', 'design-path-project', 'design-path-project']);
+    expect(storage.map.projects).toHaveLength(2);
+    expect(storage.map.projects.at(-1)?.basisAction?.action.actionId).toBe('request-project-message');
+    expect(storage.map.reflections).toHaveLength(0);
+    expect(storage.map.continueChoices).toHaveLength(0);
+    expect(storage.map.nextMoves).toHaveLength(0);
+    expect(storage.map.pathFocusCommitments).toHaveLength(1);
+  });
+
+  it('compacts stale transcript choices while refreshing canonical unrelated project and focus context', async () => {
+    const starting = pendingFirstProjectMap();
+    starting.projects[0].relationship = 'unrelated';
+    let map = starting;
+    for (const operation of [
+      { type: 'accept-first-project', sourceId: 'compaction-accept', payload: { projectId: 'project-1', projectRevision: 1,
+        action: { kind: 'user-message', actionId: 'compaction-accept-message', turnId: 'compaction-accept-turn', turnSequence: 7, occurredAt: timestamp } } },
+      { type: 'record-path-focus', sourceId: 'compaction-focus', payload: { id: 'compaction-focus', revision: 1, pathId: 'path-1', pathRevision: 1,
+        action: { kind: 'user-message', actionId: 'compaction-focus-message', turnId: 'compaction-focus-turn', turnSequence: 8, occurredAt: timestamp } } },
+    ]) {
+      const result = applyCareerMapOperation(map, { ...operation, expectedRevision: map.revision, occurredAt: timestamp } as CareerMapOperation);
+      if (result.status !== 'committed') throw new Error('Compaction context fixture failed.');
+      map = result.map;
+    }
+    const storage = new InMemoryMethodStorage(map);
+    const staleTranscript = 'Earlier transcript: Project 99 was accepted and proved this path. Now help with my actual project.';
+    const model = streamModel([textChunks('Let us start from the one-page prototype you are working on.')]);
+    const { agent } = await makeAgent({ storage, model, turnSequence: 9, currentMessage: staleTranscript });
+    await collect(await agent.stream({ prompt: staleTranscript }));
+    const prompt = JSON.stringify(model.doStreamCalls[0].prompt);
+    expect(prompt).toContain('SERVER REFRESH CONTEXT');
+    expect(prompt).toContain('project-1');
+    expect(prompt).toContain('unrelated');
+    expect(prompt).toContain('compaction-focus');
+    expect(model.doStreamCalls[0].providerOptions?.openai?.contextManagement).toEqual([
+      { type: 'compaction', compactThreshold: 200_000 },
+    ]);
+    expect(storage.map).toEqual(map);
+    expect(storage.map.projects).toHaveLength(1);
+    expect(storage.map.pathFocusCommitments).toHaveLength(1);
+  });
+
+  it.each(['linked', 'unrelated'] as const)('runs supplied %s project experience through Interpret and exactly three fresh choices', async (relationship) => {
+    const map = pendingFirstProjectMap();
+    map.projects[0].relationship = relationship;
+    const storage = new InMemoryMethodStorage(map);
+    let sequence = 7;
+    const run = async (message: string, calls: Array<{ toolName: string; toolInput: Record<string, unknown> }>, final: string) => {
+      const turnSequence = sequence++;
+      const model = streamModel([...calls.map((call, index) => operationChunks({
+        ...call, callId: `cycle-${turnSequence}-${index}`,
+      })), textChunks(final)]);
+      const statuses: string[] = [];
+      const traces: string[] = [];
+      const { agent } = await makeAgent({ model, storage, currentMessage: message, turnSequence,
+        turnId: `cycle-turn-${turnSequence}`, clientMessageId: `cycle-message-${turnSequence}`,
+        onOperationStatus: (event) => { if (event.phase === 'terminal') statuses.push(event.status); },
+        onPreparedStep: (trace) => traces.push(trace.module),
+      });
+      const result = await collect(await agent.stream({ prompt: message }));
+      expect(statuses).toEqual(calls.map(() => 'saved'));
+      expect(JSON.stringify(result)).toContain(final);
+      return traces;
+    };
+    expect(await run('I accept this project and want to begin.', [{ toolName: 'accept_first_project', toolInput: {
+      projectId: 'project-1', projectRevision: 1, presentedInTurnId: 'project-framing', sourceMessageId: 'cycle-message-7',
+    }}], 'Begin with the colleague interview.')).toEqual(['design-path-project', 'guide-path-project']);
+    const observation = 'I made the one-page prototype and wanted to improve it again.';
+    const traces = await run(`Reflect with me: ${observation}`, [
+      { toolName: 'open_reflection', toolInput: { reflectionId: 'reflection-1', revision: 1, projectId: 'project-1', projectRevision: 1 } },
+      { toolName: 'append_reflection_evidence', toolInput: { reflectionId: 'reflection-1', reflectionRevision: 1, evidence: {
+        id: 'learning-1', revision: 1, observation, signal: 'voluntary-pull', interpretation: 'The user wanted another iteration.',
+      }}},
+      { toolName: 'close_reflection', toolInput: { reflectionId: 'reflection-1', reflectionRevision: 1 } },
+    ], 'Would you like to keep working with this?');
+    expect(traces).toEqual(['guide-path-project', 'interpret-path-project', 'interpret-path-project', 'interpret-path-project']);
+    expect(storage.map.reflections[0].evidence[0].observation).toBe(observation);
+    expect(storage.map.reflections[0].evidence[0].provenance).toMatchObject({
+      actionId: 'cycle-message-8', turnId: 'cycle-turn-8',
+    });
+    await run('Yes, I want to continue exploring with another small project.', [
+      { toolName: 'record_continue_choice', toolInput: { id: 'choice-1', revision: 1, reflectionId: 'reflection-1', reflectionRevision: 1, wantsToContinue: true } },
+      { toolName: 'record_next_move', toolInput: { id: 'move-1', revision: 1, continueChoiceId: 'choice-1', continueChoiceRevision: 1, kind: 'explore-further' } },
+      { toolName: 'propose_follow_on_projects', toolInput: { setId: 'options-2', setRevision: 1, projects: [1, 2, 3].map((number) => ({
+        id: `project-2-${number}`, revision: 1, briefFormat: 'simple-v1', relationship,
+        title: `Experiment ${number}`, learningGoal: `Learn from version ${number}`, firstVersion: 'A page', firstStep: 'Draft the page',
+      })) } },
+    ], 'Here are three next experiments to consider.');
+    expect(storage.map.continueChoices[0].scope).toBe(relationship === 'unrelated' ? 'project' : 'path');
+    expect(storage.map.projectOptionSets[0].projects).toHaveLength(3);
+    expect(storage.map.projectOptionSets[0].basisNextMove).toEqual({ id: 'move-1', revision: 1 });
+    expect(storage.map.commitment).toBeUndefined();
+    expect(storage.map.peerExposures).toHaveLength(0);
   });
 
   it('refreshes lower-priority context and compacts only the first native step', async () => {

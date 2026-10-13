@@ -9,7 +9,7 @@ import {
   PURPOSE_PATHS_OFFER_ENGLISH,
   R22_CANONICAL_ENGLISH,
 } from './base-instructions';
-import { METHOD_MODULE_KEYS, METHOD_MODULE_REGISTRY } from './registry';
+import { METHOD_MODULE_KEYS, METHOD_MODULE_REGISTRY, methodReasoningEffort } from './registry';
 import {
   MethodModuleLoadError,
   createMethodModuleLoader,
@@ -45,13 +45,15 @@ describe('repository-owned Method module loader', () => {
     await expect(createMethodModuleLoader({ versionPolicy: 'candidate' })).rejects.toThrow(/explicit skills root/i);
   });
 
-  it('validates the fixed first-three registry and loads exactly the canonical checkpoint module', async () => {
+  it('validates the fixed five-module registry and loads exactly the canonical checkpoint module', async () => {
     const loader = await createMethodModuleLoader();
 
     expect(METHOD_MODULE_KEYS).toEqual([
       'form-foundation',
       'create-purpose-paths',
       'design-path-project',
+      'guide-path-project',
+      'interpret-path-project',
     ]);
     expect(Object.keys(METHOD_MODULE_REGISTRY)).toEqual(METHOD_MODULE_KEYS);
 
@@ -65,13 +67,27 @@ describe('repository-owned Method module loader', () => {
     expect(loader.loadedKeys()).toEqual(['create-purpose-paths']);
   });
 
-  it('fails closed for later or unknown checkpoints instead of discovering a filesystem module', async () => {
+  it('recalculates effort from the active module without a classifier', () => {
+    expect(METHOD_MODULE_KEYS.map(methodReasoningEffort)).toEqual(['low', 'high', 'medium', 'low', 'low']);
+  });
+
+  it('adopts the three reconciled drafts byte for byte', async () => {
+    const loader = await createMethodModuleLoader();
+    for (const key of ['design-path-project', 'guide-path-project', 'interpret-path-project'] as const) {
+      const draft = await readFile(new URL(`../../../docs/drafts/2026-10-13-project-learning-loop/${key}/SKILL.md`, import.meta.url), 'utf8');
+      const runtime = await readFile(path.join(sourceSkillsRoot, key, 'SKILL.md'), 'utf8');
+      expect(runtime).toBe(draft);
+      expect(loader.load(checkpoint(key)).contentVersion).toBe(key === 'design-path-project' ? '1.3.0' : '1.0.0');
+    }
+  });
+
+  it('fails closed for deferred or unknown checkpoints instead of discovering a filesystem module', async () => {
     const root = await copySkillsFixture();
-    const rogueDirectory = path.join(root, 'guide-path-project');
+    const rogueDirectory = path.join(root, 'find-purpose-peers');
     await cp(path.join(root, 'design-path-project'), rogueDirectory, { recursive: true });
     const loader = await createMethodModuleLoader({ skillsRoot: root });
 
-    expect(() => loader.load(checkpoint('guide-path-project'))).toThrowError(MethodModuleLoadError);
+    expect(() => loader.load(checkpoint('find-purpose-peers'))).toThrowError(MethodModuleLoadError);
     expect(() => loader.load(checkpoint('../design-path-project'))).toThrow(/not registered/i);
     expect(loader.loadedKeys()).toEqual([]);
   });
@@ -153,9 +169,11 @@ describe('repository-owned Method module loader', () => {
   });
 
   it('keeps global voice, trust, state-order, and brevity rules in the small base instructions', () => {
-    expect(BASE_METHOD_INSTRUCTIONS.length).toBeLessThan(5_000);
+    expect(BASE_METHOD_INSTRUCTIONS.length).toBeLessThan(6_000);
     expect(BASE_METHOD_INSTRUCTIONS).toMatch(/relaxed, informal English, simple sentences, and natural contractions/i);
     expect(BASE_METHOD_INSTRUCTIONS).toMatch(/prestige/i);
+    expect(BASE_METHOD_INSTRUCTIONS).toContain('respect disagreement without repeatedly reopening a settled choice');
+    expect(BASE_METHOD_INSTRUCTIONS).toContain('do not invent alignment');
     expect(BASE_METHOD_INSTRUCTIONS).toMatch(/untrusted data/i);
     expect(BASE_METHOD_INSTRUCTIONS).toMatch(/committed operation result/i);
     expect(BASE_METHOD_INSTRUCTIONS).toMatch(/paragraphs.*H2–H4.*bold.*italics.*ordered.*unordered lists/is);
@@ -225,22 +243,21 @@ describe('repository-owned Method module loader', () => {
     expect(paths).toMatch(/cards application-owned.*Avoid repeating card fields/is);
     expect(paths).not.toMatch(/What could become possible|350 words|80 words|confirmed Why|same Why/i);
 
-    expect(project).toMatch(/exactly one first Path Project/i);
-    expect(project).toMatch(/one replacement/i);
-    expect(project).toMatch(/firsthand beneficiary/i);
-    expect(project).toMatch(/present-first-project-framing.*once/i);
-    expect(project).toMatch(/later (?:explorer message|turn)/i);
-    expect(project).toMatch(/main agent.*semantic.*acceptance.*current explorer message/is);
-    expect(project).toMatch(/acceptancePhrase.*not.*exact-match/is);
-    expect(project).toMatch(/durable marker prevents repetition after reload or compaction/i);
-    expect(project).toContain(R22_CANONICAL_ENGLISH);
-    expect(project).not.toMatch(/Spanish conversation|translate all five ideas/i);
-    expect(project.indexOf(R22_CANONICAL_ENGLISH)).toBe(project.lastIndexOf(R22_CANONICAL_ENGLISH));
+    expect(project).toContain("What you'll learn:");
+    expect(project).toContain("What you'll make:");
+    expect(project).toContain('Suggested starting point:');
+    expect(project).toMatch(/exactly three distinct, equally weighted project options/i);
+    expect(project).toMatch(/no prescribed phrase is required/i);
+    expect(project).toMatch(/specific current proposal the user has seen/i);
+    expect(project).not.toContain(R22_CANONICAL_ENGLISH);
+    expect(loader.load(checkpoint('guide-path-project')).instructions).toContain('# Guide a Path Project');
+    expect(loader.load(checkpoint('interpret-path-project')).instructions).toContain('Do not rewrite the North Star within reflection.');
+
   });
 });
 
 describe.runIf(process.env.METHOD_PRODUCTION_SMOKE === '1')('production Method bundle', () => {
-  it('loads all three registered SKILL.md files from the packaged Node production filesystem', async () => {
+  it('loads all five registered SKILL.md files from the packaged Node production filesystem', async () => {
     const productionRoot = resolveMethodSkillsRoot({ environment: 'production' });
     expect(productionRoot).toBe(path.resolve(process.cwd(), 'dist/method-skills'));
 
@@ -252,7 +269,7 @@ describe.runIf(process.env.METHOD_PRODUCTION_SMOKE === '1')('production Method b
     }
   });
 
-  it('loads all three registered SKILL.md files from the Vercel includeFiles source tree', async () => {
+  it('loads all five registered SKILL.md files from the Vercel includeFiles source tree', async () => {
     const productionRoot = resolveMethodSkillsRoot({ environment: 'production', deployment: 'vercel' });
     expect(productionRoot).toBe(path.resolve(process.cwd(), 'server/ai/method/skills'));
 

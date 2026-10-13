@@ -5,9 +5,8 @@ import {
   matchesPathOperationExpectation,
   summarizeFirstProjectReplacement,
   summarizeFoundationTrace,
-  summarizeR22Presentation,
+  summarizeProjectPresentation,
 } from './evaluation';
-import { R22_CANONICAL_ENGLISH } from './base-instructions';
 
 describe('Method evaluation assertions', () => {
   it('executes every declared U7 semantic-intent fixture before retaining its metadata', () => {
@@ -49,6 +48,23 @@ describe('Method evaluation assertions', () => {
     expect(source).toMatch(/retryCount: result\.evidenceAuthorityViolations\.length/);
     expect(source).toMatch(/activeFoundationNarrations\.every\(\(turn\) => turn\.replyShape\.questions === 1\)/);
     expect(source).toMatch(/pausedFoundationNarrations\.every\([\s\S]*?turn\.replyShape\.questions === 0[\s\S]*?turn\.operations\.length === 0/);
+  });
+
+  it('uses module effort and natural presentation contracts in the offline eval source', () => {
+    const source = readFileSync(new URL('../../../scripts/eval-revelio-method.mjs', import.meta.url), 'utf8');
+    expect(source).toContain('reasoningEffort: methodReasoningEffort(bundle.key)');
+    expect(source).toContain("process.argv.includes('--offline-contracts-only')");
+    expect(source).toContain('test-fixtures/legacy-proof-v2.json');
+    expect(source).not.toContain('REVELIO_METHOD_REASONING_EFFORT');
+    expect(source).not.toContain('firstProjectAccepted || requestedOperationCompleted');
+    expect(source).not.toContain('summarizeR22Presentation');
+    expect(source).not.toContain('FIRST_PROJECT_ACCEPTANCE_PHRASE_ENGLISH');
+    expect(source).not.toContain('acceptance question did not include the exact persisted phrase');
+    expect(source).not.toContain('R22 framing was not the exact first paragraph');
+    expect(source).not.toContain('isExactFirstProjectFramingDelivery');
+    expect(source).not.toContain('groundedProjectInputSchema');
+    expect(source).not.toContain('projectGroundingSchema');
+    expect(source).toContain("briefFormat: 'simple-v1'");
   });
 
   it('requires minimum-sufficient privacy-safe Foundation coverage before propose-why', () => {
@@ -185,21 +201,18 @@ describe('Method evaluation assertions', () => {
     })).toBe(false);
   });
 
-  it('ties rejection-turn replacement, structured grounding, and acceptance to one opaque project id', () => {
+  it('ties rejection-turn replacement and acceptance to one opaque project id', () => {
     const valid = [
       {
         turnIndex: 4,
         type: 'replace-project-proposal',
         replacementProjectId: 'replacement-project',
-        projectGroundingKind: 'firsthand-beneficiary',
-        projectGroundingBasisProvided: true,
       },
       { turnIndex: 6, type: 'accept-first-project', projectId: 'replacement-project' },
     ];
     expect(summarizeFirstProjectReplacement(valid, 4)).toMatchObject({
       replacementOnExpectedTurn: true,
       acceptedReplacement: true,
-      groundedReplacement: true,
       valid: true,
     });
     expect(summarizeFirstProjectReplacement([
@@ -210,33 +223,14 @@ describe('Method evaluation assertions', () => {
       valid[0],
       { ...valid[1], projectId: 'original-project' },
     ], 4).valid).toBe(false);
-    expect(summarizeFirstProjectReplacement([
-      { ...valid[0], projectGroundingBasisProvided: false },
-      valid[1],
-    ], 4).valid).toBe(false);
   });
 
-  it('requires the locale framing alone, then one short question, with no preface or heading', () => {
-    const correctEnglish = `${R22_CANONICAL_ENGLISH}\n\nDo you explicitly accept this Path Project?`;
-    const alternateFraming = 'A translated framing supplied by the model.';
-    const correctAlternate = `${alternateFraming}\n\nWould you accept?`;
-    expect(summarizeR22Presentation(correctEnglish, R22_CANONICAL_ENGLISH).valid).toBe(true);
-    expect(summarizeR22Presentation(correctAlternate, alternateFraming).valid).toBe(true);
-    expect(summarizeR22Presentation(
-      `One useful framing:\n\n${R22_CANONICAL_ENGLISH}\n\nDo you accept?`,
-      R22_CANONICAL_ENGLISH,
-    ).valid).toBe(false);
-    expect(summarizeR22Presentation(
-      `## Before you accept\n${R22_CANONICAL_ENGLISH}\n\nDo you accept?`,
-      R22_CANONICAL_ENGLISH,
-    ).valid).toBe(false);
-    expect(summarizeR22Presentation(
-      `${R22_CANONICAL_ENGLISH}\n\nDo you accept? Are you sure?`,
-      R22_CANONICAL_ENGLISH,
-    ).valid).toBe(false);
-    expect(summarizeR22Presentation(
-      `${R22_CANONICAL_ENGLISH} ${R22_CANONICAL_ENGLISH}\n\nDo you accept?`,
-      R22_CANONICAL_ENGLISH,
-    ).valid).toBe(false);
+  it('accepts a completed natural project presentation without a magic reply phrase or whole-reply shape', () => {
+    const framing = 'We can adjust this together as you go.';
+    expect(summarizeProjectPresentation(`## Your project\n\n${framing}\n\nTell me what you would change.`, framing).valid).toBe(true);
+    expect(summarizeProjectPresentation(framing, framing).valid).toBe(true);
+    expect(summarizeProjectPresentation('A different project.', framing).valid).toBe(false);
+    expect(summarizeProjectPresentation('', framing).valid).toBe(false);
+    expect(summarizeProjectPresentation(`${framing} ${framing}`, framing).valid).toBe(true);
   });
 });

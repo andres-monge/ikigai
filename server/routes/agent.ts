@@ -322,9 +322,12 @@ const storedOperationEnvelopeSchema = z.object({
   status: z.enum(['committed', 'idempotent-replay', 'conflict', 'rejected']),
   operation: z.enum(WORKSPACE_OPERATION_TYPES),
   authoritativeRevision: z.number().int().nonnegative(),
-  derivedModule: z.enum(['form-foundation', 'create-purpose-paths', 'design-path-project']),
+  derivedModule: z.enum(['form-foundation', 'create-purpose-paths', 'design-path-project', 'guide-path-project', 'interpret-path-project']),
   pendingDecision: z.object({
-    kind: z.enum(['why-confirmation', 'path-selection', 'path-revision-confirmation', 'first-project-confirmation']),
+    kind: z.enum([
+      'why-confirmation', 'path-selection', 'path-revision-confirmation', 'first-project-confirmation',
+      'project-revision-confirmation', 'follow-on-project-selection', 'continue-choice', 'next-move',
+    ]),
     targetId: z.string().min(1).max(160),
     targetRevision: z.number().int().positive(),
   }).strict().nullable(),
