@@ -14,7 +14,7 @@ These additions belong once in the shared base, alongside the existing accepted 
 
 - Develop: make the chosen idea startable; learning-first brief; one first proposal and acceptance; later three-option project choices; project-content revisions.
 - Guide: practical support and flexible next actions; work-status observations; offer reflection when useful; no forced introspection or scheduled check-ins.
-- Interpret: understand actual experience through energy drivers/drainers; record reflection; user-owned continue/change and Next Move; peer-stage handoff for commitment.
+- Interpret: understand actual experience through energy drivers/drainers; record reflection; user-owned continue/change and Next Move; focus commitment preserves the learning loop.
 
 Energy appears in each file only for a different responsibility: design the question, notice experience lightly during work, interpret it during reflection. Exact first-project framing lives only in development. The two existing canonical reflection questions live only in interpretation.
 
@@ -26,11 +26,11 @@ Option C with a visible Suggested starting point. Ordinary conversation in the t
 
 1. Current project schema still requires nine content fields, and Map renders them separately. The proposed simpler content and Chat/Map presentation need explicit schema/rendering alignment, preserving historical records and acceptance protections.
 2. Shared base additions above and terminology change from explorer to user are proposed, not adopted. Apply the terminology change to relevant active prompts/docs after final agreement; do not rewrite historical evidence indiscriminately.
-3. Current projects require active-path basis; guidance and reflection also assume path-linked work. Supporting an intentionally unrelated saved project requires an honest relationship and legal continuation route. Do not fabricate a path link to satisfy existing validation. Standard linked-path reflections retain exact R26/R29 wording; natural questions for unrelated projects are a proposed contract exception.
-4. Guidance/reflection have Method/domain specifications but no existing active SKILL.md files or model-facing U8 tools in this checkout. Registry contains three U7 modules and the agent stops after first-project acceptance. The drafts cannot make those features operational.
+3. Current projects require active-path basis; guidance and reflection also assume path-linked work. Supporting an intentionally unrelated saved project requires an honest relationship and legal continuation route. Do not fabricate a path link to satisfy existing validation. The approved MVP contract uses flexible reflection and preserves the exact Interpret decision guidance; linked-path questions remain available where applicable and unrelated work uses honest natural questions.
+4. Guidance/reflection have Method/domain specifications but no existing active SKILL.md files or model-facing U8 tools in this checkout. Registry contains three U7 modules and the agent stops after first-project acceptance. Planned code/schema adoption adds Guide and Interpret for five active modules; the drafts alone cannot make those features operational.
 5. Project briefing currently lacks full refreshed Foundation evidence/constraints and omits saved learningGoal. Supply relevant existing context deliberately when adopting the revised project flow.
 6. Paths HIGH, project development MEDIUM, Foundation/other stages LOW remains the scoped routing recommendation. Production currently uses Paths HIGH and others LOW. No setting changes or claims of tested optimal effort are made here.
-7. Exactly three equal follow-on project options and confirmed meaningful peer exposure before provisional commitment remain existing Method requirements. They were not silently removed under the broader freedom principle. Whether mandatory three-option presentation should change remains open for later discussion.
+7. Every later project decision preserves exactly three equal follow-on options, including after selecting another path. Formal Peers, proof inventories and Side Doors are wholly deferred from the MVP; focus commitment requires no peer exposure and preserves further learning. See `docs/method/deferred-features.md`.
 
 ## Official guidance used
 

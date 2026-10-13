@@ -1,0 +1,11 @@
+# Deferred Method features
+
+The repeating-learning MVP delivers Foundation, three Purpose Paths, project development, practical guidance, reflection and user-owned Next Move through five active modules. Focus commitment preserves this loop. Formal Peers, proof inventories and Side Doors are wholly deferred, including conversational delivery and release gates. Revisit them when actual users need them; no date or user-count trigger applies. Ordinary guidance can still help users learn from people. All external contact, publication and applications remain human-controlled.
+
+| Feature | Purpose and intended implementation | Connections and retained detailed specification |
+|---|---|---|
+| Formal Peers | Research a small set of real people, communities or first-person sources; explain relevance, access and useful questions; capture user-confirmed insights. Contact remains voluntary. | Enrich projects and decisions. [Method contract](../plans/2026-08-29-1133-feat-revelio-method-plan.md): R34–R35, F4, AE10 and KTD9. The former mandatory exposure-before-commitment rule is historical and superseded. |
+| Proof inventory | Describe existing artifacts, problems solved, people helped, useful demonstrated qualities, knowledge, relationships and shareable work; confirm before relying on it. | Connect accumulated projects to future entry routes. Method R36, F5, AE11 and deferred U9 in both active plans. |
+| Side Doors | Research three contribution-first entry routes, compare equally, select one, prepare an approach and distinguish route outcomes from path evidence. | Builds on proof and relevant relationships. Method R37–R40, F5, AE11–AE12 and U9; [career-entry research](../research/2026-08-28-side-doors-career-entry.md); [revamp U9](../plans/2026-08-14-claude-feat-revelio-revamp-plan.md). |
+
+These retained IDs and U9 detail are deferred specifications and historical design evidence, not deployment prerequisites. Existing records retain their identities, lineage and meaning and remain readable, validatable, invalidatable and erasable. Their presence must not route users into deferred modules, block focus commitment or strand resume. The wider ambition remains in [the thesis](../thesis.md).

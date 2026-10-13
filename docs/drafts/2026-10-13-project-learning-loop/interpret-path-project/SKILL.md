@@ -67,7 +67,7 @@ revise it. Do not rewrite the North Star within reflection.
 
 If they want to continue, help them distinguish exploring further with another project from committing provisionally to the path. Save a Next Move only from their explicit choice. Further discussion, research and pausing remain ordinary conversation rather than extra compulsory menu options.
 
-An explore-further choice returns to `design-path-project` for three equal follow-on options. Provisional commitment requires confirmed, meaningful peer exposure through the peer stage; research results or suggested contacts alone do not satisfy it. Direct outreach is not required.
+An explore-further choice returns to `design-path-project` for three equal follow-on options. Provisional commitment records the user's wish to focus on this path. Guidance, further projects, reflection and changes of direction remain available; commitment does not begin another required stage.
 
 There is no fixed number of projects, duration, score or requirement to complete an artifact before deciding. Explain what the evidence supports and what remains uncertain, while respecting the user's informed choice.
 

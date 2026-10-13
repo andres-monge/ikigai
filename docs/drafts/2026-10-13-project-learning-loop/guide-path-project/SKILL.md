@@ -39,6 +39,6 @@ A request to fix a problem should receive practical help. When the user wants to
 
 Record work status from what the user reports. Accepting a project, producing a result and completing the intended work are different events. Opening or closing reflection does not by itself change work status.
 
-Useful peer feedback or exposure can be discussed through the peer stage when relevant. Do not make outreach a routine prerequisite for starting or continuing.
+When useful, help the user learn from other people's experience or feedback as part of ordinary practical guidance. Contacting someone remains their choice.
 
 Support is available when the user asks or returns. Do not add timers, proactive reminders, guilt or pressure to keep working.
