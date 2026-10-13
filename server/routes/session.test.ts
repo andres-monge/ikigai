@@ -16,7 +16,7 @@
  */
 
 import { beforeEach, afterAll, describe, it, expect } from 'vitest';
-import request from 'supertest';
+import request from '../test-fixtures/loopback-http.js';
 import express from 'express';
 import { eq } from 'drizzle-orm';
 import { db } from '../db.js';
@@ -84,7 +84,7 @@ afterAll(async () => {
 
 describe('GET /api/session/:sessionId', () => {
   it('should return 404 for non-existent session', async () => {
-    const response = await request(app)
+    const response = await (await request(app))
       .get('/api/session/non-existent-session')
       .expect(404);
 
@@ -96,7 +96,7 @@ describe('GET /api/session/:sessionId', () => {
 
   it('should return 400 for empty sessionId parameter', async () => {
     // Test with URL-encoded empty string
-    const response = await request(app)
+    const response = await (await request(app))
       .get('/api/session/%20%20%20') // URL-encoded spaces
       .expect(400);
 
@@ -143,7 +143,7 @@ describe('GET /api/session/:sessionId', () => {
     });
 
     // Test the GET endpoint
-    const response = await request(app)
+    const response = await (await request(app))
       .get(`/api/session/${testSessionId}`)
       .expect(200);
 
@@ -179,7 +179,7 @@ describe('GET /api/session/:sessionId', () => {
 
 describe('POST /api/session/start-over', () => {
   it('should return 400 for invalid request body', async () => {
-    const response = await request(app)
+    const response = await (await request(app))
       .post('/api/session/start-over')
       .send({}) // Missing sessionId
       .expect(400);
@@ -189,7 +189,7 @@ describe('POST /api/session/start-over', () => {
   });
 
   it('should return 400 for empty sessionId', async () => {
-    const response = await request(app)
+    const response = await (await request(app))
       .post('/api/session/start-over')
       .send({ sessionId: "" })
       .expect(400);
@@ -200,7 +200,7 @@ describe('POST /api/session/start-over', () => {
   it('should return success and log event for any session (idempotent)', async () => {
     const nonExistentSessionId = 'non-existent-session-' + Date.now();
 
-    const response = await request(app)
+    const response = await (await request(app))
       .post('/api/session/start-over')
       .send({ sessionId: nonExistentSessionId })
       .expect(200);
@@ -253,7 +253,7 @@ describe('POST /api/session/start-over', () => {
     expect(beforeSession!.purposePaths).toHaveLength(2);
 
     // Call start-over endpoint
-    const response = await request(app)
+    const response = await (await request(app))
       .post('/api/session/start-over')
       .send({ sessionId: testSessionId2 })
       .expect(200);
@@ -284,7 +284,7 @@ describe('POST /api/session/start-over', () => {
     });
 
     // First start-over call
-    const response1 = await request(app)
+    const response1 = await (await request(app))
       .post('/api/session/start-over')
       .send({ sessionId: testSessionId })
       .expect(200);
@@ -292,7 +292,7 @@ describe('POST /api/session/start-over', () => {
     expect(response1.body.message).toBe("Start over recorded successfully");
 
     // Second start-over call should also succeed and log another event
-    const response2 = await request(app)
+    const response2 = await (await request(app))
       .post('/api/session/start-over')
       .send({ sessionId: testSessionId })
       .expect(200);
@@ -335,7 +335,7 @@ describe('Session lifecycle integration', () => {
     });
 
     // 3. Retrieve via GET endpoint
-    const getResponse = await request(app)
+    const getResponse = await (await request(app))
       .get(`/api/session/${lifecycleSessionId}`)
       .expect(200);
 
@@ -343,7 +343,7 @@ describe('Session lifecycle integration', () => {
     expect(getResponse.body.purposePaths).toHaveLength(1);
 
     // 4. Call start-over endpoint (now preserves data)
-    const startOverResponse = await request(app)
+    const startOverResponse = await (await request(app))
       .post('/api/session/start-over')
       .send({ sessionId: lifecycleSessionId })
       .expect(200);
@@ -351,7 +351,7 @@ describe('Session lifecycle integration', () => {
     expect(startOverResponse.body.message).toBe("Start over recorded successfully");
 
     // 5. Verify session data is STILL accessible (preserved for analytics)
-    const getAfterStartOverResponse = await request(app)
+    const getAfterStartOverResponse = await (await request(app))
       .get(`/api/session/${lifecycleSessionId}`)
       .expect(200);
 

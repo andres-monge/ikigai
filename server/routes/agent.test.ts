@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import express, { type RequestHandler } from 'express';
-import rawRequest from 'supertest';
+import rawRequest from '../test-fixtures/loopback-http.js';
 import { simulateReadableStream } from 'ai';
 import { MockLanguageModelV4 } from 'ai/test';
 import { describe, expect, it, vi } from 'vitest';
@@ -434,8 +434,8 @@ function testApp(
  * contract. Security-negative cases use rawRequest so each missing or invalid
  * header remains explicit at the call site.
  */
-function request(app: express.Express) {
-  const client = rawRequest(app);
+async function request(app: express.Express) {
+  const client = (await rawRequest(app));
   return {
     get: (path: string) => client.get(path),
     post: (path: string) => {
@@ -456,7 +456,7 @@ describe('protected Method routes', () => {
     vi.stubEnv('REVELIO_LATENCY_TRACE', '1');
     try {
       const logs: Array<Record<string, unknown>> = [];
-      const response = await request(testApp({
+      const response = await (await request(testApp({
         storage: createStorage({ getConversationMapping: vi.fn(async () => 'latency-conversation') }),
         requireAuth: authenticated,
         agentEnabled: true,
@@ -469,7 +469,7 @@ describe('protected Method routes', () => {
         },
         internalContextMarker: () => 'latency-marker',
         operationalLog: (entry) => logs.push(entry),
-      })).post('/api/agent').send({ id: 'latency-client-message', message: SENTINEL });
+      }))).post('/api/agent').send({ id: 'latency-client-message', message: SENTINEL });
 
       expect(response.status).toBe(200);
       const latency = logs.at(-1)?.latency as Record<string, unknown>;
@@ -527,10 +527,10 @@ describe('protected Method routes', () => {
       ],
       hasMore: false,
     })) };
-    const response = await request(testApp({
+    const response = await (await request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true, model, conversationClient,
       now: () => new Date(timestamp(4)), operationalLog: vi.fn(),
-    })).post('/api/agent').send({ id: 'client-message-1', message: userText });
+    }))).post('/api/agent').send({ id: 'client-message-1', message: userText });
 
     expect(response.status).toBe(200);
     expect(response.text).not.toContain(PURPOSE_PATHS_OFFER_ENGLISH);
@@ -577,11 +577,11 @@ describe('protected Method routes', () => {
       },
     });
     const storage = createStorage({ getConversationMapping: vi.fn(async () => 'truncated-paths-conversation') }, map);
-    const response = await request(testApp({
+    const response = await (await request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true, model,
       conversationClient: { listItems: vi.fn(async () => ({ data: [], hasMore: false })) },
       now: () => new Date(timestamp(4)), operationalLog: vi.fn(),
-    })).post('/api/agent').send({ id: 'client-message-1', message: 'Revise paths one and three.' });
+    }))).post('/api/agent').send({ id: 'client-message-1', message: 'Revise paths one and three.' });
 
     expect(response.status).toBe(200);
     expect(uiStreamChunks(response.text)).toContainEqual(expect.objectContaining({ type: 'error' }));
@@ -654,7 +654,7 @@ describe('protected Method routes', () => {
           model,
           operationalLog,
         });
-        const pending = testCase.apply(rawRequest(app)
+        const pending = testCase.apply((await rawRequest(app))
           .post(path)
           .set('Content-Type', 'application/json'));
         const response = await pending.send(body);
@@ -698,7 +698,7 @@ describe('protected Method routes', () => {
       const app = testApp({
         storage: createStorage(), requireAuth, agentEnabled: true, transcribeAudio, operationalLog,
       });
-      const response = await apply(rawRequest(app).post('/api/agent/audio/transcribe')).send(WEBM_AUDIO);
+      const response = await apply((await rawRequest(app)).post('/api/agent/audio/transcribe')).send(WEBM_AUDIO);
 
       expect(response.status).toBe(status);
       expect(requireAuth).not.toHaveBeenCalled();
@@ -713,7 +713,7 @@ describe('protected Method routes', () => {
       const app = testApp({
         storage: createStorage(), requireAuth, agentEnabled: true, transcribeAudio, operationalLog,
       });
-      const preflight = await rawRequest(app)
+      const preflight = await (await rawRequest(app))
         .options('/api/agent/audio/transcribe')
         .set('Origin', METHOD_REQUEST_ORIGIN)
         .set('Access-Control-Request-Method', 'POST');
@@ -731,12 +731,12 @@ describe('protected Method routes', () => {
         response.status(401).end();
       });
       const storage = createStorage();
-      const response = await rawRequest(testApp({
+      const response = await (await rawRequest(testApp({
         storage,
         requireAuth,
         agentEnabled: true,
         operationalLog: vi.fn(),
-      }))
+      })))
         .post(path)
         .set('Content-Type', 'application/json')
         .send(operationBody);
@@ -756,12 +756,12 @@ describe('protected Method routes', () => {
       });
       const operationalLog = vi.fn();
       const storage = createStorage();
-      const response = await rawRequest(testApp({
+      const response = await (await rawRequest(testApp({
         storage,
         requireAuth,
         agentEnabled: true,
         operationalLog,
-      }))
+      })))
         .post(path)
         .set('Origin', METHOD_REQUEST_ORIGIN)
         .set('X-Revelio-Request', '1')
@@ -786,12 +786,12 @@ describe('protected Method routes', () => {
       });
       const operationalLog = vi.fn();
       const storage = createStorage();
-      const response = await rawRequest(testApp({
+      const response = await (await rawRequest(testApp({
         storage,
         requireAuth,
         agentEnabled: true,
         operationalLog,
-      }))
+      })))
         .options(path)
         .set('Origin', 'https://revelio-me-git-feature.vercel.app')
         .set('Access-Control-Request-Method', 'POST')
@@ -814,11 +814,11 @@ describe('protected Method routes', () => {
     const app = testApp({ storage, requireAuth: unauthenticated, agentEnabled: true, operationalLog: vi.fn() });
 
     const responses = await Promise.all([
-      request(app).get('/api/agent/workspace'),
-      request(app).get('/api/agent/history'),
-      request(app).post('/api/agent').send({ id: 'message', message: 'hello' }),
-      request(app).post('/api/agent/workspace/operations').send({}),
-      request(app).post('/api/agent/audio/transcribe').send(WEBM_AUDIO),
+      (await request(app)).get('/api/agent/workspace'),
+      (await request(app)).get('/api/agent/history'),
+      (await request(app)).post('/api/agent').send({ id: 'message', message: 'hello' }),
+      (await request(app)).post('/api/agent/workspace/operations').send({}),
+      (await request(app)).post('/api/agent/audio/transcribe').send(WEBM_AUDIO),
     ]);
 
     expect(responses.map((response) => response.status)).toEqual([401, 401, 401, 401, 401]);
@@ -855,15 +855,15 @@ describe('protected Method routes', () => {
         operationalLog: vi.fn(),
       }, createFreshAgentRouter);
 
-      const workspace = await request(app).get('/api/agent/workspace');
-      const history = await request(app).get('/api/agent/history');
-      const agent = await request(app).post('/api/agent').send({ id: 'message', message: SENTINEL });
-      const operation = await request(app).post('/api/agent/workspace/operations').send(
+      const workspace = await (await request(app)).get('/api/agent/workspace');
+      const history = await (await request(app)).get('/api/agent/history');
+      const agent = await (await request(app)).post('/api/agent').send({ id: 'message', message: SENTINEL });
+      const operation = await (await request(app)).post('/api/agent/workspace/operations').send(
         selectPurposePathRequest({
           operationId: 'operation-disabled-flag', clientMessageId: 'message-disabled-flag',
         }),
       );
-      const audio = await request(app).post('/api/agent/audio/transcribe').send(WEBM_AUDIO);
+      const audio = await (await request(app)).post('/api/agent/audio/transcribe').send(WEBM_AUDIO);
 
       expect(workspace.status).toBe(200);
       expect(workspace.body).toMatchObject({ status: 'ready' });
@@ -915,9 +915,9 @@ describe('protected Method routes', () => {
       })),
     };
 
-    const response = await request(testApp({
+    const response = await (await request(testApp({
       storage, requireAuth: authenticated, agentEnabled: false, conversationClient, operationalLog: vi.fn(),
-    })).get('/api/agent/history');
+    }))).get('/api/agent/history');
 
     expect(response.status).toBe(200);
     expect(response.body.messages.map((message: { id: string }) => message.id))
@@ -930,8 +930,8 @@ describe('protected Method routes', () => {
   it('returns an empty workspace bootstrap and enforces the bounded agent message schema before storage', async () => {
     const storage = createStorage({ loadCareerMap: vi.fn(async () => ({ status: 'not-found' as const })) });
     const app = testApp({ storage, requireAuth: authenticated, agentEnabled: true, operationalLog: vi.fn() });
-    const workspace = await request(app).get('/api/agent/workspace');
-    const oversized = await request(app).post('/api/agent').send({
+    const workspace = await (await request(app)).get('/api/agent/workspace');
+    const oversized = await (await request(app)).post('/api/agent').send({
       id: 'client-message-1', message: 'x'.repeat(12_001),
     });
     expect(workspace.body).toEqual({ status: 'empty', map: null });
@@ -953,12 +953,12 @@ describe('protected Method routes', () => {
       authenticated(request, response, next);
     };
 
-    const response = await request(testApp({
+    const response = await (await request(testApp({
       storage,
       requireAuth: consumedBodyAuthenticated,
       agentEnabled: true,
       operationalLog: vi.fn(),
-    })).post('/api/agent').send({ id: 'client-message-1', message: 'hello' });
+    }))).post('/api/agent').send({ id: 'client-message-1', message: 'hello' });
 
     expect(response.status).toBe(200);
     expect(response.body.status).toBe('completed-replay');
@@ -985,12 +985,12 @@ describe('protected Method routes', () => {
       authenticated(request, response, next);
     };
 
-    const response = await request(testApp({
+    const response = await (await request(testApp({
       storage,
       requireAuth: consumedBodyAuthenticated,
       agentEnabled: true,
       operationalLog: vi.fn(),
-    })).post('/api/agent/workspace/operations').send(
+    }))).post('/api/agent/workspace/operations').send(
       selectPurposePathRequest({ operationId: 'operation-replay' }),
     );
 
@@ -1016,13 +1016,13 @@ describe('protected Method routes', () => {
         authenticated(request, response, next);
       };
 
-      await Promise.resolve(request(testApp({
+      await Promise.resolve((await request(testApp({
         storage,
         requireAuth: disconnectedAuthenticated,
         agentEnabled: true,
         model,
         operationalLog: vi.fn(),
-      })).post('/api/agent').send({ id: 'client-message-1', message: 'hello' })).catch(() => undefined);
+      }))).post('/api/agent').send({ id: 'client-message-1', message: 'hello' })).catch(() => undefined);
 
       expect(storage.getOrCreateCareerMap).not.toHaveBeenCalled();
       expect(storage.beginAgentTurn).not.toHaveBeenCalled();
@@ -1035,10 +1035,10 @@ describe('protected Method routes', () => {
     const logs: Array<Record<string, unknown>> = [];
     const storage = createPathSelectionStorage();
     const model = new MockLanguageModelV4({ doStream: textStream('must not run') as never });
-    const response = await request(testApp({
+    const response = await (await request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true, model,
       operationalLog: (entry) => logs.push(entry),
-    })).post('/api/agent').send({
+    }))).post('/api/agent').send({
       id: `message-safe\n${clientIdSentinel}`,
       message: 'A normal reflection.',
     });
@@ -1052,10 +1052,10 @@ describe('protected Method routes', () => {
   it('collapses attacker-controlled unmatched Method paths to a static log label', async () => {
     const pathSentinel = 'PRIVATE_LOG_PATH_SENTINEL';
     const logs: Array<Record<string, unknown>> = [];
-    const response = await request(testApp({
+    const response = await (await request(testApp({
       storage: createStorage(), requireAuth: authenticated, agentEnabled: true,
       operationalLog: (entry) => logs.push(entry),
-    })).get(`/api/agent/${pathSentinel}`);
+    }))).get(`/api/agent/${pathSentinel}`);
 
     expect(response.status).toBe(404);
     expect(logs.at(-1)).toMatchObject({ route: 'method-unmatched', status: 404 });
@@ -1078,7 +1078,7 @@ describe('protected Method routes', () => {
       now: () => new Date(timestamp(3)),
       operationalLog: (entry) => logs.push(entry),
     });
-    const response = await request(app)
+    const response = await (await request(app))
       .post('/api/agent/workspace/operations')
       .set('x-user-id', 'spoofed-user')
       .send(selectPurposePathRequest({ operationId: 'operation-1' }));
@@ -1116,7 +1116,7 @@ describe('protected Method routes', () => {
     const providerFailure = new Error('private direct continuation failure');
     const model = new MockLanguageModelV4({ doStream: errorStream(providerFailure) as never });
     const storage = createPathSelectionStorage();
-    const response = await request(testApp({
+    const response = await (await request(testApp({
       storage,
       requireAuth: authenticated,
       agentEnabled: true,
@@ -1125,7 +1125,7 @@ describe('protected Method routes', () => {
         listItems: vi.fn(async () => ({ data: [], hasMore: false })),
       },
       operationalLog: vi.fn(),
-    })).post('/api/agent/workspace/operations').send(
+    }))).post('/api/agent/workspace/operations').send(
       selectPurposePathRequest({ operationId: 'operation-reply-failure' }),
     );
 
@@ -1148,13 +1148,13 @@ describe('protected Method routes', () => {
         .mockResolvedValueOnce(true),
     });
     const continuation = directContinuationProvider('Here is a first project for this path.');
-    const response = await request(testApp({
+    const response = await (await request(testApp({
       storage,
       ...continuation,
       requireAuth: authenticated,
       agentEnabled: true,
       operationalLog: vi.fn(),
-    })).post('/api/agent/workspace/operations').send(
+    }))).post('/api/agent/workspace/operations').send(
       selectPurposePathRequest({ operationId: 'operation-release-retry' }),
     );
 
@@ -1164,9 +1164,9 @@ describe('protected Method routes', () => {
 
   it('keeps first-project framing and acceptance conversation-only at the workspace route boundary', async () => {
     const storage = createPathSelectionStorage();
-    const response = await request(testApp({
+    const response = await (await request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true, operationalLog: vi.fn(),
-    })).post('/api/agent/workspace/operations').send({
+    }))).post('/api/agent/workspace/operations').send({
       operationId: 'workspace-project-acceptance',
       clientMessageId: 'client-message-1',
       expectedRevision: 1,
@@ -1187,10 +1187,10 @@ describe('protected Method routes', () => {
 
   it('rejects a stale workspace revision before persisting the operation', async () => {
     const storage = createPathSelectionStorage();
-    const response = await request(testApp({
+    const response = await (await request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true,
       now: () => new Date(timestamp(3)), operationalLog: vi.fn(),
-    })).post('/api/agent/workspace/operations').send(selectPurposePathRequest({
+    }))).post('/api/agent/workspace/operations').send(selectPurposePathRequest({
       operationId: 'operation-stale-revision',
       clientMessageId: 'message-stale-revision',
       expectedRevision: 2,
@@ -1234,10 +1234,10 @@ describe('protected Method routes', () => {
       getConversationMapping: vi.fn(async () => 'conversation-for-authenticated-owner'),
     });
 
-    const response = await request(testApp({
+    const response = await (await request(testApp({
       storage, ...directContinuationProvider(), requireAuth: authenticated, agentEnabled: true,
       now: () => new Date(timestamp(1)), operationalLog: vi.fn(),
-    })).post('/api/agent/workspace/operations').send(selectPurposePathRequest({
+    }))).post('/api/agent/workspace/operations').send(selectPurposePathRequest({
       operationId: 'operation-clock-skew-select',
       clientMessageId: 'message-clock-skew-select',
       expectedRevision: skewed.revision,
@@ -1302,12 +1302,12 @@ describe('protected Method routes', () => {
         return textStream('Confirmed from the authoritative revision.');
       },
     });
-    const response = await request(testApp({
+    const response = await (await request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true, model,
       now: () => fixedNow,
       conversationClient: { listItems: vi.fn(async () => ({ data: [], hasMore: false })) },
       operationalLog: vi.fn(),
-    })).post('/api/agent').send({
+    }))).post('/api/agent').send({
       id: 'message-same-time-confirm',
       message: 'That feels exactly right.',
     });
@@ -1400,10 +1400,10 @@ describe('protected Method routes', () => {
       operationalLog: vi.fn(),
     });
 
-    const first = await request(app).post('/api/agent').send({
+    const first = await (await request(app)).post('/api/agent').send({
       id: 'correlation-message-1', message: 'That feels exactly right.',
     });
-    const second = await request(app).post('/api/agent').send({
+    const second = await (await request(app)).post('/api/agent').send({
       id: 'correlation-message-2', message: 'Now propose three Purpose Paths.',
     });
     const lifecycleFor = (response: typeof first) => uiStreamChunks(response.text)
@@ -1516,7 +1516,7 @@ describe('protected Method routes', () => {
       operationalLog: (entry) => logs.push(entry),
     });
     const body = { id: 'client-message-1', message: 'That feels exactly right.' };
-    const response = await request(app).post('/api/agent').send(body);
+    const response = await (await request(app)).post('/api/agent').send(body);
 
     const statuses = uiStreamChunks(response.text)
       .filter((chunk) => chunk.type === 'data-operation-status')
@@ -1545,7 +1545,7 @@ describe('protected Method routes', () => {
     expect(response.text).not.toContain('saved-operation-provider-id');
     expect(response.text).not.toContain('private provider reply failure');
 
-    const replay = await request(app).post('/api/agent').send(body);
+    const replay = await (await request(app)).post('/api/agent').send(body);
     expect(replay.status).toBe(409);
     expect(replay.body).toMatchObject({
       status: 'failed-replay',
@@ -1580,14 +1580,14 @@ describe('protected Method routes', () => {
         sourceMessageId: 'client-message-1',
       });
 
-      const response = await request(testApp({
+      const response = await (await request(testApp({
         storage,
         requireAuth: authenticated,
         agentEnabled: true,
         model,
         conversationClient: { listItems: vi.fn(async () => ({ data: [], hasMore: false })) },
         operationalLog: vi.fn(),
-      })).post('/api/agent').send({
+      }))).post('/api/agent').send({
         id: 'client-message-1',
         message: 'That feels exactly right.',
       });
@@ -1640,14 +1640,14 @@ describe('protected Method routes', () => {
         callId: `abort-race-${outcome}`,
         sourceMessageId: 'client-message-1',
       });
-      const outbound = request(testApp({
+      const outbound = (await request(testApp({
         storage,
         requireAuth: authenticated,
         agentEnabled: true,
         model,
         conversationClient: { listItems: vi.fn(async () => ({ data: [], hasMore: false })) },
         operationalLog: vi.fn(),
-      })).post('/api/agent').send({
+      }))).post('/api/agent').send({
         id: 'client-message-1',
         message: 'That feels exactly right.',
       });
@@ -1675,10 +1675,10 @@ describe('protected Method routes', () => {
       terminalResult: { kind: 'failed', refetch: true, errorClass: 'TurnLeaseLostError' },
     };
     const storage = createPathSelectionStorage({ completeAgentTurn: vi.fn(async () => failedTurn) });
-    const response = await request(testApp({
+    const response = await (await request(testApp({
       storage, ...directContinuationProvider(), requireAuth: authenticated, agentEnabled: true,
       now: () => new Date(timestamp(3)), operationalLog: vi.fn(),
-    })).post('/api/agent/workspace/operations').send(
+    }))).post('/api/agent/workspace/operations').send(
       selectPurposePathRequest({ operationId: 'operation-completion-race' }),
     );
 
@@ -1698,13 +1698,13 @@ describe('protected Method routes', () => {
     const model = new MockLanguageModelV4({
       doGenerate: { content: [{ type: 'text', text: 'must-not-run' }], finishReason: { unified: 'stop', raw: 'stop' }, usage: usage(), warnings: [] } as never,
     });
-    const response = await request(testApp({
+    const response = await (await request(testApp({
       storage,
       requireAuth: authenticated,
       agentEnabled: true,
       model,
       operationalLog: vi.fn(),
-    })).post('/api/agent').send({ id: 'client-message-1', message: 'hello' });
+    }))).post('/api/agent').send({ id: 'client-message-1', message: 'hello' });
 
     expect(response.status).toBe(begun.status === 'attached' ? 409 : 200);
     expect(response.body.status).toBe(begun.status === 'attached' ? 'in-flight' : 'completed-replay');
@@ -1723,9 +1723,9 @@ describe('protected Method routes', () => {
         status: 'terminal', shouldInvokeModel: false, turn: terminalTurn,
       })),
     });
-    const response = await request(testApp({
+    const response = await (await request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true, operationalLog: vi.fn(),
-    })).post('/api/agent').send({ id: 'client-message-1', message: 'retry' });
+    }))).post('/api/agent').send({ id: 'client-message-1', message: 'retry' });
 
     expect(response.status).toBe(expectedStatus);
     expect(response.body).toEqual({
@@ -1753,9 +1753,9 @@ describe('protected Method routes', () => {
       })),
     });
 
-    const response = await request(testApp({
+    const response = await (await request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true, operationalLog: vi.fn(),
-    })).post('/api/agent').send({ id: 'client-message-1', message: 'retry' });
+    }))).post('/api/agent').send({ id: 'client-message-1', message: 'retry' });
 
     expect(response.status).toBe(200);
     expect(response.body.result).toMatchObject({ kind: 'completed', displayReady: true });
@@ -1780,9 +1780,9 @@ describe('protected Method routes', () => {
         turn: { ...turn('workspace-action', 'completed'), terminalResult: { kind: 'workspace-result', refetch: true, operationEnvelope } },
       })),
     });
-    const response = await request(testApp({
+    const response = await (await request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true, operationalLog: vi.fn(),
-    })).post('/api/agent/workspace/operations').send(
+    }))).post('/api/agent/workspace/operations').send(
       selectPurposePathRequest({ operationId: 'operation-replay' }),
     );
 
@@ -1809,9 +1809,9 @@ describe('protected Method routes', () => {
         },
       })),
     });
-    const response = await request(testApp({
+    const response = await (await request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true, operationalLog: vi.fn(),
-    })).post('/api/agent/workspace/operations').send(
+    }))).post('/api/agent/workspace/operations').send(
       selectPurposePathRequest({ operationId: 'operation-replay' }),
     );
 
@@ -1834,9 +1834,9 @@ describe('protected Method routes', () => {
         },
       })),
     });
-    const response = await request(testApp({
+    const response = await (await request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true, operationalLog: vi.fn(),
-    })).post('/api/agent/workspace/operations').send(
+    }))).post('/api/agent/workspace/operations').send(
       selectPurposePathRequest({ operationId: 'operation-replay' }),
     );
 
@@ -1859,14 +1859,14 @@ describe('protected Method routes', () => {
     const model = new MockLanguageModelV4({
       doStream: async () => textStream('A normal reflective response without a write.') as never,
     });
-    const response = await request(testApp({
+    const response = await (await request(testApp({
       storage,
       requireAuth: authenticated,
       agentEnabled: true,
       model,
       conversationClient,
       operationalLog: vi.fn(),
-    })).post('/api/agent').send({ id: 'client-message-1', message: 'Help me think this through.' });
+    }))).post('/api/agent').send({ id: 'client-message-1', message: 'Help me think this through.' });
 
     expect(response.status, JSON.stringify({ body: response.body, failed: storage.failAgentTurn.mock.calls })).toBe(200);
     expect(response.text).toContain('A normal reflective response');
@@ -1930,7 +1930,7 @@ describe('protected Method routes', () => {
     const storage = createStorage({
       getConversationMapping: vi.fn(async () => 'delayed-context-conversation'),
     });
-    const response = await request(testApp({
+    const response = await (await request(testApp({
       storage,
       requireAuth: authenticated,
       agentEnabled: true,
@@ -1938,7 +1938,7 @@ describe('protected Method routes', () => {
       conversationClient,
       internalContextMarker: () => marker,
       operationalLog: vi.fn(),
-    })).post('/api/agent').send({ id: 'client-message-1', message: 'Help me reflect.' });
+    }))).post('/api/agent').send({ id: 'client-message-1', message: 'Help me reflect.' });
 
     expect(response.status).toBe(200);
     expect(conversationClient.listItems).toHaveBeenCalledTimes(3);
@@ -1981,7 +1981,7 @@ describe('protected Method routes', () => {
       const storage = createStorage({
         getConversationMapping: vi.fn(async () => 'incomplete-context-conversation'),
       });
-      const response = await request(testApp({
+      const response = await (await request(testApp({
         storage,
         requireAuth: authenticated,
         agentEnabled: true,
@@ -1989,7 +1989,7 @@ describe('protected Method routes', () => {
         conversationClient,
         internalContextMarker: () => marker,
         operationalLog: vi.fn(),
-      })).post('/api/agent').send({ id: 'client-message-1', message: 'Help me reflect.' });
+      }))).post('/api/agent').send({ id: 'client-message-1', message: 'Help me reflect.' });
 
       expect(response.status).toBe(200);
       expect(response.text).not.toContain('"type":"finish"');
@@ -2014,7 +2014,7 @@ describe('protected Method routes', () => {
     const storage = createStorage({
       getConversationMapping: vi.fn(async () => 'hanging-failure-conversation'),
     });
-    const response = await request(testApp({
+    const response = await (await request(testApp({
       storage,
       requireAuth: authenticated,
       agentEnabled: true,
@@ -2022,7 +2022,7 @@ describe('protected Method routes', () => {
       conversationClient,
       internalContextMarker: () => 'hanging-failure-context-0',
       operationalLog: vi.fn(),
-    })).post('/api/agent').send({ id: 'client-message-1', message: 'Help me reflect.' });
+    }))).post('/api/agent').send({ id: 'client-message-1', message: 'Help me reflect.' });
 
     expect(response.status).toBe(200);
     expect(response.text).toContain('The agent request failed.');
@@ -2047,7 +2047,7 @@ describe('protected Method routes', () => {
     const storage = createStorage({
       getConversationMapping: vi.fn(async () => 'hanging-cancel-conversation'),
     });
-    const outbound = request(testApp({
+    const outbound = (await request(testApp({
       storage,
       requireAuth: authenticated,
       agentEnabled: true,
@@ -2055,7 +2055,7 @@ describe('protected Method routes', () => {
       conversationClient,
       internalContextMarker: () => 'hanging-cancel-context-0',
       operationalLog: vi.fn(),
-    })).post('/api/agent').send({ id: 'client-message-1', message: 'Help me reflect.' });
+    }))).post('/api/agent').send({ id: 'client-message-1', message: 'Help me reflect.' });
     const settled = Promise.resolve(outbound).catch(() => undefined);
 
     await listingStartedGate;
@@ -2102,7 +2102,7 @@ describe('protected Method routes', () => {
     const storage = createStorage({
       getConversationMapping: vi.fn(async () => 'search-conversation'),
     });
-    const response = await request(testApp({
+    const response = await (await request(testApp({
       storage,
       requireAuth: authenticated,
       agentEnabled: true,
@@ -2110,7 +2110,7 @@ describe('protected Method routes', () => {
       conversationClient,
       internalContextMarker: () => 'search-context-0',
       operationalLog: vi.fn(),
-    })).post('/api/agent').send({ id: 'client-message-1', message: userText });
+    }))).post('/api/agent').send({ id: 'client-message-1', message: userText });
 
     expect(response.status).toBe(200);
     const chunks = uiStreamChunks(response.text);
@@ -2174,7 +2174,7 @@ describe('protected Method routes', () => {
         hasMore: false,
       })),
     };
-    const response = await request(testApp({
+    const response = await (await request(testApp({
       storage,
       requireAuth: authenticated,
       agentEnabled: true,
@@ -2182,7 +2182,7 @@ describe('protected Method routes', () => {
       conversationClient,
       internalContextMarker: () => 'outage-context-0',
       operationalLog: vi.fn(),
-    })).post('/api/agent').send({
+    }))).post('/api/agent').send({
       id: 'client-message-1',
       message: 'Check the current official fact.',
     });
@@ -2218,7 +2218,7 @@ describe('protected Method routes', () => {
     const storage = createStorage({
       getConversationMapping: vi.fn(async () => 'silent-turn-conversation'),
     });
-    const response = await request(testApp({
+    const response = await (await request(testApp({
       storage,
       requireAuth: authenticated,
       agentEnabled: true,
@@ -2231,7 +2231,7 @@ describe('protected Method routes', () => {
       },
       internalContextMarker: () => 'silent-context-0',
       operationalLog: (entry) => logs.push(entry),
-    })).post('/api/agent').send({
+    }))).post('/api/agent').send({
       id: 'client-message-silent',
       message: 'Please change one of the Purpose Paths.',
     });
@@ -2379,8 +2379,8 @@ describe('protected Method routes', () => {
         received += decoder.decode();
         terminalEnded = true;
       })();
-      const immediateHistory = terminalBoundary.then(() => request(app).get('/api/agent/history'));
-      const immediateNextTurn = terminalBoundary.then(() => request(app)
+      const immediateHistory = terminalBoundary.then(async () => (await request(app)).get('/api/agent/history'));
+      const immediateNextTurn = terminalBoundary.then(async () => (await request(app))
         .post('/api/agent')
         .send({ id: secondTurn.clientMessageId, message: 'Immediate next message.' }));
 
@@ -2426,11 +2426,11 @@ describe('protected Method routes', () => {
       completeAgentTurn: vi.fn(async () => undefined),
     });
     const model = new MockLanguageModelV4({ doStream: textStream('Safe narration before terminalization.') as never });
-    const response = await request(testApp({
+    const response = await (await request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true, model,
       conversationClient: { listItems: vi.fn(async () => ({ data: [], hasMore: false })) },
       operationalLog: vi.fn(),
-    })).post('/api/agent').send({ id: 'client-message-1', message: 'hello' });
+    }))).post('/api/agent').send({ id: 'client-message-1', message: 'hello' });
 
     expect(response.text).not.toContain('"type":"finish"');
     expect(storage.completeAgentTurn).toHaveBeenCalledOnce();
@@ -2446,12 +2446,12 @@ describe('protected Method routes', () => {
       completeAgentTurn: vi.fn(async () => { throw deliveryError; }),
     });
     const assistantText = 'Extra preface before a framing response.';
-    const response = await request(testApp({
+    const response = await (await request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true,
       model: new MockLanguageModelV4({ doStream: textStream(assistantText) as never }),
       conversationClient: { listItems: vi.fn(async () => ({ data: [], hasMore: false })) },
       operationalLog: vi.fn(),
-    })).post('/api/agent').send({ id: 'client-message-1', message: 'Show the framing.' });
+    }))).post('/api/agent').send({ id: 'client-message-1', message: 'Show the framing.' });
 
     expect(storage.completeAgentTurn).toHaveBeenCalledWith(expect.objectContaining({ assistantText }));
     expect(storage.failAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
@@ -2508,12 +2508,12 @@ describe('protected Method routes', () => {
     const assistantText = includesFraming
       ? `Here is a manageable start. ${framingText} Let me know how it feels.`
       : 'Here is a manageable start. Let me know how it feels.';
-    const response = await request(testApp({
+    const response = await (await request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true,
       model: new MockLanguageModelV4({ doStream: textStream(assistantText) as never }),
       conversationClient: { listItems: vi.fn(async () => ({ data: [], hasMore: false })) },
       operationalLog: vi.fn(),
-    })).post('/api/agent').send({ id: 'client-message-1', message: 'Show the project.' });
+    }))).post('/api/agent').send({ id: 'client-message-1', message: 'Show the project.' });
 
     const displayedText = uiStreamChunks(response.text).filter((chunk) => chunk.type === 'text-delta').map((chunk) => chunk.delta).join('');
     expect(displayedText).toBe(assistantText);
@@ -2610,7 +2610,7 @@ describe('protected Method routes', () => {
       id: () => `natural-chain-${++id}`,
       conversationClient: { listItems: vi.fn(async () => ({ data: [], hasMore: false })) }, operationalLog: vi.fn(),
     });
-    const first = await request(app).post('/api/agent').send({ id: 'project-request', message: 'Show me a small project for this path.' });
+    const first = await (await request(app)).post('/api/agent').send({ id: 'project-request', message: 'Show me a small project for this path.' });
     const displayed = uiStreamChunks(first.text).filter((chunk) => chunk.type === 'text-delta').map((chunk) => chunk.delta).join('');
     expect(displayed).toBe(reply);
     expect(first.text).toContain('"type":"finish"');
@@ -2618,7 +2618,7 @@ describe('protected Method routes', () => {
     expect(deliveredFraming?.status).toBe('delivered');
     expect(deliveredFraming?.presentation?.assistantTurnId).toBe(completedTurns[0]?.turnId);
     expect(map.projects.at(-1)?.presentation.assistantTurnId).toBe(completedTurns[0]?.turnId);
-    const later = await request(app).post('/api/agent').send({ id: 'later-assent', message: 'Yes, that sounds useful. I want to try it.' });
+    const later = await (await request(app)).post('/api/agent').send({ id: 'later-assent', message: 'Yes, that sounds useful. I want to try it.' });
     expect(later.text).toContain('"type":"finish"');
     expect(map.projects.at(-1)?.agreementStatus).toBe('accepted');
     expect(map.projects.at(-1)?.confirmation?.confirmedBy.turnId).toBe(completedTurns[1]?.turnId);
@@ -2645,10 +2645,10 @@ describe('protected Method routes', () => {
     };
 
     try {
-      const response = await request(testApp({
+      const response = await (await request(testApp({
         storage, requireAuth: authenticated, agentEnabled: true, model, conversationClient,
         operationalLog: vi.fn(),
-      })).post('/api/agent').send({ id: 'client-message-1', message: 'hello' });
+      }))).post('/api/agent').send({ id: 'client-message-1', message: 'hello' });
 
       expect(response.status).toBe(502);
       expect(response.body).toMatchObject({ errorClass: 'TimeoutError' });
@@ -2675,10 +2675,10 @@ describe('protected Method routes', () => {
       listItems: vi.fn(async () => ({ data: [], hasMore: false })),
     };
     const model = new MockLanguageModelV4({ doStream: textStream('Safe reply.') as never });
-    const response = await request(testApp({
+    const response = await (await request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true, model, conversationClient,
       operationalLog: (entry) => logs.push(entry),
-    })).post('/api/agent').send({ id: 'client-message-1', message: 'hello' });
+    }))).post('/api/agent').send({ id: 'client-message-1', message: 'hello' });
 
     expect(response.status).toBe(200);
     expect(conversationClient.createConversation).toHaveBeenCalledWith(expect.any(AbortSignal));
@@ -2721,10 +2721,10 @@ describe('protected Method routes', () => {
     };
     const model = new MockLanguageModelV4({ doStream: textStream('Safe reply.') as never });
 
-    const response = await request(testApp({
+    const response = await (await request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true, model, conversationClient,
       operationalLog: vi.fn(),
-    })).post('/api/agent').send({ id: 'client-message-1', message: 'hello' });
+    }))).post('/api/agent').send({ id: 'client-message-1', message: 'hello' });
 
     expect(response.status).toBe(200);
     expect(mapped).toBe(providerConversationId);
@@ -2751,9 +2751,9 @@ describe('protected Method routes', () => {
       listItems: vi.fn(async () => ({ data: [], hasMore: false })),
     };
 
-    const response = await request(testApp({
+    const response = await (await request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true, conversationClient, operationalLog: vi.fn(),
-    })).get('/api/agent/history');
+    }))).get('/api/agent/history');
 
     expect(response.status).toBe(200);
     expect(storage.claimConversationProvisioningCleanup).toHaveBeenCalledWith(
@@ -2816,12 +2816,12 @@ describe('protected Method routes', () => {
       storage, requireAuth: authenticated, agentEnabled: true, model, conversationClient,
       now: () => new Date(timestamp(3)), operationalLog: vi.fn(),
     });
-    const activeProvisioning = Promise.resolve(request(app)
+    const activeProvisioning = Promise.resolve((await request(app))
       .post('/api/agent')
       .send({ id: 'client-message-1', message: 'hello' }));
     await bindingStartedGate;
 
-    const history = await Promise.resolve(request(app).get('/api/agent/history'))
+    const history = await Promise.resolve((await request(app)).get('/api/agent/history'))
       .finally(() => releaseBinding());
     const response = await activeProvisioning;
 
@@ -2849,11 +2849,11 @@ describe('protected Method routes', () => {
       deleteConversation: vi.fn(async () => undefined),
       listItems: vi.fn(),
     };
-    const response = await request(testApp({
+    const response = await (await request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true, conversationClient,
       conversationCleanupSignal: (entry) => cleanupSignals.push(entry),
       operationalLog: vi.fn(),
-    } as never)).post('/api/agent').send({ id: 'client-message-1', message: 'hello' });
+    } as never))).post('/api/agent').send({ id: 'client-message-1', message: 'hello' });
 
     expect(response.status).toBe(502);
     expect(conversationClient.createConversation).toHaveBeenCalledOnce();
@@ -2901,7 +2901,7 @@ describe('protected Method routes', () => {
       storage, requireAuth: authenticated, agentEnabled: true, conversationClient, operationalLog: vi.fn(),
     });
 
-    const failed = await request(app)
+    const failed = await (await request(app))
       .post('/api/agent')
       .send({ id: 'client-message-1', message: 'hello' });
     expect(failed.status).toBe(502);
@@ -2909,7 +2909,7 @@ describe('protected Method routes', () => {
     expect(pending).toMatchObject({ conversationId: providerConversationId });
     expect(conversationClient.deleteConversation).not.toHaveBeenCalled();
 
-    const history = await request(app).get('/api/agent/history');
+    const history = await (await request(app)).get('/api/agent/history');
     expect(history.status).toBe(200);
     expect(mapped).toBe(providerConversationId);
     expect(pending).toBeUndefined();
@@ -2929,9 +2929,9 @@ describe('protected Method routes', () => {
       listItems: vi.fn(),
     };
 
-    const response = await request(testApp({
+    const response = await (await request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true, conversationClient, operationalLog: vi.fn(),
-    })).post('/api/agent').send({ id: 'client-message-1', message: 'hello' });
+    }))).post('/api/agent').send({ id: 'client-message-1', message: 'hello' });
 
     expect(response.status).toBe(502);
     expect(conversationClient.deleteConversation).toHaveBeenCalledWith(
@@ -2955,10 +2955,10 @@ describe('protected Method routes', () => {
       listItems: vi.fn(),
     };
     const model = new MockLanguageModelV4({ doStream: textStream('must not run') as never });
-    const outbound = request(testApp({
+    const outbound = (await request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true, model, conversationClient,
       operationalLog: vi.fn(),
-    })).post('/api/agent').send({ id: 'client-message-1', message: 'hello' });
+    }))).post('/api/agent').send({ id: 'client-message-1', message: 'hello' });
     const settled = Promise.resolve(outbound).catch(() => undefined);
     await vi.waitFor(() => expect(conversationClient.createConversation).toHaveBeenCalledOnce());
     outbound.abort();
@@ -3006,7 +3006,7 @@ describe('protected Method routes', () => {
     });
     const model = new MockLanguageModelV4({ doStream: textStream('must not run') as never });
 
-    const response = await request(testApp({
+    const response = await (await request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true, model,
       provisioningHandoffTiming: {
         now: () => Date.now(),
@@ -3016,7 +3016,7 @@ describe('protected Method routes', () => {
         },
       },
       operationalLog: vi.fn(),
-    } as never)).post('/api/agent').send({
+    } as never))).post('/api/agent').send({
       id: 'message-during-healthy-provisioning',
       message: 'Do not start concurrently with the healthy first turn.',
     });
@@ -3070,7 +3070,7 @@ describe('protected Method routes', () => {
       listItems: vi.fn(async () => ({ data: [], hasMore: false })),
     };
 
-    const response = await request(testApp({
+    const response = await (await request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true, model, conversationClient,
       provisioningHandoffTiming: {
         now: () => Date.now(),
@@ -3080,7 +3080,7 @@ describe('protected Method routes', () => {
         },
       },
       operationalLog: vi.fn(),
-    } as never)).post('/api/agent').send({
+    } as never))).post('/api/agent').send({
       id: resumedTurn.clientMessageId,
       message: 'Continue after the first provisioning turn settled.',
     });
@@ -3118,7 +3118,7 @@ describe('protected Method routes', () => {
     });
     const model = new MockLanguageModelV4({ doStream: textStream('must not run') as never });
 
-    const response = await request(testApp({
+    const response = await (await request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true, model,
       provisioningHandoffTiming: {
         now: () => monotonicNow,
@@ -3128,7 +3128,7 @@ describe('protected Method routes', () => {
         },
       },
       operationalLog: vi.fn(),
-    } as never)).post('/api/agent').send({
+    } as never))).post('/api/agent').send({
       id: 'message-during-bounded-provisioning',
       message: 'Return a normal conflict after the bounded handoff window.',
     });
@@ -3206,7 +3206,7 @@ describe('protected Method routes', () => {
       operationalLog: vi.fn(),
     });
 
-    const first = request(app).post('/api/agent').send({
+    const first = (await request(app)).post('/api/agent').send({
       id: firstTurn.clientMessageId,
       message: 'Start while the Conversation is being provisioned.',
     });
@@ -3214,7 +3214,7 @@ describe('protected Method routes', () => {
     await vi.waitFor(() => expect(conversationClient.createConversation).toHaveBeenCalledOnce());
     first.abort();
 
-    const secondResponsePromise = Promise.resolve(request(app).post('/api/agent').send({
+    const secondResponsePromise = Promise.resolve((await request(app)).post('/api/agent').send({
       id: secondTurn.clientMessageId,
       message: 'Start only after the stopped turn has settled.',
     }));
@@ -3257,10 +3257,10 @@ describe('protected Method routes', () => {
       listItems: vi.fn(),
     };
     const model = new MockLanguageModelV4({ doStream: textStream('must not run') as never });
-    const outbound = request(testApp({
+    const outbound = (await request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true, model, conversationClient,
       operationalLog: vi.fn(),
-    })).post('/api/agent').send({ id: 'client-message-1', message: 'hello' });
+    }))).post('/api/agent').send({ id: 'client-message-1', message: 'hello' });
     const settled = Promise.resolve(outbound).catch(() => undefined);
     await vi.waitFor(() => expect(conversationClient.createConversation).toHaveBeenCalledOnce());
 
@@ -3366,7 +3366,7 @@ describe('protected Method routes', () => {
       operationalLog: (entry) => logs.push(entry),
     });
 
-    const failed = await request(app)
+    const failed = await (await request(app))
       .post('/api/agent')
       .send({ id: 'client-message-1', message: 'hello' });
     expect(failed.status).toBe(502);
@@ -3384,13 +3384,13 @@ describe('protected Method routes', () => {
     expect(provisioningTurn.status).toBe('failed');
     expect(resolveConversationProvisioning).not.toHaveBeenCalled();
 
-    const firstHistory = await request(app).get('/api/agent/history');
+    const firstHistory = await (await request(app)).get('/api/agent/history');
     expect(firstHistory.status).toBe(200);
     expect(firstHistory.body).toEqual({ status: 'empty', messages: [] });
     expect(storage.releaseConversationProvisioningCleanup).toHaveBeenCalledOnce();
     expect(pending).toBeDefined();
 
-    const history = await request(app).get('/api/agent/history');
+    const history = await (await request(app)).get('/api/agent/history');
 
     expect(history.status).toBe(200);
     expect(history.body).toEqual({ status: 'empty', messages: [] });
@@ -3423,7 +3423,7 @@ describe('protected Method routes', () => {
       transcribeAudio, operationalLog: (entry) => logs.push(entry),
     });
 
-    const response = await request(app)
+    const response = await (await request(app))
       .post('/api/agent/audio/transcribe?language=fr')
       .set('content-type', contentType)
       .send(audio);
@@ -3454,7 +3454,7 @@ describe('protected Method routes', () => {
       operationalLog: (entry) => logs.push(entry),
     });
 
-    const response = await request(app)
+    const response = await (await request(app))
       .post('/api/agent/audio/transcribe')
       .send(WEBM_AUDIO);
 
@@ -3476,7 +3476,7 @@ describe('protected Method routes', () => {
       storage: createStorage(), requireAuth: authenticated, agentEnabled: true,
       transcribeAudio, operationalLog: vi.fn(),
     });
-    const send = (contentType: string, body: Buffer) => request(app)
+    const send = async (contentType: string, body: Buffer) => (await request(app))
       .post('/api/agent/audio/transcribe')
       .set('content-type', contentType)
       .send(body);
@@ -3499,10 +3499,10 @@ describe('protected Method routes', () => {
     const transcribeAudio = vi.fn(async () => 'boundary transcript');
     const audio = Buffer.alloc(11 * 1024 * 1024);
     WEBM_AUDIO.copy(audio);
-    const response = await request(testApp({
+    const response = await (await request(testApp({
       storage: createStorage(), requireAuth: authenticated, agentEnabled: true,
       transcribeAudio, operationalLog: vi.fn(),
-    })).post('/api/agent/audio/transcribe').send(audio);
+    }))).post('/api/agent/audio/transcribe').send(audio);
 
     expect(response.status).toBe(200);
     expect(transcribeAudio).toHaveBeenCalledOnce();
@@ -3520,8 +3520,8 @@ describe('protected Method routes', () => {
         operationalLog: vi.fn(),
       }, createFreshAgentRouter);
 
-      const workspace = await request(app).get('/api/agent/workspace');
-      const audio = await request(app).post('/api/agent/audio/transcribe').send(WEBM_AUDIO);
+      const workspace = await (await request(app)).get('/api/agent/workspace');
+      const audio = await (await request(app)).post('/api/agent/audio/transcribe').send(WEBM_AUDIO);
 
       expect(workspace.status).toBe(200);
       expect(audio.status).toBe(503);
@@ -3549,8 +3549,8 @@ describe('protected Method routes', () => {
       transcribeAudio,
       operationalLog: (entry) => logs.push(entry),
     });
-    const unavailable = await request(app).post('/api/agent/audio/transcribe').send(WEBM_AUDIO);
-    const failed = await request(app).post('/api/agent/audio/transcribe').send(WEBM_AUDIO);
+    const unavailable = await (await request(app)).post('/api/agent/audio/transcribe').send(WEBM_AUDIO);
+    const failed = await (await request(app)).post('/api/agent/audio/transcribe').send(WEBM_AUDIO);
 
     expect(unavailable.status).toBe(503);
     expect(failed.status).toBe(502);
@@ -3572,10 +3572,10 @@ describe('protected Method routes', () => {
           input.abortSignal?.addEventListener('abort', () => reject(input.abortSignal?.reason), { once: true });
         });
       });
-      const responsePromise = Promise.resolve(request(testApp({
+      const responsePromise = Promise.resolve((await request(testApp({
         storage: createStorage(), requireAuth: authenticated, agentEnabled: true,
         transcribeAudio, operationalLog: vi.fn(),
-      })).post('/api/agent/audio/transcribe').send(WEBM_AUDIO));
+      }))).post('/api/agent/audio/transcribe').send(WEBM_AUDIO));
       await started;
       await vi.advanceTimersByTimeAsync(90_000);
       const response = await responsePromise;
@@ -3605,10 +3605,10 @@ describe('protected Method routes', () => {
     providerError.name = SENTINEL;
     const logs: Array<Record<string, unknown>> = [];
     const model = new MockLanguageModelV4({ doStream: errorStream(providerError) as never });
-    const responsePromise = Promise.resolve(request(testApp({
+    const responsePromise = Promise.resolve((await request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true, model,
       operationalLog: (entry) => logs.push(entry),
-    })).post('/api/agent').send({ id: 'client-message-1', message: 'hello' }));
+    }))).post('/api/agent').send({ id: 'client-message-1', message: 'hello' }));
     let responseSettled = false;
     void responsePromise.finally(() => { responseSettled = true; });
     await failStartedGate;
@@ -3630,12 +3630,12 @@ describe('protected Method routes', () => {
 
   it('rejects client owner and Conversation fields rather than trusting them', async () => {
     const storage = createStorage();
-    const response = await request(testApp({
+    const response = await (await request(testApp({
       storage,
       requireAuth: authenticated,
       agentEnabled: true,
       operationalLog: vi.fn(),
-    })).post('/api/agent').send({
+    }))).post('/api/agent').send({
       id: 'client-message-1',
       message: 'hello',
       ownerId: 'another-user',
@@ -3656,8 +3656,8 @@ describe('protected Method routes', () => {
       : createPathSelectionStorage({ beginWorkspaceActionTurn: vi.fn(async () => conflict) });
     const app = testApp({ storage, requireAuth: authenticated, agentEnabled: true, operationalLog: vi.fn() });
     const response = surface === 'agent'
-      ? await request(app).post('/api/agent').send({ id: 'client-message-1', message: 'hello' })
-      : await request(app).post('/api/agent/workspace/operations').send(
+      ? await (await request(app)).post('/api/agent').send({ id: 'client-message-1', message: 'hello' })
+      : await (await request(app)).post('/api/agent/workspace/operations').send(
         selectPurposePathRequest({ operationId: 'operation-1' }),
       );
     expect(response.status).toBe(409);
@@ -3670,15 +3670,15 @@ describe('protected Method routes', () => {
     const logs: Array<Record<string, unknown>> = [];
     const emptyStorage = createStorage({ getConversationMapping: vi.fn(async () => undefined) });
     const emptyClient = { listItems: vi.fn() };
-    const empty = await request(testApp({
+    const empty = await (await request(testApp({
       storage: emptyStorage, requireAuth: authenticated, agentEnabled: true,
       conversationClient: emptyClient, operationalLog: vi.fn(),
-    })).get('/api/agent/history');
+    }))).get('/api/agent/history');
     expect(empty.body).toEqual({ status: 'empty', messages: [] });
     expect(emptyClient.listItems).not.toHaveBeenCalled();
 
     const successLogs: Array<Record<string, unknown>> = [];
-    const ready = await request(testApp({
+    const ready = await (await request(testApp({
       storage: createStorage({
         getConversationMapping: vi.fn(async () => 'server-conversation'),
         listAgentTurns: vi.fn(async () => [{
@@ -3701,17 +3701,17 @@ describe('protected Method routes', () => {
         })),
       },
       operationalLog: (entry) => successLogs.push(entry),
-    })).get('/api/agent/history');
+    }))).get('/api/agent/history');
     expect(ready.body.messages[1].parts[0].text).toBe(SENTINEL);
     expect(JSON.stringify(successLogs)).not.toContain(SENTINEL);
 
-    const failed = await request(testApp({
+    const failed = await (await request(testApp({
       storage: createStorage({ getConversationMapping: vi.fn(async () => 'server-conversation') }),
       requireAuth: authenticated,
       agentEnabled: true,
       conversationClient: { listItems: vi.fn(async () => { throw new Error(SENTINEL); }) },
       operationalLog: (entry) => logs.push(entry),
-    })).get('/api/agent/history');
+    }))).get('/api/agent/history');
     expect(failed.status).toBe(502);
     expect(JSON.stringify(failed.body)).not.toContain(SENTINEL);
     expect(JSON.stringify(logs)).not.toContain(SENTINEL);
@@ -3719,12 +3719,12 @@ describe('protected Method routes', () => {
 
   it('maps a bounded owner-lock miss to a typed retryable 409', async () => {
     const logs: Array<Record<string, unknown>> = [];
-    const response = await request(testApp({
+    const response = await (await request(testApp({
       storage: createStorage({ loadCareerMap: vi.fn(async () => { throw new MethodOwnerBusyError(); }) }),
       requireAuth: authenticated,
       agentEnabled: true,
       operationalLog: (entry) => logs.push(entry),
-    })).get('/api/agent/workspace');
+    }))).get('/api/agent/workspace');
     expect(response.status).toBe(409);
     expect(response.body).toMatchObject({ errorClass: 'MethodOwnerBusyError', retryable: true });
     expect(logs.at(-1)).toMatchObject({ errorClass: 'MethodOwnerBusyError', status: 409 });
@@ -3733,11 +3733,11 @@ describe('protected Method routes', () => {
   it('hashes client operation ids in operational logs', async () => {
     const rawOperationId = 'operation-PRIVATE-IDENTIFIER-sentinel';
     const logs: Array<Record<string, unknown>> = [];
-    const response = await request(testApp({
+    const response = await (await request(testApp({
       storage: createPathSelectionStorage(), ...directContinuationProvider(),
       requireAuth: authenticated, agentEnabled: true,
       now: () => new Date(timestamp(3)), operationalLog: (entry) => logs.push(entry),
-    })).post('/api/agent/workspace/operations').send(
+    }))).post('/api/agent/workspace/operations').send(
       selectPurposePathRequest({ operationId: rawOperationId }),
     );
     expect(response.status).toBe(200);
@@ -3755,10 +3755,10 @@ describe('protected Method routes', () => {
       }),
     });
     const model = new MockLanguageModelV4({ doStream: textStream('must not run') as never });
-    const outbound = request(testApp({
+    const outbound = (await request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true, model,
       operationalLog: vi.fn(),
-    })).post('/api/agent').send({ id: 'client-message-1', message: 'hello' });
+    }))).post('/api/agent').send({ id: 'client-message-1', message: 'hello' });
     const settled = Promise.resolve(outbound).catch(() => undefined);
     await vi.waitFor(() => expect(storage.getOrCreateCareerMap).toHaveBeenCalledOnce());
     outbound.abort();
@@ -3780,10 +3780,10 @@ describe('protected Method routes', () => {
       }),
     });
     const model = new MockLanguageModelV4({ doStream: textStream('must not run') as never });
-    const outbound = request(testApp({
+    const outbound = (await request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true, model,
       operationalLog: vi.fn(),
-    })).post('/api/agent').send({ id: 'client-message-1', message: 'hello' });
+    }))).post('/api/agent').send({ id: 'client-message-1', message: 'hello' });
     const settled = Promise.resolve(outbound).catch(() => undefined);
     await vi.waitFor(() => expect(storage.getConversationMapping).toHaveBeenCalledOnce());
     outbound.abort();
@@ -3819,7 +3819,7 @@ describe('protected Method routes', () => {
       storage, requireAuth: authenticated, agentEnabled: true, model, conversationClient,
       operationalLog: vi.fn(),
     });
-    const outbound = request(app)
+    const outbound = (await request(app))
       .post('/api/agent')
       .send({ id: 'client-message-1', message: 'Help me reflect.' });
     const settled = Promise.resolve(outbound).catch(() => undefined);
@@ -3832,7 +3832,7 @@ describe('protected Method routes', () => {
     expect(storage.completeAgentTurn).not.toHaveBeenCalled();
     expect(storage.releaseTurnLease).toHaveBeenCalledOnce();
 
-    const next = await request(app)
+    const next = await (await request(app))
       .post('/api/agent')
       .send({ id: 'client-message-2', message: 'Continue.' });
     expect(next.status).toBe(200);
@@ -3853,14 +3853,14 @@ describe('protected Method routes', () => {
       }),
     });
     const model = new MockLanguageModelV4({ doStream: textStream('Safe reply before completion.') as never });
-    const outbound = request(testApp({
+    const outbound = (await request(testApp({
       storage,
       requireAuth: authenticated,
       agentEnabled: true,
       model,
       conversationClient: { listItems: vi.fn(async () => ({ data: [], hasMore: false })) },
       operationalLog: vi.fn(),
-    })).post('/api/agent').send({ id: 'client-message-1', message: 'Help me reflect.' });
+    }))).post('/api/agent').send({ id: 'client-message-1', message: 'Help me reflect.' });
     const settled = Promise.resolve(outbound).catch(() => undefined);
     await completionStartedGate;
     outbound.abort();
@@ -3922,10 +3922,10 @@ describe('protected Method routes', () => {
         return { status: 'rejected' as const, map: canonical, error: { code: 'operation-unavailable' as const } };
       }),
     });
-    const outbound = request(testApp({
+    const outbound = (await request(testApp({
       storage, requireAuth: authenticated, agentEnabled: true,
       now: () => new Date(timestamp(3)), operationalLog: vi.fn(),
-    })).post('/api/agent/workspace/operations').send(selectPurposePathRequest({
+    }))).post('/api/agent/workspace/operations').send(selectPurposePathRequest({
       operationId: 'operation-after-foreign-commit',
       expectedRevision: foreign.map.revision,
     }));
@@ -3964,7 +3964,7 @@ describe('protected Method routes', () => {
       now: () => new Date(timestamp(3)), operationalLog: vi.fn(),
     });
     const body = selectPurposePathRequest({ operationId: 'operation-abort-after-commit' });
-    const outbound = request(app).post('/api/agent/workspace/operations').send(body);
+    const outbound = (await request(app)).post('/api/agent/workspace/operations').send(body);
     const settled = Promise.resolve(outbound).catch(() => undefined);
     await committedSignal;
     outbound.abort();
@@ -3981,7 +3981,7 @@ describe('protected Method routes', () => {
       status: 'terminal', shouldInvokeModel: false,
       turn: { ...turn('workspace-action', 'cancelled'), terminalResult: cancellation },
     });
-    const replay = await request(app).post('/api/agent/workspace/operations').send(body);
+    const replay = await (await request(app)).post('/api/agent/workspace/operations').send(body);
 
     expect(replay.status).toBe(409);
     expect(replay.body).toMatchObject({

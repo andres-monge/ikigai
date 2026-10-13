@@ -15,7 +15,8 @@
  */
 
 import { beforeEach, afterAll, describe, it, expect, vi } from 'vitest';
-import request from 'supertest';
+import request, { listenOnLoopback } from '../../test-fixtures/loopback-http.js';
+import { createServer } from 'node:http';
 import express from 'express';
 import { AddressInfo } from 'node:net';
 import { db } from '../../db.js';
@@ -278,7 +279,7 @@ describe('Purpose Discovery Streaming Endpoint - /api/analyze/stream', () => {
     );
 
     // 3. Make the streaming request (now POST with body)
-    const response = await request(app)
+    const response = await (await request(app))
       .post('/api/analyze/stream')
       .send({ sessionId })
       .expect(200);
@@ -360,7 +361,7 @@ describe('Purpose Discovery Streaming Endpoint - /api/analyze/stream', () => {
 
     // 3. Start a real HTTP server
     const testApp = createTestApp();
-    const server = testApp.listen(0);
+    const server = await listenOnLoopback(createServer(testApp));
     const { port } = server.address() as AddressInfo;
     const baseURL = `http://127.0.0.1:${port}`;
 
@@ -429,8 +430,8 @@ describe('Purpose Discovery Streaming Endpoint - /api/analyze/stream', () => {
     );
 
     // 3. Start both streams sequentially to ensure clean database operations
-    const response1 = await request(app).post('/api/analyze/stream').send({ sessionId: sessionId1 });
-    const response2 = await request(app).post('/api/analyze/stream').send({ sessionId: sessionId2 });
+    const response1 = await (await request(app)).post('/api/analyze/stream').send({ sessionId: sessionId1 });
+    const response2 = await (await request(app)).post('/api/analyze/stream').send({ sessionId: sessionId2 });
 
     // 4. Verify both streams succeeded
     expect(response1.status).toBe(200);
@@ -480,7 +481,7 @@ describe('Purpose Discovery Streaming Endpoint - /api/analyze/stream', () => {
     );
 
     // 3. Make the streaming request - should result in 500 error
-    const response = await request(app)
+    const response = await (await request(app))
       .post('/api/analyze/stream')
       .send({ sessionId })
       .expect(500);
@@ -495,7 +496,7 @@ describe('Purpose Discovery Streaming Endpoint - /api/analyze/stream', () => {
   });
 
   it('should return 404 for non-existent session', async () => {
-    const response = await request(app)
+    const response = await (await request(app))
       .post('/api/analyze/stream')
       .send({ sessionId: 'non-existent-session' })
       .expect(404);
@@ -513,7 +514,7 @@ describe('Purpose Discovery Streaming Endpoint - /api/analyze/stream', () => {
     });
 
     // 2. Try to stream - should fail with validation error
-    const response = await request(app)
+    const response = await (await request(app))
       .post('/api/analyze/stream')
       .send({ sessionId })
       .expect(400);
@@ -523,7 +524,7 @@ describe('Purpose Discovery Streaming Endpoint - /api/analyze/stream', () => {
   });
 
   it('should return 400 when sessionId is missing', async () => {
-    const response = await request(app)
+    const response = await (await request(app))
       .post('/api/analyze/stream')
       .send({})
       .expect(400);

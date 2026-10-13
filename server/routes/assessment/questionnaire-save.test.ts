@@ -14,7 +14,7 @@
  */
 
 import { beforeEach, afterAll, describe, it, expect, vi } from 'vitest';
-import request from 'supertest';
+import request from '../../test-fixtures/loopback-http.js';
 import express from 'express';
 import { db } from '../../db.js';
 import { assessmentSessions, purposePaths } from '../../../shared/schema.js';
@@ -142,7 +142,7 @@ describe('POST /api/questionnaire/save', () => {
   });
 
   it('should successfully save new session with minimal response', async () => {
-    const response = await request(app)
+    const response = await (await request(app))
       .post('/api/questionnaire/save')
       .send(testQuestionnaireSaveData);
 
@@ -205,7 +205,7 @@ describe('POST /api/questionnaire/save', () => {
     expect(beforeUpdate!.coreDriversAnalysis).toBeDefined();
 
     // Now update via the save endpoint
-    const response = await request(app)
+    const response = await (await request(app))
       .post('/api/questionnaire/save')
       .send({
         ...testQuestionnaireSaveData,
@@ -239,7 +239,7 @@ describe('POST /api/questionnaire/save', () => {
 
   it('should handle validation errors correctly', async () => {
     // Test missing sessionId
-    const invalidRequest1 = await request(app)
+    const invalidRequest1 = await (await request(app))
       .post('/api/questionnaire/save')
       .send({
         language: 'en',
@@ -253,7 +253,7 @@ describe('POST /api/questionnaire/save', () => {
     expect(invalidRequest1.body.details).toBeDefined();
 
     // Test invalid language
-    const invalidRequest2 = await request(app)
+    const invalidRequest2 = await (await request(app))
       .post('/api/questionnaire/save')
       .send({
         sessionId: 'test-session',
@@ -265,7 +265,7 @@ describe('POST /api/questionnaire/save', () => {
     expect(invalidRequest2.body.error).toBe("Invalid request data");
 
     // Test missing responses category
-    const invalidRequest3 = await request(app)
+    const invalidRequest3 = await (await request(app))
       .post('/api/questionnaire/save')
       .send({
         sessionId: 'test-session',
@@ -292,7 +292,7 @@ describe('POST /api/questionnaire/save', () => {
       new Error('Database connection timeout')
     );
 
-    const response = await request(app)
+    const response = await (await request(app))
       .post('/api/questionnaire/save')
       .send(testQuestionnaireSaveData);
 
@@ -337,7 +337,7 @@ describe('POST /api/questionnaire/save', () => {
       throw new Error('Transaction failed during session update');
     });
 
-    const response = await request(app)
+    const response = await (await request(app))
       .post('/api/questionnaire/save')
       .send({
         sessionId: 'atomic-test-session',
@@ -382,7 +382,7 @@ describe('POST /api/questionnaire/save', () => {
       } as QuestionnaireResponses
     };
 
-    const response = await request(app)
+    const response = await (await request(app))
       .post('/api/questionnaire/save')
       .send(spanishRequest);
 
@@ -405,7 +405,7 @@ describe('POST /api/questionnaire/save', () => {
     const beforeCreate = new Date();
     
     // Create new session
-    const response1 = await request(app)
+    const response1 = await (await request(app))
       .post('/api/questionnaire/save')
       .send(testQuestionnaireSaveData);
 
@@ -423,7 +423,7 @@ describe('POST /api/questionnaire/save', () => {
     await new Promise(resolve => setTimeout(resolve, 10));
     const beforeUpdate = new Date();
 
-    const response2 = await request(app)
+    const response2 = await (await request(app))
       .post('/api/questionnaire/save')
       .send({
         ...testQuestionnaireSaveData,
@@ -453,7 +453,7 @@ describe('POST /api/questionnaire/save', () => {
     });
 
     // Simulate concurrent requests with different response data
-    const request1 = request(app)
+    const request1 = (await request(app))
       .post('/api/questionnaire/save')
       .send({
         sessionId: concurrentSessionId,
@@ -464,7 +464,7 @@ describe('POST /api/questionnaire/save', () => {
         }
       });
 
-    const request2 = request(app)
+    const request2 = (await request(app))
       .post('/api/questionnaire/save')
       .send({
         sessionId: concurrentSessionId,
@@ -519,7 +519,7 @@ describe('POST /api/questionnaire/save', () => {
       throw new Error('Database constraint violation: foreign key constraint failed');
     });
 
-    const response = await request(app)
+    const response = await (await request(app))
       .post('/api/questionnaire/save')
       .send({
         sessionId: constraintTestSessionId,
@@ -554,7 +554,7 @@ describe('POST /api/questionnaire/save', () => {
       throw new Error('connection timeout');
     });
 
-    const response = await request(app)
+    const response = await (await request(app))
       .post('/api/questionnaire/save')
       .send({
         sessionId: timeoutSessionId,

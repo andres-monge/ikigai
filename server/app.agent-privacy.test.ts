@@ -1,5 +1,5 @@
 import express, { type RequestHandler } from 'express';
-import request from 'supertest';
+import request from './test-fixtures/loopback-http.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createCareerMap } from '../shared/career-map/index.js';
 import { createApiRequestLogger, createApp } from './app.js';
@@ -22,8 +22,8 @@ vi.mock('./ai/transcription.js', async (importOriginal) => {
 const METHOD_ORIGIN = 'https://revelio.test';
 const WEBM_HEADER = Buffer.from('1a45dfa39f4286810142f7810142f2810442f381084282847765626d4287810442858102', 'hex');
 
-function protectedAudio(app: ReturnType<typeof createApp>) {
-  return request(app)
+function protectedAudio(client: Awaited<ReturnType<typeof request>>) {
+  return client
     .post('/api/agent/audio/transcribe')
     .set('Origin', METHOD_ORIGIN)
     .set('X-Revelio-Request', '1')
@@ -69,11 +69,11 @@ describe('protected Method logger boundary', () => {
     }));
     app.get('/api/legacy-probe', (_request, response) => response.json({ legacy: 'visible-prefix' }));
 
-    const protectedResponse = await request(app).get('/api/agent/history');
+    const protectedResponse = await (await request(app)).get('/api/agent/history');
     expect(protectedResponse.status).toBe(200);
     expect(writeLog).not.toHaveBeenCalled();
 
-    const legacyResponse = await request(app).get('/api/legacy-probe');
+    const legacyResponse = await (await request(app)).get('/api/legacy-probe');
     expect(legacyResponse.status).toBe(200);
     expect(writeLog).toHaveBeenCalledOnce();
     expect(writeLog.mock.calls[0]?.[0]).toContain('visible-prefix');
@@ -87,7 +87,7 @@ describe('protected Method logger boundary', () => {
     const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
-    const response = await request(createApp()).get('/api/AGENT/Workspace/');
+    const response = await (await request(createApp())).get('/api/AGENT/Workspace/');
 
     expect(response.status).toBe(200);
     expect(JSON.stringify(response.body)).toContain(mapSentinel);
@@ -103,7 +103,7 @@ describe('protected Method logger boundary', () => {
     const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
-    const response = await request(createApp()).get('/api//agent/workspace');
+    const response = await (await request(createApp())).get('/api//agent/workspace');
 
     expect(response.status).toBe(200);
     expect(JSON.stringify(response.body)).toContain(mapSentinel);
@@ -122,7 +122,7 @@ describe('protected Method parser error boundary', () => {
       status: 400,
       errorClass: 'SyntaxError',
       sentinel: 'PRIVATE_MALFORMED_JSON_SENTINEL',
-      send: (app: ReturnType<typeof createApp>, sentinel: string) => request(app)
+      send: async (app: ReturnType<typeof createApp>, sentinel: string) => (await request(app))
         .post('/api/agent')
         .set('content-type', 'application/json')
         .send(`{"id":"message","message":"${sentinel}`),
@@ -134,7 +134,7 @@ describe('protected Method parser error boundary', () => {
       status: 413,
       errorClass: 'PayloadTooLargeError',
       sentinel: 'PRIVATE_OVERSIZED_JSON_SENTINEL',
-      send: (app: ReturnType<typeof createApp>, sentinel: string) => request(app)
+      send: async (app: ReturnType<typeof createApp>, sentinel: string) => (await request(app))
         .post('/api/agent')
         .set('content-type', 'application/json')
         .send({ id: 'message', message: sentinel.repeat(16_384) }),
@@ -146,12 +146,12 @@ describe('protected Method parser error boundary', () => {
       status: 413,
       errorClass: 'PayloadTooLargeError',
       sentinel: 'PRIVATE_OVERSIZED_AUDIO_SENTINEL',
-      send: (app: ReturnType<typeof createApp>, sentinel: string) => request(app)
+      send: async (app: ReturnType<typeof createApp>, sentinel: string) => (await request(app))
         .post('/api/agent/audio/transcribe')
         .set('Origin', METHOD_ORIGIN)
         .set('X-Revelio-Request', '1')
         .set('content-type', 'audio/webm')
-        .send(Buffer.concat([WEBM_HEADER, Buffer.from(sentinel), Buffer.alloc(2 * 1024 * 1024 + 1)])),
+        .send(Buffer.concat([WEBM_HEADER, Buffer.from(sentinel), Buffer.alloc(11 * 1024 * 1024 + 1)])),
     },
     {
       label: 'malformed JSON request on an attacker-controlled Method path',
@@ -160,7 +160,7 @@ describe('protected Method parser error boundary', () => {
       status: 400,
       errorClass: 'SyntaxError',
       sentinel: 'PRIVATE_PARSER_PATH_SENTINEL',
-      send: (app: ReturnType<typeof createApp>, sentinel: string) => request(app)
+      send: async (app: ReturnType<typeof createApp>, sentinel: string) => (await request(app))
         .post(`/api/agent/${sentinel}`)
         .set('content-type', 'application/json')
         .send(`{"id":"message","message":"${sentinel}`),
@@ -172,7 +172,7 @@ describe('protected Method parser error boundary', () => {
       status: 400,
       errorClass: 'SyntaxError',
       sentinel: 'PRIVATE_MIXED_CASE_PARSER_SENTINEL',
-      send: (app: ReturnType<typeof createApp>, sentinel: string) => request(app)
+      send: async (app: ReturnType<typeof createApp>, sentinel: string) => (await request(app))
         .post('/api/AGENT/')
         .set('content-type', 'application/json')
         .send(`{"id":"message","message":"${sentinel}`),
@@ -184,7 +184,7 @@ describe('protected Method parser error boundary', () => {
       status: 400,
       errorClass: 'SyntaxError',
       sentinel: 'PRIVATE_DOUBLE_SEPARATOR_PARSER_SENTINEL',
-      send: (app: ReturnType<typeof createApp>, sentinel: string) => request(app)
+      send: async (app: ReturnType<typeof createApp>, sentinel: string) => (await request(app))
         .post(`/api//agent/${sentinel}`)
         .set('content-type', 'application/json')
         .send(`{"id":"message","message":"${sentinel}`),
@@ -199,12 +199,14 @@ describe('protected Method parser error boundary', () => {
     sentinel,
     send,
   }) => {
+    vi.stubEnv('AGENT_ENABLED', 'true');
     const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     const response = await send(createApp(), sentinel);
 
     expect(response.status).toBe(status);
+    expect(transcribeProtectedAudio).not.toHaveBeenCalled();
     expect(response.body).toEqual({ error: 'Agent request failed', errorClass });
     expect(consoleError).toHaveBeenCalledWith(
       'Protected Method request failed',
@@ -227,19 +229,19 @@ describe('protected Method audio provider boundary', () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const app = createApp();
 
-    const crossOrigin = await request(app)
+    const crossOrigin = await (await request(app))
       .post('/api/agent/audio/transcribe')
       .set('Origin', 'https://attacker.example')
       .set('X-Revelio-Request', '1')
       .set('Content-Type', 'audio/webm')
       .send(Buffer.concat([WEBM_HEADER, Buffer.from('PRIVATE_EARLY_REJECT_SENTINEL')]));
-    const unsupported = await request(app)
+    const unsupported = await (await request(app))
       .post('/api/agent/audio/transcribe')
       .set('Origin', METHOD_ORIGIN)
       .set('X-Revelio-Request', '1')
       .set('Content-Type', 'application/json')
       .send('{"PRIVATE_PREPARSER_SENTINEL":');
-    const preflight = await request(app)
+    const preflight = await (await request(app))
       .options('/api/agent/audio/transcribe')
       .set('Origin', METHOD_ORIGIN)
       .set('Access-Control-Request-Method', 'POST');
@@ -268,7 +270,7 @@ describe('protected Method audio provider boundary', () => {
     const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
-    const response = await request(createApp())
+    const response = await (await request(createApp()))
       .post('/api//agent/audio/transcribe')
       .set('Origin', METHOD_ORIGIN)
       .set('X-Revelio-Request', '1')
@@ -291,7 +293,7 @@ describe('protected Method audio provider boundary', () => {
     const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
-    const response = await protectedAudio(createApp()).send(audio);
+    const response = await protectedAudio(await request(createApp())).send(audio);
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ text: transcriptSentinel });

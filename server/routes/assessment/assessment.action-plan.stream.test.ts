@@ -12,7 +12,8 @@
  */
 
 import { beforeEach, afterAll, describe, it, expect, vi } from 'vitest';
-import request from 'supertest';
+import request, { listenOnLoopback } from '../../test-fixtures/loopback-http.js';
+import { createServer } from 'node:http';
 import express from 'express';
 import { AddressInfo } from 'node:net';
 import { db } from '../../db.js';
@@ -225,7 +226,7 @@ describe('Action Plan Streaming Endpoint - POST /api/action-plan/stream (AI SDK)
     );
 
     // 3. Make the streaming request (now POST with body)
-    const response = await request(app)
+    const response = await (await request(app))
       .post('/api/action-plan/stream')
       .send({ sessionId, pathId: purposePath1.id })
       .expect(200);
@@ -317,7 +318,7 @@ describe('Action Plan Streaming Endpoint - POST /api/action-plan/stream (AI SDK)
 
     // 3. Start a real HTTP server
     const testApp = createTestApp();
-    const server = testApp.listen(0);
+    const server = await listenOnLoopback(createServer(testApp));
     const { port } = server.address() as AddressInfo;
     const baseURL = `http://127.0.0.1:${port}`;
 
@@ -416,8 +417,8 @@ describe('Action Plan Streaming Endpoint - POST /api/action-plan/stream (AI SDK)
     );
 
     // 3. Start both streams sequentially to ensure clean database operations
-    const response1 = await request(app).post('/api/action-plan/stream').send({ sessionId: sessionId1, pathId: purposePath1.id });
-    const response2 = await request(app).post('/api/action-plan/stream').send({ sessionId: sessionId2, pathId: purposePath2.id });
+    const response1 = await (await request(app)).post('/api/action-plan/stream').send({ sessionId: sessionId1, pathId: purposePath1.id });
+    const response2 = await (await request(app)).post('/api/action-plan/stream').send({ sessionId: sessionId2, pathId: purposePath2.id });
 
     // 5. Verify both streams succeeded
     expect(response1.status).toBe(200);
@@ -479,7 +480,7 @@ describe('Action Plan Streaming Endpoint - POST /api/action-plan/stream (AI SDK)
     );
 
     // 3. Make the streaming request - should result in 500 error
-    const response = await request(app)
+    const response = await (await request(app))
       .post('/api/action-plan/stream')
       .send({ sessionId, pathId: purposePath.id })
       .expect(500);
@@ -495,7 +496,7 @@ describe('Action Plan Streaming Endpoint - POST /api/action-plan/stream (AI SDK)
 
 
   it('should return 404 for non-existent session', async () => {
-    const response = await request(app)
+    const response = await (await request(app))
       .post('/api/action-plan/stream')
       .send({ sessionId: 'non-existent-session', pathId: 1 })
       .expect(404);
@@ -504,7 +505,7 @@ describe('Action Plan Streaming Endpoint - POST /api/action-plan/stream (AI SDK)
   });
 
   it('should return 400 when sessionId is missing', async () => {
-    const response = await request(app)
+    const response = await (await request(app))
       .post('/api/action-plan/stream')
       .send({})
       .expect(400);
@@ -522,7 +523,7 @@ describe('Action Plan Streaming Endpoint - POST /api/action-plan/stream (AI SDK)
       responses: testResponses
     });
 
-    const response = await request(app)
+    const response = await (await request(app))
       .post('/api/action-plan/stream')
       .send({ sessionId, pathId: 'invalid' })
       .expect(400);
@@ -553,7 +554,7 @@ describe('Action Plan Streaming Endpoint - POST /api/action-plan/stream (AI SDK)
       actionStrategy: 'Test strategy'
     });
 
-    const response = await request(app)
+    const response = await (await request(app))
       .post('/api/action-plan/stream')
       .send({ sessionId, pathId: 999 }) // This pathId doesn't exist
       .expect(404);

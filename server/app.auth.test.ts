@@ -1,4 +1,4 @@
-import request from 'supertest';
+import request from './test-fixtures/loopback-http.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => {
@@ -82,7 +82,7 @@ describe('Express auth integration', () => {
       });
     });
 
-    const response = await request(createApp())
+    const response = await (await request(createApp()))
       .post('/api/auth/sign-in/social')
       .set('x-revelio-client-ip', '198.51.100.8')
       .send({ provider: 'google' });
@@ -101,8 +101,8 @@ describe('Express auth integration', () => {
 
     const app = createApp();
     const [authResponse, legacyResponse] = await Promise.all([
-      request(app).get('/api/auth/get-session'),
-      request(app).get('/api/legacy-probe'),
+      (await request(app)).get('/api/auth/get-session'),
+      (await request(app)).get('/api/legacy-probe'),
     ]);
 
     expect(authResponse.status).toBe(503);
@@ -119,8 +119,8 @@ describe('Express auth integration', () => {
 
     const app = createApp();
     const [first, second] = await Promise.all([
-      request(app).get('/api/auth/get-session'),
-      request(app).get('/api/auth/get-session'),
+      (await request(app)).get('/api/auth/get-session'),
+      (await request(app)).get('/api/auth/get-session'),
     ]);
 
     expect(first.status).toBe(204);
@@ -134,7 +134,7 @@ describe('Express auth integration', () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     mocks.nodeHandler.mockRejectedValue(new Error('provider secret leaked in detail'));
 
-    const response = await request(createApp()).get('/api/auth/get-session');
+    const response = await (await request(createApp())).get('/api/auth/get-session');
 
     expect(response.status).toBe(500);
     expect(response.body).toEqual({ error: 'Authentication request failed' });

@@ -161,7 +161,7 @@ describe('production effort at the outgoing Responses HTTP boundary', () => {
     ['Foundation', () => createCareerMap('explorer-1'), 'low'],
     ['Paths creation', confirmedWhyMap, 'high'],
     ['Paths revision, replacement and combination', pendingPathsMap, 'high'],
-    ['Path Project', selectedPathMap, 'low'],
+    ['Project development', selectedPathMap, 'medium'],
   ] as const)('uses the canonical checkpoint for %s', async (_label, fixture, effort) => {
     const { requests } = await run(fixture());
     expect(requests).toHaveLength(1);
@@ -180,14 +180,14 @@ describe('production effort at the outgoing Responses HTTP boundary', () => {
     expectControls(requests[0]);
   });
 
-  it('switches HIGH to LOW immediately after selecting a path in the same turn', async () => {
+  it('switches HIGH to MEDIUM immediately after selecting a path in the same turn', async () => {
     const { requests, map } = await run(pendingPathsMap(), '1', {
       name: 'select_purpose_path', input: { setId: 'set-1', setRevision: 1,
         pathId: 'path-1', pathRevision: 1, presentedInTurnId: 'paths-presentation',
         sourceMessageId: 'current-message' },
     });
     expect(map.pathSets.at(-1)?.paths[0].selection).toBe('active');
-    expect(requests.map((request) => request.reasoning.effort)).toEqual(['high', 'low']);
+    expect(requests.map((request) => request.reasoning.effort)).toEqual(['high', 'medium']);
     for (const request of requests) expectControls(request);
     expect(requests[1].tools.map((tool) => tool.name)).toContain('propose_first_project');
     expect(requests[1].tools.map((tool) => tool.name)).not.toContain('select_purpose_path');

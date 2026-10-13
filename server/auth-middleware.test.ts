@@ -1,5 +1,5 @@
 import express from 'express';
-import request from 'supertest';
+import request from './test-fixtures/loopback-http.js';
 import { describe, expect, it, vi } from 'vitest';
 
 const { AuthConfigurationError } = vi.hoisted(() => ({
@@ -57,7 +57,7 @@ describe('server-derived protected identity', () => {
       (_req, res) => res.json({ identity: getProtectedIdentity(res) }),
     );
 
-    const response = await request(app)
+    const response = await (await request(app))
       .get('/protected')
       .set('x-user-id', 'spoofed-client-id');
 
@@ -75,7 +75,7 @@ describe('server-derived protected identity', () => {
       (_req, res) => res.json({ protected: true }),
     );
 
-    const response = await request(app).get('/protected');
+    const response = await (await request(app)).get('/protected');
 
     expect(response.status).toBe(503);
     expect(response.body).toEqual({ error: 'Authentication is unavailable' });
@@ -102,7 +102,7 @@ describe('server-derived protected identity', () => {
       },
     );
 
-    const response = await request(app).get('/protected');
+    const response = await (await request(app)).get('/protected');
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({

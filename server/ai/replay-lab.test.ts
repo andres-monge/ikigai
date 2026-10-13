@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { mkdtemp, mkdir, cp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import request from 'supertest';
+import request from '../test-fixtures/loopback-http.js';
 import { execFileSync } from 'node:child_process';
 import { privateArtifactPath } from '../../scripts/replay-private-paths.js';
 import { createCareerMap, applyCareerMapOperation } from '../../shared/career-map/index.js';
@@ -50,8 +50,8 @@ describe('private replay lab', () => {
     const { store } = await setup();
     expect(() => createLabApp(store, 5173)).toThrow('reserved');
     const app = createLabApp(store);
-    expect((await request(app).get('/api/state').set('Host', '127.0.0.1:5317')).status).toBe(403);
-    expect((await request(app).get('/api/state').set('Host', 'localhost:5174')).status).toBe(200);
+    expect((await (await request(app)).get('/api/state').set('Host', '127.0.0.1:5317')).status).toBe(403);
+    expect((await (await request(app)).get('/api/state').set('Host', 'localhost:5174')).status).toBe(200);
   });
   it('accepts only ignored untracked scoped storage inside Git and rejects forced tracked artifacts', async () => {
     const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'revelio-private-git-'))); temporaryRoots.push(root);
@@ -89,10 +89,10 @@ describe('private replay lab', () => {
     const app = createLabApp(store);
     const initial = await store.getCandidate('seed');
     const skill = initial.skills['create-purpose-paths'].replace(/version:.*\n/, 'version: 1.1.7\n');
-    const saved = await request(app).put('/api/candidates/seed').set('Host', '127.0.0.1:5174').set('Origin', 'http://127.0.0.1:5174').send({ expectedVersion: initial.version, skills: { 'create-purpose-paths': skill } });
+    const saved = await (await request(app)).put('/api/candidates/seed').set('Host', '127.0.0.1:5174').set('Origin', 'http://127.0.0.1:5174').send({ expectedVersion: initial.version, skills: { 'create-purpose-paths': skill } });
     expect(saved.status).toBe(200);
     expect(saved.body.skills['create-purpose-paths']).toBe(skill);
-    const invalid = await request(app).put('/api/candidates/seed').set('Host', '127.0.0.1:5174').set('Origin', 'http://127.0.0.1:5174').send({ expectedVersion: saved.body.version, skills: { 'create-purpose-paths': skill.replace('version: 1.1.7', 'version: broken') } });
+    const invalid = await (await request(app)).put('/api/candidates/seed').set('Host', '127.0.0.1:5174').set('Origin', 'http://127.0.0.1:5174').send({ expectedVersion: saved.body.version, skills: { 'create-purpose-paths': skill.replace('version: 1.1.7', 'version: broken') } });
     expect(invalid.status).toBe(400);
     expect(invalid.body.error).toMatch(/content version/i);
     expect((await store.getCandidate('seed')).version).toBe(saved.body.version);
@@ -281,12 +281,12 @@ describe('private replay lab', () => {
     let runs = 0;
     const { store } = await setup(async (options) => { runs++; await fixtureRunner(options); });
     const app = createLabApp(store);
-    expect((await request(app).post('/api/batch').set('Host', '127.0.0.1:5174').set('Origin', 'https://attacker.invalid').send({ candidateIds: ['seed'], checkpointIds: ['one'] })).status).toBe(403);
-    expect((await request(app).post('/api/batch').set('Host', '127.0.0.1:5174').send({ candidateIds: ['seed'], checkpointIds: ['one'] })).status).toBe(403);
-    expect((await request(app).get('/api/state').set('Host', 'attacker.invalid')).status).toBe(403);
+    expect((await (await request(app)).post('/api/batch').set('Host', '127.0.0.1:5174').set('Origin', 'https://attacker.invalid').send({ candidateIds: ['seed'], checkpointIds: ['one'] })).status).toBe(403);
+    expect((await (await request(app)).post('/api/batch').set('Host', '127.0.0.1:5174').send({ candidateIds: ['seed'], checkpointIds: ['one'] })).status).toBe(403);
+    expect((await (await request(app)).get('/api/state').set('Host', 'attacker.invalid')).status).toBe(403);
     await expect(store.getCandidate('../production')).rejects.toThrow('identifier');
     expect(runs).toBe(0);
-    expect((await request(app).get('/api/state').set('Host', '127.0.0.1:5174')).status).toBe(200);
+    expect((await (await request(app)).get('/api/state').set('Host', '127.0.0.1:5174')).status).toBe(200);
   });
   it('marks persisted queued/running jobs interrupted on restart without replaying them', async () => {
     const { root } = await setup();
