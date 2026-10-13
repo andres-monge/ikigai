@@ -89,4 +89,50 @@ All three actionable findings are applied; the residual local gate has no unreso
 - Authenticated Method browser/desktop/mobile and manual screen-reader release verification remain pending. Component assertions are separate evidence. The existing Playwright suite contains a single anonymous `/legacy` happy-path journey; it does not establish both-language or authenticated Method browser coverage. Spanish questionnaire unit tests provide narrower evidence. The old Playwright configuration uses 5001 and was not run unchanged; approved origins are main 5173 and lab 5174.
 - Separately authorized paid-model evaluation/live judgment quality remains pending. No model samples, live-account turns or provider experiments ran for this implementation.
 - Synthetic full Method-data erasure verifies map/history/draft/turn/lease/Conversation controls and retry behavior. I3's real-account/BetterAuth identity deletion runbook and dry run remain pending; these tests do not delete or prove deletion of auth accounts.
-- Incorporation into the serving integration checkout and deployment remain coordinator gates. Existing main 5173/lab 5174 processes, unrelated integration WIP and approved port changes are untouched. No push, PR, serving restart or deployment occurred.
+- Coordinator audit and incorporation completed after the isolated receipt above; see the incorporation record below. Deployment remains pending. No push, PR or external deployment occurred.
+
+
+## Coordinator-approved incorporation — 2026-10-13
+
+The coordinator audited the settled implementation and review receipt, then authorized incorporation and local runtime startup. Integration checkout: `/Users/andresm/.codex/worktrees/c615/ikigai`; branch: `codex/revelio-revamp-integration`. The branch advanced from `de6dcd8` to approved `b39c6f5989d7deaf1dd018964d72686f4164a115`, retaining all seven implementation commit IDs (`bb5984c`, `09976fa`, `63b85e9`, `ed7a945`, `ad4fa77`, `a2fab52`, `b39c6f5`). This later record updates the isolated receipt's earlier incorporation/runtime boundary; founder acceptance and release are still pending.
+
+### Recovery, three-way resolution and preservation
+
+Fresh status contained the same six integration WIP files. Before writes, a private recovery directory captured their full bytes and SHA256 manifest, binary WIP diff, original index, approved patch and temporary three-way plan outputs:
+
+`/Users/andresm/Documents/Cursor Projects/ikigai/.git/worktrees/ikigai/recovery/repeating-learning-incorporation-20261013`
+
+The directory is outside tracked worktree content, mode 0700, and must stay out of commits. No stash, reset, discard or unrelated-WIP commit was used. A separate index was populated with the approved tree; after file-level preconditions and three-way reconciliation, the branch ref advanced with an expected-old-HEAD guard and the prepared index became the checkout index. Both the original index and six original files remain recoverable.
+
+Three-way merging used current integration plans, clean baseline and approved implementation. Four conflicts were resolved by current normative meaning:
+
+- Revamp packaging risk: five active modules replaces six/seven delivery gates.
+- Method R41: active learning state plus historical peer/proof/route compatibility replaces active route delivery.
+- Method KTD11: read-only historical Side Doors replaces a delivered tail; five-band cards and safety remain.
+- Method final receipt: retain the approved repeating-learning evidence append.
+
+The resolved plans exactly equal approved `b39c6f5`; the reviewed replay, interface and V6 adoption history remains intact. A post-incorporation byte audit confirmed every adopted tracked file equals that approved implementation. No additional implementation resolution or fresh code review was needed.
+
+The remaining uncommitted integration WIP is exactly `AGENTS.md`, `server/auth.test.ts`, `server/auth.ts`, `server/index.ts`. Each is byte-identical to its pre-incorporation snapshot. The two plan WIP deltas are deliberately incorporated in the reviewed authority/history content; they were not discarded. Approved main 5173/lab 5174 settings remain. No new founder edits were detected at the fresh snapshot. Manual source-skill content, protected Interpret guidance, current Paths V6, accepted voice V4, Foundation 1.1.13 and immutable plan are preserved by the adopted-file audit; private lab artifacts remain outside Git.
+
+### Targeted integration verification
+
+- Node24 `npm run check` passes in the integration checkout, including retained port/auth WIP.
+- `npm run test:method-bundle` completes its production build. Its default Vitest filters also discover old tests in private `.context` snapshots and report obsolete/missing archive modules; those are not adopted source failures and the snapshots were retained.
+- The actual source production smoke rerun, `METHOD_PRODUCTION_SMOKE=1 npx vitest run server/ai/method/loader.test.ts server/ai/method/evaluation.test.ts --exclude '.context/**'`, passes all 18 checks in two files, including five active bundles. Logs: `/tmp/revelio-mvp-integration-bundle.log` and `/tmp/revelio-mvp-integration-modules.log`.
+- The final approved 843-test full suite remains the deterministic baseline; no duplicate broad test run or duplicate formal review was added. Incorporation introduces no new implementation code.
+- Current integration whitespace check passes. The approved branch's verbatim Design trailing space remains the documented exception.
+
+### Actual runtime and nonmutating smoke
+
+Neither 5173 nor 5174 had a listener at fresh inspection; no existing process was killed. Node24 processes were started from the integration checkout using the existing project environment file `/Users/andresm/Documents/Cursor Projects/ikigai/.env`, without copying or editing credentials. Main PID `59610` serves `http://localhost:5173/`; lab PID `59614` serves `http://127.0.0.1:5174/`. `lsof` confirms both process working directories. Both origins return HTTP 200. Main retains the existing login URL and local opt-in `REVELIO_LATENCY_TRACE=1` / `VITE_REVELIO_LATENCY_TRACE=1`. Lab uses the existing ignored `.context/revelio/replay/interface` root; no experiment was requested. Private startup logs stay in the recovery directory.
+
+The enterprise-controlled browser accepted access to the existing localhost:5173 Chrome tab; no blocked-access workaround was used. The installed CLI had no attached session, so the existing signed-in Chrome extension session was used through Computer Use rather than opening a separate signed-out browser.
+
+A nonmutating reload retained authentication and displayed existing canonical history/Map. Desktop width 1272 and narrow width 390 show no horizontal overflow; read-only Map has zero action buttons and retains North Star and the five-band path content. Chat has one empty composer, disabled Send, zero alerts and three eligible path Start controls by accessible name. No Start control was activated and no message, recording, model request, reset, sign-out or account action was performed. The temporary viewport was restored to 1272 and the founder's tab was left on Chat. This tests the existing pre-project account state; it does not visually verify a saved simple project or a completed learning cycle.
+
+### Founder handoff
+
+The founder can continue the signed-in app on main 5173: choose the intended current path, refine and accept a first project in ordinary conversation, receive guidance, report actual experience, reflect, choose what to try next and select among three later options. Reload during pending decisions and after acceptance to check persistence. Later focus commitment should keep guidance/reflection/projects available. These actions belong to the attended founder run; none was fabricated for this smoke.
+
+Attended U7 acceptance, qualitative U8-loop dogfood, manual screen-reader/release verification, separately authorized live-model evaluation, I3 real-account erasure and external deployment remain open. Local incorporation and authenticated read-only smoke are complete; they do not auto-accept those gates.
