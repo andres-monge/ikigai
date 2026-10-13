@@ -1,10 +1,10 @@
 # Project learning-loop drafts — 2026-10-13
 
-Proposal only. These files are outside the production module loader. They do not register U8, change routing, alter saved records, or authorize model experiments. Earlier proposals and existing work remain untouched.
+These source drafts remain outside the production module loader. Their reconciled bodies were adopted into separate runtime skills on 2026-10-13 (commit `63b85e9`); source drafts alone do not register modules, change saved records or authorize experiments. Earlier proposals and existing work remain historical evidence. Offline adoption is recorded in [the MVP evidence receipt](../../evidence/2026-10-13-repeating-learning-mvp.md); founder acceptance and release remain pending.
 
-## Shared principles proposed for the base instructions
+## Shared principles adopted in the base instructions
 
-These additions belong once in the shared base, alongside the existing accepted voice, semantic intent, presentation, state, privacy and external-action rules. The three skill files are drafted assuming that shared context; this README is not a fourth runtime skill.
+These principles are adopted once in shared base 1.1.9, alongside the existing accepted voice, semantic intent, presentation, state, privacy and external-action rules. The three skill files assume that shared context; this README is not a fourth runtime skill.
 
 - Use simple, plain language and familiar words. Adapt the amount of explanation to the user's knowledge; explain an unfamiliar term when it is necessary.
 - Understand and preserve what the user wants. Use the Method as a lens for offering useful approaches, not as a reason to override an informed choice. Explain relevant trade-offs, offer adaptations, and respect disagreement without repeatedly reopening a settled choice or manipulating the user.
@@ -16,7 +16,7 @@ These additions belong once in the shared base, alongside the existing accepted 
 - Guide: practical support and flexible next actions; work-status observations; offer reflection when useful; no forced introspection or scheduled check-ins.
 - Interpret: understand actual experience through energy drivers/drainers; record reflection; user-owned continue/change and Next Move; focus commitment preserves the learning loop.
 
-Energy appears in each file only for a different responsibility: design the question, notice experience lightly during work, interpret it during reflection. Exact first-project framing lives only in development. The two existing canonical reflection questions live only in interpretation.
+Energy appears in each file only for a different responsibility: design the question, notice experience lightly during work, interpret it during reflection. First-project presentation and acceptance belong to development. The two existing canonical reflection questions live only in interpretation.
 
 ## Decisions carried from founder discussion
 
@@ -24,13 +24,13 @@ Option C with a visible Suggested starting point. Ordinary conversation in the t
 
 ## Adoption boundaries and later reconciliation
 
-1. Current project schema still requires nine content fields, and Map renders them separately. The proposed simpler content and Chat/Map presentation need explicit schema/rendering alignment, preserving historical records and acceptance protections.
-2. Shared base additions above and terminology change from explorer to user are proposed, not adopted. Apply the terminology change to relevant active prompts/docs after final agreement; do not rewrite historical evidence indiscriminately.
-3. Current projects require active-path basis; guidance and reflection also assume path-linked work. Supporting an intentionally unrelated saved project requires an honest relationship and legal continuation route. Do not fabricate a path link to satisfy existing validation. The approved MVP contract uses flexible reflection and preserves the exact Interpret decision guidance; linked-path questions remain available where applicable and unrelated work uses honest natural questions.
-4. Guidance/reflection have Method/domain specifications but no existing active SKILL.md files or model-facing U8 tools in this checkout. Registry contains three U7 modules and the agent stops after first-project acceptance. Planned code/schema adoption adds Guide and Interpret for five active modules; the drafts alone cannot make those features operational.
-5. Project briefing currently lacks full refreshed Foundation evidence/constraints and omits saved learningGoal. Supply relevant existing context deliberately when adopting the revised project flow.
-6. Paths HIGH, project development MEDIUM, Foundation/other stages LOW remains the scoped routing recommendation. Production currently uses Paths HIGH and others LOW. No setting changes or claims of tested optimal effort are made here.
-7. Every later project decision preserves exactly three equal follow-on options, including after selecting another path. Formal Peers, proof inventories and Side Doors are wholly deferred from the MVP; focus commitment requires no peer exposure and preserves further learning. See `docs/method/deferred-features.md`.
+1. Version-3 simple briefs now contain title, learningGoal, firstVersion and firstStep. Chat and read-only Map render the learning-first presentation with a visible Suggested starting point. Strict version-2 reading and legacy detailed briefs preserve historical records; completed prior-turn acceptance protections remain.
+2. Shared base 1.1.9 adopts the freedom/plain-language principles above. Active adopted instructions use user terminology; historical evidence is retained.
+3. Intentionally unrelated projects have an honest saved relationship and project-scoped continuation. Reflection and next decisions preserve that distinction; unrelated evidence cannot commit the old path or silently change the North Star. The exact Interpret decision guidance is preserved.
+4. Production registers five modules: Foundation 1.1.13, Paths 1.1.7, Design 1.3.0, Guide 1.0.0 and Interpret 1.0.0. Narrow loop tools and per-step canonical refresh support guidance, reflection and repeated decisions after acceptance. Runtime skill bodies match these reconciled source drafts exactly; runtime frontmatter versions are recorded separately.
+5. Refreshed project briefings include saved learningGoal, relevant Foundation evidence/constraints, relationship, work and reflection/decision context. Deterministic tests establish context and tool behavior; they do not establish live-model judgment quality.
+6. Active routing uses Paths HIGH, Design MEDIUM and Foundation/Guide/Interpret LOW, recalculated at each step. Fake-model boundary checks establish this routing contract; no claim of optimal effort or paid evaluation is made.
+7. Every later project decision preserves exactly three equal follow-on options, including after selecting another path. Formal Peers, proof inventories and Side Doors are wholly deferred from the MVP; focus commitment requires no peer exposure and preserves further learning. See [deferred features](../../method/deferred-features.md).
 
 ## Official guidance used
 

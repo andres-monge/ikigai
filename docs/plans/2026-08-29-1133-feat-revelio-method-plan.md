@@ -593,7 +593,7 @@ The active revamp plan's platform preparation and identity work remain prerequis
 - **Files:** `shared/schema.ts`; `server/storage.ts`; `server/storage.test.ts`; `server/storage.performance.test.ts` (new); `server/ai/briefing.ts` (new); `server/ai/briefing.test.ts` (new); reviewed Drizzle migration files.
 - **Approach:**
   1. Inspect the execution baseline. Create the Method schema directly when no career-map schema has shipped; otherwise add a fixture-backed upgrade from the exact released `schemaVersion` with no speculative backfill.
-  2. Store schema version, row revision, operation source and payload fingerprint, confirmation provenance, module version, and researched-source metadata; ordinary domain operations cannot change schema version.
+  2. Store schema version, row revision, operation source and payload fingerprint, confirmation provenance, module version, and researched-source metadata; ordinary domain operations cannot choose an arbitrary schema version. Under the 2026-10-13 MVP compatibility contract, strict valid version-2 reads normalize purely, and the first explicit authorized mutation writes version 3 with its normal single revision and receipt; no read performs a write or manufactures an action.
   3. Apply compare-and-swap update and matching history insertion in one transaction with owner scope and database-enforced operation uniqueness. Same-ID/same-payload replay returns the stored result; different-payload reuse is rejected.
   4. Validate the full document on load and before commit, then compile a module-specific briefing from confirmed basis, active work, pending decisions, relevant evidence and sources, and necessary parked or stale records.
   5. Preserve tombstones and revision lineage for normal corrections, while implementing the active plan's cross-store erasure contract for all Method records and OpenAI Conversation items.
@@ -801,3 +801,14 @@ Live transcripts assess decisions and state writes rather than general phrasing,
 
 
 > **Founder-approved amendment (2026-10-03):** The active plan's Paths V1 preparation and review amendment supersedes the prior card content and repeated path-onboarding rules. Path introduction is first-completed-offer only; revisions and replacements use natural concise acknowledgment while preserving canonical-card delivery and completed-turn guards. Paths V1 uses the exact proposed shorter skill. Path-quality review compares V1 and later candidate versions after founder error analysis; original history remains input context/archives rather than the mandatory output baseline.
+
+
+## Repeating-learning implementation receipt — 2026-10-13
+
+This dated receipt records isolated implementation evidence; it does not replace the preceding reviewed integration, replay, interface or founder-review history. See [the detailed MVP evidence](../evidence/2026-10-13-repeating-learning-mvp.md) for commands, coverage and outstanding gates.
+
+Local commits `bb5984c`, `09976fa`, `63b85e9` and `ed7a945` reconcile authority, add compatible version-3 repeating state and active checkpoints, adopt five operational modules, and align learning-first Chat/Map presentation. Runtime versions are Foundation 1.1.13, Paths 1.1.7, Design 1.3.0, Guide 1.0.0, Interpret 1.0.0 and shared base 1.1.9. All three adopted skill bodies match the reconciled drafts exactly; protected Interpret decision guidance retains SHA256 `3497faaf9dda0c7dd4af23a589d8f73147d99580cf8fd48e6c3a374ca2bbf8d7`.
+
+Final Node24 checks pass: typecheck; 53 test files with 843 passed and two production-only skips; build plus 18 production module checks; offline preflight with zero provider calls. U6 verifies three-project continuation, reload checkpoints, historical review recovery, compaction and complete Method-data erasure/performance evidence. Actual local formal review is complete (`20261013-135731-c178e631`); all three validated findings are corrected and regression-tested. See the evidence receipt for scope and remaining human gates.
+
+Local implementation completion is separate from release completion. Attended U7 and actual-app founder dogfood, authenticated Method browser/mobile checks, manual screen-reader verification, separately authorized paid-model evaluation, I3 real-account/BetterAuth identity-erasure runbook, incorporation and deployment remain pending. Synthetic Method-data erasure does not delete or prove deletion of BetterAuth accounts. Existing approved main 5173/lab 5174 serving processes and unrelated integration WIP remain untouched.

@@ -39,6 +39,7 @@ import legacyProof from '../shared/career-map/test-fixtures/legacy-proof-v2.json
 import { readCareerMap } from '../shared/career-map/model';
 import { createCareerMap as createV2Map } from '../shared/career-map/legacy-v2/model';
 import { ConversationHistoryProviderError } from './ai/history.js';
+import { repeatingLearningFixture } from './test-fixtures/repeating-learning.js';
 import {
   createMethodResetDependencies,
   databaseIdentity,
@@ -1755,16 +1756,30 @@ describe('PostgresStorage repair, erasure, and integrity', () => {
   it('retries provider erasure from a non-content-bearing marker and leaves no Method orphan', async () => {
     const userId = owner('erasure');
     await storage.getOrCreateCareerMap(userId);
-    await persistCompletedSequence(userId, 'erasure-map', [
-      {
-        type: 'propose-why', sourceId: id('erasure-why-propose'), expectedRevision: 0, occurredAt: at(1),
-        payload: { why: { id: id('erasure-why'), revision: 1, statement: 'Erase Method data completely.', serves: 'Explorers leaving the pilot', pointOfView: 'Deletion must include exact evidence links.' }, presentation: presentation(1) },
-      },
-      {
-        type: 'confirm-why', sourceId: id('erasure-why-confirm'), expectedRevision: 1, occurredAt: at(2),
-        payload: { whyId: id('erasure-why'), whyRevision: 1, action: action(2) },
-      },
-    ]);
+    const fixture = repeatingLearningFixture(userId, 31);
+    await db.update(careerMaps).set({ schemaVersion: 2, revision: fixture.legacy.revision, document: fixture.legacy as never }).where(eq(careerMaps.userId, userId));
+    await db.insert(careerMapHistory).values(fixture.baseline.operationHistory.map((receipt, index) => ({
+      userId, operationSourceId: receipt.sourceId, operationType: receipt.operationType,
+      payloadFingerprint: receipt.payloadFingerprint, baseRevision: index,
+      resultRevision: receipt.resultRevision, result: receipt,
+      confirmationProvenance: receipt.confirmationProvenance,
+      moduleVersion: receipt.moduleVersion!, committedAt: new Date(receipt.committedAt),
+    })));
+    await persistCompletedSequence(userId, 'erasure-map', fixture.operations);
+    const populated = await storage.loadCareerMap(userId);
+    expect(populated.status).toBe('ready');
+    if (populated.status !== 'ready') throw new Error('Erasure fixture must load before deletion.');
+    expect(populated.map.schemaVersion).toBe(3);
+    expect(populated.map.provisionalCommitment).toEqual(fixture.baseline.provisionalCommitment);
+    expect(populated.map.proofRevisions).toEqual(fixture.baseline.proofRevisions);
+    expect(populated.map.sideDoorSets).toEqual(fixture.baseline.sideDoorSets);
+    expect(populated.map.routeOutcomes).toHaveLength(1);
+    expect(populated.map.projects.at(-1)).toMatchObject({ briefFormat: 'simple-v1', relationship: 'unrelated', agreementStatus: 'accepted' });
+    expect(populated.map.projectOptionSets.at(-1)?.basisAction?.sourceId).toBe(`${userId}-request-new-project-22`);
+    expect(populated.map.reflections.at(-1)).toMatchObject({ status: 'closed', evidence: [expect.objectContaining({ signal: 'voluntary-pull' })] });
+    expect(populated.map.continueChoices.at(-1)).toMatchObject({ scope: 'project', wantsToContinue: true });
+    expect(populated.map.pathFocusCommitments).toHaveLength(1);
+    expect(await storage.listCareerMapHistory(userId)).toHaveLength(31);
     const turn = await beginTurn(userId, 'erasure-auxiliary');
     await storage.saveCareerMapDraft({ userId, leaseId: turn.leaseId, id: id('draft'), kind: 'outreach', content: { text: 'private draft' } });
     await storage.setConversationMapping(userId, turn.leaseId, id('conversation'));
@@ -1785,6 +1800,10 @@ describe('PostgresStorage repair, erasure, and integrity', () => {
     expect(await storage.getTurnLease(userId)).toBeUndefined();
     expect(await storage.getConversationMapping(userId)).toBeUndefined();
     expect(await storage.getMethodErasureJob(userId)).toMatchObject({ status: 'failed-provider' });
+    const marker = await storage.getMethodErasureJob(userId);
+    expect(Object.keys(marker!).sort()).toEqual([
+      'conversationId', 'createdAt', 'errorClass', 'jobId', 'status', 'updatedAt', 'userId',
+    ].sort());
     expect(await storage.auditCareerMapIntegrity()).toMatchObject({
       pendingErasureJobs: 1,
       zeroInvalid: false,

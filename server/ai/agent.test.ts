@@ -1196,34 +1196,97 @@ describe('amended Method agent core loop', () => {
     expect(storage.map.pathFocusCommitments).toHaveLength(1);
   });
 
-  it('compacts stale transcript choices while refreshing canonical unrelated project and focus context', async () => {
+  it('compacts stale transcript choices and rejects an obsolete decision before refreshing unrelated project and focus context', async () => {
     const starting = pendingFirstProjectMap();
     starting.projects[0].relationship = 'unrelated';
+    const action = (turnSequence: number) => ({ kind: 'user-message' as const,
+      actionId: `compaction-message-${turnSequence}`, turnId: `compaction-turn-${turnSequence}`, turnSequence, occurredAt: timestamp });
     let map = starting;
     for (const operation of [
       { type: 'accept-first-project', sourceId: 'compaction-accept', payload: { projectId: 'project-1', projectRevision: 1,
         action: { kind: 'user-message', actionId: 'compaction-accept-message', turnId: 'compaction-accept-turn', turnSequence: 7, occurredAt: timestamp } } },
       { type: 'record-path-focus', sourceId: 'compaction-focus', payload: { id: 'compaction-focus', revision: 1, pathId: 'path-1', pathRevision: 1,
         action: { kind: 'user-message', actionId: 'compaction-focus-message', turnId: 'compaction-focus-turn', turnSequence: 8, occurredAt: timestamp } } },
+      { type: 'open-reflection', sourceId: 'compaction-reflection', payload: {
+        reflectionId: 'reflection-current', revision: 1, projectId: 'project-1', projectRevision: 1, action: action(9),
+      } },
+      { type: 'append-reflection-evidence', sourceId: 'compaction-learning', payload: {
+        reflectionId: 'reflection-current', reflectionRevision: 1, evidence: {
+          id: 'learning-old', revision: 1, observation: 'I felt finished with the prototype.',
+          signal: 'voluntary-pull', interpretation: 'The user reported being finished.', provenance: action(9),
+        },
+      } },
+      { type: 'close-reflection', sourceId: 'compaction-close', payload: {
+        reflectionId: 'reflection-current', reflectionRevision: 1, action: action(10),
+      } },
+      { type: 'revise-reflection-evidence', sourceId: 'compaction-correction', payload: {
+        reflectionId: 'reflection-current', reflectionRevision: 1, newReflectionRevision: 2, supersedesEvidenceId: 'learning-old',
+        evidence: { id: 'learning-corrected', revision: 1, observation: 'Actually, I wanted to improve the prototype again.',
+          signal: 'voluntary-pull', interpretation: 'The user corrected their reported experience.',
+          supersedesEvidenceId: 'learning-old', provenance: action(11) },
+      } },
     ]) {
       const result = applyCareerMapOperation(map, { ...operation, expectedRevision: map.revision, occurredAt: timestamp } as CareerMapOperation);
       if (result.status !== 'committed') throw new Error('Compaction context fixture failed.');
       map = result.map;
     }
     const storage = new InMemoryMethodStorage(map);
-    const staleTranscript = 'Earlier transcript: Project 99 was accepted and proved this path. Now help with my actual project.';
-    const model = streamModel([textChunks('Let us start from the one-page prototype you are working on.')]);
-    const { agent } = await makeAgent({ storage, model, turnSequence: 9, currentMessage: staleTranscript });
-    await collect(await agent.stream({ prompt: staleTranscript }));
-    const prompt = JSON.stringify(model.doStreamCalls[0].prompt);
-    expect(prompt).toContain('SERVER REFRESH CONTEXT');
-    expect(prompt).toContain('project-1');
-    expect(prompt).toContain('unrelated');
-    expect(prompt).toContain('compaction-focus');
+    const staleTranscript = 'Earlier transcript: Project 99 was accepted and proved this path. Reflection reflection-current@1 is the current decision. I want to continue with my actual project.';
+    const model = streamModel([
+      operationChunks({ callId: 'obsolete-choice', toolName: 'record_continue_choice',
+        prematureText: 'Project 99 has proved your path.', toolInput: {
+          id: 'choice-obsolete', revision: 1, reflectionId: 'reflection-current', reflectionRevision: 1, wantsToContinue: true,
+        } }),
+      operationChunks({ callId: 'current-choice', toolName: 'record_continue_choice', toolInput: {
+        id: 'choice-current', revision: 1, reflectionId: 'reflection-current', reflectionRevision: 2, wantsToContinue: true,
+      } }),
+      textChunks('We can keep exploring this project; your path focus remains independent.'),
+    ]);
+    const statuses: Array<Record<string, unknown>> = [];
+    const traces: Array<Record<string, unknown>> = [];
+    const { agent } = await makeAgent({ storage, model, turnSequence: 12, currentMessage: staleTranscript,
+      onPreparedStep: (trace) => traces.push(trace),
+      onOperationStatus: (event) => { if (event.phase === 'terminal') statuses.push(event); },
+    });
+    const output = await collect(await agent.stream({ prompt: staleTranscript }));
+    expect(JSON.stringify(output)).not.toContain('Project 99 has proved your path.');
+    expect(model.doStreamCalls).toHaveLength(3);
+    const prompts = model.doStreamCalls.map((call) => JSON.stringify(call.prompt));
+    const briefings = model.doStreamCalls.map((call) => {
+      const context = call.prompt.flatMap((message) => Array.isArray(message.content) ? message.content : [])
+        .findLast((part) => part.type === 'text' && part.text.startsWith(`${METHOD_INTERNAL_CONTEXT_MARKER} —`));
+      if (!context || context.type !== 'text') throw new Error('Missing provider-bound authoritative context.');
+      return JSON.parse(context.text.slice(context.text.indexOf('\n') + 1)).focusedCareerMap as string;
+    });
+    for (const briefing of briefings) {
+      expect(briefing).toContain('project-1@1; accepted');
+      expect(briefing).toContain('Relationship to Purpose Path: unrelated');
+      expect(briefing).toContain('compaction-focus@1; path path-1@1');
+      expect(briefing).toContain('Actually, I wanted to improve the prototype again.');
+      expect(briefing).not.toContain('Project 99');
+    }
+    expect(briefings[0]).toContain('continue-choice: reflection-current@2');
+    expect(briefings[1]).toContain('continue-choice: reflection-current@2');
+    expect(prompts[1]).toContain('"errorClass":"ConfirmationTargetMismatchError"');
+    expect(briefings[2]).toContain('next-move: choice-current@1');
+    expect(briefings[2]).not.toContain('continue-choice: reflection-current@2');
+    expect(statuses).toEqual([
+      expect.objectContaining({ operationId: 'obsolete-choice', status: 'rejected', authoritativeRevision: map.revision }),
+      expect.objectContaining({ operationId: 'current-choice', status: 'saved', authoritativeRevision: map.revision + 1 }),
+    ]);
+    expect(traces.map((trace) => trace.mapRevision)).toEqual([map.revision, map.revision, map.revision + 1]);
+    expect(traces.map((trace) => trace.module)).toEqual(Array(3).fill('interpret-path-project'));
     expect(model.doStreamCalls[0].providerOptions?.openai?.contextManagement).toEqual([
       { type: 'compaction', compactThreshold: 200_000 },
     ]);
-    expect(storage.map).toEqual(map);
+    expect(model.doStreamCalls.slice(1).every((call) => !call.providerOptions?.openai?.contextManagement)).toBe(true);
+    expect(storage.map.continueChoices).toEqual([expect.objectContaining({
+      id: 'choice-current', reflectionBasis: { id: 'reflection-current', revision: 2 }, scope: 'project', wantsToContinue: true,
+    })]);
+    expect(storage.map.projects).toEqual(map.projects);
+    expect(storage.map.reflections).toEqual(map.reflections);
+    expect(storage.map.pathFocusCommitments).toEqual(map.pathFocusCommitments);
+    expect(storage.map.commitment).toBeUndefined();
     expect(storage.map.projects).toHaveLength(1);
     expect(storage.map.pathFocusCommitments).toHaveLength(1);
   });

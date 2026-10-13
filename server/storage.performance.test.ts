@@ -1,11 +1,11 @@
 import { performance } from 'node:perf_hooks';
 import { randomUUID } from 'node:crypto';
+import { eq } from 'drizzle-orm';
+import { careerMaps, careerMapHistory } from '../shared/schema.js';
+import { repeatingLearningFixture } from './test-fixtures/repeating-learning.js';
 import { afterAll, describe, expect, it } from 'vitest';
 import {
-  applyCareerMapOperation,
   careerMapSchema,
-  createCareerMap,
-  type CareerMap,
   type CareerMapOperation,
 } from '../shared/career-map/index.js';
 import {
@@ -73,29 +73,15 @@ function boundPerformanceOperation(
     turnSequence: operation.expectedRevision + 1,
     occurredAt: operation.occurredAt,
   });
-  if (operation.type !== 'append-foundation-evidence') throw new Error('Unexpected performance operation.');
-  return {
-    context,
-    operation: {
-      ...operation,
-      payload: {
-        evidence: { ...operation.payload.evidence, provenance: context.action },
-      },
-    } as CareerMapOperation,
+  const bind = (value: unknown): unknown => {
+    if (!value || typeof value !== 'object') return value;
+    if (Array.isArray(value)) return value.map(bind);
+    const record = value as Record<string, unknown>;
+    if (record.kind === 'user-message' || record.kind === 'ui-action') return context.action;
+    if (record.kind === 'model-presentation') return context.presentation;
+    return Object.fromEntries(Object.entries(record).map(([key, nested]) => [key, bind(nested)]));
   };
-}
-
-function longLivedFixture(revisions = 300): CareerMap {
-  let map = createCareerMap(`${runId}-fixture`);
-  for (let index = 0; index < revisions; index += 1) {
-    const result = applyCareerMapOperation(
-      map,
-      evidenceOperation(map.revision, `${runId}-fixture-source-${index}`),
-    );
-    if (result.status !== 'committed') throw new Error(`Fixture failed at revision ${index}: ${result.status}`);
-    map = result.map;
-  }
-  return map;
+  return { context, operation: bind(operation) as CareerMapOperation };
 }
 
 function percentile(values: number[], fraction: number): number {
@@ -113,7 +99,14 @@ afterAll(async () => {
 
 describe('career-map durable-shape falsification bounds', () => {
   it('records serialized size and full-document validation bounds for a long-lived map', () => {
-    const fixture = longLivedFixture();
+    const fixture = repeatingLearningFixture(`${runId}-fixture`).map;
+    expect(fixture.projects.length).toBeGreaterThan(20);
+    expect(fixture.reflections.length).toBeGreaterThan(20);
+    expect(fixture.pathFocusCommitments.length).toBeGreaterThan(20);
+    expect(new Set(fixture.operationHistory.map((receipt) => receipt.operationType)).size).toBeGreaterThan(10);
+    expect(fixture.proofRevisions).toHaveLength(1);
+    expect(fixture.sideDoorSets).toHaveLength(1);
+    expect(fixture.routeOutcomes).toHaveLength(1);
     const serializedBytes = Buffer.byteLength(JSON.stringify(fixture));
     for (let warmup = 0; warmup < 5; warmup += 1) careerMapSchema.parse(fixture);
     const validationSamples: number[] = [];
@@ -125,6 +118,10 @@ describe('career-map durable-shape falsification bounds', () => {
     const validationP95Ms = percentile(validationSamples, 0.95);
     console.info('U4_PERFORMANCE_SHAPE', JSON.stringify({
       fixtureRevisions: fixture.revision,
+      projects: fixture.projects.length,
+      reflections: fixture.reflections.length,
+      optionSets: fixture.projectOptionSets.length,
+      focusCommitments: fixture.pathFocusCommitments.length,
       serializedBytes,
       validationP95Ms,
       bounds: CAREER_MAP_FALSIFICATION_BOUNDS,
@@ -136,47 +133,45 @@ describe('career-map durable-shape falsification bounds', () => {
   it('records transaction latency and concurrent CAS settlement bounds', async () => {
     const latencyOwner = owner('latency');
     await storage.getOrCreateCareerMap(latencyOwner);
-    const latencyTurn = {
-      userId: latencyOwner,
-      clientMessageId: `${runId}-latency-message`,
-      requestFingerprint: `${runId}-latency-request`,
-      turnId: `${runId}-latency-turn`,
-      leaseId: `${runId}-latency-lease`,
-    };
-    const startedTurn = await storage.beginWorkspaceActionTurn(latencyTurn);
-    expect(startedTurn.status).toBe('started');
-    if (startedTurn.status !== 'started') throw new Error('Performance turn did not start.');
-    const durableLatencyTurn = startedTurn.turn;
     const hotPathBaseRevision = 280;
-    for (let revision = 0; revision < hotPathBaseRevision; revision += 1) {
-      const bounded = boundPerformanceOperation(
-        durableLatencyTurn,
-        evidenceOperation(revision, `${runId}-latency-source-${revision}`),
-      );
-      const result = await storage.persistCareerMapOperation({
-        userId: latencyOwner,
-        leaseId: latencyTurn.leaseId,
-        ...bounded,
-        moduleVersion: 'performance@1',
-      });
-      expect(result.status).toBe('committed');
-    }
+    const base = repeatingLearningFixture(latencyOwner, hotPathBaseRevision).map;
+    await storageTestDatabase.update(careerMaps).set({
+      schemaVersion: base.schemaVersion, revision: base.revision, document: base,
+    }).where(eq(careerMaps.userId, latencyOwner));
+    await storageTestDatabase.insert(careerMapHistory).values(base.operationHistory.map((receipt, index) => ({
+      userId: latencyOwner, operationSourceId: receipt.sourceId, operationType: receipt.operationType,
+      payloadFingerprint: receipt.payloadFingerprint, baseRevision: index, resultRevision: receipt.resultRevision,
+      result: receipt, confirmationProvenance: receipt.confirmationProvenance,
+      moduleVersion: receipt.moduleVersion!, committedAt: new Date(receipt.committedAt),
+    })));
+    expect((await storage.loadCareerMap(latencyOwner)).status).toBe('ready');
+    const tail = repeatingLearningFixture(latencyOwner).operations.filter((operation) => operation.expectedRevision >= hotPathBaseRevision);
     const transactionSamples: number[] = [];
-    for (let revision = hotPathBaseRevision; revision < 300; revision += 1) {
+    for (const operation of tail) {
+      // Separate durable turns keep proposal/selection and reflection authority real.
+      const revision = operation.expectedRevision;
+      const startedTurn = await storage.beginWorkspaceActionTurn({
+        userId: latencyOwner, clientMessageId: `${runId}-latency-message-${revision}`,
+        requestFingerprint: `${runId}-latency-request-${revision}`,
+        turnId: `${runId}-latency-turn-${revision}`, leaseId: `${runId}-latency-lease-${revision}`,
+      });
+      expect(startedTurn.status).toBe('started');
+      if (startedTurn.status !== 'started') throw new Error('Performance turn did not start.');
+      const bounded = boundPerformanceOperation(startedTurn.turn, operation);
       const started = performance.now();
-      const bounded = boundPerformanceOperation(
-        durableLatencyTurn,
-        evidenceOperation(revision, `${runId}-latency-source-${revision}`),
-      );
       const result = await storage.persistCareerMapOperation({
-        userId: latencyOwner,
-        leaseId: latencyTurn.leaseId,
-        ...bounded,
-        moduleVersion: 'performance@1',
+        userId: latencyOwner, leaseId: startedTurn.turn.leaseId, ...bounded, moduleVersion: 'performance@1',
       });
       transactionSamples.push(performance.now() - started);
-      expect(result.status).toBe('committed');
+      expect(result.status, operation.type).toBe('committed');
+      expect((await storage.completeAgentTurn({ userId: latencyOwner, turnId: startedTurn.turn.turnId, leaseId: startedTurn.turn.leaseId }))?.status).toBe('completed');
     }
+    const raceTurn = await storage.beginWorkspaceActionTurn({
+      userId: latencyOwner, clientMessageId: `${runId}-race-message`, requestFingerprint: `${runId}-race-request`,
+      turnId: `${runId}-race-turn`, leaseId: `${runId}-race-lease`,
+    });
+    expect(raceTurn.status).toBe('started');
+    if (raceTurn.status !== 'started') throw new Error('Race turn did not start.');
     const transactionP95Ms = percentile(transactionSamples, 0.95);
 
     const concurrentStarted = performance.now();
@@ -184,9 +179,9 @@ describe('career-map durable-shape falsification bounds', () => {
       Array.from({ length: CAREER_MAP_FALSIFICATION_BOUNDS.concurrentAttempts }, (_, index) =>
         storage.persistCareerMapOperation({
           userId: latencyOwner,
-          leaseId: latencyTurn.leaseId,
+          leaseId: raceTurn.turn.leaseId,
           ...boundPerformanceOperation(
-            durableLatencyTurn,
+            raceTurn.turn,
             evidenceOperation(300, `${runId}-race-source-${index}`),
           ),
           moduleVersion: 'performance@1',
@@ -211,6 +206,7 @@ describe('career-map durable-shape falsification bounds', () => {
       runtime: process.version,
       transactionSamples: transactionSamples.length,
       hotPathBaseRevision,
+      operationTypes: [...new Set(tail.map((operation) => operation.type))],
       transactionP95Ms,
       concurrentAttempts: settlements.length,
       ownerBusy,
