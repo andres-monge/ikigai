@@ -2,8 +2,9 @@
 
 import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createCareerMap, type CareerMap } from '@shared/career-map';
+import { createCareerMap, readCareerMap, type CareerMap } from '@shared/career-map';
 import { MethodMap } from './method-map';
+import legacyProof from '@shared/career-map/test-fixtures/legacy-proof-v2.json';
 
 afterEach(cleanup);
 
@@ -158,5 +159,98 @@ describe('MethodMap', () => {
     const checkpoint = screen.getByTestId('method-checkpoint');
     expect(within(checkpoint).getByRole('heading', { name: 'Form Your North Star' })).toBeTruthy();
     expect(checkpoint.textContent).toBe('Current focusForm Your North Star');
+  });
+});
+
+const action = { kind: 'user-message' as const, actionId: 'select', turnId: 'turn-2', turnSequence: 2, occurredAt: presentation.presentedAt };
+function simpleProject(number = 1): CareerMap['projects'][number] {
+  return { id: `project-${number}`, revision: 1, number, basisPath: { id: 'path-1', revision: 1 },
+    briefFormat: 'simple-v1', relationship: 'linked', title: `Useful trial ${number}`,
+    learningGoal: 'Will making a small aid pull me back? Notice energy after each trial.',
+    firstVersion: 'One usable sketch; stop after one trial.', firstStep: 'Sketch one confusing moment.',
+    agreementStatus: 'accepted', workStatus: 'not-started', workUpdates: [], presentation };
+}
+
+describe('repeating learning presentation', () => {
+  it('shows the simple learning brief in order without fabricated legacy fields or reply controls', () => {
+    const map = pathMap('active');
+    map.projects.push({ ...simpleProject(), relationship: 'unrelated' });
+    render(<MethodMap map={map} />);
+    const card = screen.getByTestId('path-project-card');
+    expect([...card.querySelectorAll('dt')].map((label) => label.textContent)).toEqual([
+      "What you'll learn", "What you'll make", 'Suggested starting point',
+    ]);
+    expect(within(card).getByText(simpleProject().learningGoal)).toBeTruthy();
+    expect(within(card).getByText(simpleProject().firstVersion)).toBeTruthy();
+    expect(within(card).getByText(simpleProject().firstStep)).toBeTruthy();
+    expect(card.querySelector('details')).toBeNull();
+    expect(screen.getByText('Intentionally unrelated to your current Purpose Path.')).toBeTruthy();
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(document.body.textContent).not.toMatch(/Audience|Decision question|Choose one formal|begin Side Doors/i);
+  });
+
+  it('keeps legacy detail collapsed while showing its learning and starting point', () => {
+    const map = readCareerMap(legacyProof);
+    render(<MethodMap map={map} />);
+    const card = screen.getAllByTestId('path-project-card')[0];
+    expect(within(card).getByText("What you'll learn")).toBeTruthy();
+    expect(within(card).getByText(map.projects[0].learningGoal)).toBeTruthy();
+    expect(card.querySelector('details')?.open).toBe(false);
+    expect(within(card).getByText(map.projects[0].audience!)).toBeTruthy();
+  });
+
+  it('uses the current project reflection and focus tenure, keeping older learning inspectable', () => {
+    const map = pathMap('active');
+    map.operationHistory.push({ sourceId: 'selection-source', operationType: 'select-purpose-path', fromRevision: 0, toRevision: 1, replayed: false, committedAt: presentation.presentedAt, confirmationProvenance: action } as CareerMap['operationHistory'][number]);
+    map.pathFocusCommitments.push({ id: 'focus', revision: 1, basisPath: { id: 'path-1', revision: 1 }, selectionSourceId: 'selection-source', action });
+    map.projects.push({ ...simpleProject(), agreementStatus: 'parked' }, simpleProject(2));
+    map.reflections.push({ id: 'new-reflection', revision: 1, projectBasis: { id: 'project-2', revision: 1 }, status: 'open', openedBy: action,
+      evidence: [{ id: 'new-evidence', revision: 1, observation: 'Current project energy', interpretation: 'Worth trying again', signal: 'energy', provenance: action }] });
+    map.reflections.push({ id: 'old-reflection', revision: 1, projectBasis: { id: 'project-1', revision: 1 }, status: 'closed', openedBy: action,
+      evidence: [{ id: 'old-evidence', revision: 1, observation: 'Older learning', interpretation: 'Earlier signal', signal: 'energy', provenance: action }] });
+    const { rerender } = render(<MethodMap map={map} />);
+    const learning = screen.getByTestId('current-project-learning');
+    expect(learning.textContent).toContain('Current project energy');
+    expect(learning.textContent).not.toContain('Older learning');
+    expect(screen.getByText('Older learning — Earlier signal')).toBeTruthy();
+    expect(screen.getByTestId('current-path-focus').textContent).toContain('Distinct path 1');
+    expect(screen.getByTestId('current-path-focus').textContent).toContain('Keep learning');
+    map.pathFocusCommitments[0].selectionSourceId = 'old-selection';
+    rerender(<MethodMap map={map} />);
+    expect(screen.queryByTestId('current-path-focus')).toBeNull();
+  });
+
+  it('moves previous-path learning into history after a direction change or North Star revision', () => {
+    const map = pathMap('active');
+    map.projects.push(simpleProject());
+    map.reflections.push({ id: 'reflection-1', revision: 1, projectBasis: { id: 'project-1', revision: 1 }, status: 'closed', openedBy: action, evidence: [] });
+    map.continueChoices.push({ id: 'choice-1', revision: 1, reflectionBasis: { id: 'reflection-1', revision: 1 }, wantsToContinue: true, action });
+    map.nextMoves.push({ id: 'move-1', revision: 1, continueChoiceBasis: { id: 'choice-1', revision: 1 }, kind: 'commit-provisionally', action });
+    map.pathSets[0].paths[0].selection = 'parked';
+    map.pathSets[0].paths[1].selection = 'active';
+    const { rerender } = render(<MethodMap map={map} />);
+    expect(screen.queryByTestId('current-project-learning')).toBeNull();
+    expect(screen.queryByText('You chose to focus on this path and keep learning.')).toBeNull();
+    expect(screen.getByText('Commit provisionally')).toBeTruthy();
+    map.pathSets[0].paths[0].selection = 'active';
+    map.pathSets[0].paths[1].selection = 'parked';
+    map.foundation.whyRevisions[0].status = 'superseded';
+    rerender(<MethodMap map={map} />);
+    expect(screen.queryByTestId('current-project-learning')).toBeNull();
+    expect(screen.queryByText('You chose to focus on this path and keep learning.')).toBeNull();
+  });
+
+  it('keeps historical tail records collapsed and read-only without active tail instructions', () => {
+    const map = readCareerMap(legacyProof);
+    const before = structuredClone(map);
+    render(<MethodMap map={map} />);
+    const history = screen.getByTestId('historical-method-records');
+    expect((history as HTMLDetailsElement).open).toBe(false);
+    expect(history.textContent).toContain(map.peerExposures[0].subject);
+    expect(history.textContent).toContain(map.proofRevisions[0].artifacts[0]);
+    expect(history.textContent).toContain('Committed provisionally');
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(document.body.textContent).not.toMatch(/begin Side Doors|Choose your Next Move|Choose one formal next step/);
+    expect(map).toEqual(before);
   });
 });

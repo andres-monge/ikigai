@@ -2,6 +2,9 @@ import {
   deriveMethodCheckpoint,
   selectCurrentFoundationEvidence,
   selectCurrentRealityConstraints,
+  selectCurrentProjectLearning,
+  selectCurrentPathFocus,
+  selectActivePurposePath,
   type CareerMap,
   type MethodModule,
 } from '@shared/career-map';
@@ -42,13 +45,11 @@ function CheckpointSummary({ map }: { map: CareerMap }) {
 
 function ProjectCard({
   project,
-  compact = false,
 }: {
   project: CareerMap['projects'][number] | CareerMap['projectOptionSets'][number]['projects'][number];
-  compact?: boolean;
 }) {
   return (
-    <article data-testid="path-project-card" className="border-2 border-black bg-white p-5 shadow-[4px_4px_0_rgba(0,0,0,0.65)]">
+    <article data-testid="path-project-card" className="min-w-0 break-words border-2 border-black bg-white p-5 shadow-[4px_4px_0_rgba(0,0,0,0.65)]">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <h3 className="text-xl font-black">{project.title}</h3>
         {'selection' in project ? <SelectionLabel selection={project.selection} /> : null}
@@ -59,40 +60,80 @@ function ProjectCard({
           <p>Work: {humanizeStatus(project.workStatus)}</p>
         </div>
       ) : null}
-      <p className="mt-3 text-sm leading-6">{project.outcome}</p>
-      <details className="mt-4 border-t border-slate-300 pt-3" open={!compact}>
-        <summary className="cursor-pointer text-sm font-bold">Inspect project details</summary>
-        <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-          <div><dt className="method-map-label">Audience</dt><dd>{project.audience}</dd></div>
-          <div><dt className="method-map-label">Why this is wanted</dt><dd>{project.whyWanted}</dd></div>
-          <div><dt className="method-map-label">Learning goal</dt><dd>{project.learningGoal}</dd></div>
-          <div><dt className="method-map-label">First version</dt><dd>{project.firstVersion}</dd></div>
-          <div><dt className="method-map-label">First step</dt><dd>{project.firstStep}</dd></div>
-          <div><dt className="method-map-label">Decision question</dt><dd>{project.decisionQuestion}</dd></div>
-          <div><dt className="method-map-label">Evidence to notice</dt><dd>{project.evidenceCue}</dd></div>
-        </dl>
-      </details>
+      {project.relationship === 'unrelated' ? (
+        <p className="mt-3 text-sm leading-6">Intentionally unrelated to your current Purpose Path.</p>
+      ) : null}
+      <dl className="mt-4 space-y-4 text-sm leading-6">
+        <div><dt className="method-map-label">What you'll learn</dt><dd className="mt-1 whitespace-pre-wrap">{project.learningGoal}</dd></div>
+        <div><dt className="method-map-label">What you'll make</dt><dd className="mt-1 whitespace-pre-wrap">{project.firstVersion}</dd></div>
+        <div><dt className="method-map-label">Suggested starting point</dt><dd className="mt-1 whitespace-pre-wrap">{project.firstStep}</dd></div>
+      </dl>
+      {!project.briefFormat ? (
+        <details className="mt-4 border-t border-slate-300 pt-3">
+          <summary className="cursor-pointer text-sm font-bold">Inspect legacy project details</summary>
+          <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+            <div><dt className="method-map-label">Outcome</dt><dd>{project.outcome}</dd></div>
+            <div><dt className="method-map-label">Audience</dt><dd>{project.audience}</dd></div>
+            <div><dt className="method-map-label">Why this is wanted</dt><dd>{project.whyWanted}</dd></div>
+            <div><dt className="method-map-label">Decision question</dt><dd>{project.decisionQuestion}</dd></div>
+            <div><dt className="method-map-label">Evidence to notice</dt><dd>{project.evidenceCue}</dd></div>
+          </dl>
+        </details>
+      ) : null}
     </article>
   );
 }
 
-function LaterMethodState({ map }: MethodMapProps) {
-  const reflection = map.reflections.at(-1);
-  const continueChoice = reflection
-    ? map.continueChoices.find((item) => (
-      item.reflectionBasis.id === reflection.id
-      && item.reflectionBasis.revision === reflection.revision
-    ))
-    : undefined;
-  const nextMove = continueChoice
-    ? map.nextMoves.find((item) => (
-      item.continueChoiceBasis.id === continueChoice.id
-      && item.continueChoiceBasis.revision === continueChoice.revision
-    ))
-    : undefined;
-  const peer = map.peerExposures.findLast((item) => item.status !== 'superseded');
-  const proof = map.proofRevisions.findLast((item) => item.status !== 'superseded');
-  const doors = map.sideDoorSets.findLast((item) => item.status !== 'superseded');
+function CurrentLearningState({ map, showLearning }: MethodMapProps & { showLearning: boolean }) {
+  const { reflection, choice, move: savedMove } = showLearning ? selectCurrentProjectLearning(map) : {};
+  const focus = selectCurrentPathFocus(map);
+  const move = savedMove?.kind === 'commit-provisionally' && !focus ? undefined : savedMove;
+  const focusedPath = focus && map.pathSets.flatMap((set) => set.paths)
+    .find((path) => path.id === focus.basisPath.id && path.revision === focus.basisPath.revision);
+  return (
+    <div className="space-y-5">
+      {focus ? (
+        <section data-testid="current-path-focus" className="border-2 border-black bg-white p-5">
+          <h2 className="text-xl font-black">Focusing on {focusedPath?.name ?? focus.basisPath.id}</h2>
+          <p className="mt-2 text-sm leading-6">Keep learning through projects, get help with your work, or reconsider your direction in the chat.</p>
+        </section>
+      ) : null}
+      {reflection ? <ReflectionCard reflection={reflection} current /> : null}
+      {move ? (
+        <section className="border-2 border-black bg-white p-5">
+          <h2 className="text-xl font-black">Your next direction</h2>
+          <p className="mt-2 text-sm leading-6">
+            {move.kind === 'explore-further' ? 'Explore further with another project.' : null}
+            {move.kind === 'commit-provisionally' ? 'You chose to focus on this path and keep learning.' : null}
+            {move.kind === 'return-to-paths' ? 'You chose to return to Purpose Paths.' : null}
+          </p>
+        </section>
+      ) : choice ? (
+        <section className="border-2 border-black bg-white p-5">
+          <h2 className="text-xl font-black">Your learning decision</h2>
+          <p className="mt-2 text-sm leading-6">
+            {choice.wantsToContinue
+              ? `You said you want to continue ${choice.scope === 'project' ? 'this project' : 'exploring this path'}.`
+              : `You said you do not want to continue ${choice.scope === 'project' ? 'this project' : 'down this path'}.`}
+          </p>
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
+function ReflectionCard({ reflection, current = false }: { reflection: CareerMap['reflections'][number]; current?: boolean }) {
+  return (
+    <details data-testid={current ? 'current-project-learning' : undefined} className="border-2 border-black bg-white p-5" open={current && reflection.status === 'open'}>
+      <summary className="cursor-pointer font-display text-lg font-black">What You Learned · {reflection.status}</summary>
+      <ul className="mt-4 list-disc space-y-2 pl-5 text-sm">
+        {reflection.evidence.map((item) => <li key={`${item.id}-${item.revision}`}>{item.observation} — {item.interpretation}</li>)}
+      </ul>
+    </details>
+  );
+}
+
+function HistoricalMethodState({ map }: MethodMapProps) {
   const routeOutcomes = map.routeOutcomes;
   const pathName = (id: string, revision: number) => map.pathSets
     .flatMap((set) => set.paths)
@@ -101,46 +142,23 @@ function LaterMethodState({ map }: MethodMapProps) {
     const move = map.nextMoves.find((item) => item.id === id && item.revision === revision);
     return move ? humanizeStatus(move.kind) : id;
   };
+  if (!map.peerExposures.length && !map.proofRevisions.length && !map.sideDoorSets.length
+    && !routeOutcomes.length && !map.commitmentIntent && !map.provisionalCommitment) return null;
   return (
-    <div className="space-y-5">
-      {reflection ? (
-        <details className="border-2 border-black bg-white p-5" open={reflection.status === 'open'}>
-          <summary className="cursor-pointer font-display text-lg font-black">What You Learned · {reflection.status}</summary>
-          <ul className="mt-4 list-disc space-y-2 pl-5 text-sm">
-            {reflection.evidence.map((item) => <li key={`${item.id}-${item.revision}`}>{item.observation} — {item.interpretation}</li>)}
-          </ul>
-        </details>
-      ) : null}
-      {nextMove ? (
-        <section className="border-2 border-black bg-white p-5">
-          <h2 className="text-xl font-black">Next Move</h2>
-          <p className="mt-2 text-sm leading-6">
-            {nextMove.kind === 'explore-further' ? 'Explore further with another Path Project.' : null}
-            {nextMove.kind === 'commit-provisionally' ? 'Commit provisionally and begin Side Doors.' : null}
-            {nextMove.kind === 'return-to-paths' ? 'Return to Purpose Paths.' : null}
-          </p>
-        </section>
-      ) : null}
-      {continueChoice && !nextMove ? (
-        <section className="border-2 border-black bg-white p-5">
-          <h2 className="text-xl font-black">Choose your Next Move</h2>
-          <p className="mt-2 text-sm leading-6">
-            {continueChoice.wantsToContinue
-              ? 'You said you want to continue. Choose one formal next step.'
-              : 'You said you do not want to continue down this path.'}
-          </p>
-        </section>
-      ) : null}
-      {peer ? (
-        <section className="border-2 border-black bg-white p-5">
-          <h2 className="text-xl font-black">Relevant peer insight</h2>
+    <details data-testid="historical-method-records" className="border-2 border-black bg-white p-5">
+      <summary className="cursor-pointer font-display text-lg font-black">Historical records · read-only</summary>
+      <p className="mt-3 text-sm leading-6">Saved peer, commitment, proof and route history.</p>
+      <div className="mt-4 space-y-5">
+      {map.peerExposures.map((peer) => (
+        <section key={`${peer.id}-${peer.revision}`} className="border-2 border-black bg-white p-5">
+          <h2 className="text-xl font-black">Relevant peer insight · {humanizeStatus(peer.status)}</h2>
           <p className="mt-2 text-sm leading-6"><strong>{peer.subject}:</strong> {peer.insight}</p>
         </section>
-      ) : null}
+      ))}
       {map.commitmentIntent ? (
         <section data-testid="commitment-intent" className="border-2 border-black bg-white p-5">
           <p className="method-map-label">Commitment intent · {humanizeStatus(map.commitmentIntent.status)}</p>
-          <h2 className="text-xl font-black">Provisional commitment is in progress</h2>
+          <h2 className="text-xl font-black">Historical commitment intent</h2>
           <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
             <div><dt className="method-map-label">Purpose Path</dt><dd>{pathName(map.commitmentIntent.basisPath.id, map.commitmentIntent.basisPath.revision)}</dd></div>
             <div><dt className="method-map-label">Next Move</dt><dd>{moveName(map.commitmentIntent.basisNextMove.id, map.commitmentIntent.basisNextMove.revision)}</dd></div>
@@ -164,8 +182,8 @@ function LaterMethodState({ map }: MethodMapProps) {
           </dl>
         </section>
       ) : null}
-      {proof ? (
-        <details className="border-2 border-black bg-white p-5">
+      {map.proofRevisions.map((proof) => (
+        <details key={`${proof.id}-${proof.revision}`} className="border-2 border-black bg-white p-5">
           <summary className="cursor-pointer font-display text-lg font-black">Proof inventory · {proof.status}</summary>
           <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
             <p><strong>Artifacts:</strong> {proof.artifacts.join(' · ') || 'None recorded'}</p>
@@ -178,14 +196,14 @@ function LaterMethodState({ map }: MethodMapProps) {
             <p><strong>Shareable:</strong> {proof.shareableMaterial.join(' · ') || 'None recorded'}</p>
           </div>
         </details>
-      ) : null}
-      {doors ? (
-        <section>
-          <h2 className="text-xl font-black">Side Doors</h2>
-          <p className="mt-1 text-sm text-stone-600">Three routes, shown without ranking. Revelio never sends outreach.</p>
+      ))}
+      {map.sideDoorSets.map((doors) => (
+        <section key={`${doors.id}-${doors.revision}`}>
+          <h2 className="text-xl font-black">Historical Side Doors · {humanizeStatus(doors.status)}</h2>
+          <p className="mt-1 text-sm text-stone-600">Saved routes, shown without ranking.</p>
           <div className="mt-4 grid gap-4 xl:grid-cols-3">
             {doors.doors.map((door) => (
-              <article data-testid="side-door-card" key={`${door.id}-${door.revision}`} className="border-2 border-black bg-white p-5 shadow-[4px_4px_0_rgba(0,0,0,0.65)]">
+              <article data-testid="side-door-card" key={`${door.id}-${door.revision}`} className="min-w-0 break-words border-2 border-black bg-white p-5 shadow-[4px_4px_0_rgba(0,0,0,0.65)]">
                 <h3 className="text-lg font-black">{door.name}</h3>
                 <p className="mt-2 text-sm"><strong>Who or what:</strong> {door.target}</p>
                 <p className="mt-2 text-sm"><strong>Proof value:</strong> {door.proofValue}</p>
@@ -197,7 +215,7 @@ function LaterMethodState({ map }: MethodMapProps) {
             ))}
           </div>
         </section>
-      ) : null}
+      ))}
       {routeOutcomes.length > 0 ? (
         <details className="border-2 border-black bg-white p-5">
           <summary className="cursor-pointer font-display text-lg font-black">Route outcomes</summary>
@@ -209,7 +227,8 @@ function LaterMethodState({ map }: MethodMapProps) {
           <p className="mt-4 text-xs font-bold">Only explorer-reported outcomes appear here. Revelio does not send outreach.</p>
         </details>
       ) : null}
-    </div>
+      </div>
+    </details>
   );
 }
 
@@ -222,16 +241,28 @@ export function MethodMap({ map }: MethodMapProps) {
   const pathSetMatchesConfirmedWhy = !!displayedPathSet && !!confirmedWhy
     && displayedPathSet.basisWhy.id === confirmedWhy.id
     && displayedPathSet.basisWhy.revision === confirmedWhy.revision;
+  const currentLearning = selectCurrentProjectLearning(map);
+  const activePath = selectActivePurposePath(map);
+  const hasCurrentBasis = (basis: { id: string; revision: number }) => pathSetMatchesConfirmedWhy
+    && activePath?.id === basis.id && activePath.revision === basis.revision;
+  const showLearning = !!currentLearning.project && hasCurrentBasis(currentLearning.project.basisPath);
   const activeProject = map.projects.findLast((item) => (
-    item.agreementStatus === 'suggested' || item.agreementStatus === 'accepted'
-  ) && pathSetMatchesConfirmedWhy && displayedPathSet?.paths.some((path) => (
-    path.id === item.basisPath.id && path.revision === item.basisPath.revision
-  )));
-  const optionSet = map.projectOptionSets.findLast((item) => item.status !== 'superseded');
+    item.agreementStatus === 'suggested' || item === currentLearning.project
+  ) && hasCurrentBasis(item.basisPath));
+  const historicalProjects = map.projects.filter((project) => project !== activeProject);
+  const historicalReflections = map.reflections.filter((reflection) => (!showLearning || reflection !== currentLearning.reflection));
+  const optionSet = map.projectOptionSets.findLast((item) => item.status === 'suggested' && hasCurrentBasis(item.basisPath));
+  const historicalOptions = map.projectOptionSets.filter((set) => set !== optionSet);
+  const historicalChoices = map.continueChoices.filter((choice) => !showLearning || choice !== currentLearning.choice);
+  const currentFocus = selectCurrentPathFocus(map);
+  const historicalMoves = map.nextMoves.filter((move) => !showLearning || move !== currentLearning.move
+    || (move.kind === 'commit-provisionally' && !currentFocus));
+  const historicalFocus = map.pathFocusCommitments.filter((focus) => focus !== currentFocus);
   const hasState = currentEvidence.length > 0 || currentConstraints.length > 0
     || why || displayedPathSet || activeProject || optionSet
     || map.reflections.length || map.proofRevisions.length || map.sideDoorSets.length
-    || map.commitmentIntent || map.provisionalCommitment;
+    || map.commitmentIntent || map.provisionalCommitment || map.pathFocusCommitments.length
+    || map.projects.length || map.projectOptionSets.length || map.peerExposures.length || map.routeOutcomes.length;
 
   if (!hasState) {
     return (
@@ -247,7 +278,7 @@ export function MethodMap({ map }: MethodMapProps) {
   }
 
   return (
-    <div className="min-w-0">
+    <div className="min-w-0 break-words">
       <CheckpointSummary map={map} />
       <div className="mt-8 space-y-8">
       {why ? (
@@ -292,7 +323,7 @@ export function MethodMap({ map }: MethodMapProps) {
           </p>
           <h2 id="active-project-heading" className="text-2xl font-black">{activeProject.number === 1 ? 'First Path Project' : `Path Project ${activeProject.number}`}</h2>
           <div className="mt-4">
-            <ProjectCard project={activeProject} compact={activeProject.agreementStatus === 'accepted'} />
+            <ProjectCard project={activeProject} />
           </div>
         </section>
       ) : null}
@@ -302,12 +333,33 @@ export function MethodMap({ map }: MethodMapProps) {
           <p className="method-map-label">Exactly three equal choices after a completed loop</p>
           <h2 id="follow-on-heading" className="text-2xl font-black">Path Project {optionSet.projectNumber}</h2>
           <div className="mt-4 grid gap-4 xl:grid-cols-3">
-            {optionSet.projects.map((project) => <ProjectCard key={`${project.id}-${project.revision}`} project={project} compact />)}
+            {optionSet.projects.map((project) => <ProjectCard key={`${project.id}-${project.revision}`} project={project} />)}
           </div>
         </section>
       ) : null}
 
-        <LaterMethodState map={map} />
+        <CurrentLearningState map={map} showLearning={showLearning} />
+        {historicalProjects.length || historicalReflections.length || historicalOptions.length || historicalChoices.length || historicalMoves.length || historicalFocus.length ? (
+          <details className="border-2 border-black bg-white p-5">
+            <summary className="cursor-pointer font-display text-lg font-black">Earlier projects and learning · read-only</summary>
+            <div className="mt-4 space-y-5">
+              {historicalProjects.map((project) => <ProjectCard key={`${project.id}-${project.revision}`} project={project} />)}
+              {historicalReflections.map((reflection) => <ReflectionCard key={`${reflection.id}-${reflection.revision}`} reflection={reflection} />)}
+              {historicalOptions.map((set) => (
+                <section key={`${set.id}-${set.revision}`}>
+                  <h3 className="font-bold">Project {set.projectNumber} options · {humanizeStatus(set.status)}</h3>
+                  <div className="mt-4 grid gap-4 xl:grid-cols-3">
+                    {set.projects.map((project) => <ProjectCard key={`${project.id}-${project.revision}`} project={project} />)}
+                  </div>
+                </section>
+              ))}
+              {historicalChoices.map((choice) => <p key={`${choice.id}-${choice.revision}`} className="text-sm">Earlier continue choice: {choice.wantsToContinue ? 'Yes' : 'No'} · {choice.scope ?? 'path'}</p>)}
+              {historicalMoves.map((move) => <p key={`${move.id}-${move.revision}`} className="text-sm">{humanizeStatus(move.kind)}</p>)}
+              {historicalFocus.map((focus) => <p key={`${focus.id}-${focus.revision}`} className="text-sm">Earlier path focus: {map.pathSets.flatMap((set) => set.paths).find((path) => path.id === focus.basisPath.id && path.revision === focus.basisPath.revision)?.name ?? focus.basisPath.id}</p>)}
+            </div>
+          </details>
+        ) : null}
+        <HistoricalMethodState map={map} />
       </div>
     </div>
   );
