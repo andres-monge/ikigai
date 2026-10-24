@@ -1172,7 +1172,6 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
                 accept={Object.keys(ATTACHMENT_TYPES).join(',')}
                 onChange={(event) => { const selected = Array.from(event.target.files ?? []); event.target.value = ''; void addFiles(selected); }} />
               <AttachmentDraft files={files} onRemove={(id) => { updateFiles(filesRef.current.filter((item) => item.id !== id)); setAttachmentError(null); }} />
-              <p className="text-xs text-stone-600">3 MB total per message. Word reads text; use PDF when embedded visuals matter.</p>
               {preparingFiles ? <p role="status" className="text-xs">Preparing attachments…</p> : null}
               {attachmentError ? <p role="alert" className="text-xs font-bold text-red-800">{attachmentError}</p> : null}
               {recoverableSubmission ? <button type="button" disabled={preparingFiles} className="text-xs underline" onClick={() => {
