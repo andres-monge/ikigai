@@ -30,6 +30,27 @@ U1 shared-contract test was observed red before implementation; U2 composer miss
 - `npm run check` and production build passed after cancellation fix (`cancel-final-check.log`, `cancel-final-build.log`). Existing nonfatal bundle-size/Browserslist warnings remain; no lint script is configured.
 - Earlier bounded provider diagnostic accepted/read all six synthetic formats using `store:false`, no Conversation/app state. This diagnostic proves compatibility only; the separate actual Browser checklist above supplies E2E evidence.
 
+## Declared Node 24 runtime verification
+
+Final bounded verification used **Node v24.19.0**, matching `package.json`'s `24.x` engine, on tested HEAD `e1149e17d5e922ff09f8d344ff37bc9e0691ac29`. Production code remains unchanged from `313f404`; this follow-up changes evidence only. Earlier logs/review reruns used Node v22.22.0; the checks below supply the declared-runtime acceptance rather than relabeling those historical results.
+
+Process-scoped commands (no global configuration or dependency changes):
+
+```sh
+export PATH='/Users/andresm/.nvm/versions/node/v24.19.0/bin':"$PATH"
+node -p 'JSON.stringify({version:process.version,executable:process.execPath})'
+# Same unreachable dummy test environment as the earlier route tests:
+npm test -- server/ai/cancelled-tool-calls.test.ts server/routes/agent.test.ts server/ai/history.test.ts --run
+npm run check
+npm run build
+```
+
+Version/executable probe returned `v24.19.0` and `/Users/andresm/.nvm/versions/node/v24.19.0/bin/node`; `command -v node` and `command -v npm` both resolved inside that installation. **179/179 tests**, typecheck and production build passed. Logs: `.context/attachments/node24-verification-runtime.json`, `node24-tests.log`, `node24-check.log`, `node24-build.log`.
+
+The normal candidate started with that direct Node executable, `-r dotenv/config --import tsx server/index.ts`, unchanged primary `DOTENV_CONFIG_PATH`, development mode and the exact existing runtime patch. `lsof` verified listener PID **87780**, its executable at the Node 24 path, and cwd in worktree `80dc`. Fresh auth-only browser inspection matched the same dedicated test identity. Exactly one ordinary continuation completed through the real provider; reload retained its caption/reply, the console had zero errors, and the full canonical map and Conversation mapping stayed identical (revision **20 → 20**). No reset or repeated journey/matrix. Evidence: `.context/attachments/node24-runtime-receipt.json`, `node24-browser-state-result.json`, `browser-node24-continuation-reload.png`, `node24-candidate-server.log`.
+
+Stopped only PID 87780 (session 35012) after verification. `lsof` confirms no 5173 listener, matching the pre-window state; no other checkout was started and 5174 was untouched.
+
 ## Review and observed failure corrections
 
 Phase-2 ce-simplify-code review completed with five reviewers; applied one signature-switch simplification and removed two redundant comments. Protected proof tests retained.
@@ -47,7 +68,7 @@ The confirmed preflight timeout correction in `313f404` combines route cancellat
 
 ## Runtime and test-state provenance
 
-Only the exact uncommitted `server/auth.ts`, `server/auth.test.ts`, `server/index.ts` delta inspected read-only in `c615` was copied here: localhost auth default and port 5001 → 5173. They remain uncommitted, excluded from feature commits. Patch `.context/attachments/runtime-5173.patch`; dependency symlink uses `c615`'s existing install. Integration/primary WIP and lab port 5174 were untouched. There was no prior 5173 listener; The window is closed: only this run's final candidate (PID 86729, session 60358) was stopped after the final reply; `lsof` confirms no 5173 listener. No other checkout was started.
+Only the exact uncommitted `server/auth.ts`, `server/auth.test.ts`, `server/index.ts` delta inspected read-only in `c615` was copied here: localhost auth default and port 5001 → 5173. They remain uncommitted, excluded from feature commits. Patch `.context/attachments/runtime-5173.patch`; dependency symlink uses `c615`'s existing install. Integration/primary WIP and lab port 5174 were untouched. There was no prior 5173 listener; The window is closed: only this run's candidates were stopped after verification (final Node 24 PID 87780, session 35012); `lsof` confirms no 5173 listener. No other checkout was started.
 
 An initial insufficient Boolean auth probe allowed normal `/login` to redirect to a preexisting unidentified session and bootstrap read-only workspace/history requests. Inspection stopped at the header/loading state before reading conversation content or submitting anything. The human then switched accounts explicitly, followed by exact test-owner verification.
 
