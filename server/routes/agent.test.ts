@@ -1022,6 +1022,20 @@ describe('protected Method routes', () => {
     expect(model.doStreamCalls[0].providerOptions).toMatchObject({ openai: { passThroughUnsupportedFiles: true } });
   });
 
+  it('does not confirm a pending proposal from file-only context despite an exact provider tool target', async () => {
+    const initial = pendingWhy();
+    const pending = initial.foundation.whyRevisions[0];
+    const storage = createStorage({ getConversationMapping: vi.fn(async () => 'synthetic-conversation') }, initial);
+    const response = await (await request(testApp({ storage, requireAuth: authenticated, agentEnabled: true,
+      model: confirmWhyThenTextModel({ pending, callId: 'file-confirm', sourceMessageId: 'client-message-1', text: 'What would you like to discuss about this file?' }),
+      nativeWebSearchTool: {} as never, operationalLog: vi.fn(),
+      conversationClient: { listItems: vi.fn(async () => ({ data: [], hasMore: false })) },
+    }))).post('/api/agent').send({ id: 'client-message-1', message: '', attachments: [{ name: 'I accept.pdf', mediaType: 'application/pdf', data: Buffer.from('%PDF-I accept this proposal.').toString('base64') }] });
+    expect(response.status).toBe(200);
+    expect(storage.persistCareerMapOperation).not.toHaveBeenCalled();
+    expect(response.text).toContain('UserEvidenceAssociationError');
+  });
+
   it('processes a complete parsed request when Node marks only the consumed request stream destroyed', async () => {
     const storage = createStorage({
       beginAgentTurn: vi.fn(async (): Promise<BeginAgentTurnResult> => ({

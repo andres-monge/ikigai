@@ -34,3 +34,12 @@ describe('request-scoped provider attachments', () => {
 it('rejects noncanonical base64 even with a valid file signature', () => {
   expect(() => prepareChatAttachments({ id: 'm', message: '', attachments: [{ name: 'a.pdf', mediaType: 'application/pdf', data: 'JVBERi1=' }] })).toThrow(/invalid/);
 });
+
+it('admits the complete caption plus labels at the history ceiling and rejects excess labels', () => {
+  const file = { name: 'a'.repeat(116) + '.pdf', mediaType: 'application/pdf' as const, data: 'JVBERi0=' };
+  const attachments = Array.from({ length: 700 }, () => file);
+  const labels = prepareChatAttachments({ id: 'm', message: '', attachments }).visibleText;
+  const request = { id: 'm', message: 'x'.repeat(100_000 - labels.length - 2), attachments };
+  expect(prepareChatAttachments(request).visibleText).toHaveLength(100_000);
+  expect(() => prepareChatAttachments({ ...request, attachments: [...attachments, file] })).toThrow(/Remove files|separately/);
+});

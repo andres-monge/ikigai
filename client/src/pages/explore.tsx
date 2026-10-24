@@ -656,7 +656,10 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
   }
 
   async function addFiles(selected: File[]) {
-    if (preparingFilesRef.current) return;
+    if (preparingFilesRef.current) {
+      setAttachmentError('An attachment is still being prepared. Wait, then paste or select this file again.');
+      return;
+    }
     preparingFilesRef.current = true;
     setPreparingFiles(true);
     setAttachmentError(null);
@@ -674,7 +677,7 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
       }
     }
     if (mountedRef.current) {
-      setAttachmentError(errors.length ? errors.join(' ') : null);
+      if (errors.length) setAttachmentError(errors.join(' '));
       setPreparingFiles(false);
     }
     preparingFilesRef.current = false;

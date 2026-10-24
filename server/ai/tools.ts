@@ -320,6 +320,17 @@ export async function executeMethodOperation(
   return envelopeFromState(options.operationType, before, normalized.status, normalized.errorClass, normalized.retryable);
 }
 
+function currentUserAction(runtime: MethodToolRuntime) {
+  if (runtime.surface === 'agent-turn' && runtime.currentMessage?.trim() === '') {
+    const error = new Error('A human caption is required to authorize this choice.');
+    error.name = 'UserEvidenceAssociationError';
+    throw error;
+  }
+  return runtime.surface === 'agent-turn'
+    ? createAgentTurnPersistenceContext(runtime.turn, runtime.timing).action
+    : createWorkspaceActionPersistenceContext(runtime.turn, runtime.timing).action;
+}
+
 function confirmationPayload(
   runtime: MethodToolRuntime,
   input: z.infer<typeof confirmationTargetSchema>,
@@ -349,10 +360,7 @@ function confirmationPayload(
     error.name = 'ConfirmationTargetMismatchError';
     throw error;
   }
-  const context = runtime.surface === 'agent-turn'
-    ? createAgentTurnPersistenceContext(runtime.turn, runtime.timing)
-    : createWorkspaceActionPersistenceContext(runtime.turn, runtime.timing);
-  return { [targetKey]: input.targetId, [`${targetKey.replace(/Id$/, '')}Revision`]: input.targetRevision, action: context.action };
+  return { [targetKey]: input.targetId, [`${targetKey.replace(/Id$/, '')}Revision`]: input.targetRevision, action: currentUserAction(runtime) };
 }
 
 function assertExactPendingTarget(input: {
@@ -596,52 +604,52 @@ export function createMethodTools(runtime: MethodToolRuntime): ToolSet {
     }
   };
   return {
-    choose_parked_purpose_path: operationTool(runtime, 'choose-parked-purpose-path', 'Save an explicit choice of one exact previously presented parked path from direction discussion, preserving prior work without inventing reflection.', z.object({ sourceSetId: entityIdSchema, sourceSetRevision: revisionSchema, replacementSetId: entityIdSchema, replacementSetRevision: revisionSchema, pathId: entityIdSchema, pathRevision: revisionSchema }).strict(), (input) => ({ ...input, action: context().action })),
-    request_new_project: operationTool(runtime, 'request-new-project', 'Record the explorer’s explicit request for another project without inventing reflection or a continuation choice.', z.object({}).strict(), () => ({ action: context().action })),
-    open_path_revision_focus: operationTool(runtime, 'open-path-revision-focus', 'Open direction discussion when the explorer wants to change paths; preserve existing projects and learning.', z.object({ reason: z.string().min(1).max(2_000) }).strict(), (input) => ({ ...input, action: context().action })),
+    choose_parked_purpose_path: operationTool(runtime, 'choose-parked-purpose-path', 'Save an explicit choice of one exact previously presented parked path from direction discussion, preserving prior work without inventing reflection.', z.object({ sourceSetId: entityIdSchema, sourceSetRevision: revisionSchema, replacementSetId: entityIdSchema, replacementSetRevision: revisionSchema, pathId: entityIdSchema, pathRevision: revisionSchema }).strict(), (input) => ({ ...input, action: currentUserAction(runtime) })),
+    request_new_project: operationTool(runtime, 'request-new-project', 'Record the explorer’s explicit request for another project without inventing reflection or a continuation choice.', z.object({}).strict(), () => ({ action: currentUserAction(runtime) })),
+    open_path_revision_focus: operationTool(runtime, 'open-path-revision-focus', 'Open direction discussion when the explorer wants to change paths; preserve existing projects and learning.', z.object({ reason: z.string().min(1).max(2_000) }).strict(), (input) => ({ ...input, action: currentUserAction(runtime) })),
     propose_project_revision: operationTool(runtime, 'propose-project-revision', 'Suggest a replacement brief for the exact accepted project, preserving reported work until later confirmation.', projectTargetSchema.extend({ replacement: projectToolInputSchema }).strict(), (input) => ({ ...input, presentation: context().presentation })),
     confirm_project_revision: operationTool(runtime, 'confirm-project-revision', 'Confirm only the exact pending revised project from a completed prior turn on clear explorer assent.', projectTargetSchema, (input) => {
       exactPending('project-revision-confirmation', input.projectId, input.projectRevision);
-      return { ...input, action: context().action };
+      return { ...input, action: currentUserAction(runtime) };
     }),
-    update_project_work_status: operationTool(runtime, 'update-project-work-status', 'Save the explorer’s reported work status separately from acceptance, reflection and continuation; inactivity is not a report.', projectTargetSchema.extend({ status: projectWorkStatusSchema }).strict(), (input) => ({ ...input, action: context().action })),
+    update_project_work_status: operationTool(runtime, 'update-project-work-status', 'Save the explorer’s reported work status separately from acceptance, reflection and continuation; inactivity is not a report.', projectTargetSchema.extend({ status: projectWorkStatusSchema }).strict(), (input) => ({ ...input, action: currentUserAction(runtime) })),
     propose_follow_on_projects: operationTool(runtime, 'propose-follow-on-projects', 'Offer exactly three distinct equal options after a learning loop. The application derives the current project or direction decision basis.', z.object({ setId: entityIdSchema, setRevision: revisionSchema, projects: z.array(projectToolInputSchema).length(3) }).strict(), (input) => ({ ...input, presentation: context().presentation })),
     replace_follow_on_project: operationTool(runtime, 'replace-follow-on-project', 'Replace one exact pending project option while preserving its two siblings and decision basis.', z.object({ sourceSetId: entityIdSchema, sourceSetRevision: revisionSchema, replacedProjectId: entityIdSchema, replacementSetId: entityIdSchema, replacementSetRevision: revisionSchema, replacement: projectToolInputSchema }).strict(), (input) => ({ ...input, presentation: context().presentation })),
     select_follow_on_project: operationTool(runtime, 'select-follow-on-project', 'Save the explorer’s explicit selection of one exact option from the pending three-project set delivered in a completed prior turn.', z.object({ setId: entityIdSchema, setRevision: revisionSchema, projectId: entityIdSchema, projectRevision: revisionSchema }).strict(), (input) => {
       exactPending('follow-on-project-selection', input.setId, input.setRevision);
-      return { ...input, action: context().action };
+      return { ...input, action: currentUserAction(runtime) };
     }),
-    open_reflection: operationTool(runtime, 'open-reflection', 'Open flexible reflection on the current accepted project at any work status.', projectTargetSchema.extend({ reflectionId: entityIdSchema, revision: revisionSchema }).strict(), (input) => ({ ...input, action: context().action })),
+    open_reflection: operationTool(runtime, 'open-reflection', 'Open flexible reflection on the current accepted project at any work status.', projectTargetSchema.extend({ reflectionId: entityIdSchema, revision: revisionSchema }).strict(), (input) => ({ ...input, action: currentUserAction(runtime) })),
     append_reflection_evidence: operationTool(runtime, 'append-reflection-evidence', 'Record only actual supplied experience. Copy the observation verbatim from the current explorer message; keep interpretation separate and do not score it.', reflectionTargetSchema.extend({ evidence: learningInputSchema }).strict(), ({ evidence, ...input }) => {
       assertUserAuthoredValue(runtime, evidence.observation);
-      return { ...input, evidence: { ...evidence, provenance: context().action } };
+      return { ...input, evidence: { ...evidence, provenance: currentUserAction(runtime) } };
     }),
     revise_reflection_evidence: operationTool(runtime, 'revise-reflection-evidence', 'Append an explorer-authored correction to exact reflection evidence, preserving the prior snapshot and any decisions based on it.', reflectionTargetSchema.extend({ newReflectionRevision: revisionSchema, supersedesEvidenceId: entityIdSchema, evidence: learningInputSchema }).strict(), ({ evidence, ...input }) => {
       assertUserAuthoredValue(runtime, evidence.observation);
-      return { ...input, evidence: { ...evidence, supersedesEvidenceId: input.supersedesEvidenceId, provenance: context().action } };
+      return { ...input, evidence: { ...evidence, supersedesEvidenceId: input.supersedesEvidenceId, provenance: currentUserAction(runtime) } };
     }),
-    close_reflection: operationTool(runtime, 'close-reflection', 'Close a supported reflection independently of project completion and desire to continue. Empty reflection remains unfinished history.', reflectionTargetSchema, (input) => ({ ...input, action: context().action })),
+    close_reflection: operationTool(runtime, 'close-reflection', 'Close a supported reflection independently of project completion and desire to continue. Empty reflection remains unfinished history.', reflectionTargetSchema, (input) => ({ ...input, action: currentUserAction(runtime) })),
     record_continue_choice: operationTool(runtime, 'record-continue-choice', 'Record the explorer’s explicit desire to continue after reflection. Scope follows the saved project relationship; unrelated evidence does not decide the old path.', reflectionTargetSchema.extend({ id: entityIdSchema, revision: revisionSchema, wantsToContinue: z.boolean() }).strict(), (input) => {
       exactPending('continue-choice', input.reflectionId, input.reflectionRevision);
-      return { ...input, action: context().action };
+      return { ...input, action: currentUserAction(runtime) };
     }),
     record_next_move: operationTool(runtime, 'record-next-move', 'Record the explorer’s explicit next decision: explore further, return to paths, or focus provisionally on a linked path. Preserve freedom to change or continue learning.', z.object({ id: entityIdSchema, revision: revisionSchema, continueChoiceId: entityIdSchema, continueChoiceRevision: revisionSchema, kind: nextMoveKindSchema }).strict(), (input) => {
       exactPending('next-move', input.continueChoiceId, input.continueChoiceRevision);
-      return { ...input, action: context().action };
+      return { ...input, action: currentUserAction(runtime) };
     }),
-    record_path_focus: operationTool(runtime, 'record-path-focus', 'Save an independently explicit wish to focus on the current path. This preserves the repeating learning loop and attributes no unrelated project evidence to the path.', z.object({ id: entityIdSchema, revision: revisionSchema, pathId: entityIdSchema, pathRevision: revisionSchema }).strict(), (input) => ({ ...input, action: context().action })),
-    confirm_legacy_path_focus: operationTool(runtime, 'confirm-legacy-path-focus', 'Confirm an exact preserved path-focus intent on the still-current path only when the explorer explicitly chooses it again.', z.object({ id: entityIdSchema, revision: revisionSchema, intentId: entityIdSchema, intentRevision: revisionSchema }).strict(), (input) => ({ ...input, action: context().action })),
+    record_path_focus: operationTool(runtime, 'record-path-focus', 'Save an independently explicit wish to focus on the current path. This preserves the repeating learning loop and attributes no unrelated project evidence to the path.', z.object({ id: entityIdSchema, revision: revisionSchema, pathId: entityIdSchema, pathRevision: revisionSchema }).strict(), (input) => ({ ...input, action: currentUserAction(runtime) })),
+    confirm_legacy_path_focus: operationTool(runtime, 'confirm-legacy-path-focus', 'Confirm an exact preserved path-focus intent on the still-current path only when the explorer explicitly chooses it again.', z.object({ id: entityIdSchema, revision: revisionSchema, intentId: entityIdSchema, intentRevision: revisionSchema }).strict(), (input) => ({ ...input, action: currentUserAction(runtime) })),
     append_foundation_evidence: operationTool(runtime, 'append-foundation-evidence', 'Record one explorer-authored North Star evidence item. The content must be copied verbatim as one exact substring from the current explorer message; never summarize or paraphrase it. Never store a statement that the explorer cannot name an absorbing activity as fascination evidence.', evidenceToolInputSchema, (input) => {
       assertUserAuthoredValue(runtime, input.content);
-      return { evidence: { ...input, provenance: context().action } };
+      return { evidence: { ...input, provenance: currentUserAction(runtime) } };
     }),
     correct_foundation_evidence: operationTool(runtime, 'correct-foundation-evidence', 'Append a correction to one exact North Star evidence record.', z.object({ supersedesEvidenceId: entityIdSchema, evidence: evidenceToolInputSchema }).strict(), ({ supersedesEvidenceId, evidence }) => {
       assertUserAuthoredValue(runtime, evidence.content);
-      return { supersedesEvidenceId, evidence: { ...evidence, supersedesEvidenceId, provenance: context().action } };
+      return { supersedesEvidenceId, evidence: { ...evidence, supersedesEvidenceId, provenance: currentUserAction(runtime) } };
     }),
     record_reality_constraint: operationTool(runtime, 'record-reality-constraint', 'Record one practical reality constraint outside Your North Star. The description must be copied verbatim as one exact substring from the current explorer message; never summarize or paraphrase it.', constraintToolInputSchema, (input) => {
       assertUserAuthoredValue(runtime, input.description);
-      return { constraint: { ...input, provenance: context().action } };
+      return { constraint: { ...input, provenance: currentUserAction(runtime) } };
     }),
     propose_why: operationTool(runtime, 'propose-why', 'Propose one North Star for the explorer to consider. It cannot be confirmed in this assistant turn.', whyInputSchema, (why) => {
       return { why, presentation: context().presentation };
@@ -650,14 +658,14 @@ export function createMethodTools(runtime: MethodToolRuntime): ToolSet {
       return { supersedesWhyId, why, presentation: context().presentation };
     }),
     confirm_why: operationTool(runtime, 'confirm-why', 'Confirm only the exact pending North Star from a completed prior assistant turn when the main agent judges the current explorer message as confirmation.', whyConfirmationSchema, (input) => confirmationPayload(runtime, { ...input, targetId: input.whyId, targetRevision: input.whyRevision }, 'confirm-why', 'why-confirmation', 'whyId')),
-    open_foundation_revision_focus: operationTool(runtime, 'open-foundation-revision-focus', 'Open a conversation to reconsider the North Star when the explorer asks to revisit it; for example, a new interest may point to a different contribution or point of view. State the reason. Opening this focus does not revise or confirm the North Star; explore the tension with the explorer before proposing any revision.', z.object({ reason: z.string().min(1).max(2_000) }).strict(), ({ reason }) => ({ reason, action: context().action })),
-    close_focus: operationTool(runtime, 'close-focus', 'Close the current reflection focus only after a later explorer turn resolves it or asks to return to the prior decision. Never close Foundation reflection in the same turn that opened it. In Foundation revision focus, this withdraws an unconfirmed North Star revision and restores the prior decision without changing the confirmed North Star or Purpose Paths.', z.object({}).strict(), () => ({ action: context().action })),
+    open_foundation_revision_focus: operationTool(runtime, 'open-foundation-revision-focus', 'Open a conversation to reconsider the North Star when the explorer asks to revisit it; for example, a new interest may point to a different contribution or point of view. State the reason. Opening this focus does not revise or confirm the North Star; explore the tension with the explorer before proposing any revision.', z.object({ reason: z.string().min(1).max(2_000) }).strict(), ({ reason }) => ({ reason, action: currentUserAction(runtime) })),
+    close_focus: operationTool(runtime, 'close-focus', 'Close the current reflection focus only after a later explorer turn resolves it or asks to return to the prior decision. Never close Foundation reflection in the same turn that opened it. In Foundation revision focus, this withdraws an unconfirmed North Star revision and restores the prior decision without changing the confirmed North Star or Purpose Paths.', z.object({}).strict(), () => ({ action: currentUserAction(runtime) })),
     resolve_basis_review: operationTool(runtime, 'resolve-basis-review', 'Resolve the exact earliest invalidated artifact shown in the current checkpoint. After a confirmed North Star revision, an old path set must use replaced; this preserves its history and allows a fresh three-path set after all reviews are resolved. Review later artifacts individually rather than automatically reaffirming them.', z.object({
       targetKind: invalidationTargetKindSchema,
       targetId: entityIdSchema,
       targetRevision: revisionSchema,
       resolution: z.enum(['reaffirmed', 'revised', 'replaced']),
-    }).strict(), (input) => ({ ...input, action: context().action })),
+    }).strict(), (input) => ({ ...input, action: currentUserAction(runtime) })),
     propose_purpose_paths: operationTool(runtime, 'propose-purpose-paths', 'Suggest exactly three equal-weight Purpose Paths grounded in the confirmed North Star.', z.object({ setId: entityIdSchema, setRevision: revisionSchema, paths: z.array(pathToolInputSchema).length(3) }).strict(), ({ setId, setRevision, paths }) => {
       return { setId, setRevision, paths, presentation: context().presentation };
     }),
@@ -692,7 +700,7 @@ export function createMethodTools(runtime: MethodToolRuntime): ToolSet {
         error.name = 'ConfirmationTargetMismatchError';
         throw error;
       }
-      return { setId: input.setId, setRevision: input.setRevision, pathId: input.pathId, pathRevision: input.pathRevision, action: context().action };
+      return { setId: input.setId, setRevision: input.setRevision, pathId: input.pathId, pathRevision: input.pathRevision, action: currentUserAction(runtime) };
     }),
     confirm_purpose_path_revision: operationTool(runtime, 'confirm-purpose-path-revision', 'Confirm the exact pending revised Purpose Path set.', targetSelectionSchema, (input) => {
       const set = runtime.prepared.current?.map.pathSets.find((item) => item.id === input.setId && item.revision === input.setRevision);
@@ -702,7 +710,7 @@ export function createMethodTools(runtime: MethodToolRuntime): ToolSet {
         error.name = 'ConfirmationTargetMismatchError';
         throw error;
       }
-      return { setId: input.setId, setRevision: input.setRevision, pathId: input.pathId, pathRevision: input.pathRevision, action: context().action };
+      return { setId: input.setId, setRevision: input.setRevision, pathId: input.pathId, pathRevision: input.pathRevision, action: currentUserAction(runtime) };
     }),
     propose_first_project: operationTool(runtime, 'propose-first-project', 'Immediately after committed path selection, suggest one small firsthand Path Project in the same response for collaborative refinement.', projectToolInputSchema, (project) => {
       return { project, presentation: context().presentation };

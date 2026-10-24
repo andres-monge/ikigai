@@ -1422,3 +1422,24 @@ describe('strict state-specific Method tools', () => {
     ]));
   });
 });
+
+describe('attachment-only turns cannot supply a human choice', () => {
+  it('rejects empty-caption North Star confirmation and path selection before persistence', async () => {
+    const why = await confirmPendingWhy('');
+    expect(why.result).toMatchObject({ status: 'rejected', errorClass: 'UserEvidenceAssociationError' });
+    expect(why.storage.persist).not.toHaveBeenCalled();
+    const path = await selectPendingPath('');
+    expect(path.result).toMatchObject({ status: 'rejected', errorClass: 'UserEvidenceAssociationError' });
+    expect(path.storage.persist).not.toHaveBeenCalled();
+  });
+  it('rejects empty-caption project acceptance with an otherwise exact pending target', async () => {
+    const loader = await createMethodModuleLoader();
+    const storage = new ReducerStorage(pendingProject());
+    const prepared = await refreshMethodState(storage, loader, 'explorer-1');
+    const tools = createMethodTools({ ...runtime(storage), loader, surface: 'agent-turn', prepared: { current: prepared }, currentMessage: '', timing: { turnSequence: 7, occurredAt: at(7) } });
+    const result = await tools.accept_first_project.execute?.({ projectId: 'project-1', projectRevision: 1, presentedInTurnId: 'project-framing-turn', sourceMessageId: 'current-message' }, { toolCallId: 'empty-caption-accept', messages: [] } as never);
+    expect(result).toMatchObject({ status: 'rejected', errorClass: 'UserEvidenceAssociationError' });
+    expect(storage.persist).not.toHaveBeenCalled();
+    expect(storage.map.projects.at(-1)?.agreementStatus).toBe('suggested');
+  });
+});

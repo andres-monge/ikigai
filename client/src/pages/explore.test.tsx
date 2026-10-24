@@ -6,6 +6,7 @@ import { applyCareerMapOperation, createCareerMap, type CareerMap, type CareerMa
 import type { NormalizedHistoryMessage } from '@/components/explore/explore-state';
 import { ChatProjectBrief } from '@/components/explore/project-brief';
 import { _resetBrowserSupportCache } from '@/hooks/use-speech-to-text';
+import * as attachmentPreparation from '@/components/explore/prepare-attachment';
 import { attachProjectBriefs, attachPurposePathSets, Explore } from './explore';
 
 function jsonResponse(body: unknown, status = 200) {
@@ -284,6 +285,28 @@ describe('Explore U6 conversation-first workspace', () => {
     Object.defineProperty(event, 'clipboardData', { value: { items: [{ kind: 'string', type: 'text/plain' }] } });
     fireEvent(textbox, event);
     expect(event.defaultPrevented).toBe(false);
+  });
+
+  it('announces a recoverable error if a second paste arrives during file preparation', async () => {
+    const pending = deferred<attachmentPreparation.DraftAttachment>();
+    const first = new File(['%PDF-first'], 'first.pdf', { type: 'application/pdf' });
+    const prepare = vi.spyOn(attachmentPreparation, 'prepareAttachment').mockReturnValueOnce(pending.promise);
+    render(<Explore {...props()} />);
+    fireEvent.change(await screen.findByLabelText('Attach files'), { target: { files: [first] } });
+    await screen.findByText('Preparing attachments…');
+    const image = new File(['image'], 'second.png', { type: 'image/png' });
+    fireEvent.paste(screen.getByRole('textbox'), { clipboardData: { items: [{ kind: 'file', type: 'image/png', getAsFile: () => image }] } });
+    try {
+      expect(screen.getByRole('alert').textContent).toMatch(/still being prepared.*paste or select.*again/i);
+    } finally {
+      pending.resolve({ id: 'first', file: first, attachment: { name: first.name, mediaType: 'application/pdf', data: btoa('%PDF-first') }, optimized: false });
+      await screen.findByRole('button', { name: 'Remove first.pdf' });
+      prepare.mockRestore();
+    }
+    fireEvent.change(screen.getByLabelText('Attach files'), { target: { files: [new File(['%PDF-second'], 'second.pdf', { type: 'application/pdf' })] } });
+    await screen.findByRole('button', { name: 'Remove second.pdf' });
+    expect(screen.getByRole('button', { name: 'Remove first.pdf' })).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('shows the saved simple brief before support-only final prose in the same Chat message', async () => {
