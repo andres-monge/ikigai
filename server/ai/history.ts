@@ -37,6 +37,7 @@ export interface ConversationItemPage {
 export interface ConversationItemsClient {
   createConversation?(abortSignal?: AbortSignal): Promise<string>;
   deleteConversation?(conversationId: string, abortSignal?: AbortSignal): Promise<void>;
+  deleteConversationItem?(input: { conversationId: string; itemId: string; abortSignal?: AbortSignal }): Promise<void>;
   listItems(input: {
     conversationId: string;
     after?: string;
@@ -424,7 +425,7 @@ const internalContextPayloadSchema = z.object({
   marker: z.string().min(1).max(200),
 }).passthrough();
 
-function providerInternalContextMarker(item: unknown): { itemId: string; marker: string } | undefined {
+export function providerInternalContextMarker(item: unknown): { itemId: string; marker: string } | undefined {
   if (!item || typeof item !== 'object') return undefined;
   const record = item as Record<string, unknown>;
   if (record.type !== 'message' || record.role !== 'user') return undefined;
@@ -832,6 +833,13 @@ export class OpenAIConversationClient implements ConversationItemsClient {
     await this.request(`/conversations/${encodeURIComponent(conversationId)}`, {
       method: 'DELETE',
     }, 'delete', abortSignal, true);
+  }
+
+  async deleteConversationItem(input: { conversationId: string; itemId: string; abortSignal?: AbortSignal }): Promise<void> {
+    await this.request(
+      `/conversations/${encodeURIComponent(input.conversationId)}/items/${encodeURIComponent(input.itemId)}`,
+      { method: 'DELETE' }, 'delete', input.abortSignal, true,
+    );
   }
 
   async deleteConversationItemsAndConversation(conversationId: string): Promise<void> {

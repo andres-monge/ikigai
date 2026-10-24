@@ -1383,4 +1383,12 @@ describe('attachment label projection without originals', () => {
     expect(messages[0].parts).toEqual([{ type: 'text', text }]);
     expect(conversationHistoryPageSchema.safeParse({ status: 'ready', messages }).success).toBe(true);
   });
+  it('deletes only the encoded protocol item and treats absence as idempotent', async () => {
+    const fetchImplementation = vi.fn(async () => new Response('{}', { status: 404 }));
+    const client = new OpenAIConversationClient('private-api-key', fetchImplementation as typeof fetch);
+    const signal = new AbortController().signal;
+    await client.deleteConversationItem({ conversationId: 'conv/id', itemId: 'item/id', abortSignal: signal });
+    expect(fetchImplementation).toHaveBeenCalledWith('https://api.openai.com/v1/conversations/conv%2Fid/items/item%2Fid', expect.objectContaining({ method: 'DELETE', signal }));
+  });
+
 });

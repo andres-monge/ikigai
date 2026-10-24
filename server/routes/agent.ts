@@ -27,6 +27,7 @@ import {
   type MethodAgentTurnDiagnostics,
   type MethodAgentTurnStreamResult,
 } from '../ai/agent.js';
+import { reconcileCancelledToolCalls } from '../ai/cancelled-tool-calls.js';
 import { createMethodModuleLoader, type MethodModuleLoader } from '../ai/method/loader.js';
 import { MethodLatencyTrace, methodLatencyEnabled } from './agent-latency.js';
 import {
@@ -958,6 +959,11 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
       };
       const uiStream = createUIMessageStream({
         execute: async ({ writer }) => {
+          await reconcileCancelledToolCalls({
+            storage, client: conversationClient(), userId: identity.userId,
+            conversationId: activeConversationId, turn: turn!, abortSignal: abort.signal,
+            operationId: (turnId, callId) => opaqueOperationId([turnId, callId].join('\u0000')),
+          });
           const agent = createMethodAgent({
             model: model(),
             nativeWebSearchTool: nativeWebSearchTool(),
@@ -1575,6 +1581,11 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
       throwIfRouteAborted(abort.signal);
       const uiStream = createUIMessageStream({
         execute: async ({ writer }) => {
+          await reconcileCancelledToolCalls({
+            storage, client: conversationClient(), userId: identity.userId,
+            conversationId: activeConversationId, turn: turn!, abortSignal: abort.signal,
+            operationId: (turnId, callId) => opaqueOperationId([turnId, callId].join('\u0000')),
+          });
           const agent = createMethodAgent({
             model: model(),
             nativeWebSearchTool: nativeWebSearchTool(),

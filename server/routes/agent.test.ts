@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import express, { type RequestHandler } from 'express';
 import rawRequest from '../test-fixtures/loopback-http.js';
@@ -1034,6 +1035,52 @@ describe('protected Method routes', () => {
     expect(response.status).toBe(200);
     expect(storage.persistCareerMapOperation).not.toHaveBeenCalled();
     expect(response.text).toContain('UserEvidenceAssociationError');
+  });
+
+  it.each([false, true])('continues after a cancelled provider tool call without replaying its canonical effect (committed=%s)', async (committed) => {
+    const cancelled = { ...turn('agent-turn', 'cancelled'), turnId: 'cancelled-turn', clientMessageId: 'cancelled-message', terminalResult: { kind: 'cancelled', internalContextItemIds: ['cancelled-context'] } };
+    const current = { ...turn('agent-turn'), turnId: 'follow-up-turn', clientMessageId: 'follow-up-message', leaseId: 'follow-up-lease' };
+    const sourceId = `op_${createHash('sha256').update('cancelled-turn\u0000cancelled-call').digest('hex').slice(0,16)}`;
+    let map = createCareerMap(USER_ID);
+    if (committed) {
+      const result = applyCareerMapOperation(map, { type: 'propose-why', sourceId, expectedRevision: 0, occurredAt: timestamp(1), payload: {
+        why: { id: 'saved-why', revision: 1, statement: 'Make instructions clear.', serves: 'Community volunteers', pointOfView: 'Patience creates independence.' },
+        presentation: { kind: 'model-presentation', assistantTurnId: cancelled.turnId, turnSequence: 1, completed: true, presentedAt: timestamp(1) },
+      } });
+      if (result.status !== 'committed') throw new Error('Fixture must commit');
+      map = result.map;
+    }
+    const before = JSON.stringify(map);
+    let items: Array<Record<string, unknown>> = [
+      internalContextItem('cancelled-context', 'cancelled-marker'),
+      { id: 'cancelled-user', type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Question\n\nImage attached' }, { type: 'input_image', image_url: 'PRIVATE_ORIGINAL' }] },
+      { id: 'paired-call', type: 'function_call', name: 'propose_why', call_id: 'paired-call-id', status: 'completed' },
+      { id: 'paired-output', type: 'function_call_output', call_id: 'paired-call-id', output: '{}' },
+      { id: 'cancelled-call-item', type: 'function_call', name: 'propose_why', call_id: 'cancelled-call', status: 'completed' },
+    ];
+    const deleteConversationItem = vi.fn(async ({ conversationId, itemId }: { conversationId: string; itemId: string }) => {
+      expect(conversationId).toBe('server-conversation');
+      items = items.filter(item => item.id !== itemId);
+    });
+    const storage = createStorage({
+      getConversationMapping: vi.fn(async () => 'server-conversation'),
+      listAgentTurns: vi.fn(async () => [cancelled, current]),
+      getAgentTurn: vi.fn(async (_user: string, clientId: string) => clientId === cancelled.clientMessageId ? cancelled : current),
+      getTurnLease: vi.fn(async () => ({ userId: USER_ID, turnId: current.turnId, leaseId: current.leaseId, acquiredAt: new Date(), expiresAt: new Date('2999-01-01') })),
+      beginAgentTurn: vi.fn(async () => ({ status: 'started', shouldInvokeModel: true, turn: current })),
+    }, map);
+    const model = new MockLanguageModelV4({ doStream: async () => items.some(item => item.id === 'cancelled-call-item')
+      ? errorStream(new Error('No tool output found for function call.'))
+      : textStream('Continued safely with the saved state.') });
+    const response = await (await request(testApp({ storage, model, requireAuth: authenticated, agentEnabled: true, nativeWebSearchTool: {} as never, operationalLog: vi.fn(),
+      conversationClient: { listItems: vi.fn(async ({ order }) => ({ data: order === 'asc' ? items : [...items].reverse(), hasMore: false })), deleteConversationItem } as never,
+    }))).post('/api/agent').send({ id: current.clientMessageId, message: 'Continue without changing anything.' });
+    expect(response.text).toContain('Continued safely with the saved state.');
+    expect(storage.completeAgentTurn).toHaveBeenCalledOnce();
+    expect(storage.persistCareerMapOperation).not.toHaveBeenCalled();
+    expect(JSON.stringify(map)).toBe(before);
+    expect(items.map(item => item.id)).toEqual(['cancelled-context', 'cancelled-user', 'paired-call', 'paired-output']);
+    expect(deleteConversationItem).toHaveBeenCalledOnce();
   });
 
   it('processes a complete parsed request when Node marks only the consumed request stream destroyed', async () => {
