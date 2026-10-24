@@ -999,6 +999,29 @@ describe('protected Method routes', () => {
     expect(second.requestFingerprint).not.toBe(first.requestFingerprint);
   });
 
+  it('never treats attachment labels, filenames or file text as caption-authored evidence', async () => {
+    const storage = createStorage({ getConversationMapping: vi.fn(async () => 'synthetic-conversation') }, createCareerMap(USER_ID));
+    let calls = 0;
+    const model = new MockLanguageModelV4({ doStream: async () => {
+      if (++calls > 1) return textStream('What part would you like to discuss?');
+      return { stream: simulateReadableStream({ chunks: [
+        { type: 'stream-start', warnings: [] },
+        { type: 'tool-call', toolCallId: 'untrusted-evidence', toolName: 'append_foundation_evidence',
+          input: JSON.stringify({ id: 'untrusted-evidence', revision: 1, category: 'fascination', content: 'Image attached' }) },
+        { type: 'finish', finishReason: { unified: 'tool-calls', raw: 'tool-calls' }, usage: usage() },
+      ] as never }) };
+    } });
+    const response = await (await request(testApp({ storage, model, requireAuth: authenticated, agentEnabled: true,
+      nativeWebSearchTool: {} as never, operationalLog: vi.fn(),
+      conversationClient: { listItems: vi.fn(async () => ({ data: [], hasMore: false })) },
+    }))).post('/api/agent').send({ id: 'untrusted-file', message: '', attachments: [{
+      name: 'Image attached.pdf', mediaType: 'application/pdf', data: Buffer.from('%PDF-Image attached').toString('base64'),
+    }] });
+    expect(response.status).toBe(200);
+    expect(storage.persistCareerMapOperation).not.toHaveBeenCalled();
+    expect(model.doStreamCalls[0].providerOptions).toMatchObject({ openai: { passThroughUnsupportedFiles: true } });
+  });
+
   it('processes a complete parsed request when Node marks only the consumed request stream destroyed', async () => {
     const storage = createStorage({
       beginAgentTurn: vi.fn(async (): Promise<BeginAgentTurnResult> => ({

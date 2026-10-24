@@ -16,3 +16,10 @@ describe('attachment request contract', () => {
     expect(() => validateAttachmentRequest({ id: 'm', message: 'x'.repeat(100001) })).toThrow(/separately|text/i);
   });
 });
+
+it('preserves a long document extension while stripping directional control characters', () => {
+  const name = sanitizeAttachmentName('a'.repeat(200) + '\u202e.pdf');
+  expect(name).toHaveLength(120);
+  expect(name.endsWith('.pdf')).toBe(true);
+  expect(name).not.toContain('\u202e');
+});

@@ -1347,3 +1347,40 @@ describe('protected OpenAI Conversation history adapter', () => {
     await expect(absent.deleteConversationItemsAndConversation('conversation-absent')).resolves.toBeUndefined();
   });
 });
+
+describe('attachment label projection without originals', () => {
+  it.each(['completed', 'failed', 'cancelled'] as const)('reloads %s attachment turns through existing text-only history', async (status) => {
+    const visibleText = 'Question\n\nImage attached\nbrief.docx — Word document';
+    const reply = 'Let us discuss the feedback.';
+    const result = await loadConversationHistory({
+      storage: {
+        getConversationMapping: vi.fn(async () => 'synthetic-conversation'),
+        listAgentTurns: vi.fn(async () => [durableTurn({ turnId: 'file-turn', status,
+          terminalResult: { kind: status, refetch: true,
+            displayProjection: { userItemId: 'file-user', assistantItemIds: ['file-answer'] } } })]),
+      },
+      client: { listItems: vi.fn(async () => ({ hasMore: false, data: [
+        { id: 'file-answer', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: reply }] },
+        { id: 'file-user', type: 'message', role: 'user', content: [
+          { type: 'input_text', text: visibleText },
+          { type: 'input_image', image_url: 'PRIVATE_ORIGINAL_URL' },
+          { type: 'input_file', file_data: 'PRIVATE_FILE_BYTES', filename: 'PRIVATE_PROVIDER_FILENAME' },
+        ] },
+      ] })) }, userId: 'explorer-1',
+    });
+    expect(result.messages[0].parts).toEqual([{ type: 'text', text: visibleText }]);
+    expect(JSON.stringify(result)).not.toMatch(/PRIVATE_|input_file|input_image/);
+    expect(resolveDisplayProjection([
+      { id: 'file-user', type: 'message', role: 'user', content: [{ type: 'input_text', text: visibleText }] },
+      { id: 'file-answer', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: reply }] },
+    ], visibleText, reply)).toEqual({ userItemId: 'file-user', assistantItemIds: ['file-answer'] });
+  });
+  it('retains attachment-only labels and the full admitted text at the history ceiling', () => {
+    const text = 'x'.repeat(NORMALIZED_HISTORY_MAX_TEXT_LENGTH - '\n\nImage attached'.length) + '\n\nImage attached';
+    const messages = normalizeConversationItems([{ id: 'file-only', type: 'message', role: 'user', content: [
+      { type: 'input_text', text }, { type: 'input_image', image_url: 'private-original' },
+    ] }]);
+    expect(messages[0].parts).toEqual([{ type: 'text', text }]);
+    expect(conversationHistoryPageSchema.safeParse({ status: 'ready', messages }).success).toBe(true);
+  });
+});

@@ -2,16 +2,22 @@ import { createHash } from 'node:crypto';
 import type { UserContent } from 'ai';
 import { AttachmentError, formatAttachmentMessage, sanitizeAttachmentName, validateAttachmentRequest, type AttachmentRequest } from '../../shared/chat-attachments.js';
 
+function matchesAttachmentSignature(bytes: Buffer, mediaType: string): boolean {
+  switch (mediaType) {
+    case 'image/png': return bytes.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex'));
+    case 'image/jpeg': return bytes.subarray(0, 3).equals(Buffer.from('ffd8ff', 'hex'));
+    case 'image/webp': return bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP';
+    case 'application/pdf': return bytes.toString('ascii', 0, 5) === '%PDF-';
+    case 'application/msword': return bytes.subarray(0, 8).equals(Buffer.from('d0cf11e0a1b11ae1', 'hex'));
+    default: return bytes.subarray(0, 4).equals(Buffer.from('504b0304', 'hex'));
+  }
+}
+
 export function prepareChatAttachments(request: AttachmentRequest) {
   validateAttachmentRequest(request);
   const files = (request.attachments ?? []).map((file) => {
     const bytes = Buffer.from(file.data, 'base64');
-    const matches = file.mediaType === 'image/png' ? bytes.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex'))
-      : file.mediaType === 'image/jpeg' ? bytes.subarray(0, 3).equals(Buffer.from('ffd8ff', 'hex'))
-      : file.mediaType === 'image/webp' ? bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP'
-      : file.mediaType === 'application/pdf' ? bytes.toString('ascii', 0, 5) === '%PDF-'
-      : file.mediaType === 'application/msword' ? bytes.subarray(0, 8).equals(Buffer.from('d0cf11e0a1b11ae1', 'hex'))
-      : bytes.subarray(0, 4).equals(Buffer.from('504b0304', 'hex'));
+    const matches = matchesAttachmentSignature(bytes, file.mediaType);
     if (!matches || bytes.toString('base64') !== file.data) throw new AttachmentError('File type or content is invalid. Remove it and select a valid copy.');
     return { ...file, name: sanitizeAttachmentName(file.name), bytes };
   });

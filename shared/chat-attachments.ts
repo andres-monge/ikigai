@@ -17,7 +17,9 @@ export class AttachmentError extends Error {
   constructor(message: string, readonly status = 400) { super(message); this.name = 'AttachmentError'; }
 }
 export function sanitizeAttachmentName(name: string): string {
-  return (name.split(/[\\/]/).pop() ?? '').replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, '').slice(0, 120) || 'document';
+  const basename = (name.split(/[\\/]/).pop() ?? '').replace(/[\p{Cc}\p{Cf}\u2028\u2029]/gu, '');
+  const extension = /\.[a-zA-Z0-9]{1,5}$/.exec(basename)?.[0] ?? '';
+  return (basename.length > 120 ? basename.slice(0, 120 - extension.length) + extension : basename) || 'document';
 }
 export function formatAttachmentMessage(caption: string, files: readonly { name: string; mediaType: string }[] = []): string {
   if (!files.length) return caption;

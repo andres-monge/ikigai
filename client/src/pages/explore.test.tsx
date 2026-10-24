@@ -207,6 +207,85 @@ describe('Explore U6 conversation-first workspace', () => {
     vi.unstubAllGlobals();
   });
 
+  it('sends attachment-only file bytes and retains exact files on a recoverable failure', async () => {
+    const sent: Array<{ message: string; attachments: Array<{ data: string }> }> = [];
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      if (String(input).includes('/history')) return jsonResponse({ status: 'empty', messages: [] });
+      if (String(input).includes('/workspace')) return jsonResponse({ status: 'ready', map: createCareerMap('explorer-1') });
+      sent.push(JSON.parse(init!.body as string));
+      throw new Error('Network failed');
+    });
+    render(<Explore {...props()} />);
+    const picker = await screen.findByLabelText('Attach files');
+    const file = new File(['%PDF-content'], 'brief.pdf', { type: 'application/pdf' });
+    fireEvent.change(picker, { target: { files: [file] } });
+    await screen.findByRole('button', { name: 'Remove brief.pdf' });
+    const send = screen.getByRole('button', { name: 'Send' });
+    await waitFor(() => expect((send as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(send);
+    await screen.findByText(/submitted message has been restored/);
+    expect(sent[0]).toMatchObject({ message: '', attachments: [{ name: 'brief.pdf', mediaType: 'application/pdf', data: btoa('%PDF-content') }] });
+    expect(screen.getByRole('button', { name: 'Remove brief.pdf' })).toBeTruthy();
+  });
+
+  it('keeps a newer draft on Stop and restores the prior caption and files only by explicit replacement', async () => {
+    const pending = deferred<Response>();
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      if (String(input).includes('/history')) return jsonResponse({ status: 'empty', messages: [] });
+      if (String(input).includes('/workspace')) return jsonResponse({ status: 'ready', map: createCareerMap('explorer-1') });
+      return abortable(pending.promise, init?.signal);
+    });
+    render(<Explore {...props()} />);
+    fireEvent.change(await screen.findByLabelText('Attach files'), { target: { files: [new File(['%PDF-original'], 'original.pdf', { type: 'application/pdf' })] } });
+    await screen.findByRole('button', { name: 'Remove original.pdf' });
+    const textbox = screen.getByRole('textbox');
+    fireEvent.change(textbox, { target: { value: 'Original caption' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await screen.findByRole('button', { name: 'Stop' });
+    fireEvent.change(textbox, { target: { value: 'Newer draft' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
+    const restore = await screen.findByRole('button', { name: 'Restore previous submission (replaces current draft)' });
+    expect((textbox as HTMLTextAreaElement).value).toBe('Newer draft');
+    expect(screen.queryByRole('button', { name: 'Remove original.pdf' })).toBeNull();
+    fireEvent.click(restore);
+    expect((textbox as HTMLTextAreaElement).value).toBe('Original caption');
+    expect(screen.getByRole('button', { name: 'Remove original.pdf' })).toBeTruthy();
+  });
+
+  it('preserves text and valid files when an addition is unsupported or exceeds the aggregate', async () => {
+    render(<Explore {...props()} />);
+    const picker = await screen.findByLabelText('Attach files');
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Keep this question' } });
+    fireEvent.change(picker, { target: { files: [new File(['%PDF-ok'], 'valid.pdf', { type: 'application/pdf' }), new File(['x'], 'bad.exe', { type: 'application/octet-stream' })] } });
+    await screen.findByRole('button', { name: 'Remove valid.pdf' });
+    await screen.findByText(/Choose PNG, JPEG/);
+    expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('Keep this question');
+    fireEvent.change(picker, { target: { files: [new File([new Uint8Array(3_000_000)], 'large.pdf', { type: 'application/pdf' })] } });
+    await screen.findByText(/Files exceed 3 MB/);
+    expect(screen.getByRole('button', { name: 'Remove valid.pdf' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Remove large.pdf' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove valid.pdf' }));
+    expect(screen.queryByRole('button', { name: 'Remove valid.pdf' })).toBeNull();
+  });
+
+  it('handles image paste as a removable preview while leaving ordinary text paste alone', async () => {
+    vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:synthetic-preview'), revokeObjectURL: vi.fn() }));
+    render(<Explore {...props()} />);
+    await screen.findByLabelText('Attach files');
+    const textbox = screen.getByRole('textbox');
+    const image = new File([new Uint8Array([137,80,78,71,13,10,26,10])], 'paste.png', { type: 'image/png' });
+    const preventDefault = vi.fn();
+    fireEvent.paste(textbox, { clipboardData: { items: [{ kind: 'file', type: 'image/png', getAsFile: () => image }] }, preventDefault });
+    await screen.findByAltText('Attached image preview');
+    expect(URL.createObjectURL).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove paste.png' }));
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:synthetic-preview');
+    const event = new Event('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'clipboardData', { value: { items: [{ kind: 'string', type: 'text/plain' }] } });
+    fireEvent(textbox, event);
+    expect(event.defaultPrevented).toBe(false);
+  });
+
   it('shows the saved simple brief before support-only final prose in the same Chat message', async () => {
     const map = deliveredProjectMap();
     vi.mocked(fetch).mockImplementation(async (input: RequestInfo | URL) => {

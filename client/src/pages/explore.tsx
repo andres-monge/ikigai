@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUp, Loader2, Mic, Square, X } from 'lucide-react';
+import { ArrowUp, Loader2, Mic, Plus, Square, X } from 'lucide-react';
 import {
   conversationHistoryPageSchema,
   methodOperationEnvelopeSchema,
@@ -19,6 +19,10 @@ import { PurposePathCard } from '@/components/explore/purpose-path-card';
 import { ChatProjectBrief } from '@/components/explore/project-brief';
 import { ActivityIndicator } from '@/components/explore/activity-indicator';
 import { createClientLatencyTrace, type ClientLatencyTrace } from './explore-latency';
+
+import { AttachmentDraft } from '@/components/explore/attachment-draft';
+import { prepareAttachment, type DraftAttachment } from '@/components/explore/prepare-attachment';
+import { ATTACHMENT_TYPES, MAX_ATTACHMENT_BYTES, formatAttachmentMessage, validateAttachmentRequest } from '@shared/chat-attachments';
 
 type LoadState = 'loading' | 'empty' | 'ready' | 'error';
 type WorkspaceLoadState = LoadState | 'repair-required';
@@ -173,6 +177,14 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
   const [olderCursor, setOlderCursor] = useState<string | undefined>();
   const [map, setMap] = useState<CareerMap | null>(null);
   const [draft, setDraft] = useState('');
+  const [files, setFiles] = useState<DraftAttachment[]>([]);
+  const filesRef = useRef<DraftAttachment[]>([]);
+  const [preparingFiles, setPreparingFiles] = useState(false);
+  const preparingFilesRef = useRef(false);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [recoverableSubmission, setRecoverableSubmission] = useState<{ caption: string; files: DraftAttachment[] } | null>(null);
+  const pickerRef = useRef<HTMLInputElement | null>(null);
+
   const [submittedDraft, setSubmittedDraft] = useState<string | null>(null);
   const [streamedText, setStreamedText] = useState('');
   const [unresolvedOperationCount, setUnresolvedOperationCount] = useState(0);
@@ -638,18 +650,71 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
 
   const retryNewest = () => { void refreshNewestAndValidate(); };
 
+  function updateFiles(next: DraftAttachment[]) {
+    filesRef.current = next;
+    setFiles(next);
+  }
+
+  async function addFiles(selected: File[]) {
+    if (preparingFilesRef.current) return;
+    preparingFilesRef.current = true;
+    setPreparingFiles(true);
+    setAttachmentError(null);
+    const errors: string[] = [];
+    for (const file of selected) {
+      try {
+        const remaining = MAX_ATTACHMENT_BYTES - filesRef.current.reduce((sum, item) => sum + item.file.size, 0);
+        const prepared = await prepareAttachment(file, remaining);
+        if (!mountedRef.current) return;
+        const next = [...filesRef.current, prepared];
+        validateAttachmentRequest({ id: newOpaqueId('message'), message: draftValueRef.current.trim(), attachments: next.map((item) => item.attachment) });
+        updateFiles(next);
+      } catch (error) {
+        errors.push(error instanceof Error ? error.message : 'File could not be prepared. Choose a valid copy.');
+      }
+    }
+    if (mountedRef.current) {
+      setAttachmentError(errors.length ? errors.join(' ') : null);
+      setPreparingFiles(false);
+    }
+    preparingFilesRef.current = false;
+  }
+
+  function restoreSubmission(caption: string, submittedFiles: DraftAttachment[]): boolean {
+    if (draftValueRef.current.trim() || filesRef.current.length || preparingFilesRef.current) {
+      setRecoverableSubmission({ caption, files: submittedFiles });
+      return false;
+    }
+    draftValueRef.current = caption;
+    setDraft(caption);
+    updateFiles(submittedFiles);
+    setRecoverableSubmission(null);
+    return true;
+  }
+
   async function submitMessage() {
     if (voiceBusy) {
       announceVoiceSendBlock();
       return;
     }
     const message = draft.trim();
-    if (!message || turnBusy || bootstrapPending) return;
+    if ((!message && !filesRef.current.length) || turnBusy || bootstrapPending || preparingFilesRef.current) return;
+    const submittedFiles = [...filesRef.current];
+    const messageId = newOpaqueId('message');
+    const payload = { id: messageId, message, ...(submittedFiles.length ? { attachments: submittedFiles.map((item) => item.attachment) } : {}) };
+    try { validateAttachmentRequest(payload); } catch (error) {
+      setAttachmentError(error instanceof Error ? error.message : 'Message could not be prepared.');
+      return;
+    }
+    const requestBody = JSON.stringify(payload);
+    const visibleText = formatAttachmentMessage(message, payload.attachments);
+    setAttachmentError(null);
+    setRecoverableSubmission(null);
+    updateFiles([]);
     const latency = createClientLatencyTrace('agent-turn');
     latencyTraceRef.current = latency;
     if (incompleteTranscriptWarning) clearIncompleteTranscriptWarning();
     refreshGenerationRef.current += 1;
-    const messageId = newOpaqueId('message');
     const controller = new AbortController();
     abortRef.current = controller;
     pinnedToBottomRef.current = true;
@@ -665,14 +730,14 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
     setMessages((current) => [...current, {
       id: messageId,
       role: 'user',
-      parts: [{ type: 'text', text: message }],
+      parts: [{ type: 'text', text: visibleText }],
     }]);
     try {
       const response = await fetch('/api/agent', {
         method: 'POST',
         credentials: 'include',
         headers: requestHeaders,
-        body: JSON.stringify({ id: messageId, message }),
+        body: requestBody,
         signal: controller.signal,
       });
       latency?.mark('headers');
@@ -682,6 +747,10 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
       if (contentType.includes('application/json')) {
         const body = await parseJson(response) as Record<string, unknown> | null;
         const status = body?.status;
+        if (!response.ok && status !== 'in-flight' && status !== 'cancelled-replay' && status !== 'completed-replay') {
+          if (response.status === 413 || response.status === 400) setAttachmentError(typeof body?.error === 'string' ? body.error : 'Remove or replace a file and try again.');
+          throw new Error('AgentRequestFailed');
+        }
         if (status === 'completed-replay') setTurnNotice(null);
         else if (status === 'in-flight') setTurnNotice('This message is already in progress. Refreshing its latest state.');
         else if (status === 'cancelled-replay') setTurnNotice('This message was already stopped.');
@@ -693,11 +762,7 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
         latency?.mark('response-end');
         if (!mountedRef.current) return;
         if (streamStateRef.current.providerFailed) {
-          const restored = !draftValueRef.current.trim();
-          if (restored) {
-            draftValueRef.current = message;
-            setDraft(message);
-          }
+          const restored = restoreSubmission(message, submittedFiles);
           if (pendingAttemptsRef.current.size === 0) {
             setTurnNotice(restored
               ? 'Revelio’s reply failed. Your submitted message is available to edit.'
@@ -707,11 +772,7 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
       }
     } catch (error) {
       if (!mountedRef.current) return;
-      const restored = !draftValueRef.current.trim();
-      if (restored) {
-        draftValueRef.current = message;
-        setDraft(message);
-      }
+      const restored = restoreSubmission(message, submittedFiles);
       if (controller.signal.aborted) {
         for (const attempt of pendingAttemptsRef.current.values()) attempt.cancelled = true;
         setTurnNotice(restored ? 'Stopped. Your submitted message has been restored.' : 'Stopped. Your current draft is unchanged.');
@@ -1104,8 +1165,26 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
                   Finish or cancel recording before sending.
                 </p>
               ) : null}
+              <input ref={pickerRef} type="file" multiple className="sr-only" tabIndex={-1} aria-label="Attach files"
+                accept={Object.keys(ATTACHMENT_TYPES).join(',')}
+                onChange={(event) => { const selected = Array.from(event.target.files ?? []); event.target.value = ''; void addFiles(selected); }} />
+              <AttachmentDraft files={files} onRemove={(id) => { updateFiles(filesRef.current.filter((item) => item.id !== id)); setAttachmentError(null); }} />
+              <p className="text-xs text-stone-600">3 MB total per message. Word reads text; use PDF when embedded visuals matter.</p>
+              {preparingFiles ? <p role="status" className="text-xs">Preparing attachments…</p> : null}
+              {attachmentError ? <p role="alert" className="text-xs font-bold text-red-800">{attachmentError}</p> : null}
+              {recoverableSubmission ? <button type="button" disabled={preparingFiles} className="text-xs underline" onClick={() => {
+                draftValueRef.current = recoverableSubmission.caption;
+                setDraft(recoverableSubmission.caption);
+                updateFiles(recoverableSubmission.files);
+                setRecoverableSubmission(null);
+                setAttachmentError(null);
+              }}>Restore previous submission (replaces current draft)</button> : null}
               <label htmlFor="revelio-draft" className="sr-only">Message Revelio</label>
               <div className="flex items-end gap-1 border-2 border-black bg-white p-2 shadow-[3px_3px_0_rgba(0,0,0,0.65)] transition-[border-color,box-shadow] focus-within:border-ikigai-teal">
+                <button type="button" aria-label="Add attachments" title="Add attachments" disabled={preparingFiles || bootstrapPending}
+                  onClick={() => pickerRef.current?.click()} className="grid h-11 w-9 shrink-0 place-items-center focus-visible:outline focus-visible:outline-2 disabled:opacity-40">
+                  <Plus aria-hidden="true" className="h-5 w-5" />
+                </button>
                 <textarea
                   id="revelio-draft"
                   ref={draftRef}
@@ -1119,6 +1198,10 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
                       clearIncompleteTranscriptWarning();
                     }
                   }}
+                  onPaste={(event) => {
+                    const images = Array.from(event.clipboardData.items ?? []).filter((item) => item.kind === 'file' && item.type.startsWith('image/')).flatMap((item) => { const file = item.getAsFile(); return file ? [file] : []; });
+                    if (images.length) { event.preventDefault(); void addFiles(images); }
+                  }}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' && !event.shiftKey) {
                       event.preventDefault();
@@ -1126,7 +1209,7 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
                     }
                   }}
                   placeholder={isFirstRun ? 'Write your answer…' : 'Reply, ask, or push back'}
-                  className="min-h-11 max-h-44 flex-1 resize-none self-center border-0 bg-transparent px-2 py-2 text-[1.0625rem] font-medium leading-7 outline-none placeholder:font-normal placeholder:text-stone-500"
+                  className="min-h-11 min-w-0 max-h-44 flex-1 resize-none self-center border-0 bg-transparent px-2 py-2 text-[1.0625rem] font-medium leading-7 outline-none placeholder:font-normal placeholder:text-stone-500"
                 />
                 <button
                   ref={voicePrimaryRef}
@@ -1182,7 +1265,7 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
                 ) : (
                   <button
                     type="button"
-                    disabled={!draft.trim() || bootstrapPending}
+                    disabled={(!draft.trim() && !files.length) || bootstrapPending || preparingFiles}
                     aria-disabled={voiceBusy || undefined}
                     aria-label="Send"
                     title="Send"

@@ -30,3 +30,7 @@ describe('request-scoped provider attachments', () => {
     expect(() => prepareChatAttachments({ id: 'm', message: '', attachments: [file, { ...file, data: Buffer.from('%PDF-x').toString('base64') }] })).toThrow(/3 MB/);
   });
 });
+
+it('rejects noncanonical base64 even with a valid file signature', () => {
+  expect(() => prepareChatAttachments({ id: 'm', message: '', attachments: [{ name: 'a.pdf', mediaType: 'application/pdf', data: 'JVBERi1=' }] })).toThrow(/invalid/);
+});
