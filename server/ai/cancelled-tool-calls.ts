@@ -18,11 +18,12 @@ export async function reconcileCancelledToolCalls(input: {
   operationId: (turnId: string, callId: string) => string;
   abortSignal: AbortSignal;
 }): Promise<void> {
-  const { storage, client, userId, conversationId, turn, abortSignal } = input;
+  const { storage, client, userId, conversationId, turn } = input;
   const turns = await storage.listAgentTurns(userId);
   const cancelled = turns.filter(candidate => candidate.userId === userId
     && candidate.status === 'cancelled' && candidate.terminalResult?.kind === 'cancelled');
   if (!cancelled.length) return;
+  const abortSignal = AbortSignal.any([input.abortSignal, AbortSignal.timeout(10_000)]);
   const assertOwner = async () => {
     abortSignal.throwIfAborted();
     const [lease, current, mapping] = await Promise.all([

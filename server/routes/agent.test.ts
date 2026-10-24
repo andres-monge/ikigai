@@ -1037,8 +1037,8 @@ describe('protected Method routes', () => {
     expect(response.text).toContain('UserEvidenceAssociationError');
   });
 
-  it.each([false, true])('continues after a cancelled provider tool call without replaying its canonical effect (committed=%s)', async (committed) => {
-    const cancelled = { ...turn('agent-turn', 'cancelled'), turnId: 'cancelled-turn', clientMessageId: 'cancelled-message', terminalResult: { kind: 'cancelled', internalContextItemIds: ['cancelled-context'] } };
+  it.each([{ committed: false, markersOnly: false }, { committed: true, markersOnly: false }, { committed: true, markersOnly: true }])('continues after a cancelled provider tool call without replaying its canonical effect ($committed, markersOnly=$markersOnly)', async ({ committed, markersOnly }) => {
+    const cancelled = { ...turn('agent-turn', 'cancelled'), turnId: 'cancelled-turn', clientMessageId: 'cancelled-message', terminalResult: { kind: 'cancelled', ...(markersOnly ? { internalContextMarkers: ['cancelled-marker'] } : { internalContextItemIds: ['cancelled-context'] }) } };
     const current = { ...turn('agent-turn'), turnId: 'follow-up-turn', clientMessageId: 'follow-up-message', leaseId: 'follow-up-lease' };
     const sourceId = `op_${createHash('sha256').update('cancelled-turn\u0000cancelled-call').digest('hex').slice(0,16)}`;
     let map = createCareerMap(USER_ID);

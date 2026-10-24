@@ -19,7 +19,7 @@ function fixture() {
     loadCareerMap: vi.fn(async () => ({ status: 'ready', map: createCareerMap('owner') })),
   };
   const client = {
-    listItems: vi.fn(async () => ({ data: items, hasMore: false })),
+    listItems: vi.fn(async (_input?: { abortSignal?: AbortSignal }) => ({ data: items, hasMore: false })),
     deleteConversationItem: vi.fn(async ({ itemId }: { itemId: string }) => { items = items.filter(item => item.id !== itemId); }),
   };
   const run = () => reconcileCancelledToolCalls({ storage: storage as unknown as IStorage, client, userId: 'owner', conversationId: 'conversation', turn, operationId: (turnId, callId) => `${turnId}:${callId}`, abortSignal: new AbortController().signal });
@@ -52,6 +52,22 @@ describe('cancelled provider call reconciliation', () => {
     if (change === 'incomplete') f.items[1].status = 'in_progress';
     await expect(f.run()).rejects.toThrow();
     expect(f.client.deleteConversationItem).not.toHaveBeenCalled();
+  });
+  it('ends a stalled provider preflight within its own timeout without deleting items', async () => {
+    const f = fixture();
+    const nativeTimeout = AbortSignal.timeout;
+    const timeout = vi.spyOn(AbortSignal, 'timeout').mockImplementation(() => nativeTimeout(1));
+    f.client.listItems.mockImplementation(input => new Promise((_resolve, reject) => {
+      const unbounded = setTimeout(() => reject(new Error('Preflight still waiting')), 50);
+      input!.abortSignal!.addEventListener('abort', () => {
+        clearTimeout(unbounded); reject(input!.abortSignal!.reason);
+      }, { once: true });
+    }));
+    try {
+      await expect(f.run()).rejects.toMatchObject({ name: 'TimeoutError' });
+      expect(timeout).toHaveBeenCalledWith(10_000);
+      expect(f.client.deleteConversationItem).not.toHaveBeenCalled();
+    } finally { timeout.mockRestore(); }
   });
   it('ignores foreign cancelled turns without accessing their provider history', async () => {
     const f = fixture(); f.past.userId = 'other';
