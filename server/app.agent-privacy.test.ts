@@ -124,6 +124,7 @@ describe('protected Method parser error boundary', () => {
       sentinel: 'PRIVATE_MALFORMED_JSON_SENTINEL',
       send: async (app: ReturnType<typeof createApp>, sentinel: string) => (await request(app))
         .post('/api/agent')
+        .set('Origin', METHOD_ORIGIN).set('X-Revelio-Request', '1')
         .set('content-type', 'application/json')
         .send(`{"id":"message","message":"${sentinel}`),
     },
@@ -136,8 +137,9 @@ describe('protected Method parser error boundary', () => {
       sentinel: 'PRIVATE_OVERSIZED_JSON_SENTINEL',
       send: async (app: ReturnType<typeof createApp>, sentinel: string) => (await request(app))
         .post('/api/agent')
+        .set('Origin', METHOD_ORIGIN).set('X-Revelio-Request', '1')
         .set('content-type', 'application/json')
-        .send({ id: 'message', message: sentinel.repeat(16_384) }),
+        .send({ id: 'message', message: sentinel.repeat(164_000) }),
     },
     {
       label: 'oversized audio request',
@@ -174,6 +176,7 @@ describe('protected Method parser error boundary', () => {
       sentinel: 'PRIVATE_MIXED_CASE_PARSER_SENTINEL',
       send: async (app: ReturnType<typeof createApp>, sentinel: string) => (await request(app))
         .post('/api/AGENT/')
+        .set('Origin', METHOD_ORIGIN).set('X-Revelio-Request', '1')
         .set('content-type', 'application/json')
         .send(`{"id":"message","message":"${sentinel}`),
     },
@@ -207,7 +210,7 @@ describe('protected Method parser error boundary', () => {
 
     expect(response.status).toBe(status);
     expect(transcribeProtectedAudio).not.toHaveBeenCalled();
-    expect(response.body).toEqual({ error: 'Agent request failed', errorClass });
+    expect(response.body).toEqual({ error: status === 413 && routeLabel === 'agent-turn' ? 'Message too large. Remove or replace a file, or send separately (3 MB total per message).' : 'Agent request failed', errorClass });
     expect(consoleError).toHaveBeenCalledWith(
       'Protected Method request failed',
       expect.objectContaining({
@@ -359,5 +362,31 @@ describe('protected Method audio provider boundary', () => {
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }
+  });
+});
+
+describe('attachment-sized protected JSON', () => {
+  it('admits a valid body above the global parser limit only at agent submission', async () => {
+    vi.stubEnv('AGENT_ENABLED', 'true');
+    const read = vi.spyOn(defaultStorage, 'getOrCreateCareerMap').mockResolvedValue({ status: 'repair-required', map: null } as never);
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const data = Buffer.alloc(140_000); data.write('%PDF-');
+    const response = await (await request(createApp())).post('/api/agent')
+      .set('Origin', METHOD_ORIGIN).set('X-Revelio-Request', '1')
+      .send({ id: 'attachment-body-message', message: '', attachments: [{ name: 'PRIVATE_FILE.pdf', mediaType: 'application/pdf', data: data.toString('base64') }] });
+    expect(response.status).toBe(409);
+    expect(read).toHaveBeenCalledOnce();
+    expect(JSON.stringify(log.mock.calls)).not.toContain('PRIVATE_FILE');
+  });
+  it('rejects oversized transport with actionable private errors', async () => {
+    vi.stubEnv('AGENT_ENABLED', 'true');
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const response = await (await request(createApp())).post('/api/agent')
+      .set('Origin', METHOD_ORIGIN).set('X-Revelio-Request', '1')
+      .send({ id: 'large-message', message: 'PRIVATE_FILE' + 'a'.repeat(4_250_000) });
+    expect(response.status).toBe(413);
+    expect(response.body.error).toMatch(/Remove or replace/);
+    expect(JSON.stringify([response.body, log.mock.calls, error.mock.calls])).not.toContain('PRIVATE_FILE');
   });
 });

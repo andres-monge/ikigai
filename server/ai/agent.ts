@@ -534,6 +534,7 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
             conversation: options.conversationId,
             store: true,
             parallelToolCalls: false,
+            passThroughUnsupportedFiles: true,
             reasoningEffort: options.replayReasoningEffort ?? methodReasoningEffort(state.module.key),
             instructions: [
               requestInstructions(state, options.baseInstructions),
@@ -553,7 +554,7 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
   const methodAgent = {
     toolLoopAgent,
     async stream(input: ({
-      prompt: string;
+      prompt: string | ModelMessage[];
     } | {
       continueFromConversation: true;
     }) & {

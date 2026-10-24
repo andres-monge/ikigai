@@ -979,6 +979,26 @@ describe('protected Method routes', () => {
     expect(storage.beginAgentTurn).not.toHaveBeenCalled();
   });
 
+  it('sends attachment-only bytes to the provider and binds replay to their content', async () => {
+    const storage = createStorage({ getConversationMapping: vi.fn(async () => 'synthetic-conversation') });
+    const model = new MockLanguageModelV4({ doStream: async () => textStream('I can discuss this file.') });
+    const app = testApp({ storage, model, requireAuth: authenticated, agentEnabled: true,
+      nativeWebSearchTool: {} as never, operationalLog: vi.fn(),
+      conversationClient: { listItems: vi.fn(async () => ({ data: [], has_more: false })) } });
+    const attachment = { name: 'brief.pdf', mediaType: 'application/pdf', data: Buffer.from('%PDF-first').toString('base64') };
+    const response = await (await request(app)).post('/api/agent').send({ id: 'file-message', message: '', attachments: [attachment] });
+    expect(response.status).toBe(200);
+    expect(model.doStreamCalls[0].prompt).toContainEqual(expect.objectContaining({ role: 'user', content: [
+      expect.objectContaining({ type: 'text', text: 'brief.pdf — PDF document' }),
+      expect.objectContaining({ type: 'file', mediaType: 'application/pdf', data: { type: 'data', data: Buffer.from('%PDF-first') } }),
+    ] }));
+    const first = (storage.beginAgentTurn.mock.calls as unknown[][])[0]?.[0] as unknown as { requestFingerprint: string };
+    attachment.data = Buffer.from('%PDF-other').toString('base64');
+    await (await request(app)).post('/api/agent').send({ id: 'file-message', message: '', attachments: [attachment] });
+    const second = (storage.beginAgentTurn.mock.calls as unknown[][])[1]?.[0] as unknown as { requestFingerprint: string };
+    expect(second.requestFingerprint).not.toBe(first.requestFingerprint);
+  });
+
   it('processes a complete parsed request when Node marks only the consumed request stream destroyed', async () => {
     const storage = createStorage({
       beginAgentTurn: vi.fn(async (): Promise<BeginAgentTurnResult> => ({

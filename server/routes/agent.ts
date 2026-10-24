@@ -63,10 +63,22 @@ import {
   type TranscriptionMediaType,
 } from '../ai/transcription.js';
 
+import { MAX_ATTACHMENT_REQUEST_BYTES, ATTACHMENT_TYPES, AttachmentError } from '../../shared/chat-attachments.js';
+import { prepareChatAttachments } from '../ai/chat-attachments.js';
+
 const agentRequestSchema = z.object({
   id: opaqueClientMessageIdSchema,
-  message: z.string().trim().min(1).max(12_000),
+  message: z.string().trim().max(12_000),
+  attachments: z.array(z.object({
+    name: z.string().min(1).max(300),
+    mediaType: z.enum(Object.keys(ATTACHMENT_TYPES) as [keyof typeof ATTACHMENT_TYPES, ...(keyof typeof ATTACHMENT_TYPES)[]]),
+    data: z.string(),
+  }).strict()).optional(),
 }).strict();
+
+function requestFingerprint(clientMessageId: string, message: string): string {
+  return createHash('sha256').update(`${clientMessageId}\u0000${message}`).digest('hex');
+}
 
 const METHOD_AUDIO_LIMIT = '11mb';
 const METHOD_AUDIO_PROVIDER_TIMEOUT_MS = 90_000;
@@ -263,9 +275,6 @@ function methodTurnDiagnosticLog(diagnostics: MethodAgentTurnDiagnostics): Recor
   };
 }
 
-function requestFingerprint(clientMessageId: string, message: string): string {
-  return createHash('sha256').update(`${clientMessageId}\u0000${message}`).digest('hex');
-}
 
 function opaqueOperationId(operationId: string): string {
   return `op_${createHash('sha256').update(operationId).digest('hex').slice(0, 16)}`;
@@ -1268,6 +1277,14 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
     }
   });
 
+  router.post('/', (request, response, next) => {
+    if (!enabled(options.agentEnabled)) {
+      response.status(503).json({ error: 'Agent is disabled', errorClass: 'AgentDisabledError' });
+      return;
+    }
+    next();
+  }, express.json({ limit: MAX_ATTACHMENT_REQUEST_BYTES }));
+
   router.post('/', async (request, response) => {
     if (!enabled(options.agentEnabled)) {
       response.locals.methodLog = { errorClass: 'AgentDisabledError' };
@@ -1278,6 +1295,16 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
     if (!parsed.success) {
       response.locals.methodLog = { errorClass: 'ValidationError' };
       response.status(400).json({ error: 'Invalid agent request', errorClass: 'ValidationError' });
+      return;
+    }
+    let prepared: ReturnType<typeof prepareChatAttachments>;
+    try {
+      prepared = prepareChatAttachments(parsed.data);
+    } catch (error) {
+      response.status(error instanceof AttachmentError ? error.status : 400).json({
+        error: error instanceof AttachmentError ? error.message : 'Invalid attachment request',
+        errorClass: 'ValidationError',
+      });
       return;
     }
     const identity = getProtectedIdentity(response);
@@ -1366,7 +1393,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
       const displayProjection = providerState.complete && bindingAssistantText().length > 0
         ? resolveDisplayProjection(
             providerState.items,
-            parsed.data.message,
+            prepared.visibleText,
             bindingAssistantText(),
             new Set(providerState.internalContextItemIds),
           )
@@ -1384,7 +1411,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
         ...(displayProjection
           ? { displayProjection }
           : bindingAssistantText().length > 0
-            ? { displayRecovery: createDisplayRecovery(parsed.data.message, bindingAssistantText(), true) }
+            ? { displayRecovery: createDisplayRecovery(prepared.visibleText, bindingAssistantText(), true) }
             : {}),
       };
     };
@@ -1407,7 +1434,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
         result: {
           kind: 'cancelled', stopped: true, refetch: true,
           displayRecovery: createDisplayRecovery(
-            parsed.data.message,
+            prepared.visibleText,
             bindingAssistantText(),
             safeAssistantText.length > 0,
           ),
@@ -1435,7 +1462,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
       const beginInput = {
         userId: identity.userId,
         clientMessageId: parsed.data.id,
-        requestFingerprint: requestFingerprint(parsed.data.id, parsed.data.message),
+        requestFingerprint: prepared.fingerprint,
         turnId: nextId(),
         leaseId: nextId(),
       };
@@ -1620,7 +1647,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
           });
           latency?.mark('provider-start');
           methodResult = await agent.stream({
-            prompt: parsed.data.message,
+            prompt: [{ role: 'user', content: prepared.content }],
             abortSignal: abort.signal,
             onTextDelta: (text) => { safeAssistantText += text; },
             onCitation: (citation) => {
@@ -1701,7 +1728,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
             const displayProjection = providerState.complete
               ? resolveDisplayProjection(
                   providerState.items,
-                  parsed.data.message,
+                  prepared.visibleText,
                   bindingAssistantText(),
                   new Set(providerState.internalContextItemIds),
                 )
@@ -1727,7 +1754,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
                   ...(canonicalPurposePathsOffer() ? { canonicalPurposePathsOffer: true } : {}),
                   ...(displayProjection
                     ? { displayProjection }
-                    : { displayRecovery: createDisplayRecovery(parsed.data.message, bindingAssistantText(), false) }),
+                    : { displayRecovery: createDisplayRecovery(prepared.visibleText, bindingAssistantText(), false) }),
                 },
                 assistantText: safeAssistantText,
                 abortSignal: abort.signal,

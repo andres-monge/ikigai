@@ -163,7 +163,11 @@ export function createApp(): Express {
     audioTranscriptionMetadataGuard(req, res, next);
   });
 
-  app.use(express.json());
+  const smallJsonParser = express.json();
+  app.use((req, res, next) => {
+    if (req.method === 'POST' && normalizeMethodRequestPath(req.path) === '/') return next();
+    smallJsonParser(req, res, next);
+  });
   app.use(express.urlencoded({ extended: false }));
 
   // Custom logging middleware for API requests
@@ -213,7 +217,7 @@ export function createApp(): Express {
 
     // Safely extract error message with type guard
     const message = isProtectedMethodRoute
-      ? 'Agent request failed'
+      ? status === 413 && normalizeMethodRequestPath(req.path) === '/' ? 'Message too large. Remove or replace a file, or send separately (3 MB total per message).' : 'Agent request failed'
       :
       err && typeof err === "object" && "message" in err && typeof err.message === "string"
         ? err.message
