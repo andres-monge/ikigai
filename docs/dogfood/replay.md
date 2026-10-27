@@ -47,7 +47,7 @@ Private root layout:
 
 Repository-local storage is restricted to `.context/revelio/`, must actually be Git-ignored, and must contain no tracked files. Runtime artifacts cannot be symlinks. External disposable test fixtures remain supported. Credentials are read only from the separate environment file and never served. The service binds to `127.0.0.1`, rejects unrelated Host/Origin headers, and requires same-origin mutations. Port 5173 is rejected. Restarted queued/running jobs become interrupted errors, requiring a new explicit run.
 
-Recovered historical maps are labelled reconstructions. Their focused briefings are verified exactly against original refresh contexts; later facts are excluded. Available tool calls are grouped with every matching result. Hidden reasoning and missing historical request settings remain unavailable. This interface covers Foundation and Purpose Path iteration. First-project terminal framing is outside this implementation; PostgreSQL transactions, production leases and application authentication are not replayed.
+Recovered historical maps are labelled reconstructions. Their focused briefings are verified exactly against original refresh contexts; later facts are excluded. Available tool calls are grouped with every matching result. Hidden reasoning and missing historical request settings remain unavailable. Historical candidates retain their original module membership and fixed effort. New Learning loop candidates freeze all five currently registered modules, the full current base/voice, and the per-stage effort policy. Missing historical stages fail closed rather than loading current defaults. First-project terminal framing is recorded only after verified output/history completion; PostgreSQL transactions, production leases and application authentication are not replayed.
 
 Additional verification:
 
@@ -75,3 +75,14 @@ Relocation preserves frozen instructions, manifests and result files byte-for-by
 The bundle remains a review artifact; the application does not load it wholesale. The founder approved production adoption on 2026-10-11: production Paths now matches the frozen V6 skill, and the base embeds the accepted V4 voice while preserving newer Shared and Foundation audit changes. Canonical Paths requests use HIGH reasoning; Foundation and project requests use LOW, including same-turn transitions. Isolated replay retains its explicit LOW default unless HIGH is requested. See `2026-10-11-u7-v6-integration.md`; attended actual-app selection, project acceptance and reload remain pending.
 
 For a source-inspired transfer check, label reconstructed wording and starting context, retain the full source and its existing canonical screening decision privately, and use fresh maps and provider histories. Do not manufacture a confirmed North Star. Stop before a run when known evidence gaps would yield only a generic Foundation interview rather than testing Paths. A Foundation-only branch is inconclusive for Paths distinctness; it is not successful path coverage.
+
+
+## Learning-loop preparation (2026-10-27)
+
+The existing lab supports captured post-exchange checkpoints that await an unknown next answer. Their executable case keeps that answer empty, so batch replay is blocked; **Continue this branch** supplies a new answer from the captured result. Every submission from the same parent creates an independent sibling. Continuing a child extends that child's history. Human feedback remains attached to its exact result version.
+
+Learning candidates use production per-step effort: Paths HIGH, project design MEDIUM, Foundation/support/reflection LOW. Fixed LOW/MEDIUM/HIGH remain explicit replay modes, and the historical default remains LOW. The effort policy is frozen in the candidate and each run; a future runtime-policy mismatch fails before provider transport and requires explicit preparation. This prevents silent policy drift without adding production request controls.
+
+The Learning loop view displays saved canonical projects and options, reflection observations and interpretations, decisions, provisional focus and Foundation revision focus. Project section labels and state selection reuse production contracts. These displays are read-only; branching uses the same agent/tools and an in-memory reducer clone. The lab validates durable turn provenance and completed-presentation confirmation, including first-project framing delivery.
+
+See [preparation receipt](2026-10-27-learning-loop-lab-preparation.md) for verification and the distinction between a true captured checkpoint and synthetic later-stage plumbing fixtures. No real-provider hypothesis runs were authorized or performed during preparation.

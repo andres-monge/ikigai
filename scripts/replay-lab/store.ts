@@ -4,6 +4,7 @@ import { access, lstat, mkdir, readFile, readdir, realpath, rename, rm, writeFil
 import path from 'node:path';
 import { runReplay, type ReplayCase } from '../replay-revelio.js';
 import { REVELIO_AGENT_MODEL } from '../../server/ai/agent.js';
+import { careerMapSchema } from '../../shared/career-map/index.js';
 import { METHOD_MODULE_KEYS } from '../../server/ai/method/registry.js';
 import { createMethodModuleLoader, MethodModuleLoadError } from '../../server/ai/method/loader.js';
 import { privateArtifactPath, loadArtifactRelocations, rebaseArtifactReferences } from '../replay-private-paths.js';
@@ -72,7 +73,9 @@ export async function createLabStore(options: { root: string; envPath: string; r
     try { return await next; } finally { if (candidateLocks.get(id) === next) candidateLocks.delete(id); }
   }
   async function validateSkills(skillsRoot: string) {
-    try { await createMethodModuleLoader({ skillsRoot, versionPolicy: 'candidate' }); }
+    const entries = await readdir(skillsRoot);
+    const candidateModules = METHOD_MODULE_KEYS.filter(key => entries.includes(key));
+    try { await createMethodModuleLoader({ skillsRoot, versionPolicy: 'candidate', candidateModules }); }
     catch (error) {
       if (error instanceof MethodModuleLoadError) throw new LabInputError(error.message);
       throw error;
@@ -81,12 +84,17 @@ export async function createLabStore(options: { root: string; envPath: string; r
   async function candidateUnlocked(id: string): Promise<Candidate> {
     validateId(id);
     const draft = file('candidates', id, 'draft');
-    const info = await read<{ name: string; kind?: CandidateKind; archived?: boolean }>(path.join(draft, 'name.json'));
+    const info = await read<{ name: string; kind?: CandidateKind; archived?: boolean; effortByModule?: Candidate['effortByModule'] }>(path.join(draft, 'name.json'));
     const voice = await text(path.join(draft, 'voice.txt'));
     const skills: Record<string, string> = {};
-    for (const key of METHOD_MODULE_KEYS) skills[key] = await text(path.join(draft, 'skills', key, 'SKILL.md'));
+    for (const key of METHOD_MODULE_KEYS) if (await exists(path.join(draft, 'skills', key, 'SKILL.md'))) skills[key] = await text(path.join(draft, 'skills', key, 'SKILL.md'));
     const kind = info.kind ?? 'paths';
-    if (kind !== 'paths' && kind !== 'voice') throw new LabInputError('Invalid candidate kind.');
+    if (!['paths', 'voice', 'learning'].includes(kind)) throw new LabInputError('Invalid candidate kind.');
+    if (kind === 'learning' && (Object.keys(skills).length !== METHOD_MODULE_KEYS.length
+      || !info.effortByModule || Object.keys(info.effortByModule).length !== METHOD_MODULE_KEYS.length
+      || METHOD_MODULE_KEYS.some(key => !['low','medium','high'].includes(info.effortByModule![key])))) {
+      throw new LabInputError('Learning candidates require all five frozen modules and their effort policy.');
+    }
     if (kind === 'paths' && voice !== acceptedVoice) throw new LabInputError('Path candidates must use the exact accepted V4 voice.');
     if (!info.name?.trim() || info.name.length > 200) throw new LabInputError('Candidate name is required.');
     await validateSkills(path.join(draft, 'skills'));
@@ -97,7 +105,7 @@ export async function createLabStore(options: { root: string; envPath: string; r
     const candidateTemplate = await exists(path.join(draft, 'base-template.txt')) ? await text(path.join(draft, 'base-template.txt')) : template;
     if (!candidateTemplate.includes('{{VOICE}}')) throw new LabInputError('Candidate base template must expose {{VOICE}}.');
     const candidateRules = candidateTemplate.replaceAll('{{VOICE}}', '').replaceAll('{{CONTROLS}}', '');
-    const details = { ...(preparation ? { preparation } : {}), ...(info.archived ? { archived: true } : {}) };
+    const details = { ...(info.effortByModule ? { effortByModule: info.effortByModule } : {}), ...(preparation ? { preparation } : {}), ...(info.archived ? { archived: true } : {}) };
     const version = hash({ name: info.name, kind, voice, skills, sharedRules: candidateRules, ...details });
     const artifactPath = file('candidates', id, 'versions', version);
     const candidate: Candidate = { id, name: info.name, kind, version, voice, skills, sharedRules: candidateRules, controls: '', acceptedVoice: voice === acceptedVoice, artifactPath, ...details };
@@ -117,9 +125,9 @@ export async function createLabStore(options: { root: string; envPath: string; r
     const source = await getCandidate(input.copyFrom);
     const id = 'candidate_' + randomUUID();
     const kind = input.kind ?? source.kind;
-    if (!input.name?.trim() || input.name.length > 200 || !['paths', 'voice'].includes(kind)) throw new LabInputError('Invalid candidate.');
+    if (!input.name?.trim() || input.name.length > 200 || !['paths', 'voice', 'learning'].includes(kind)) throw new LabInputError('Invalid candidate.');
     const draft = file('candidates', id, 'draft');
-    await save(path.join(draft, 'name.json'), { name: input.name, kind, ...(source.archived ? { archived: true } : {}) }, true);
+    await save(path.join(draft, 'name.json'), { name: input.name, kind, ...(source.effortByModule ? { effortByModule: source.effortByModule } : {}), ...(source.archived ? { archived: true } : {}) }, true);
     await saveText(path.join(draft, 'voice.txt'), kind === 'paths' ? acceptedVoice : source.voice);
     await saveSkills(path.join(draft, 'skills'), source.skills);
     if (await exists(path.join(source.artifactPath, 'base-template.txt'))) await saveText(path.join(draft, 'base-template.txt'), await text(path.join(source.artifactPath, 'base-template.txt')));
@@ -141,7 +149,7 @@ export async function createLabStore(options: { root: string; envPath: string; r
         await validateSkills(path.join(staging, 'skills'));
       } finally { await rm(staging, { recursive: true, force: true }); }
       const draft = file('candidates', id, 'draft');
-      await save(path.join(draft, 'name.json'), { name, kind: previous.kind, ...(previous.archived ? { archived: true } : {}) });
+      await save(path.join(draft, 'name.json'), { name, kind: previous.kind, ...(previous.effortByModule ? { effortByModule: previous.effortByModule } : {}), ...(previous.archived ? { archived: true } : {}) });
       await saveText(path.join(draft, 'voice.txt'), voice);
       await saveSkills(path.join(draft, 'skills'), skills);
       return candidateUnlocked(id);
@@ -174,14 +182,14 @@ export async function createLabStore(options: { root: string; envPath: string; r
     try {
       job.status = 'running'; await persistJob(job);
       const fixture = await read<ReplayCase>(path.join(directory, 'case.json'));
-      await runner({ casePath: path.join(directory, 'case.json'), instructionsPath: path.join(directory, 'instructions'), outputPath: path.join(directory, 'output'), envPath: options.envPath, captureContinuation: true });
+      await runner({ casePath: path.join(directory, 'case.json'), instructionsPath: path.join(directory, 'instructions'), outputPath: path.join(directory, 'output'), envPath: options.envPath, captureContinuation: true, reasoningEffort: job.config?.kind === 'learning' ? 'production' : 'low', effortByModule: job.config?.effortByModule });
       const result = await read<Record<string, any>>(path.join(directory, 'output/result.json'));
       const continuation = await read<Pick<ReplayCase, 'initialMap' | 'priorTurns' | 'priorItems'>>(path.join(directory, 'output/continuation.json'));
       if (!Array.isArray(continuation.priorItems) || !continuation.priorItems.length || !continuation.priorTurns.at(-1)?.terminalResult?.displayProjection) throw new Error('Incomplete continuation.');
       const turnId = continuation.priorTurns.at(-1)!.turnId;
       const displayed = result.canonicalPurposePathsOffer === true ? continuation.initialMap.pathSets.filter((set) => set.presentation.assistantTurnId === turnId) : [];
-      Object.assign(job, { status: 'done', reply: result.reply, cards: displayed.flatMap((set) => set.paths), traces: result.traces, operations: result.operations, providerItems: continuation.priorItems,
-        metadata: { model: result.model, effort: result.reasoningEffort, provenance: fixture.provenance, initialRevision: result.initialRevision, finalRevision: result.finalRevision, sourceFileUnchanged: result.sourceFileUnchanged, prefixPreserved: result.prefixPreserved, databaseConnected: false } });
+      Object.assign(job, { ...(job.config?.kind === 'learning' ? { canonicalState: careerMapSchema.parse(continuation.initialMap) } : {}), status: 'done', reply: result.reply, cards: displayed.flatMap((set) => set.paths), traces: result.traces, operations: result.operations, providerItems: continuation.priorItems,
+        metadata: { model: result.model, effort: result.reasoningEffort, ...(job.config?.effortByModule ? { effortByModule: job.config.effortByModule } : {}), provenance: fixture.provenance, initialRevision: result.initialRevision, finalRevision: result.finalRevision, sourceFileUnchanged: result.sourceFileUnchanged, prefixPreserved: result.prefixPreserved, databaseConnected: false } });
     } catch (error) {
       job.status = 'error'; job.error = 'Run failed. Private diagnostic artifacts are preserved; no automatic retry.';
       try {
@@ -216,7 +224,7 @@ export async function createLabStore(options: { root: string; envPath: string; r
     await saveText(path.join(directory, 'instructions/base.txt'), frozenBase ?? runTemplate.replaceAll('{{VOICE}}', config.voice).replaceAll('{{CONTROLS}}', controls));
     await saveSkills(path.join(directory, 'instructions/skills'), config.skills);
     const job: Job = { id, candidateId: config.id, candidateName: config.name, version: config.version, checkpointId: checkpoint.id, ...(parentId ? { parentId } : {}), createdAt: new Date().toISOString(), status: 'queued', currentMessage: fixture.currentMessage, feedback: { preference: 'none', comment: '' }, config,
-      caveats: ['Historical inputs may be reconstructed; see checkpoint provenance.', 'Only available provider items are retained. Hidden reasoning is unavailable.'], metadata: { model: REVELIO_AGENT_MODEL, effort: 'low', provenance: fixture.provenance } };
+      caveats: ['Historical inputs may be reconstructed; see checkpoint provenance.', 'Only available provider items are retained. Hidden reasoning is unavailable.'], metadata: { model: REVELIO_AGENT_MODEL, effort: config.kind === 'learning' ? 'production' : 'low', ...(config.effortByModule ? { effortByModule: config.effortByModule } : {}), provenance: fixture.provenance } };
     await persistJob(job); queue.push(id);
     return id;
   }
@@ -229,6 +237,7 @@ export async function createLabStore(options: { root: string; envPath: string; r
     const blocked = candidates.find((candidate) => candidate.preparation?.status === 'blocked');
     if (blocked) throw new LabInputError(`${blocked.name} requires contract preparation before running: ${blocked.preparation!.conflicts.join(' ')}`);
     const selections = await Promise.all(input.checkpointIds.map(async (id) => { validateId(id); return { checkpoint: await getCheckpoint(id), fixture: await read<ReplayCase>(file('checkpoints', id, 'case.json')) }; }));
+    if (selections.some(({ checkpoint }) => checkpoint.provenance.awaitingReply === true)) throw new LabInputError('This checkpoint awaits your next answer. Use Continue this branch on its captured result.');
     const jobIds: string[] = [];
     for (const candidate of candidates) for (const { checkpoint, fixture } of selections) jobIds.push(await enqueue(candidate, checkpoint, fixture));
     pump(); return { jobIds };

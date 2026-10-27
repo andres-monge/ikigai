@@ -46,6 +46,52 @@ const fixtureRunner: LabRunner = async ({ casePath, outputPath }) => {
 };
 
 describe('private replay lab', () => {
+  it('preserves historical three-module candidate bytes and membership without filling later defaults', async () => {
+    const {root,store} = await setup();
+    const skills = path.join(root,'candidates/seed/draft/skills');
+    await rm(path.join(skills,'guide-path-project'),{recursive:true});
+    await rm(path.join(skills,'interpret-path-project'),{recursive:true});
+    const before = await readFile(path.join(skills,'create-purpose-paths/SKILL.md'),'utf8');
+    const first = await store.getCandidate('seed');
+    expect(Object.keys(first.skills)).toHaveLength(3);
+    expect((await store.getCandidate('seed')).version).toBe(first.version);
+    expect(await readFile(path.join(skills,'create-purpose-paths/SKILL.md'),'utf8')).toBe(before);
+    expect(first).not.toHaveProperty('effortByModule');
+  });
+
+  it('freezes production policy and isolated sibling histories for learning continuations', async () => {
+    const calls: Parameters<LabRunner>[0][] = [];
+    const {root,store} = await setup(async options => { calls.push(options); await fixtureRunner(options); });
+    const policy = {'form-foundation':'low','create-purpose-paths':'high','design-path-project':'medium','guide-path-project':'low','interpret-path-project':'low'};
+    await write(path.join(root,'candidates/seed/draft/name.json'),{name:'Current learning loop',kind:'learning',effortByModule:policy});
+    const candidate = await store.getCandidate('seed');
+    const copy = await store.createCandidate({name:'Learning copy',copyFrom:'seed'});
+    expect(copy.effortByModule).toEqual(policy);
+    const {jobIds:[parentId]} = await store.batch({candidateIds:['seed'],checkpointIds:['one']});
+    await store.idle();
+    const parent = await store.getJob(parentId);
+    expect(parent.status).toBe('done');
+    expect(parent.canonicalState?.revision).toBe(1);
+    await store.updateCandidate('seed',{expectedVersion:candidate.version,voice:'A later voice edit.'});
+    const [a,b] = await Promise.all([store.continueJob(parentId,{message:'Adjust how I work.'}),store.continueJob(parentId,{message:'Explore another direction.'})]);
+    await store.idle();
+    const children = await Promise.all([a.jobIds[0],b.jobIds[0]].map(id=>store.getJob(id)));
+    for (const child of children) {
+      expect(child.status).toBe('done'); expect(child.version).toBe(parent.version);
+      expect(child.canonicalState?.revision).toBe(2);
+      expect(child.config?.effortByModule).toEqual(policy);
+      expect(child.config?.voice).toBe(parent.config?.voice);
+    }
+    expect(children[0].canonicalState?.foundation.evidence.at(-1)?.content).toBe('Adjust how I work.');
+    expect(children[1].canonicalState?.foundation.evidence.at(-1)?.content).toBe('Explore another direction.');
+    expect((await store.getJob(parentId)).canonicalState?.revision).toBe(1);
+    for (const call of calls) expect(call).toMatchObject({reasoningEffort:'production',effortByModule:policy});
+    const checkpoint = await store.getCheckpoint('one');
+    await write(path.join(root,'checkpoints/one/checkpoint.json'),{...checkpoint,provenance:{awaitingReply:true}});
+    await expect(store.batch({candidateIds:['seed'],checkpointIds:['one']})).rejects.toThrow('awaits your next answer');
+    expect(calls).toHaveLength(3);
+  });
+
   it('reserves main port 5173 and rejects the retired lab origin', async () => {
     const { store } = await setup();
     expect(() => createLabApp(store, 5173)).toThrow('reserved');

@@ -57,6 +57,8 @@ export interface CreateMethodModuleLoaderOptions extends MethodSkillsRootOptions
   readonly skillsRoot?: string;
   /** Private replay bundles may version content independently of the production registry. */
   readonly versionPolicy?: 'registry' | 'candidate';
+  /** Explicit private historical bundle membership; absent stages fail closed. */
+  readonly candidateModules?: readonly RegisteredMethodModuleKey[];
 }
 
 interface ParsedSkillFile {
@@ -194,15 +196,21 @@ export async function createMethodModuleLoader(
   if (options.versionPolicy === 'candidate' && !options.skillsRoot) {
     throw new MethodModuleLoadError('invalid-bundle', 'Candidate bundles require an explicit skills root.');
   }
+  if (options.candidateModules && (options.versionPolicy !== 'candidate' || !options.skillsRoot
+    || !options.candidateModules.length || new Set(options.candidateModules).size !== options.candidateModules.length
+    || options.candidateModules.some(key => !isRegisteredMethodModule(key)))) {
+    throw new MethodModuleLoadError('invalid-bundle', 'Explicit candidate modules require a valid private candidate bundle.');
+  }
+  const registeredKeys = Object.freeze([...(options.candidateModules ?? METHOD_MODULE_KEYS)]);
   const skillsRoot = path.resolve(options.skillsRoot ?? resolveMethodSkillsRoot(options));
   const bundles = await Promise.all(
-    METHOD_MODULE_KEYS.map(async (key) => [key, await readRegisteredBundle(key, skillsRoot, options.versionPolicy ?? 'registry')] as const),
+    registeredKeys.map(async (key) => [key, await readRegisteredBundle(key, skillsRoot, options.versionPolicy ?? 'registry')] as const),
   );
   const cache = new Map<RegisteredMethodModuleKey, LoadedMethodModule>(bundles);
   const loaded = new Set<RegisteredMethodModuleKey>();
 
   return Object.freeze({
-    registeredKeys: METHOD_MODULE_KEYS,
+    registeredKeys,
     load(checkpoint: Pick<MethodCheckpoint, 'module'>): LoadedMethodModule {
       const module: MethodModule = checkpoint.module;
       if (!isRegisteredMethodModule(module)) {
@@ -216,7 +224,7 @@ export async function createMethodModuleLoader(
       return bundle;
     },
     loadedKeys(): RegisteredMethodModuleKey[] {
-      return METHOD_MODULE_KEYS.filter((key) => loaded.has(key));
+      return registeredKeys.filter((key) => loaded.has(key));
     },
   });
 }

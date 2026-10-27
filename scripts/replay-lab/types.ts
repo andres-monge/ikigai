@@ -1,4 +1,5 @@
-export type CandidateKind = 'paths' | 'voice';
+import type { CareerMap } from '../../shared/career-map/index.js';
+export type CandidateKind = 'paths' | 'voice' | 'learning';
 export interface CandidatePreparation {
   status: 'blocked' | 'ready'; conflicts: string[]; adaptations: string[];
   originalSkill: string; contract: Record<string, unknown>;
@@ -8,6 +9,7 @@ export interface Candidate {
   voice: string; skills: Record<string, string>;
   sharedRules: string; controls: string; acceptedVoice: boolean;
   artifactPath: string;
+  effortByModule?: Record<string, 'low' | 'medium' | 'high'>;
   preparation?: CandidatePreparation;
   archived?: boolean;
 }
@@ -26,6 +28,7 @@ export interface Job {
   status: 'queued' | 'running' | 'done' | 'error'; error?: string;
   reply?: string; cards?: PathCard[]; currentMessage?: string;
   feedback: Feedback; archive?: boolean; caveats?: string[];
+  canonicalState?: CareerMap;
   config?: Candidate; traces?: unknown[]; operations?: unknown[];
   providerItems?: Record<string, unknown>[];
   metadata?: Record<string, unknown>;
