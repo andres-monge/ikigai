@@ -1,0 +1,37 @@
+# Chat recap reload recovery — 2026-10-28
+
+## Debug Summary
+
+**Problem:** A completed founder reply revised three paths and included a useful learning recap. After returning to Chat/reloading, the cards remained but the recap disappeared. This bounded `ce-debug` fix starts from integration HEAD `11b1461b373784fad91ac6ff262ba5f585facd6e`. No issue of record was supplied; targeted GitHub issue/PR searches found no matching work.
+
+**Root Cause:** The original text was retained, not lost at generation or persistence. Read-only database/provider inspection found a completed agent turn with one correctly bound 1,407-character assistant item containing the recap. The terminal `canonicalPurposePathsOffer` flag was true, as it is for later card deliveries. Three earlier completed offers existed. The live agent already separates first introduction from later acknowledgment (`server/ai/agent.ts:631–639`), while history treated that card-delivery flag as a whole-reply replacement instruction (`server/ai/history.ts`, pre-fix lines 655–686). It filtered all but the final assistant item and replaced that item's entire text with the 216-character onboarding introduction, stripping any citations. Explore faithfully rendered that reduced history and attached the canonical cards to its final item. This explains both preserved cards and missing recap without a pagination, terminal-status or renderer failure.
+
+The approved first-only introduction rule is in the revamp plan's 2026-10-03 Paths amendment (line 835). This fix implements that existing rule; it changes no Method policy or prompt. The four pre-existing auth/port/AGENTS edits cannot explain a selective, deterministic rewrite reproduced by the pure history loader. No stash/reset/discard experiment was used.
+
+**Recommended Tests:** The existing history adapter suite owns this behavior. Its isolated canonical-offer test had no prior completed presentation, so it could not distinguish first onboarding from revision. Live-agent tests covered that distinction but did not hydrate history. The new public-loader regression supplies an off-page prior durable offer, a revised reply split into acknowledgment and recap items, and hidden pre-tool prose. It asserts exact retained text, the unchanged final-item anchor and hidden-text exclusion. Prior failed/cancelled offers remain distinct negative cases. Existing first-introduction behavior remains asserted.
+
+**Fix:** History derives the first completed flagged path offer from the already loaded oldest-first durable turns (`server/storage.ts:1420–1427`), including those outside the current provider page. Only that introduction and attempts before it retain canonical text substitution. Later offers preserve their bound assistant items, text and citations. Existing ownership, internal-context exclusion, projection validation, final-card hosting and pagination guards are unchanged. No additional database/provider read, new metadata, migration or account repair is needed.
+
+**Prevention:** The synthetic regression failed before implementation with the fixed introduction instead of the recap, then all three cases passed. A separate read-only probe against the captured actual shape changed from 1,407 source / 216 projected characters to exact source/projected equality at 1,407 characters. It uses the production loader with captured data and no live generation. No founder prose is copied into tracked fixtures or this receipt.
+
+**Confidence:** High. The original recap is fully recoverable and now visible. Its saved project remains parked/not-started without a formal reflection; that separate behavior was neither repaired nor fabricated here. No separate repeated-introduction prompt change was made.
+
+## Post-Fix Quality
+
+**Scope:** Only `server/ai/history.ts`, `server/ai/history.test.ts` and this receipt. Pre-existing dirty files were `AGENTS.md`, `server/auth.test.ts`, `server/auth.ts`, `server/index.ts`; their bytes remain unchanged and they are excluded from the commit. Historical prefixes, capture/lab artifacts, skills and authority documents were not edited.
+
+**Simplify:** Actual pipeline review ran five full-rubric reviewers: reuse, quality, efficiency, test value and comments. Reuse/quality/efficiency/tests found no actionable changes. Applied the comment review's deletion of a redundant three-line comment. Protected proof tests were retained.
+
+**Review:** Targeted manual due to unrelated branch work, plus an independent read-only correctness/security review of the final fix-owned diff. Checked ordered durable provenance, off-page detection, failed/cancelled handling, bound-item eligibility, citations and final-card anchors. No actionable findings or unresolved residuals. No duplicate whole-feature code review or paid cross-model pass ran.
+
+**Verification:** Node24 typecheck and production build pass. History 39, agent 54, Explore 54 and agent routes 129 tests pass: **276 tests across four files**. The initial combined invocation passed the first three suites but route collection lacked required environment values; rerunning routes with synthetic test-only database/model configuration passed all 129. No real credentials or live database/provider were used by these tests. Private `.context` archives were excluded. Diff whitespace check passes; no lint command is configured. Logs: `/tmp/revelio-recap-tests.log`, `/tmp/revelio-recap-routes.log`, `/tmp/revelio-recap-types.log`, `/tmp/revelio-recap-build.log`.
+
+## Signed-in Browser proof and source integrity
+
+The enterprise-controlled `@Browser` surface accepted the existing Chrome tab on approved `http://localhost:5173/`. Before the fix its full Chat state lacked the recap while showing the corresponding latest user reply and all three revised cards. The composer was empty and remained untouched.
+
+Only main PID 3989 was restarted because this is a backend correction. Replacement Node24 PID 17439 runs from the same integration checkout on 5173 with the same existing project environment file, development mode and both latency flags. HTTP 200 and existing authentication were retained. No listener existed on lab 5174 at inspection; this work neither started nor changed the lab. One browser inspection timed out during restart; the documented browser recovery path retained the same session and tab, then inspection succeeded without a workaround.
+
+After an explicit page reload, Chat showed the retained original acknowledgment, recap heading, all four original bullets and closing paragraph, together with the revised path cards. The heading and revised product card each appeared once. Switching to Your Map and back preserved them. The browser is left on Chat at the restored recap, with an empty composer. A verification screenshot is retained privately, outside tracked files.
+
+Read-only repeatable-read snapshots before and after prove equality of the complete canonical document, revision, update timestamp, all 21 durable turns, all 30 operation-history records and Conversation mapping. All 259 provider items are unchanged. Canonical revision remains **30**. No message, paid/model generation, blind replay, acceptance, path selection, new project, reflection write or reset occurred. Private exact source text, capture/probe scripts, hashes and screenshot are in Git recovery metadata under `recovery/chat-recap-20261028`, not committed. Heartbeat remains off; no push, PR or deployment occurred.

@@ -576,7 +576,12 @@ function projectConversationHistory(
   const turnIdsByMessage = new Map<string, string>();
   const turnStatusesByMessage = new Map<string, 'completed' | 'cancelled' | 'failed'>();
   const finalAssistantItemIds = new Set<string>();
-  const canonicalOfferTurnIds = new Set<string>();
+  const canonicalIntroductionTurnIds = new Set<string>();
+  const firstCompletedPathOfferIndex = turns.findIndex((turn) => (
+    turn.origin === 'agent-turn' && turn.status === 'completed'
+    && turn.terminalResult?.kind === 'completed'
+    && turn.terminalResult.canonicalPurposePathsOffer === true
+  ));
   const claimedUserItemIds = new Set<string>();
   const claimedAssistantItemIds = new Set<string>();
   const directProjections = new Map<string, z.infer<typeof displayProjectionSchema>>();
@@ -614,7 +619,7 @@ function projectConversationHistory(
     assistantProjections.set(turn.turnId, direct.data);
     for (const id of direct.data.assistantItemIds) claimedAssistantItemIds.add(id);
   }
-  for (const turn of turns) {
+  for (const [turnIndex, turn] of turns.entries()) {
     if (turn.origin === 'workspace-action') {
       const projection = assistantProjections.get(turn.turnId);
       if (!projection) continue;
@@ -652,7 +657,10 @@ function projectConversationHistory(
     const finalAssistantItemId = projection.assistantItemIds.at(-1);
     if (finalAssistantItemId) {
       finalAssistantItemIds.add(finalAssistantItemId);
-      if (terminal.canonicalPurposePathsOffer === true) canonicalOfferTurnIds.add(turn.turnId);
+      if (terminal.canonicalPurposePathsOffer === true
+        && (firstCompletedPathOfferIndex < 0 || turnIndex <= firstCompletedPathOfferIndex)) {
+        canonicalIntroductionTurnIds.add(turn.turnId);
+      }
     }
     for (const id of projection.assistantItemIds) {
       allowed.set(id, 'assistant');
@@ -672,12 +680,12 @@ function projectConversationHistory(
     ).filter((message) => (
       message.role !== 'assistant'
       || !message.turn
-      || !canonicalOfferTurnIds.has(message.turn.turnId)
+      || !canonicalIntroductionTurnIds.has(message.turn.turnId)
       || message.isFinalAssistantItem === true
     )).map((message) => {
       const shown = message.role === 'assistant'
         && message.turn
-        && canonicalOfferTurnIds.has(message.turn.turnId)
+        && canonicalIntroductionTurnIds.has(message.turn.turnId)
         ? {
             ...message,
             parts: [{ type: 'text' as const, text: PURPOSE_PATHS_OFFER_ENGLISH }],

@@ -60,7 +60,7 @@ function durableTurn(input: {
 }
 
 describe('protected OpenAI Conversation history adapter', () => {
-  it('hydrates the canonical offer from a provider-bound revised set without exposing model prose', async () => {
+  it('hydrates the first canonical offer without exposing its replaced model prose', async () => {
     const rawReply = 'The three paths have changed. Which would you pick?';
     const turn = durableTurn({
       turnId: 'revised-paths', userItemId: 'revision-user', assistantItemId: 'revision-assistant',
@@ -92,6 +92,39 @@ describe('protected OpenAI Conversation history adapter', () => {
     });
     expect(JSON.stringify(loaded.messages)).not.toContain(rawReply);
     expect(JSON.stringify(loaded.messages)).not.toContain('Which would you pick?');
+  });
+
+  it.each(['completed', 'failed', 'cancelled'] as const)('preserves a revised-path recap after a prior %s offer using durable turns outside the provider page', async (priorStatus) => {
+    const acknowledgement = 'I updated the product direction while leaving research available to revisit.\n\n';
+    const recap = 'What the model-building experiment taught us\n\n- Understanding was rewarding.\n- The difficulty is still ambiguous.\n- The finished model was unsatisfying.\n- The original research question remains untested.\n\nYou can act on the product direction without another experiment.';
+    const prior = durableTurn({ turnId: 'prior-offer', status: priorStatus, terminalResult: {
+      kind: priorStatus, refetch: true, canonicalPurposePathsOffer: true,
+      displayProjection: { userItemId: 'prior-user', assistantItemIds: ['prior-answer'] },
+    } });
+    const revised = durableTurn({ turnId: 'revised-offer', terminalResult: {
+      kind: 'completed', refetch: true, canonicalPurposePathsOffer: true,
+      displayProjection: { userItemId: 'revised-user', assistantItemIds: ['revised-acknowledgement', 'revised-recap'] },
+    } });
+    const loaded = await loadConversationHistory({
+      storage: {
+        getConversationMapping: vi.fn(async () => 'conversation-server-owned'),
+        listAgentTurns: vi.fn(async () => [prior, revised]),
+      },
+      client: { listItems: vi.fn(async () => ({ data: [
+        { id: 'revised-recap', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: recap }] },
+        { id: 'revised-acknowledgement', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: acknowledgement }] },
+        { id: 'revised-hidden', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Hidden pre-tool output.' }] },
+        { id: 'revised-user', type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Update my paths and recap the experiment before another project.' }] },
+      ], hasMore: false })) },
+      userId: 'explorer-1',
+    });
+    const assistants = loaded.messages.filter((message) => message.role === 'assistant');
+    expect(assistants.flatMap((message) => message.parts).map((part) => part.text).join(''))
+      .toBe(priorStatus === 'completed' ? acknowledgement + recap : PURPOSE_PATHS_OFFER_ENGLISH);
+    expect(assistants.at(-1)).toMatchObject({ id: 'revised-recap', isFinalAssistantItem: true,
+      turn: { turnId: 'revised-offer', status: 'completed' } });
+    expect(assistants.slice(0, -1).every((message) => !message.isFinalAssistantItem)).toBe(true);
+    expect(JSON.stringify(loaded.messages)).not.toContain('Hidden pre-tool output.');
   });
 
   it('returns an empty bootstrap without calling the provider when no server mapping exists', async () => {
