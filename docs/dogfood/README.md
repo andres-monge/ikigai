@@ -2,6 +2,7 @@
 
 These records help future agents investigate observed behavior and plan retests. They do not replace `docs/thesis.md` as Method authority or `docs/plans/2026-08-14-claude-feat-revelio-revamp-plan.md` as implementation authority.
 
+- [Findings tracker](findings.md): current retained findings, requested UI work, evidence links and unresolved learning-loop gates.
 - [U7 founder run before reset](2026-09-29-u7-founder-run-before-reset.md): observations, diagnosed failures, shipped changes, and the fresh-run gate.
 - [U7 local UI and latency integration](2026-09-30-u7-ui-latency-integration.md): nonpersonal review and verification of the founder-approved display changes and opt-in diagnostics.
 - [Private founder replay](replay.md): isolated production-agent checkpoint testing and its review gate.
