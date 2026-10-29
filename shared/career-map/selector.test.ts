@@ -116,6 +116,36 @@ describe('Method checkpoint selector', () => {
     expect(deriveMethodCheckpoint(map).availableOperations).toContain('propose-first-project');
   });
 
+  it('keeps the revised set decision actionable inside path revision focus until exact confirmation', () => {
+    let map = withSelectedPath('explorer-open-revision');
+    map = commit(map, 'open-path-revision-focus', { reason: 'Consider a product direction', action: action(5) });
+    expect(deriveMethodCheckpoint(map).pendingDecision).toBeNull();
+    expect(deriveMethodCheckpoint(map).availableOperations).not.toContain('confirm-purpose-path-revision');
+    map = commit(map, 'replace-purpose-path', { sourceSetId: 'set-1', sourceSetRevision: 1, replacedPathId: 'path-2', replacementSetId: 'set-2', replacementSetRevision: 1, replacement: { ...paths[1], id: 'product-path' }, presentation: presentation(6) });
+    expect(deriveMethodCheckpoint(map)).toMatchObject({ module: 'create-purpose-paths', focus: { kind: 'path-revision' }, pendingDecision: { kind: 'path-revision-confirmation', targetId: 'set-2', targetRevision: 1 } });
+    expect(deriveMethodCheckpoint(map).availableOperations).toEqual(expect.arrayContaining(['confirm-purpose-path-revision', 'close-focus']));
+    expect(deriveMethodCheckpoint(map).availableOperations).not.toContain('propose-first-project');
+    expect(deriveMethodCheckpoint(map).availableOperations).not.toContain('select-purpose-path');
+    map = commit(map, 'confirm-purpose-path-revision', { setId: 'set-2', setRevision: 1, pathId: 'product-path', pathRevision: 1, action: action(7) });
+    expect(map.focus).toBeUndefined();
+    expect(deriveMethodCheckpoint(map)).toMatchObject({ module: 'design-path-project', pendingDecision: null });
+    expect(deriveMethodCheckpoint(map).availableOperations).toContain('propose-first-project');
+  });
+
+  it('exposes initial selection instead of revision confirmation when focus has no prior active path', () => {
+    let map = createCareerMap('explorer-initial-focus');
+    map = commit(map, 'propose-why', { why: { id: 'why-1', revision: 1, statement: 'Make useful choices', serves: 'People choosing work', pointOfView: 'Learn by trying' }, presentation: presentation(1) });
+    map = commit(map, 'confirm-why', { whyId: 'why-1', whyRevision: 1, action: action(2) });
+    map = commit(map, 'open-path-revision-focus', { reason: 'Explore possible directions', action: action(3) });
+    map = commit(map, 'propose-purpose-paths', { setId: 'set-1', setRevision: 1, paths, presentation: presentation(4) });
+    expect(deriveMethodCheckpoint(map)).toMatchObject({ focus: { kind: 'path-revision' }, pendingDecision: { kind: 'path-selection', targetId: 'set-1', targetRevision: 1 } });
+    expect(deriveMethodCheckpoint(map).availableOperations).toEqual(expect.arrayContaining(['select-purpose-path', 'close-focus']));
+    expect(deriveMethodCheckpoint(map).availableOperations).not.toContain('confirm-purpose-path-revision');
+    map = commit(map, 'select-purpose-path', { setId: 'set-1', setRevision: 1, pathId: 'path-2', pathRevision: 1, action: action(5) });
+    expect(map.focus).toBeUndefined();
+    expect(deriveMethodCheckpoint(map).module).toBe('design-path-project');
+  });
+
   it('keeps a replacement for an unaccepted first project in first-project confirmation', () => {
     let map = withSelectedPath('explorer-first-project-replacement');
     map = commit(map, 'propose-first-project', { project: project(), presentation: presentation(5) });

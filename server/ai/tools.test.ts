@@ -161,6 +161,22 @@ function pendingPaths(pathNames = ['Path 1', 'Path 2', 'Path 3']): CareerMap {
   return proposed.map;
 }
 
+function revisedPathsInOpenFocus(): CareerMap {
+  let map = pendingProject(false);
+  const apply = (operation: CareerMapOperation) => {
+    const result = applyCareerMapOperation(map, operation);
+    if (result.status !== 'committed') throw new Error(`Open revision fixture ${operation.type} failed.`);
+    map = result.map;
+  };
+  apply({ type: 'open-path-revision-focus', sourceId: 'open-revision', expectedRevision: map.revision, occurredAt: at(6),
+    payload: { reason: 'Explore the product direction while keeping research available.', action: userAction(6) } });
+  apply({ type: 'replace-purpose-path', sourceId: 'replace-path', expectedRevision: map.revision, occurredAt: at(7),
+    payload: { sourceSetId: 'set-1', sourceSetRevision: 1, replacedPathId: 'path-1', replacementSetId: 'set-2', replacementSetRevision: 1,
+      replacement: { id: 'path-product', revision: 1, name: 'Build a useful product', servesWhy: 'Help people choose useful work', evidence: ['Enjoy building tools'], centralUnknown: 'Do I enjoy developing a useful product?', projectPreview: 'Try a small product improvement', practicalFit: 'Use existing side-project time' },
+      presentation: { kind: 'model-presentation', assistantTurnId: 'revised-paths-turn', turnSequence: 7, completed: true, presentedAt: at(7) } } });
+  return map;
+}
+
 class ReducerStorage {
   readonly persist = vi.fn(async (input: { operation: CareerMapOperation }): Promise<PersistCareerMapResult> => {
     const result = applyCareerMapOperation(this.map, input.operation);
@@ -350,6 +366,65 @@ describe('strict state-specific Method tools', () => {
     expect(exposed).not.toContain('research_current_world');
     expect(storage.map.revision).toBe(3);
     expect(storage.persist).not.toHaveBeenCalled();
+  });
+
+  it.each(['agent-turn', 'workspace-action'] as const)('confirms the exact revised path while revision focus remains open through %s', async (surface) => {
+    const storage = new ReducerStorage(revisedPathsInOpenFocus());
+    storage.listAgentTurns.mockResolvedValue([{ turnId: 'revised-paths-turn', origin: 'agent-turn', status: 'completed', terminalResult: { kind: 'completed' } }] as never);
+    const loader = await createMethodModuleLoader();
+    const prepared = await refreshMethodState(storage, loader, 'explorer-1');
+    expect(prepared.checkpoint.focus?.kind).toBe('path-revision');
+    const input = { setId: 'set-2', setRevision: 1, pathId: 'path-product', pathRevision: 1, presentedInTurnId: 'revised-paths-turn', sourceMessageId: 'current-message' };
+    const runtimeInput = { ...runtime(storage, surface), loader, timing: { turnSequence: 8, occurredAt: at(8) }, currentMessage: 'The product direction looks right. Let’s work on that path.' };
+    const result = surface === 'workspace-action'
+      ? await executeWorkspaceTool({ runtime: runtimeInput, expectedRevision: storage.map.revision, operationType: 'confirm-purpose-path-revision', operationId: 'confirm-product', rawInput: input })
+      : await createMethodTools({ ...runtimeInput, surface, prepared: { current: prepared } }).confirm_purpose_path_revision.execute?.(input, { toolCallId: 'confirm-product', messages: [] } as never);
+    expect(result).toMatchObject({ status: 'committed', derivedModule: 'design-path-project' });
+    expect(storage.map.focus).toBeUndefined();
+    expect(storage.map.pathSets.at(-1)).toMatchObject({ status: 'active', confirmation: { targetId: 'set-2', confirmedBy: { actionId: 'current-message' } } });
+    expect(storage.map.pathSets.at(-1)?.paths.find((path) => path.selection === 'active')?.id).toBe('path-product');
+    expect(storage.map.projects).toHaveLength(1);
+    expect(storage.map.projects[0].agreementStatus).toBe('parked');
+    expect(storage.map.reflections).toHaveLength(0);
+    const reloaded = await refreshMethodState(storage, loader, 'explorer-1');
+    expect(reloaded.checkpoint.pendingDecision).toBeNull();
+    expect(toolNamesForCheckpoint(reloaded.checkpoint)).toContain('propose_first_project');
+    expect(storage.persist).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ['stale set revision', { setRevision: 99 }],
+    ['wrong member', { pathId: 'not-in-set' }],
+    ['wrong presenting turn', { presentedInTurnId: 'other-turn' }],
+    ['wrong current message', { sourceMessageId: 'other-message' }],
+  ])('preserves the %s guard during an open revision focus', async (_label, overrides) => {
+    const storage = new ReducerStorage(revisedPathsInOpenFocus());
+    const before = structuredClone(storage.map);
+    const loader = await createMethodModuleLoader();
+    const tools = createMethodTools({ ...runtime(storage), loader, surface: 'agent-turn', timing: { turnSequence: 8, occurredAt: at(8) }, prepared: { current: await refreshMethodState(storage, loader, 'explorer-1') } });
+    const result = await tools.confirm_purpose_path_revision.execute?.({ setId: 'set-2', setRevision: 1, pathId: 'path-product', pathRevision: 1, presentedInTurnId: 'revised-paths-turn', sourceMessageId: 'current-message', ...overrides }, { toolCallId: 'invalid-confirmation', messages: [] } as never);
+    expect(result).toMatchObject({ status: 'rejected', errorClass: 'ConfirmationTargetMismatchError' });
+    expect(storage.persist).not.toHaveBeenCalled();
+    expect(storage.map).toEqual(before);
+  });
+
+  it.each(['failed', 'cancelled', 'pending'])('rejects a revised path whose presentation turn is %s even with open focus', async (status) => {
+    const storage = new ReducerStorage(revisedPathsInOpenFocus());
+    storage.listAgentTurns.mockResolvedValue([{ turnId: 'revised-paths-turn', origin: 'agent-turn', status, terminalResult: status === 'pending' ? null : { kind: status } }] as never);
+    const loader = await createMethodModuleLoader();
+    const result = await executeWorkspaceTool({ runtime: { ...runtime(storage, 'workspace-action'), loader, timing: { turnSequence: 8, occurredAt: at(8) } }, expectedRevision: storage.map.revision, operationType: 'confirm-purpose-path-revision', operationId: 'undelivered-revision', rawInput: { setId: 'set-2', setRevision: 1, pathId: 'path-product', pathRevision: 1, presentedInTurnId: 'revised-paths-turn', sourceMessageId: 'current-message' } });
+    expect(result).toMatchObject({ status: 'rejected', errorClass: 'confirmation-not-auditable' });
+    expect(storage.persist).not.toHaveBeenCalled();
+    expect(storage.map.focus?.kind).toBe('path-revision');
+  });
+
+  it('does not confirm a revised path in its own presentation turn even with open focus', async () => {
+    const storage = new ReducerStorage(revisedPathsInOpenFocus());
+    const before = structuredClone(storage.map);
+    const loader = await createMethodModuleLoader();
+    const tools = createMethodTools({ ...runtime(storage), loader, turn: { ...runtime(storage).turn, turnId: 'revised-paths-turn' }, surface: 'agent-turn', timing: { turnSequence: 7, occurredAt: at(7) }, prepared: { current: await refreshMethodState(storage, loader, 'explorer-1') } });
+    expect(await tools.confirm_purpose_path_revision.execute?.({ setId: 'set-2', setRevision: 1, pathId: 'path-product', pathRevision: 1, presentedInTurnId: 'revised-paths-turn', sourceMessageId: 'current-message' }, { toolCallId: 'same-turn-confirmation', messages: [] } as never)).toMatchObject({ status: 'rejected', errorClass: 'confirmation-not-auditable' });
+    expect(storage.map).toEqual(before);
   });
 
   it('opens Foundation reflection from pending paths without revising the North Star', async () => {

@@ -1145,9 +1145,10 @@ describe('Explore U6 conversation-first workspace', () => {
     await waitFor(() => expect(screen.queryByRole('status', { name: 'Revelio is responding.' })).toBeNull());
   });
 
-  it('uses the revision-confirmation operation for a revised Purpose Path set', async () => {
+  it.each([false, true])('uses revision confirmation for a revised Purpose Path set with open focus=%s', async (openFocus) => {
     let operationBody: Record<string, unknown> | undefined;
     const map = revisedPathsMap();
+    if (openFocus) map.focus = { kind: 'path-revision', reason: 'Review a different direction', openedBy: { kind: 'user-message', actionId: 'open-revision', turnId: 'turn-open-revision', turnSequence: 4, occurredAt: '2030-01-01T00:00:04.000Z' } };
     const revisedHistory: NormalizedHistoryMessage[] = [{
       id: 'assistant-revised',
       role: 'assistant',

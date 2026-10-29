@@ -246,7 +246,6 @@ function operationsForFocus(map: CareerMap, focus: Focus): CareerMapOperationTyp
       ...(map.pathSets.some((set) => set.status !== 'superseded')
         ? ['replace-purpose-path' as const, 'revise-purpose-paths' as const, 'combine-purpose-paths' as const]
         : ['propose-purpose-paths' as const]),
-      ...(map.pathSets.some((set) => set.status === 'suggested') ? ['confirm-purpose-path-revision' as const] : []),
       'close-focus',
     ];
   }
@@ -260,7 +259,7 @@ function operationsForDecision(map: CareerMap, decision: PendingDecision): Caree
       'open-foundation-revision-focus',
     ];
     case 'path-selection': return ['replace-purpose-path', 'revise-purpose-paths', 'combine-purpose-paths', 'select-purpose-path', 'open-path-revision-focus', 'open-foundation-revision-focus'];
-    case 'path-revision-confirmation': return ['replace-purpose-path', 'revise-purpose-paths', 'combine-purpose-paths', 'confirm-purpose-path-revision', 'select-purpose-path', 'open-path-revision-focus', 'open-foundation-revision-focus'];
+    case 'path-revision-confirmation': return ['replace-purpose-path', 'revise-purpose-paths', 'combine-purpose-paths', 'confirm-purpose-path-revision', 'open-path-revision-focus', 'open-foundation-revision-focus'];
     case 'first-project-confirmation': {
       const project = map.projects.find((item) => (
         item.id === decision.targetId && item.revision === decision.targetRevision
@@ -352,12 +351,19 @@ export function deriveMethodCheckpoint(map: CareerMap): MethodCheckpoint {
   }
 
   if (map.focus && map.focus.kind !== 'peers' && (map.focus.kind !== 'reflection' || selectCurrentProjectLearning(map).reflection?.id === map.focus.reflectionId)) {
+    const pending = map.focus.kind === 'path-revision' ? pendingDecision(map) : null;
+    const focusDecision = pending?.module === 'create-purpose-paths'
+      ? pending.decision
+      : null;
     return {
       module: focusModule(map.focus),
-      pendingDecision: null,
+      pendingDecision: focusDecision,
       focus: map.focus,
       review: null,
-      availableOperations: withHelpOperations(map, operationsForFocus(map, map.focus)),
+      availableOperations: withHelpOperations(map, [
+        ...operationsForFocus(map, map.focus),
+        ...(focusDecision ? operationsForDecision(map, focusDecision) : []),
+      ]),
     };
   }
 
