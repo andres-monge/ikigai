@@ -28,10 +28,23 @@ export const pathProjectInputSchema = z.object({
 }).strict();
 
 export const projectWorkStatusSchema = z.enum(['not-started', 'in-progress', 'stopped', 'completed']);
+export const projectReportedActivitySchema = z.string().min(1).max(2_000);
 
 export const projectWorkUpdateSchema = z.object({
   status: projectWorkStatusSchema,
   action: userActionProvenanceSchema,
+  sourceId: entityIdSchema.optional(),
+  reportedActivity: projectReportedActivitySchema.optional(),
+  correctsActionId: entityIdSchema.optional(),
+}).strict();
+
+export const projectProceedingReportSchema = z.object({
+  sourceId: entityIdSchema,
+  projectId: entityIdSchema,
+  projectRevision: revisionSchema,
+  action: userActionProvenanceSchema,
+  reportedActivity: projectReportedActivitySchema,
+  retractedBy: userActionProvenanceSchema.optional(),
 }).strict();
 
 export const projectAcceptancePhraseSchema = z.string().min(1).max(240)
@@ -68,6 +81,7 @@ export const pathProjectSchema = pathProjectInputSchema.extend({
   presentation: modelPresentationSchema,
   acceptanceFraming: projectAcceptanceFramingSchema.optional(),
   confirmation: confirmationSchema.optional(),
+  proceedingReport: projectProceedingReportSchema.optional(),
   supersedesProjectId: entityIdSchema.optional(),
   sourceOptionSetId: entityIdSchema.optional(),
 }).strict();

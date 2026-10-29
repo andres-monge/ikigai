@@ -2156,3 +2156,47 @@ describe('PostgresStorage repair, erasure, and integrity', () => {
     expect(audit.zeroInvalid).toBe(true);
   });
 });
+
+describe('durable current-report project proceeding', () => {
+  it('binds report and correction to owned turns, preserves reports, and replays without duplicate state', async () => {
+    const userId = owner('work-report-provenance');
+    const projectId = await seedPendingFirstProject(userId,'work-report-provenance');
+    const turn = await beginTurn(userId,'work-report-current','agent-turn');
+    const context = createAgentTurnPersistenceContext(turn,{turnSequence:6,occurredAt:at(6)});
+    const operation: CareerMapOperation = {type:'report-project-work',sourceId:id('work-report'),expectedRevision:5,occurredAt:at(6),payload:{projectId,projectRevision:1,status:'completed',reportedActivity:'I finished the interviews.',action:context.action}};
+    const input = {userId,leaseId:turn.leaseId,context,operation,moduleVersion:'report-test@1'};
+    expect(await storage.persistCareerMapOperation({...input,operation:{...operation,payload:{...operation.payload,action:{...context.action,turnId:id('forged-report-turn')}}}})).toMatchObject({status:'rejected',error:{code:'invalid-operation'}});
+    const controller = new AbortController();controller.abort();
+    await expect(storage.persistCareerMapOperation({...input,abortSignal:controller.signal})).rejects.toMatchObject({name:'AbortError'});
+    expect(await storage.loadCareerMap(userId)).toMatchObject({status:'ready',map:{revision:5,projects:[expect.objectContaining({agreementStatus:'suggested',workStatus:'not-started'})]}});
+    expect(await storage.persistCareerMapOperation(input)).toMatchObject({status:'committed',map:{revision:6,projects:[expect.objectContaining({agreementStatus:'accepted',workStatus:'completed',proceedingReport:{sourceId:operation.sourceId,projectId,projectRevision:1,action:context.action,reportedActivity:operation.payload.reportedActivity}})]}});
+    expect(await storage.persistCareerMapOperation(input)).toMatchObject({status:'replayed',map:{revision:6}});
+    await storage.completeAgentTurn({userId,turnId:turn.turnId,leaseId:turn.leaseId});
+    const correctionTurn = await beginTurn(userId,'work-report-correction','agent-turn');
+    const correctionContext = createAgentTurnPersistenceContext(correctionTurn,{turnSequence:7,occurredAt:at(7)});
+    const correction: CareerMapOperation = {type:'correct-project-work-status',sourceId:id('work-report-correction'),expectedRevision:6,occurredAt:at(7),payload:{projectId,projectRevision:1,latestActionId:context.action.actionId,expectedStatus:'completed',status:'in-progress',reportedActivity:'I have one more interview to do.',action:correctionContext.action}};
+    expect(await storage.persistCareerMapOperation({userId,leaseId:correctionTurn.leaseId,context:correctionContext,operation:correction,moduleVersion:'report-test@1'})).toMatchObject({status:'committed',map:{revision:7}});
+    const loaded = await storage.loadCareerMap(userId);
+    expect(loaded.status).toBe('ready');
+    if (loaded.status !== 'ready') throw new Error('Reported project did not load.');
+    expect(loaded.map.projects[0].confirmation).toBeUndefined();
+    expect(loaded.map.projects[0].acceptanceFraming).toBeUndefined();
+    expect(loaded.map.projects[0].workUpdates).toEqual([
+      {status:'completed',action:context.action,sourceId:operation.sourceId,reportedActivity:'I finished the interviews.'},
+      {status:'in-progress',action:correctionContext.action,sourceId:correction.sourceId,reportedActivity:'I have one more interview to do.',correctsActionId:context.action.actionId},
+    ]);
+    expect(loaded.map.operationHistory).toHaveLength(7);
+  });
+
+  it('rolls back report-derived proceeding, progress and receipt together on a transaction failure', async () => {
+    const userId=owner('work-report-rollback');
+    const projectId=await seedPendingFirstProject(userId,'work-report-rollback');
+    const before=await storage.loadCareerMap(userId);
+    const turn=await beginTurn(userId,'work-report-rollback-current','agent-turn');
+    const context=createAgentTurnPersistenceContext(turn,{turnSequence:6,occurredAt:at(6)});
+    const faulting=new PostgresStorage({database:db,now:()=>now,faultInjector:(stage)=>{if(stage==='after-map-update-before-history')throw new Error('synthetic report transaction fault');}});
+    await expect(faulting.persistCareerMapOperation({userId,leaseId:turn.leaseId,context,moduleVersion:'report-test@1',operation:{type:'report-project-work',sourceId:id('work-report-rollback-op'),expectedRevision:5,occurredAt:at(6),payload:{projectId,projectRevision:1,status:'in-progress',reportedActivity:'I arranged the first interview.',action:context.action}}})).rejects.toThrow('synthetic report transaction fault');
+    expect(await storage.loadCareerMap(userId)).toEqual(before);
+    expect(await db.select().from(careerMapHistory).where(eq(careerMapHistory.userId,userId))).toHaveLength(5);
+  });
+});

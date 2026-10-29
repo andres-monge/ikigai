@@ -15,6 +15,7 @@ import {
   projectAcceptancePhraseSchema,
   projectAcceptanceQuestionSchema,
   projectWorkStatusSchema,
+  projectReportedActivitySchema,
   validateProjectBrief,
 } from './projects';
 import { learningEvidenceSchema, nextMoveKindSchema } from './learning';
@@ -120,7 +121,9 @@ export const projectOperationSchemas = {
   'accept-first-project': operationSchema('accept-first-project', z.object({ projectId: entityIdSchema, projectRevision: revisionSchema, action: userActionProvenanceSchema }).strict()),
   'propose-project-revision': operationSchema('propose-project-revision', z.object({ projectId: entityIdSchema, projectRevision: revisionSchema, replacement: pathProjectInputSchema.superRefine(validateProjectBrief), presentation: modelPresentationSchema }).strict()),
   'confirm-project-revision': operationSchema('confirm-project-revision', z.object({ projectId: entityIdSchema, projectRevision: revisionSchema, action: userActionProvenanceSchema }).strict()),
-  'update-project-work-status': operationSchema('update-project-work-status', z.object({ projectId: entityIdSchema, projectRevision: revisionSchema, status: projectWorkStatusSchema, action: userActionProvenanceSchema }).strict()),
+  'report-project-work': operationSchema('report-project-work', z.object({ projectId: entityIdSchema, projectRevision: revisionSchema, status: z.enum(['in-progress', 'stopped', 'completed']), reportedActivity: projectReportedActivitySchema, action: userActionProvenanceSchema }).strict()),
+  'update-project-work-status': operationSchema('update-project-work-status', z.object({ projectId: entityIdSchema, projectRevision: revisionSchema, status: projectWorkStatusSchema, reportedActivity: projectReportedActivitySchema.optional(), action: userActionProvenanceSchema }).strict()),
+  'correct-project-work-status': operationSchema('correct-project-work-status', z.object({ projectId: entityIdSchema, projectRevision: revisionSchema, latestActionId: entityIdSchema, expectedStatus: projectWorkStatusSchema, status: projectWorkStatusSchema, reportedActivity: projectReportedActivitySchema, action: userActionProvenanceSchema }).strict()),
   'propose-follow-on-projects': operationSchema('propose-follow-on-projects', z.object({ setId: entityIdSchema, setRevision: revisionSchema, projects: exactThree(pathProjectInputSchema.superRefine(validateProjectBrief)), presentation: modelPresentationSchema }).strict()),
   'replace-follow-on-project': operationSchema('replace-follow-on-project', z.object({ sourceSetId: entityIdSchema, sourceSetRevision: revisionSchema, replacedProjectId: entityIdSchema, replacementSetId: entityIdSchema, replacementSetRevision: revisionSchema, replacement: pathProjectInputSchema.superRefine(validateProjectBrief), presentation: modelPresentationSchema }).strict()),
   'select-follow-on-project': operationSchema('select-follow-on-project', z.object({ setId: entityIdSchema, setRevision: revisionSchema, projectId: entityIdSchema, projectRevision: revisionSchema, action: userActionProvenanceSchema }).strict()),

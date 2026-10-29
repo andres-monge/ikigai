@@ -188,8 +188,8 @@ export const careerMapSchema = composedCareerMapSchema.superRefine((map, context
     if (!hasRevision(paths, project.basisPath)) {
       context.addIssue({ code: z.ZodIssueCode.custom, path: ['projects', projectIndex, 'basisPath'], message: 'Path Project basis is missing.' });
     }
-    if (project.agreementStatus === 'accepted' && !project.confirmation) {
-      context.addIssue({ code: z.ZodIssueCode.custom, path: ['projects', projectIndex], message: 'Accepted project requires auditable confirmation.' });
+    if (project.agreementStatus === 'accepted' && !project.confirmation && (!project.proceedingReport || project.proceedingReport.retractedBy)) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['projects', projectIndex], message: 'Accepted project requires auditable confirmation or current-report proceeding.' });
     }
     if (project.acceptanceFraming && !project.acceptanceFraming.framingFormat
       && (!project.acceptanceFraming.acceptancePhrase || !project.acceptanceFraming.acceptanceQuestion)) {
@@ -204,6 +204,36 @@ export const careerMapSchema = composedCareerMapSchema.superRefine((map, context
     if (project.basisAction) {
       const receipt = map.operationHistory.find((record) => record.sourceId === project.basisAction?.sourceId);
       if (!receipt || !['request-new-project','select-purpose-path','confirm-purpose-path-revision','choose-parked-purpose-path'].includes(receipt.operationType) || JSON.stringify(receipt.confirmationProvenance) !== JSON.stringify(project.basisAction.action)) context.addIssue({ code:z.ZodIssueCode.custom, path:['projects',projectIndex,'basisAction'], message:'Project action basis must match its explicit user action receipt.' });
+    }
+    if (project.proceedingReport) {
+      const report = project.proceedingReport;
+      const receipt = map.operationHistory.find((record) => record.sourceId === report.sourceId);
+      const update = project.workUpdates.find((item) => item.sourceId === report.sourceId);
+      if ((project.agreementStatus === 'suggested' && !report.retractedBy)
+        || report.projectId !== project.id || report.projectRevision !== project.revision
+        || !receipt || receipt.operationType !== 'report-project-work'
+        || JSON.stringify(receipt.confirmationProvenance) !== JSON.stringify(report.action)
+        || report.action.kind !== 'user-message' || !update || update.status === 'not-started'
+        || JSON.stringify(update.action) !== JSON.stringify(report.action) || update.reportedActivity !== report.reportedActivity
+        || map.projects.some((other, index) => index !== projectIndex && other.proceedingReport?.sourceId === report.sourceId)) {
+        context.addIssue({ code:z.ZodIssueCode.custom, path:['projects',projectIndex,'proceedingReport'], message:'Proceeding must retain its exact project and current-report operation provenance.' });
+      }
+      if (report.retractedBy && !project.workUpdates.some((item) => item.status === 'not-started'
+        && item.correctsActionId && JSON.stringify(item.action) === JSON.stringify(report.retractedBy))) {
+        context.addIssue({ code:z.ZodIssueCode.custom, path:['projects',projectIndex,'proceedingReport'], message:'Retracted proceeding requires its retained correction.' });
+      }
+    }
+    for (const [updateIndex, update] of project.workUpdates.entries()) {
+      if (!update.sourceId) continue;
+      const receipt = map.operationHistory.find((record) => record.sourceId === update.sourceId);
+      const previous = project.workUpdates[updateIndex - 1];
+      if (!receipt || !['report-project-work','update-project-work-status','correct-project-work-status'].includes(receipt.operationType)
+        || JSON.stringify(receipt.confirmationProvenance) !== JSON.stringify(update.action)
+        || (receipt.operationType === 'correct-project-work-status'
+          ? !previous || update.correctsActionId !== previous.action.actionId
+          : update.correctsActionId !== undefined)) {
+        context.addIssue({ code:z.ZodIssueCode.custom, path:['projects',projectIndex,'workUpdates',updateIndex], message:'Work updates must retain their operation and exact prior correction provenance.' });
+      }
     }
     const lastWorkStatus = project.workUpdates.at(-1)?.status ?? 'not-started';
     if (lastWorkStatus !== project.workStatus) {

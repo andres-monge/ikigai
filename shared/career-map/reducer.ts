@@ -17,7 +17,7 @@ import type { PurposePath, PurposePathInput, PurposePathSet } from './paths';
 import { pathProjectInputSchema, type PathProjectInput, type ProjectOptionSet } from './projects';
 import { isExactFirstProjectFramingDelivery } from './authority';
 import type { SideDoorInput, SideDoorSet } from './side-doors';
-import { selectActivePurposePath, selectCurrentProjectLearning, selectCurrentPathSelectionSourceId, selectProjectDecisionBasis, hasCompletedLearningLoop, isActiveBasisReview, selectEarliestActiveReview, selectLatestAcceptedProject } from './selector';
+import { selectActivePurposePath, selectCurrentProjectLearning, selectCurrentPathSelectionSourceId, selectProjectDecisionBasis, hasCompletedLearningLoop, isActiveBasisReview, selectEarliestActiveReview, selectLatestAcceptedProject, deriveMethodCheckpoint } from './selector';
 
 type RejectionCode =
   | 'invalid-map'
@@ -320,7 +320,7 @@ function ensureNoPendingReview(map: CareerMap, type: CareerMapOperationType): vo
 function nextProjectNumber(map: CareerMap): number {
   let highestAcceptedNumber = 0;
   for (const project of map.projects) {
-    if (project.confirmation && project.number > highestAcceptedNumber) {
+    if ((project.confirmation || (project.proceedingReport && !project.proceedingReport.retractedBy)) && project.number > highestAcceptedNumber) {
       highestAcceptedNumber = project.number;
     }
   }
@@ -690,12 +690,55 @@ function applyDomainOperation(map: CareerMap, operation: CareerMapOperation): Ca
       invalidateFromProject(map, source.id, source.revision);
       return;
     }
-    case 'update-project-work-status': {
+    case 'report-project-work': {
       const target = map.projects.find((project) => sameRevision(project, operation.payload.projectId, operation.payload.projectRevision));
-      assert(target?.agreementStatus === 'accepted', 'Work status requires an accepted project.', 'stale-target');
-      assert(target.workStatus !== 'completed' || operation.payload.status === 'completed', 'Completed work status cannot be silently reversed.');
+      const pending = deriveMethodCheckpoint(map).pendingDecision;
+      assert(target?.agreementStatus === 'suggested' && pending?.kind === 'first-project-confirmation'
+        && sameRevision(target, pending.targetId, pending.targetRevision), 'A work report must identify the exact current suggested project, not a historical project or pending accepted-project replacement.', 'stale-target');
+      assert(operation.payload.action.kind === 'user-message', 'Proceeding requires a current human work report.');
+      assert(operation.payload.action.turnSequence > target.presentation.turnSequence,
+        'A work report must refer to a project persisted before the current human message.', 'stale-target');
+      for (const project of map.projects) if (project !== target && project.agreementStatus === 'accepted') project.agreementStatus = 'parked';
+      target.agreementStatus = 'accepted';
+      target.proceedingReport = {
+        sourceId: operation.sourceId, projectId: target.id, projectRevision: target.revision,
+        action: operation.payload.action, reportedActivity: operation.payload.reportedActivity,
+      };
       target.workStatus = operation.payload.status;
-      target.workUpdates.push({ status: operation.payload.status, action: operation.payload.action });
+      target.workUpdates.push({ status: operation.payload.status, action: operation.payload.action,
+        sourceId: operation.sourceId, reportedActivity: operation.payload.reportedActivity });
+      return;
+    }
+    case 'update-project-work-status':
+    case 'correct-project-work-status': {
+      const target = map.projects.find((project) => sameRevision(project, operation.payload.projectId, operation.payload.projectRevision));
+      const current = selectLatestAcceptedProject(map);
+      assert(target?.agreementStatus === 'accepted' && current && sameRevision(target, current.id, current.revision)
+        && sameRevision(target.basisPath, selectActivePurposePath(map)?.id ?? '', selectActivePurposePath(map)?.revision ?? 0), 'Work status requires the current project on the active path.', 'stale-target');
+      if (operation.type === 'correct-project-work-status') {
+        const latest = target.workUpdates.at(-1);
+        assert(latest && latest.action.actionId === operation.payload.latestActionId
+          && latest.status === operation.payload.expectedStatus, 'Correct only the exact latest reported work update.', 'stale-target');
+        assert(operation.payload.action.kind === 'user-message', 'A status correction requires a current human correction.');
+        if (operation.payload.status === 'not-started' && !target.confirmation && target.proceedingReport && !target.proceedingReport.retractedBy) {
+          let originIndex = target.workUpdates.length - 1;
+          while (target.workUpdates[originIndex].correctsActionId && originIndex > 0) originIndex -= 1;
+          assert(target.workUpdates[originIndex].sourceId === target.proceedingReport.sourceId,
+            'Clarify the earlier work report before retracting proceeding: correcting the latest update cannot retract an independent earlier report.');
+          assert(!map.reflections.some((reflection) => sameRevision(reflection.projectBasis, target.id, target.revision)),
+            'Clarify the reported experience before retracting proceeding: this project already has reflection records. Preserve that learning and its dependent decisions.');
+          target.proceedingReport.retractedBy = operation.payload.action;
+          target.agreementStatus = 'suggested';
+        }
+      } else {
+        assert(target.workStatus !== 'completed' || operation.payload.status === 'completed', 'Completed work status cannot be silently reversed.');
+        assert(target.workStatus === 'not-started' || operation.payload.status !== 'not-started', 'Use an exact status correction to retract reported work.');
+      }
+      target.workStatus = operation.payload.status;
+      target.workUpdates.push({ status: operation.payload.status, action: operation.payload.action, sourceId: operation.sourceId,
+        ...(operation.payload.reportedActivity ? { reportedActivity: operation.payload.reportedActivity } : {}),
+        ...(operation.type === 'correct-project-work-status' ? {correctsActionId:operation.payload.latestActionId} : {}),
+      });
       return;
     }
     case 'propose-follow-on-projects': {

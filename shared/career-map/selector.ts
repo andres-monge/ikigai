@@ -161,7 +161,8 @@ export function selectProjectDecisionBasis(map: CareerMap): { basisNextMove?: Re
   const receipt = request ?? selection;
   if (receipt?.confirmationProvenance && !map.projectOptionSets.some((set) => set.basisAction?.sourceId === receipt.sourceId) && !map.projects.some((project) => project.basisAction?.sourceId === receipt.sourceId)) {
     const latestProject = selectLatestAcceptedProject(map);
-    const projectReceipt = latestProject?.confirmation && map.operationHistory.findLast((item) => ['accept-first-project','confirm-project-revision','select-follow-on-project'].includes(item.operationType) && item.confirmationProvenance?.actionId === latestProject.confirmation?.confirmedBy.actionId);
+    const projectAction = latestProject?.confirmation?.confirmedBy ?? (latestProject?.proceedingReport?.retractedBy ? undefined : latestProject?.proceedingReport?.action);
+    const projectReceipt = projectAction && map.operationHistory.findLast((item) => ['accept-first-project','confirm-project-revision','select-follow-on-project','report-project-work'].includes(item.operationType) && item.confirmationProvenance?.actionId === projectAction.actionId);
     if (!projectReceipt || projectReceipt.resultRevision < receipt.resultRevision) {
       return { basisAction: { sourceId: receipt.sourceId, action: receipt.confirmationProvenance } };
     }
@@ -226,7 +227,7 @@ function pendingDecision(map: CareerMap): { module: MethodModule; decision: Pend
 
 function operationsForFocus(map: CareerMap, focus: Focus): CareerMapOperationType[] {
   switch (focus.kind) {
-    case 'reflection': return ['append-reflection-evidence', 'revise-reflection-evidence', 'update-project-work-status', 'close-reflection', 'close-focus'];
+    case 'reflection': return ['append-reflection-evidence', 'revise-reflection-evidence', 'update-project-work-status', 'correct-project-work-status', 'close-reflection', 'close-focus'];
     case 'peers': return [
       'record-peer-exposure',
       'revise-peer-exposure',
@@ -264,10 +265,10 @@ function operationsForDecision(map: CareerMap, decision: PendingDecision): Caree
       const project = map.projects.find((item) => (
         item.id === decision.targetId && item.revision === decision.targetRevision
       ));
-      if (!project?.acceptanceFraming) return ['replace-project-proposal', 'present-first-project-framing'];
+      if (!project?.acceptanceFraming) return ['replace-project-proposal', 'present-first-project-framing', 'report-project-work'];
       return project.acceptanceFraming.status === 'delivered'
-        ? ['replace-project-proposal', 'accept-first-project']
-        : [];
+        ? ['replace-project-proposal', 'accept-first-project', 'report-project-work']
+        : ['report-project-work'];
     }
     case 'project-revision-confirmation': return ['replace-project-proposal', 'confirm-project-revision'];
     case 'follow-on-project-selection': return ['replace-follow-on-project', 'select-follow-on-project'];
@@ -320,7 +321,7 @@ function normalLifecycle(map: CareerMap): { module: MethodModule; operations: Ca
 
   return {
     module: 'guide-path-project',
-    operations: ['update-project-work-status', 'propose-project-revision', 'open-reflection', ...(reflection ? ['revise-reflection-evidence' as const] : []), 'open-foundation-revision-focus', 'open-path-revision-focus'],
+    operations: ['update-project-work-status', 'correct-project-work-status', 'propose-project-revision', 'open-reflection', ...(reflection ? ['revise-reflection-evidence' as const] : []), 'open-foundation-revision-focus', 'open-path-revision-focus'],
   };
 }
 
@@ -335,6 +336,8 @@ function withHelpOperations(map: CareerMap, operations: CareerMapOperationType[]
     if ((!map.focus || map.focus.kind === 'peers' || map.focus.kind === 'reflection') && map.commitmentIntent && map.commitmentIntent.status !== 'completed' && sameRef(map.commitmentIntent.basisPath, path) && tenure?.confirmationProvenance && tenure.confirmationProvenance.turnSequence <= map.commitmentIntent.action.turnSequence && !selectCurrentPathFocus(map)) extras.push('confirm-legacy-path-focus');
     if (!map.focus || map.focus.kind === 'peers' || map.focus.kind === 'reflection') extras.push('request-new-project');
   }
+  const currentProject = selectLatestAcceptedProject(map);
+  if (currentProject?.workUpdates.length && sameRef(currentProject.basisPath, path)) extras.push('correct-project-work-status');
   return [...new Set([...operations, ...extras])];
 }
 

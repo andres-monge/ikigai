@@ -1016,3 +1016,129 @@ describe('Method reducer', () => {
     expect(result.map).toEqual(map);
   });
 });
+
+describe('current project work reports and exact status corrections', () => {
+  const suggested = () => commit(withSelectedPath(), 'propose-first-project', { project: project(), presentation: presentation(5) });
+  const report = (map: CareerMap, status: 'in-progress' | 'stopped' | 'completed' = 'in-progress') => operation(map, 'report-project-work', {
+    projectId: 'project-1', projectRevision: 1, status,
+    reportedActivity: 'I arranged the first interview.', action: action(7),
+  });
+  const correction = (map: CareerMap, status: 'not-started' | 'in-progress' | 'stopped' | 'completed') => operation(map, 'correct-project-work-status', {
+    projectId: 'project-1', projectRevision: 1,
+    latestActionId: map.projects[0].workUpdates.at(-1)!.action.actionId,
+    expectedStatus: map.projects[0].workStatus, status,
+    reportedActivity: 'That status was mistaken.', action: action(9),
+  });
+
+  it.each(['in-progress', 'stopped', 'completed'] as const)('atomically records %s from a current report without fabricating consent or delivered framing', (status) => {
+    const before = suggested();
+    const op = report(before, status);
+    const result = applyCareerMapOperation(before, op);
+    expect(result.status).toBe('committed');
+    expect(before.projects[0]).toMatchObject({ agreementStatus: 'suggested', workStatus: 'not-started', workUpdates: [] });
+    expect(result.map.projects[0]).toMatchObject({ agreementStatus: 'accepted', workStatus: status,
+      proceedingReport: { sourceId: op.sourceId, projectId: 'project-1', projectRevision: 1, action: action(7), reportedActivity: op.payload.reportedActivity },
+      workUpdates: [{ status, action: action(7), reportedActivity: op.payload.reportedActivity, sourceId: op.sourceId }],
+    });
+    expect(result.map.projects[0].confirmation).toBeUndefined();
+    expect(result.map.projects[0].acceptanceFraming).toBeUndefined();
+    expect(deriveMethodCheckpoint(result.map).module).toBe('guide-path-project');
+    expect(readCareerMap(JSON.parse(JSON.stringify(result.map)))).toEqual(result.map);
+  });
+
+  it('exposes current report but keeps assent unavailable until framing is delivered', () => {
+    const map = suggested();
+    expect(deriveMethodCheckpoint(map).availableOperations).toContain('report-project-work');
+    expect(deriveMethodCheckpoint(map).availableOperations).not.toContain('accept-first-project');
+    expect(applyCareerMapOperation(map, operation(map, 'accept-first-project', { projectId:'project-1',projectRevision:1,action:action(7) })).status).toBe('rejected');
+    expect(withAcceptedProject().projects[0]).toMatchObject({ agreementStatus:'accepted',workStatus:'not-started',workUpdates:[] });
+  });
+
+  it('binds report to exact active suggestion and rejects non-current or not-started reports without mutation', () => {
+    const map = suggested();
+    for (const delta of [{ projectRevision:2 }, { projectId:'missing' }, { status:'not-started' }, { action:action(5) }]) {
+      const op = report(map);
+      const result = applyCareerMapOperation(map, { ...op, payload:{ ...op.payload, ...delta } });
+      expect(result.status).toBe('rejected');
+      expect(result.map).toEqual(map);
+    }
+    for (const agreementStatus of ['parked','superseded'] as const) {
+      const old = structuredClone(map); old.projects[0].agreementStatus = agreementStatus;
+      expect(applyCareerMapOperation(old, report(old)).status).toBe('rejected');
+    }
+    const accepted = withAcceptedProject();
+    const pendingRevision = commit(accepted, 'propose-project-revision', { projectId:'project-1',projectRevision:1,replacement:project('replacement',1),presentation:presentation(8) });
+    const op = report(pendingRevision);
+    expect(applyCareerMapOperation(pendingRevision, {...op,payload:{...op.payload,projectId:'replacement'}}).status).toBe('rejected');
+  });
+
+  it('keeps reports idempotent and rejects source reuse or forged proceeding receipt linkage', () => {
+    const before = suggested(); const op = report(before);
+    const committed = applyCareerMapOperation(before, op);
+    expect(committed.status).toBe('committed');
+    expect(applyCareerMapOperation(committed.map, op).status).toBe('replayed');
+    expect(applyCareerMapOperation(committed.map, {...op,payload:{...op.payload,status:'completed'}})).toMatchObject({status:'rejected',error:{code:'source-id-reused'}});
+    const forged = structuredClone(committed.map);
+    forged.projects[0].proceedingReport!.sourceId = 'invented';
+    expect(careerMapSchema.safeParse(forged).success).toBe(false);
+    const wrongRevision = structuredClone(committed.map);
+    wrongRevision.projects[0].proceedingReport!.projectRevision = 2;
+    expect(careerMapSchema.safeParse(wrongRevision).success).toBe(false);
+  });
+
+  it('corrects completed explicitly and keeps the original report while rejecting stale correction targets', () => {
+    const map = applyCareerMapOperation(suggested(), report(suggested(),'completed')).map;
+    expect(applyCareerMapOperation(map, operation(map,'update-project-work-status',{projectId:'project-1',projectRevision:1,status:'in-progress',action:action(8)})).status).toBe('rejected');
+    const op = correction(map,'in-progress');
+    for (const delta of [{latestActionId:'other'}, {expectedStatus:'stopped'}]) {
+      expect(applyCareerMapOperation(map,{...op,payload:{...op.payload,...delta}}).status).toBe('rejected');
+    }
+    const corrected = applyCareerMapOperation(map,op);
+    expect(corrected.status).toBe('committed');
+    expect(corrected.map.projects[0].workUpdates).toHaveLength(2);
+    expect(corrected.map.projects[0].workUpdates[0]).toEqual(map.projects[0].workUpdates[0]);
+    expect(corrected.map.projects[0].workUpdates[1]).toMatchObject({status:'in-progress',correctsActionId:action(7).actionId,action:action(9)});
+    expect(corrected.map.projects[0].agreementStatus).toBe('accepted');
+  });
+
+  it('retracts the sole report-derived proceeding but preserves independent assent and historical reports', () => {
+    const map = applyCareerMapOperation(suggested(),report(suggested())).map;
+    expect(applyCareerMapOperation(map,operation(map,'update-project-work-status',{projectId:'project-1',projectRevision:1,status:'not-started',action:action(8)})).status).toBe('rejected');
+    const result = applyCareerMapOperation(map,correction(map,'not-started'));
+    expect(result.status).toBe('committed');
+    expect(result.map.projects[0]).toMatchObject({agreementStatus:'suggested',workStatus:'not-started',proceedingReport:{retractedBy:action(9)}});
+    expect(result.map.projects[0].workUpdates).toHaveLength(2);
+    const accepted = commit(withAcceptedProject(),'update-project-work-status',{projectId:'project-1',projectRevision:1,status:'completed',action:action(8)});
+    const corrected = applyCareerMapOperation(accepted,correction(accepted,'not-started'));
+    expect(corrected.status).toBe('committed');
+    expect(corrected.map.projects[0].agreementStatus).toBe('accepted');
+    expect(corrected.map.projects[0].confirmation).toEqual(accepted.projects[0].confirmation);
+  });
+
+  it('cannot retract an older proceeding report by correcting a later independent work update', () => {
+    let map = applyCareerMapOperation(suggested(),report(suggested())).map;
+    map = commit(map,'update-project-work-status',{projectId:'project-1',projectRevision:1,status:'completed',reportedActivity:'I completed the interviews.',action:action(8)});
+    const result=applyCareerMapOperation(map,correction(map,'not-started'));
+    expect(result).toMatchObject({status:'rejected',error:{code:'illegal-transition'}});
+    expect(result.map).toEqual(map);
+    expect(result.map.projects[0].proceedingReport?.retractedBy).toBeUndefined();
+    const first=applyCareerMapOperation(suggested(),report(suggested(),'completed')).map;
+    const inProgress=applyCareerMapOperation(first,correction(first,'in-progress')).map;
+    const correctedAgain=applyCareerMapOperation(inProgress,operation(inProgress,'correct-project-work-status',{projectId:'project-1',projectRevision:1,latestActionId:action(9).actionId,expectedStatus:'in-progress',status:'not-started',reportedActivity:'I had not actually begun it.',action:action(10)}));
+    expect(correctedAgain.status).toBe('committed');
+    expect(correctedAgain.map.projects[0].agreementStatus).toBe('suggested');
+  });
+
+  it('preserves reflection during a status correction and requires clarification before retracting its proceeding basis', () => {
+    let map = applyCareerMapOperation(suggested(),report(suggested(),'completed')).map;
+    map = commit(map,'open-reflection',{reflectionId:'report-reflection',revision:1,projectId:'project-1',projectRevision:1,action:action(8)});
+    expect(deriveMethodCheckpoint(map).availableOperations).toContain('correct-project-work-status');
+    const blocked = applyCareerMapOperation(map,correction(map,'not-started'));
+    expect(blocked).toMatchObject({status:'rejected',error:{code:'illegal-transition'}});
+    expect(blocked.map).toEqual(map);
+    const corrected = applyCareerMapOperation(map,correction(map,'in-progress'));
+    expect(corrected.status).toBe('committed');
+    expect(corrected.map.reflections).toEqual(map.reflections);
+    expect(corrected.map.invalidations).toEqual(map.invalidations);
+  });
+});
