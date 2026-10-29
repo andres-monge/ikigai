@@ -80,7 +80,7 @@ describe('repository-owned Method module loader', () => {
       const decisionSection = (text: string) => text.split('## Decide what to change')[1]?.split('## Intentionally unrelated projects')[0];
       if (key === 'interpret-path-project') expect(decisionSection(runtime)).toBe(decisionSection(draft));
       expect(runtime).toContain(key === 'design-path-project' ? '## Help before agreement' : 'exact latest');
-      expect(loader.load(checkpoint(key)).contentVersion).toBe(key === 'design-path-project' ? '1.3.1' : '1.0.1');
+      expect(loader.load(checkpoint(key)).contentVersion).toBe(key === 'design-path-project' ? '1.3.2' : '1.0.1');
     }
   });
 

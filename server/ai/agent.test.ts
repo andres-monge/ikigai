@@ -1147,6 +1147,59 @@ describe('amended Method agent core loop', () => {
     expect(model.doStreamCalls).toHaveLength(2);
   });
 
+  it('saves one project after changing paths and keeps the earlier reflection open in refreshed design context', async () => {
+    let map = pendingFirstProjectMap();
+    const action = (turnSequence: number) => ({ kind: 'user-message' as const,
+      actionId: `changed-path-${turnSequence}`, turnId: `changed-path-${turnSequence}`, turnSequence, occurredAt: timestamp,
+    });
+    const advance = <T extends CareerMapOperation['type']>(type: T, payload: Extract<CareerMapOperation, { type: T }>['payload']) => {
+      const result = applyCareerMapOperation(map, { type, payload, sourceId: `change-${map.revision}`, expectedRevision: map.revision, occurredAt: timestamp });
+      expect(result.status).toBe('committed');
+      map = result.map;
+    };
+    advance('accept-first-project', { projectId: 'project-1', projectRevision: 1, action: action(7) });
+    advance('open-reflection', { reflectionId: 'open-learning', revision: 1, projectId: 'project-1', projectRevision: 1, action: action(8) });
+    advance('append-reflection-evidence', { reflectionId: 'open-learning', reflectionRevision: 1,
+      evidence: { id: 'listening-energy', revision: 1, signal: 'energy', observation: 'Listening pulled me in; polished writing drained me.', interpretation: 'Try hands-on work without a polished report.', provenance: action(9) },
+    });
+    advance('open-path-revision-focus', { reason: 'Try the second path while retaining what I learned.', action: action(10) });
+    const previousLearning = structuredClone(map.reflections);
+    const previousProject = structuredClone(map.projects[0]);
+    const storage = new InMemoryMethodStorage(map);
+    const model = streamModel([
+      operationChunks({ callId: 'choose-other-work', toolName: 'choose_parked_purpose_path', toolInput: {
+        sourceSetId: 'set-1', sourceSetRevision: 1, replacementSetId: 'changed-set', replacementSetRevision: 1, pathId: 'path-2', pathRevision: 1,
+      } }),
+      operationChunks({ callId: 'retain-earlier-project', toolName: 'resolve_basis_review', toolInput: { targetKind: 'project', targetId: 'project-1', targetRevision: 1, resolution: 'reaffirmed' } }),
+      operationChunks({ callId: 'retain-earlier-learning', toolName: 'resolve_basis_review', toolInput: { targetKind: 'reflection', targetId: 'open-learning', targetRevision: 1, resolution: 'reaffirmed' } }),
+      operationChunks({ callId: 'save-one-project', toolName: 'propose_first_project', toolInput: {
+        id: 'physical-sign', revision: 1, briefFormat: 'simple-v1', relationship: 'linked', title: 'Sketch one useful sign',
+        learningGoal: 'Notice energy while arranging a physical message', firstVersion: 'One rough sign on paper', firstStep: 'Choose three words and sketch them',
+      } }),
+      operationChunks({ callId: 'present-one-project', toolName: 'present_first_project_framing', toolInput: {
+        projectId: 'physical-sign', projectRevision: 1, locale: 'en', framingText: 'We can adapt the first version together.',
+      } }),
+      textChunks('Try one rough sign on paper. We can adapt the first version together.'),
+    ]);
+    const statuses: string[] = [];
+    const { agent } = await makeAgent({ model, storage, turnSequence: 11, currentMessage: 'Choose Path 2 and help me begin different work, keeping the earlier learning.',
+      onOperationStatus: event => { if (event.phase === 'terminal') statuses.push(event.status); },
+    });
+    const output = await collect(await agent.stream({ prompt: 'Choose Path 2 and help me begin different work, keeping the earlier learning.' }));
+    expect(statuses).toEqual(['saved', 'saved', 'saved', 'saved', 'saved']);
+    const designContext = JSON.stringify(model.doStreamCalls[3]?.prompt);
+    expect(designContext).toContain('One suggested Path Project; save with propose_first_project.');
+    expect(designContext).toContain('Listening pulled me in; polished writing drained me.');
+    expect(designContext).toContain('## Saved Path Project on another Purpose Path');
+    expect(storage.map.reflections).toEqual(previousLearning);
+    expect(storage.map.projects[0]).toEqual(previousProject);
+    expect(storage.map.projects[1]).toMatchObject({ id: 'physical-sign', number: 2, agreementStatus: 'suggested', workStatus: 'not-started', basisPath: { id: 'path-2', revision: 1 } });
+    expect(storage.map.projectOptionSets).toHaveLength(0);
+    expect(storage.map.continueChoices).toHaveLength(0);
+    expect(storage.map.nextMoves).toHaveLength(0);
+    expect(JSON.stringify(output)).toContain('We can adapt the first version together.');
+  });
+
   it('asks for explicit first-project acceptance when the current message is only positive', async () => {
     const storage = new InMemoryMethodStorage(pendingFirstProjectMap());
     const model = streamModel([textChunks(

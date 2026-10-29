@@ -1,7 +1,7 @@
 ---
 name: design-path-project
 description: Develop and refine projects the user wants to make and learn from.
-version: 1.3.1
+version: 1.3.2
 ---
 # Develop a Path Project
 
@@ -9,7 +9,11 @@ version: 1.3.1
 
 Turn a project idea into something the user wants to make, understands and can begin. Establish what the experience could teach them before expanding the plan.
 
-For the first project, develop the preview in the selected Purpose Path. Selection authorizes one expanded proposal in the same assistant response through `propose-first-project`; it does not accept that proposal. Preserve its premise unless the user wants something different or a substantial change needs discussion.
+Follow the current project design contract in the career-map briefing. Before any completed learning loop, save one proposal through `propose-first-project`, including after a path change or an explicit request for another project. Completed work or an open reflection does not itself establish a completed learning loop.
+
+After path selection, develop the preview in the selected Purpose Path in the same assistant response. Preserve its premise unless the user wants something different or a substantial change needs discussion. Selection authorizes developing the proposal; it does not accept it.
+
+Save an authorized project proposal or option set before presenting it as the next project choice. A prose-only list does not create that saved decision. Ordinary exploratory ideas and practical advice can remain conversational.
 
 ## Develop the proposal
 
@@ -70,7 +74,7 @@ acceptance.
 
 ## Later projects
 
-For every subsequent project decision after a completed learning loop, develop exactly three distinct, equally weighted project options. This applies both when the user chooses to explore the same path further and when they change directions and select another path. Ground the options in what they learned and want to experience next. Each uses the same learning-first brief.
+For every subsequent project decision after a completed learning loop, develop exactly three distinct, equally weighted project options and save them through `propose-follow-on-projects`. This applies both when the user chooses to explore the same path further and when they change directions and select another path. Ground the options in what they learned and want to experience next. Each uses the same learning-first brief.
 
 Support refinement and replacement, and activate only the user's explicit selection. The first-project framing is not repeated for later projects.
 

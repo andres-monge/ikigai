@@ -96,6 +96,24 @@ function withAcceptedProject(): CareerMap {
   });
 }
 
+function withChangedPathAndOpenReflection(): CareerMap {
+  let map = commit(withAcceptedProject(), 'open-reflection', {
+    reflectionId: 'open-learning', revision: 1, projectId: project.id, projectRevision: 1, action: action(8),
+  });
+  map = commit(map, 'append-reflection-evidence', {
+    reflectionId: 'open-learning', reflectionRevision: 1,
+    evidence: { id: 'listening-energy', revision: 1, signal: 'energy', observation: 'Listening created energy; polishing drained it.', interpretation: 'Try hands-on work without polished prose.', provenance: action(9) },
+  });
+  map = commit(map, 'open-path-revision-focus', { reason: 'Try facilitation instead of tools.', action: action(10) });
+  map = commit(map, 'choose-parked-purpose-path', {
+    sourceSetId: 'briefing-path-set', sourceSetRevision: 1,
+    replacementSetId: 'changed-path-set', replacementSetRevision: 1,
+    pathId: 'briefing-path-parked-1', pathRevision: 1, action: action(11),
+  });
+  map = commit(map, 'resolve-basis-review', { targetKind: 'project', targetId: project.id, targetRevision: 1, resolution: 'reaffirmed', action: action(11) });
+  return commit(map, 'resolve-basis-review', { targetKind: 'reflection', targetId: 'open-learning', targetRevision: 1, resolution: 'reaffirmed', action: action(11) });
+}
+
 function legacyFixture(kind: 'commitment' | 'proof'): CareerMap {
   return readCareerMap(JSON.parse(readFileSync(new URL(`../../shared/career-map/test-fixtures/legacy-${kind}-v2.json`, import.meta.url), 'utf8')));
 }
@@ -309,6 +327,27 @@ describe('compileCareerMapBriefing', () => {
     expect(briefing.markdown).toContain('Guidance, further projects, reflection and changes of direction remain available.');
   });
 
+  it('briefs one eligible project after a path change while preserving open learning on its actual path', () => {
+    const map = withChangedPathAndOpenReflection();
+    const before = structuredClone(map);
+    const briefing = compileCareerMapBriefing(map);
+    expect(briefing.module).toBe('design-path-project');
+    expect(briefing.modelMarkdown).toContain('One suggested Path Project; save with propose_first_project.');
+    expect(briefing.modelMarkdown).not.toContain('Exactly three equal-weight Path Project options; save with propose_follow_on_projects.');
+    expect(briefing.modelMarkdown).toContain('## Saved Path Project on another Purpose Path');
+    expect(briefing.modelMarkdown).not.toContain('## Active Path Project');
+    expect(briefing.modelMarkdown).toContain('Path basis: briefing-path-active@1');
+    expect(briefing.modelMarkdown).toContain('Reflection: open-learning@1; open; project briefing-project@1');
+    expect(briefing.modelMarkdown).toContain('Listening created energy; polishing drained it.');
+    expect(map).toEqual(before);
+  });
+
+  it('does not direct a new project save during ordinary guidance or pending proposal refinement', () => {
+    for (const map of [withAcceptedProject(), withPendingProject()]) {
+      expect(compileCareerMapBriefing(map).modelMarkdown).not.toContain('## Current project design contract');
+    }
+  });
+
   it('includes full equal options and the exact prior learning decision during follow-on design', () => {
     let map = withAcceptedProject();
     map = commit(map, 'open-reflection', {
@@ -329,6 +368,9 @@ describe('compileCareerMapBriefing', () => {
       id: 'option-move', revision: 1, continueChoiceId: 'option-choice', continueChoiceRevision: 1,
       kind: 'explore-further', action: action(12),
     });
+    const designBriefing = compileCareerMapBriefing(map);
+    expect(designBriefing.modelMarkdown).toContain('Exactly three equal-weight Path Project options; save with propose_follow_on_projects.');
+    expect(designBriefing.modelMarkdown).not.toContain('One suggested Path Project; save with propose_first_project.');
     const options = [1, 2, 3].map((number) => ({
       id: `simple-option-${number}`, revision: 1, title: `Option ${number}`, briefFormat: 'simple-v1' as const,
       relationship: number === 3 ? 'unrelated' as const : 'linked' as const,

@@ -317,7 +317,10 @@ function appendProject(
   const suggested = map.projects.findLast((item) => item.agreementStatus === 'suggested');
   const project = selectedProject ?? suggested ?? selectCurrentProjectLearning(map).project;
   if (project) {
-    lines.push('## Active Path Project');
+    const path = selectActivePurposePath(map);
+    lines.push(path && project.basisPath.id === path.id && project.basisPath.revision === path.revision
+      ? '## Active Path Project'
+      : '## Saved Path Project on another Purpose Path');
     appendExactProject(lines, project);
     const alternatives = map.projects.filter(item => item.id !== project.id || item.revision !== project.revision);
     if (alternatives.length) {
@@ -505,6 +508,15 @@ function renderCareerMapBriefing(
   if (checkpoint.pendingDecision) {
     lines.push('## Pending decision');
     lines.push(`${checkpoint.pendingDecision.kind}: ${checkpoint.pendingDecision.targetId}@${checkpoint.pendingDecision.targetRevision}`);
+  }
+  if (checkpoint.module === 'design-path-project') {
+    if (checkpoint.availableOperations.includes('propose-first-project')) {
+      lines.push('## Current project design contract');
+      lines.push('One suggested Path Project; save with propose_first_project.');
+    } else if (checkpoint.availableOperations.includes('propose-follow-on-projects')) {
+      lines.push('## Current project design contract');
+      lines.push('Exactly three equal-weight Path Project options; save with propose_follow_on_projects.');
+    }
   }
   appendWhy(lines, map);
 

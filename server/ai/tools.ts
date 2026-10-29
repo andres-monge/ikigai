@@ -726,7 +726,7 @@ export function createMethodTools(runtime: MethodToolRuntime): ToolSet {
       }
       return { setId: input.setId, setRevision: input.setRevision, pathId: input.pathId, pathRevision: input.pathRevision, action: currentUserAction(runtime) };
     }),
-    propose_first_project: operationTool(runtime, 'propose-first-project', 'Immediately after committed path selection, suggest one small firsthand Path Project in the same response for collaborative refinement.', projectToolInputSchema, (project) => {
+    propose_first_project: operationTool(runtime, 'propose-first-project', 'Save one firsthand Path Project for collaborative refinement before any completed learning loop, after committed path selection or an explicit request for another project. Preserve earlier work and learning; this proposal does not accept or start it.', projectToolInputSchema, (project) => {
       return { project, presentation: context().presentation };
     }),
     replace_project_proposal: operationTool(runtime, 'replace-project-proposal', 'Replace the one pending first-project proposal.', z.object({ projectId: entityIdSchema, projectRevision: revisionSchema, replacement: projectToolInputSchema }).strict(), (input) => {

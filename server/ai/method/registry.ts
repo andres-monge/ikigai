@@ -23,7 +23,7 @@ export const METHOD_MODULE_REGISTRY = {
   'design-path-project': {
     key: 'design-path-project',
     directory: 'design-path-project',
-    contentVersion: '1.3.1',
+    contentVersion: '1.3.2',
     reasoningEffort: 'medium',
   },
   'guide-path-project': {
