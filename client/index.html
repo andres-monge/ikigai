@@ -23,6 +23,16 @@
     <meta name="twitter:description" content="8 questions. 3 paths made for you." />
     <meta name="twitter:image" content="https://revelio-me.vercel.app/assets/og-image.png" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script data-revelio-theme>
+      (function () {
+        var theme = null;
+        try { theme = localStorage.getItem('revelio-theme'); } catch (e) {}
+        if (theme !== 'light' && theme !== 'dark') {
+          theme = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+        document.documentElement.classList.toggle('dark', theme === 'dark');
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -97,6 +97,7 @@ export function Home({ language, sessionId }: HomeProps) {
           >
             <img
               src="/assets/ikigai-circles-866.png"
+              data-theme-illustration
               alt="Ikigai diagram showing the intersection of what you love, what you're good at, what the world needs, and what you can be paid for"
               className="w-full h-auto"
             />

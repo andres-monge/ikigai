@@ -208,6 +208,44 @@ describe('Explore U6 conversation-first workspace', () => {
     vi.unstubAllGlobals();
   });
 
+  it('changes theme without changing the draft, selected panel, map or submitting a request', async () => {
+    const map = suggestedPathsMap();
+    vi.mocked(fetch).mockImplementation(async (input) => String(input).includes('/history')
+      ? jsonResponse({ status: 'empty', messages: [] })
+      : jsonResponse({ status: 'ready', map }));
+    render(<Explore {...props()} />);
+    const textbox = await screen.findByRole('textbox', { name: 'Message Revelio' });
+    fireEvent.change(textbox, { target: { value: 'Keep this unsent thought' } });
+    fireEvent.click(screen.getByRole('tab', { name: 'Your Map' }));
+    await screen.findByRole('heading', { name: 'Your North Star' });
+    const assertRenderedMap = () => {
+      const visibleMap = within(screen.getByRole('tabpanel', { name: 'Your Map' }));
+      expect(visibleMap.getByText('Make difficult systems humane.', { exact: true })).toBeTruthy();
+      const cards = visibleMap.getAllByTestId('purpose-path-card');
+      expect(cards).toHaveLength(3);
+      cards.forEach((card, index) => {
+        const path = within(card);
+        const number = index + 1;
+        expect(path.getByRole('heading', { name: `Path ${number}`, exact: true })).toBeTruthy();
+        for (const text of [`Serve ${number}`, `Unknown ${number}`, `Project ${number}`, `Evidence ${number}`, `Fit ${number}`]) {
+          expect(path.getByText(text, { exact: true })).toBeTruthy();
+        }
+      });
+    };
+    assertRenderedMap();
+    const reads = vi.mocked(fetch).mock.calls.length;
+    fireEvent.click(screen.getByRole('button', { name: 'Switch to dark mode' }));
+    expect(document.documentElement.classList.contains('dark')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Switch to light mode' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('tab', { name: 'Your Map' }).getAttribute('aria-selected')).toBe('true');
+    assertRenderedMap();
+    fireEvent.click(screen.getByRole('tab', { name: 'Chat' }));
+    expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('Keep this unsent thought');
+    expect(vi.mocked(fetch).mock.calls.length).toBe(reads);
+    fireEvent.click(screen.getByRole('button', { name: 'Switch to light mode' }));
+    expect(localStorage.getItem('revelio-theme')).toBe('light');
+  });
+
   it('sends attachment-only file bytes and retains exact files on a recoverable failure', async () => {
     const sent: Array<{ message: string; attachments: Array<{ data: string }> }> = [];
     vi.mocked(fetch).mockImplementation(async (input, init) => {

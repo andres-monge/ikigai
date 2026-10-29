@@ -71,7 +71,6 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     if (signal) process.kill(process.pid, signal);
     else process.exitCode = code;
   } catch (error) {
-    // Configuration errors contain only fixed guard text, never the URL/env.
     console.error(error instanceof Error ? error.message : 'Full-suite initialization failed.');
     process.exitCode = 1;
   }

@@ -5,6 +5,7 @@
 @tailwind utilities;
 
 :root {
+  color-scheme: light;
   --background: hsl(210, 40%, 98%);
   --foreground: hsl(222.2, 84%, 4.9%);
   --muted: hsl(210, 40%, 96%);
@@ -38,27 +39,39 @@
 }
 
 .dark {
-  --background: hsl(222.2, 84%, 4.9%);
-  --foreground: hsl(210, 40%, 98%);
-  --muted: hsl(217.2, 32.6%, 17.5%);
-  --muted-foreground: hsl(215, 20.2%, 65.1%);
-  --popover: hsl(222.2, 84%, 4.9%);
-  --popover-foreground: hsl(210, 40%, 98%);
-  --card: hsl(222.2, 84%, 4.9%);
-  --card-foreground: hsl(210, 40%, 98%);
-  --border: hsl(217.2, 32.6%, 17.5%);
-  --input: hsl(217.2, 32.6%, 17.5%);
-  --primary: hsl(220.9, 79.3%, 61.2%);
-  --primary-foreground: hsl(210, 40%, 98%);
-  --secondary: hsl(262.1, 66.8%, 60%);
-  --secondary-foreground: hsl(210, 40%, 98%);
+  color-scheme: dark;
+  --background: hsl(30, 14%, 7%);
+  --foreground: hsl(38, 45%, 89%);
+  --muted: hsl(32, 13%, 15%);
+  --muted-foreground: hsl(36, 10%, 62%);
+  --popover: hsl(32, 14%, 11%);
+  --popover-foreground: hsl(38, 45%, 89%);
+  --card: hsl(32, 14%, 11%);
+  --card-foreground: hsl(38, 45%, 89%);
+  --border: hsl(34, 12%, 24%);
+  --input: hsl(34, 12%, 24%);
+  --primary: hsl(220.9, 79.3%, 66%);
+  --primary-foreground: hsl(30, 14%, 7%);
+  --secondary: hsl(262.1, 66.8%, 68%);
+  --secondary-foreground: hsl(30, 14%, 7%);
   --accent: hsl(43, 96.4%, 56.3%);
-  --accent-foreground: hsl(222.2, 84%, 4.9%);
-  --destructive: hsl(0, 62.8%, 30.6%);
-  --destructive-foreground: hsl(210, 40%, 98%);
-  --success: hsl(142.1, 76.2%, 36.3%);
-  --success-foreground: hsl(355.7, 100%, 97.3%);
-  --ring: hsl(212.7, 26.8%, 83.9%);
+  --accent-foreground: hsl(30, 14%, 7%);
+  --destructive: hsl(0, 72%, 58%);
+  --destructive-foreground: hsl(38, 45%, 94%);
+  --success: hsl(142.1, 60%, 48%);
+  --success-foreground: hsl(30, 14%, 7%);
+  --ring: hsl(38, 45%, 89%);
+
+  --ikigai-cream: 32 14% 13%;
+  --ikigai-beige: 30 14% 7%;
+
+  --night-paper: #221e18;
+  --night-raised: #2d2820;
+  --night-line: #efe6d4;
+  --night-shadow: rgba(239, 230, 212, 0.2);
+  --night-text: #efe6d4;
+  --night-text-soft: #cfc5b3;
+  --night-text-muted: #a69c8b;
 }
 
 @layer base {
@@ -293,4 +306,98 @@
     .method-path-card:nth-child(3) { animation-delay: 300ms; }
   }
 
+}
+
+@layer utilities {
+  .dark .bg-white,
+  .dark .bg-slate-50,
+  .dark .bg-gray-50,
+  .dark .bg-\[\#f6f4ed\] { background-color: var(--night-paper); }
+  .dark .bg-slate-100,
+  .dark .bg-gray-100,
+  .dark .bg-slate-200,
+  .dark .hover\:bg-slate-50:hover { background-color: var(--night-raised); }
+  .dark .bg-black { background-color: #0d0b08; }
+  .dark .bg-slate-900 { background-color: var(--night-line); }
+  .dark .bg-slate-900.text-white { color: #16130f; }
+  .dark .hover\:bg-slate-700:hover { background-color: var(--night-text-soft); }
+  .dark .bg-red-50 { background-color: hsl(0 40% 14%); }
+  .dark .border-red-200 { border-color: hsl(0 45% 32%); }
+  .dark .text-red-800 { color: hsl(0 80% 82%); }
+
+  .dark .border-black,
+  .dark .ring-black,
+  .dark .focus-visible\:outline-black:focus-visible { border-color: var(--night-line); --tw-ring-color: var(--night-line); outline-color: var(--night-line); }
+  .dark .border-slate-300,
+  .dark .border-gray-400,
+  .dark .border-\[\#e2ded2\] { border-color: var(--border); }
+
+  .dark .text-black,
+  .dark .text-slate-950,
+  .dark .text-slate-900,
+  .dark .text-gray-900,
+  .dark .text-slate-800 { color: var(--night-text); }
+  .dark .text-slate-700,
+  .dark .text-slate-600,
+  .dark .text-gray-600 { color: var(--night-text-soft); }
+  .dark .text-slate-500,
+  .dark .text-slate-400,
+  .dark .text-gray-500,
+  .dark .text-gray-400 { color: var(--night-text-muted); }
+
+  .dark .bg-ikigai-yellow.text-slate-900,
+  .dark .bg-\[\#ffc107\] .text-slate-900,
+  .dark .bg-\[\#ffc107\].text-slate-900 { color: #0f172a; }
+
+  .dark .bg-\[\#dff3f1\] { background-color: hsl(174 30% 16%); }
+  .dark .bg-\[\#fff4cc\] { background-color: hsl(45 40% 15%); }
+  .dark .bg-\[\#ffe1d6\] { background-color: hsl(16 40% 16%); }
+
+  .dark .shadow-retro-sm { box-shadow: 4px 4px 0 var(--night-shadow); }
+  .dark .shadow-retro { box-shadow: 6px 6px 0 var(--night-shadow); }
+  .dark [class*="shadow-[2px_2px_0_rgba(0,0,0"] { box-shadow: 2px 2px 0 var(--night-shadow); }
+  .dark [class*="shadow-[3px_3px_0_rgba(0,0,0"] { box-shadow: 3px 3px 0 var(--night-shadow); }
+  .dark [class*="shadow-[4px_4px_0_rgba(0,0,0"] { box-shadow: 4px 4px 0 var(--night-shadow); }
+  .dark [class*="shadow-[6px_6px_0_rgba(0,0,0"] { box-shadow: 6px 6px 0 var(--night-shadow); }
+  .dark [class*="active:shadow-none"]:active { box-shadow: none; }
+
+  .dark .method-map-label { color: var(--night-text-muted); }
+  .dark .shadow-sm { --tw-shadow-color: rgba(0, 0, 0, 0.5); }
+}
+
+@layer utilities {
+  .dark [data-theme-illustration] { filter: brightness(0.88); }
+}
+
+@layer utilities {
+  .method-path-band-label { color: #000; }
+  .method-path-divider { border-color: #000; }
+
+  .dark .explore-workspace { color: var(--night-text); }
+  .dark .text-stone-900,
+  .dark .text-stone-800 { color: var(--night-text); }
+  .dark .text-stone-700,
+  .dark .text-stone-600 { color: var(--night-text-soft); }
+  .dark .text-stone-500,
+  .dark .text-stone-400,
+  .dark .placeholder\:text-stone-500::placeholder { color: var(--night-text-muted); }
+  .dark .bg-white\/70 { background-color: var(--night-paper); }
+  .dark .border-stone-400 { border-color: var(--night-text-muted); }
+  .dark .bg-amber-50 { background-color: hsl(40 35% 14%); }
+  .dark .text-amber-900,
+  .dark .text-amber-950 { color: hsl(42 85% 80%); }
+  .dark .text-red-950 { color: hsl(0 80% 82%); }
+  .dark .border-red-800,
+  .dark .border-red-900 { border-color: hsl(0 55% 60%); }
+
+  .dark .bg-ikigai-yellow,
+  .dark .bg-ikigai-teal,
+  .dark .bg-ikigai-orange,
+  .dark .bg-ikigai-teal.text-black,
+  .dark .bg-ikigai-yellow.text-slate-900 { color: #0f172a; }
+  .dark [data-path-band="identity"],
+  .dark [data-path-band="identity"] .method-path-band-label { color: #0f172a; }
+  .dark .method-path-band-label { color: var(--night-text); }
+  .dark .method-path-divider { border-color: var(--night-line); }
+  .dark .explore-composer:focus-within { border-color: hsl(var(--ikigai-teal)); }
 }

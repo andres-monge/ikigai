@@ -1,4 +1,5 @@
 import { Compass } from 'lucide-react';
+import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
 import { t, type Language } from '@/lib/i18n';
 
@@ -52,7 +53,7 @@ export function Header({ language, onLanguageChange, onNavigateHome }: HeaderPro
             </Button>
           </div>
 
-
+          <ThemeToggle />
         </div>
       </nav>
     </header>

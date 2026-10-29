@@ -20,6 +20,7 @@ import { ChatProjectBrief } from '@/components/explore/project-brief';
 import { ActivityIndicator } from '@/components/explore/activity-indicator';
 import { createClientLatencyTrace, type ClientLatencyTrace } from './explore-latency';
 
+import { ThemeToggle } from '@/components/theme-toggle';
 import { AttachmentDraft } from '@/components/explore/attachment-draft';
 import { prepareAttachment, type DraftAttachment } from '@/components/explore/prepare-attachment';
 import { ATTACHMENT_TYPES, MAX_ATTACHMENT_BYTES, formatAttachmentMessage, validateAttachmentRequest } from '@shared/chat-attachments';
@@ -986,15 +987,16 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
         : 'Record a message';
 
   return (
-    <main className="flex h-[100dvh] flex-col overflow-hidden bg-ikigai-beige text-stone-900">
+    <main className="explore-workspace flex h-[100dvh] flex-col overflow-hidden bg-ikigai-beige text-stone-900">
       <header className="shrink-0 border-b-2 border-black bg-white px-4 py-3 sm:px-6">
-        <div className="mx-auto flex max-w-[112rem] items-center justify-between gap-4">
+        <div className="mx-auto flex max-w-[112rem] items-center justify-between gap-2 sm:gap-4">
           <div className="min-w-0">
             <h1 className="font-display text-xl font-black leading-none tracking-tight sm:text-2xl">Revelio</h1>
             <p className="mt-1 truncate font-display text-[0.65rem] font-bold uppercase tracking-[0.12em] text-stone-600 sm:text-xs">Figure out what to work on next</p>
           </div>
-          <div className="flex shrink-0 items-center gap-3">
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
             <span className="hidden text-xs text-stone-600 sm:inline">{userEmail}</span>
+            <ThemeToggle />
             <button type="button" onClick={handleSignOut} disabled={isSigningOut} className="min-h-11 border-2 border-black bg-white px-3 font-display text-xs font-black shadow-[2px_2px_0_rgba(0,0,0,0.65)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black disabled:opacity-50">
               {isSigningOut ? 'Signing out…' : 'Sign out'}
             </button>
@@ -1182,7 +1184,7 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
                 setAttachmentError(null);
               }}>Restore previous submission (replaces current draft)</button> : null}
               <label htmlFor="revelio-draft" className="sr-only">Message Revelio</label>
-              <div className="flex items-end gap-1 border-2 border-black bg-white p-2 shadow-[3px_3px_0_rgba(0,0,0,0.65)] transition-[border-color,box-shadow] focus-within:border-ikigai-teal">
+              <div className="explore-composer flex items-end gap-1 border-2 border-black bg-white p-2 shadow-[3px_3px_0_rgba(0,0,0,0.65)] transition-[border-color,box-shadow] focus-within:border-ikigai-teal">
                 <button type="button" aria-label="Add attachments" title="Add attachments" disabled={preparingFiles || bootstrapPending}
                   onClick={() => pickerRef.current?.click()} className="grid h-11 w-9 shrink-0 place-items-center focus-visible:outline focus-visible:outline-2 disabled:opacity-40">
                   <Plus aria-hidden="true" className="h-5 w-5" />

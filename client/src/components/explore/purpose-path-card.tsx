@@ -45,15 +45,15 @@ export function PurposePathCard({
           <SelectionLabel selection={path.selection} />
         </div>
         <h3 className="mt-3 text-xl font-black leading-tight">{stripProviderCitationMarkers(path.name)}</h3>
-        <h4 className="method-map-label mt-3 !text-black">How it serves the North Star</h4>
+        <h4 className="method-map-label mt-3 method-path-band-label">How it serves the North Star</h4>
         <p className="mt-2 text-sm font-semibold leading-6">{stripProviderCitationMarkers(path.servesWhy)}</p>
       </header>
-      <section data-path-band="unknown" className="method-path-band border-y-2 !border-black bg-ikigai-cream">
-        <h4 className="method-map-label !text-black">What you need to learn</h4>
+      <section data-path-band="unknown" className="method-path-band border-y-2 method-path-divider bg-ikigai-cream">
+        <h4 className="method-map-label method-path-band-label">What you need to learn</h4>
         <p className="font-display text-lg font-extrabold leading-6">{stripProviderCitationMarkers(path.centralUnknown)}</p>
       </section>
-      <section data-path-band="project" className={`method-path-band border-y-2 !border-black ${style.project}`}>
-        <h4 className="method-map-label !text-black">First project</h4>
+      <section data-path-band="project" className={`method-path-band border-y-2 method-path-divider ${style.project}`}>
+        <h4 className="method-map-label method-path-band-label">First project</h4>
         <p className="text-sm leading-6">{stripProviderCitationMarkers(path.projectPreview)}</p>
       </section>
       <section data-path-band="fit" className="method-path-band">

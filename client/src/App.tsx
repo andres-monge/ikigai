@@ -19,6 +19,7 @@ import { NotFound } from '@/pages/not-found';
 import { useSessionStorage } from '@/hooks/use-session-storage';
 import { useAnalytics } from '@/hooks/use-analytics';
 import { authClient } from '@/lib/auth-client';
+import { useTheme } from '@/lib/theme';
 import { replaceDocument } from '@/lib/browser-navigation';
 import type { Language } from '@/lib/i18n';
 import type { FullAssessment } from '@/types/assessment';
@@ -200,6 +201,7 @@ function LegacyApp() {
 }
 
 function App() {
+  useTheme();
   return (
     <Switch>
       <Route path="/login" component={LoginEntry} />
