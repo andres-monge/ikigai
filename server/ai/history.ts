@@ -26,6 +26,7 @@ const conversationIdSchema = z.string().min(1).max(200);
 const providerItemIdSchema = z.string().min(1).max(200);
 const HISTORY_PAGE_SIZE = 40;
 const MAX_HISTORY_PAGE_SIZE = 100;
+const PROVIDER_HISTORY_BATCH_SIZE = 100;
 const MAX_PROVIDER_PAGES_PER_DISPLAY_PAGE = 5;
 
 export interface ConversationItemPage {
@@ -747,15 +748,14 @@ export async function loadConversationHistory(input: {
     if (input.abortSignal?.aborted) {
       throw input.abortSignal.reason ?? new DOMException('Aborted', 'AbortError');
     }
-    const remaining = Math.max(1, pageSize - projection.messages.length);
     const page = await input.client.listItems({
       conversationId,
       after: nextAfter,
-      limit: remaining,
+      limit: PROVIDER_HISTORY_BATCH_SIZE,
       order: 'desc',
       abortSignal: input.abortSignal,
     });
-    if (!Array.isArray(page.data) || page.data.length > remaining) {
+    if (!Array.isArray(page.data) || page.data.length > PROVIDER_HISTORY_BATCH_SIZE) {
       throw new ConversationHistoryProviderError('list');
     }
     newestFirstItems.push(...page.data);
@@ -775,6 +775,12 @@ export async function loadConversationHistory(input: {
     if (!page.hasMore || projection.messages.length >= pageSize) break;
   }
 
+  const messages = projection.messages.slice(-pageSize);
+  if (projection.messages.length > pageSize) {
+    providerHasMore = true;
+    nextAfter = messages[0].id;
+  }
+
   await Promise.all(projection.backfills.map((backfill) => (
     input.storage.backfillAgentTurnDisplayProjection?.({
       userId: input.userId,
@@ -790,7 +796,7 @@ export async function loadConversationHistory(input: {
 
   return conversationHistoryPageSchema.parse({
     status: 'ready',
-    messages: projection.messages.map(toBrowserSafeHistoryMessage),
+    messages: messages.map(toBrowserSafeHistoryMessage),
     ...(olderCursor ? { olderCursor } : {}),
   });
 }

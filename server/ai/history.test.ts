@@ -163,10 +163,10 @@ describe('protected OpenAI Conversation history adapter', () => {
     expect(listItems).toHaveBeenNthCalledWith(1, expect.objectContaining({
       conversationId: 'conversation-server-owned',
       after: undefined,
-      limit: 40,
+      limit: 100,
       order: 'desc',
     }));
-    expect(listItems).toHaveBeenNthCalledWith(2, expect.objectContaining({ after: 'message-2', limit: 39 }));
+    expect(listItems).toHaveBeenNthCalledWith(2, expect.objectContaining({ after: 'message-2', limit: 100 }));
     expect(result.messages.map((message) => message.id)).toEqual(['message-1', 'message-2']);
   });
 
@@ -204,7 +204,7 @@ describe('protected OpenAI Conversation history adapter', () => {
     expect(first.olderCursor).not.toContain('conversation-server-owned');
     expect(listItems).toHaveBeenCalledTimes(1);
     expect(listItems).toHaveBeenNthCalledWith(1, expect.objectContaining({
-      after: undefined, limit: 3, order: 'desc',
+      after: undefined, limit: 100, order: 'desc',
     }));
 
     const second = await loadConversationHistory({
@@ -218,7 +218,7 @@ describe('protected OpenAI Conversation history adapter', () => {
     expect(second.messages.map((message) => message.id)).toEqual(['old-0']);
     expect(second).not.toHaveProperty('olderCursor');
     expect(listItems).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      after: 'provider-page-token', limit: 3, order: 'desc',
+      after: 'provider-page-token', limit: 100, order: 'desc',
     }));
   });
 
@@ -276,6 +276,40 @@ describe('protected OpenAI Conversation history adapter', () => {
         turn: { turnId: 'eight-items', status: 'completed' },
       }),
     ]);
+  });
+
+  it('crosses sparse provider windows without losing or duplicating display messages on older pages', async () => {
+    const turns = Array.from({ length: 30 }, (_, index) => durableTurn({
+      turnId: `sparse-${index}`, userItemId: `sparse-user-${index}`, assistantItemId: `sparse-answer-${index}`,
+    }));
+    const newestMessages = turns.flatMap((turn, index) => [
+      { id: `sparse-user-${index}`, type: 'message', role: 'user', content: [{ type: 'input_text', text: `Question ${index}` }] },
+      { id: `sparse-answer-${index}`, type: 'message', role: 'assistant', content: [{ type: 'output_text', text: `Answer ${index}` }] },
+    ]).reverse();
+    const hidden = (index: number) => ({ id: `sparse-hidden-${index}`, type: 'reasoning', text: 'PRIVATE_HIDDEN_SENTINEL' });
+    const slots = [
+      ...newestMessages.slice(0, 7), ...Array.from({ length: 33 }, (_, index) => hidden(index)),
+      ...newestMessages.slice(7, 13), ...Array.from({ length: 8 }, (_, index) => hidden(index + 33)),
+      ...Array.from({ length: 32 }, () => null), ...newestMessages.slice(13),
+    ];
+    const listItems = vi.fn(async ({ after, limit }: { after?: string; limit: number }) => {
+      const start = after ? slots.findIndex((item) => item?.id === after) + 1 : 0;
+      const scanned = slots.slice(start, start + limit);
+      const data = scanned.filter((item) => item !== null);
+      return { data, hasMore: start + limit < slots.length, lastId: data.at(-1)?.id };
+    });
+    const storage = { getConversationMapping: vi.fn(async () => 'sparse-conversation'), listAgentTurns: vi.fn(async () => turns) };
+    const cursorCodec = createConversationHistoryCursorCodec('sparse-history-cursor-secret-at-least-32');
+    const newest = await loadConversationHistory({ storage, client: { listItems }, userId: 'explorer-1', cursorCodec });
+    expect(newest.messages.map((message) => message.id)).toEqual(newestMessages.slice(0, 40).reverse().map((item) => item.id));
+    expect(newest.olderCursor).toBeDefined();
+    const older = await loadConversationHistory({ storage, client: { listItems }, userId: 'explorer-1', cursorCodec, cursor: newest.olderCursor });
+    expect(older.messages.map((message) => message.id)).toEqual(newestMessages.slice(40).reverse().map((item) => item.id));
+    expect(older.olderCursor).toBeUndefined();
+    const all = [...older.messages, ...newest.messages];
+    expect(new Set(all.map((message) => message.id)).size).toBe(60);
+    expect(JSON.stringify(all)).not.toContain('PRIVATE_HIDDEN_SENTINEL');
+    expect(listItems.mock.calls.every(([input]) => input.limit <= 100)).toBe(true);
   });
 
   it('rejects a cursor minted for another Conversation without provider access', async () => {
