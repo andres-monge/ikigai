@@ -727,6 +727,8 @@ function applyDomainOperation(map: CareerMap, operation: CareerMapOperation): Ca
             'Clarify the earlier work report before retracting proceeding: correcting the latest update cannot retract an independent earlier report.');
           assert(!map.reflections.some((reflection) => sameRevision(reflection.projectBasis, target.id, target.revision)),
             'Clarify the reported experience before retracting proceeding: this project already has reflection records. Preserve that learning and its dependent decisions.');
+          assert(!map.projects.some((project) => project.agreementStatus === 'suggested' && project.supersedesProjectId === target.id),
+            'Clarify the pending project revision before retracting its proceeding basis. Preserve the proposed revision and its confirmation target.');
           target.proceedingReport.retractedBy = operation.payload.action;
           target.agreementStatus = 'suggested';
         }

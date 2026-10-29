@@ -1129,6 +1129,33 @@ describe('current project work reports and exact status corrections', () => {
     expect(correctedAgain.map.projects[0].agreementStatus).toBe('suggested');
   });
 
+  it('preserves a pending project revision when retracting its sole report-derived proceeding basis', () => {
+    const started = applyCareerMapOperation(suggested(), report(suggested())).map;
+    const map = commit(started, 'propose-project-revision', {
+      projectId: 'project-1', projectRevision: 1,
+      replacement: project('replacement', 1), presentation: presentation(8),
+    });
+    const checkpoint = deriveMethodCheckpoint(map);
+    expect(checkpoint.pendingDecision?.kind).toBe('project-revision-confirmation');
+    const result = applyCareerMapOperation(map, correction(map, 'not-started'));
+    expect(result).toMatchObject({ status: 'rejected', error: { code: 'illegal-transition' } });
+    expect(result.map).toEqual(map);
+    expect(deriveMethodCheckpoint(result.map)).toEqual(checkpoint);
+  });
+
+  it('allows completion correction without retracting proceeding while a project revision is pending', () => {
+    const completed = applyCareerMapOperation(suggested(), report(suggested(), 'completed')).map;
+    const map = commit(completed, 'propose-project-revision', {
+      projectId: 'project-1', projectRevision: 1,
+      replacement: project('replacement', 1), presentation: presentation(8),
+    });
+    const result = applyCareerMapOperation(map, correction(map, 'in-progress'));
+    expect(result.status).toBe('committed');
+    expect(result.map.projects[0]).toMatchObject({ agreementStatus: 'accepted', workStatus: 'in-progress' });
+    expect(result.map.projects[0].proceedingReport?.retractedBy).toBeUndefined();
+    expect(deriveMethodCheckpoint(result.map).pendingDecision?.kind).toBe('project-revision-confirmation');
+  });
+
   it('preserves reflection during a status correction and requires clarification before retracting its proceeding basis', () => {
     let map = applyCareerMapOperation(suggested(),report(suggested(),'completed')).map;
     map = commit(map,'open-reflection',{reflectionId:'report-reflection',revision:1,projectId:'project-1',projectRevision:1,action:action(8)});
