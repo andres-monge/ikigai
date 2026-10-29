@@ -16,15 +16,17 @@ export default defineConfig({
     globals: true,
     environment: 'node', // Default environment for server-side testing
     setupFiles: [],
+    isolate: true, // Every DB suite owns its module-scoped child and cleanup.
     include: [
-      '**/server/**/*.{test,spec}.{js,ts}',
-      '**/client/**/*.{test,spec}.{js,ts,jsx,tsx}',
-      '**/shared/**/*.{test,spec}.{js,ts}',
+      'server/**/*.{test,spec}.{js,ts}',
+      'client/**/*.{test,spec}.{js,ts,jsx,tsx}',
+      'shared/**/*.{test,spec}.{js,ts}',
     ],
     exclude: [
       '**/node_modules/**',
       '**/dist/**',
       '**/.claude/worktrees/**',
+      '**/.context/**', // Private scratch and archived source copies are not suites.
       '**/tests/**', // E2E tests handled by Playwright
       ...(storageDatabaseTestsEnabled ? [] : storageDatabaseTests),
     ],

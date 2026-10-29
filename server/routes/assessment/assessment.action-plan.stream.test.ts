@@ -17,6 +17,13 @@ import { createServer } from 'node:http';
 import express from 'express';
 import { AddressInfo } from 'node:net';
 import { db } from '../../db.js';
+import { cleanupStorageTestDatabases } from '../../storage.test-database.js';
+
+// Hoisted before the router creates its storage singleton: both sides use this
+// suite's real migrated child, never the admin or application database.
+vi.mock('../../db.js', async () => ({
+  db: (await import('../../storage.test-database.js')).storageTestDatabase,
+}));
 import { assessmentSessions, purposePaths } from '../../../shared/schema.js';
 import type { QuestionnaireResponses } from '../../../shared/schema.js';
 import { storage } from '../../storage-instance.js';
@@ -119,7 +126,7 @@ const mockActionPlanFinalObject = {
 /* ------------------------------------------------------------------ */
 
 beforeEach(async () => {
-  // Clean tables in correct order (foreign keys first)
+  // Reset only this suite's owned migrated child (foreign keys first)
   await db.delete(purposePaths);
   await db.delete(assessmentSessions);
 
@@ -127,37 +134,7 @@ beforeEach(async () => {
   vi.clearAllMocks();
 });
 
-afterAll(async () => {
-  // Clean up database tables in correct order (foreign keys first)
-  try {
-    await db.delete(purposePaths);
-    await db.delete(assessmentSessions);
-  } catch (error: any) {
-    // Only suppress specific expected errors, fail on unexpected ones
-    if (error?.code === 'ECONNRESET' || error?.code === 'ENOTFOUND') {
-      console.log('Expected database cleanup error in test environment:', error.message);
-    } else {
-      console.error('Unexpected cleanup error - this may indicate a test problem:', error);
-      // Don't throw to avoid breaking other tests, but log clearly
-    }
-  }
-  
-  // Close the database connection pool
-  try {
-    if (db.$client) {
-      await db.$client.end();
-    }
-  } catch (error: any) {
-    // Suppress expected connection close errors in test environment
-    const expectedErrors = ['already ended', 'Connection terminated', 'ECONNRESET'];
-    const isExpected = expectedErrors.some(msg =>
-      error?.message?.includes(msg) || error?.code === msg
-    );
-    if (!isExpected) {
-      console.error('Unexpected connection close error:', error);
-    }
-  }
-}, 15000);
+afterAll(cleanupStorageTestDatabases, 15000);
 
 /* ------------------------------------------------------------------ */
 /*                         Test Data Fixtures                        */

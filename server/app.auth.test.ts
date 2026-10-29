@@ -31,6 +31,9 @@ vi.mock('./routes.js', () => ({
     app.get('/api/legacy-probe', (_request, response) => {
       response.json({ anonymous: true });
     });
+    app.post('/api/parsed-body-probe', (incoming, response) => {
+      response.json({ body: incoming.body });
+    });
   },
 }));
 
@@ -53,45 +56,43 @@ describe('Express auth integration', () => {
     mocks.toNodeHandler.mockReturnValue(mocks.nodeHandler);
   });
 
-  it('mounts the Express v4 auth wildcard before both body parsers', () => {
-    const app = createApp();
-    const stack = (app as any)._router.stack as Array<any>;
-    const authIndex = stack.findIndex((layer) => layer.route?.path === '/api/auth/*');
-    const jsonIndex = stack.findIndex((layer) => layer.name === 'jsonParser');
-    const urlencodedIndex = stack.findIndex((layer) => layer.name === 'urlencodedParser');
-
-    expect(authIndex).toBeGreaterThanOrEqual(0);
-    expect(authIndex).toBeLessThan(jsonIndex);
-    expect(authIndex).toBeLessThan(urlencodedIndex);
-  });
-
-  it('passes an unconsumed request stream and a server-overwritten client address to Better Auth', async () => {
+  it.each([
+    ['application/json', '{"provider":"google"}'],
+    ['application/x-www-form-urlencoded', 'provider=google&callbackURL=%2F'],
+    ['application/json', '{"provider":'],
+  ])('passes an unconsumed %s request stream to Better Auth (%s)', async (contentType, payload) => {
     mocks.nodeHandler.mockImplementation((incoming, response) => {
       let body = '';
-      incoming.on('data', (chunk: Buffer) => {
-        body += chunk.toString();
-      });
+      incoming.on('data', (chunk: Buffer) => { body += chunk.toString(); });
       incoming.on('end', () => {
         response.setHeader('content-type', 'application/json');
-        response.end(
-          JSON.stringify({
-            body,
-            clientIp: incoming.headers['x-revelio-client-ip'],
-          }),
-        );
+        response.end(JSON.stringify({ body, clientIp: incoming.headers['x-revelio-client-ip'] }));
       });
     });
 
     const response = await (await request(createApp()))
       .post('/api/auth/sign-in/social')
+      .set('content-type', contentType)
       .set('x-revelio-client-ip', '198.51.100.8')
-      .send({ provider: 'google' });
+      .send(payload)
+      .timeout({ response: 1_000, deadline: 2_000 });
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({
-      body: JSON.stringify({ provider: 'google' }),
-      clientIp: '127.0.0.1',
-    });
+    expect(response.body).toEqual({ body: payload, clientIp: '127.0.0.1' });
+  });
+
+  it.each([
+    ['application/json', '{"provider":"google"}'],
+    ['application/x-www-form-urlencoded', 'provider=google'],
+  ])('still parses %s on ordinary non-auth routes', async (contentType, payload) => {
+    const response = await (await request(createApp()))
+      .post('/api/parsed-body-probe')
+      .set('content-type', contentType)
+      .send(payload);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ body: { provider: 'google' } });
+    expect(mocks.nodeHandler).not.toHaveBeenCalled();
   });
 
   it('fails auth closed without taking down anonymous legacy APIs', async () => {

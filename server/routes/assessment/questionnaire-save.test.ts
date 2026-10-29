@@ -17,6 +17,13 @@ import { beforeEach, afterAll, describe, it, expect, vi } from 'vitest';
 import request from '../../test-fixtures/loopback-http.js';
 import express from 'express';
 import { db } from '../../db.js';
+import { cleanupStorageTestDatabases } from '../../storage.test-database.js';
+
+// Hoisted before the router creates its storage singleton: both sides use this
+// suite's real migrated child, never the admin or application database.
+vi.mock('../../db.js', async () => ({
+  db: (await import('../../storage.test-database.js')).storageTestDatabase,
+}));
 import { assessmentSessions, purposePaths } from '../../../shared/schema.js';
 import type { QuestionnaireResponses } from '../../../shared/schema.js';
 import { assessmentRouter } from './index.js';
@@ -35,7 +42,7 @@ import { getPurposeDiscoveryStreamChain, getActionPlanStreamChain } from '../../
 /* ------------------------------------------------------------------ */
 
 beforeEach(async () => {
-  // Clean tables in correct order (foreign keys first)
+  // Reset only this suite's owned migrated child (foreign keys first)
   await db.delete(purposePaths);
   await db.delete(assessmentSessions);
   
@@ -43,22 +50,7 @@ beforeEach(async () => {
   vi.clearAllMocks();
 });
 
-afterAll(async () => {
-  // Clean up and close database connections
-  try {
-    await db.delete(purposePaths);
-    await db.delete(assessmentSessions);
-  } catch (error) {
-    console.log('Cleanup error (expected in test environment):', error);
-  }
-  
-  // Close the PostgreSQL connection pool
-  try {
-    await db.$client.end();
-  } catch (error) {
-    console.log('Connection close error (expected in test environment):', error);
-  }
-}, 15000);
+afterAll(cleanupStorageTestDatabases, 15000);
 
 /* ------------------------------------------------------------------ */
 /*                         Test Data Fixtures                        */

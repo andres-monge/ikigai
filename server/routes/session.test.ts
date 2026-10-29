@@ -10,16 +10,21 @@
  * The frontend generates a new session ID to allow users to start fresh.
  *
  * @dependencies
- * - Development database must be running and accessible via DATABASE_URL
+ * - Explicitly designated disposable local PostgreSQL admin; see docs/testing.md
  * - Tests create and clean up their own test data
  * - Uses supertest for HTTP endpoint testing
  */
 
-import { beforeEach, afterAll, describe, it, expect } from 'vitest';
+import { beforeEach, afterAll, describe, it, expect, vi } from 'vitest';
 import request from '../test-fixtures/loopback-http.js';
 import express from 'express';
 import { eq } from 'drizzle-orm';
 import { db } from '../db.js';
+import { cleanupStorageTestDatabases } from '../storage.test-database.js';
+
+vi.mock('../db.js', async () => ({
+  db: (await import('../storage.test-database.js')).storageTestDatabase,
+}));
 import { storage } from '../storage-instance.js';
 import { sessionRouter } from './session.js';
 import { assessmentSessions, analyticsEvents } from '../../shared/schema.js';
@@ -52,31 +57,17 @@ const sampleQuestionnaireResponses: QuestionnaireResponses = {
 /* ------------------------------------------------------------------ */
 
 beforeEach(async () => {
-  // Only clean up our specific test sessions to avoid interfering with other tests
-  try {
-    await db.delete(assessmentSessions).where(eq(assessmentSessions.sessionId, testSessionId));
-    await db.delete(assessmentSessions).where(eq(assessmentSessions.sessionId, testSessionId2));
-  } catch (error) {
-    // Ignore cleanup errors for non-existent data
-  }
-  
+  // These deletes target only this suite's migrated disposable child.
+  await db.delete(assessmentSessions).where(eq(assessmentSessions.sessionId, testSessionId));
+  await db.delete(assessmentSessions).where(eq(assessmentSessions.sessionId, testSessionId2));
+
   // Create a minimal test app with just the session routes
   app = express();
   app.use(express.json());
   app.use('/api', sessionRouter);
 });
 
-afterAll(async () => {
-  // Final cleanup of our test data only
-  try {
-    await db.delete(assessmentSessions).where(eq(assessmentSessions.sessionId, testSessionId));
-    await db.delete(assessmentSessions).where(eq(assessmentSessions.sessionId, testSessionId2));
-  } catch (error) {
-    // Ignore cleanup errors
-  }
-  
-  // Don't close the database connection as other tests might be using it
-});
+afterAll(cleanupStorageTestDatabases, 15000);
 
 /* ------------------------------------------------------------------ */
 /*                         GET /api/session/:sessionId Tests         */
