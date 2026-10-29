@@ -71,13 +71,16 @@ describe('repository-owned Method module loader', () => {
     expect(METHOD_MODULE_KEYS.map(methodReasoningEffort)).toEqual(['low', 'high', 'medium', 'low', 'low']);
   });
 
-  it('adopts the three reconciled drafts byte for byte', async () => {
+  it('preserves the reconciled project decisions with versioned conversational-state amendments', async () => {
     const loader = await createMethodModuleLoader();
     for (const key of ['design-path-project', 'guide-path-project', 'interpret-path-project'] as const) {
       const draft = await readFile(new URL(`../../../docs/drafts/2026-10-13-project-learning-loop/${key}/SKILL.md`, import.meta.url), 'utf8');
       const runtime = await readFile(path.join(sourceSkillsRoot, key, 'SKILL.md'), 'utf8');
-      expect(runtime).toBe(draft);
-      expect(loader.load(checkpoint(key)).contentVersion).toBe(key === 'design-path-project' ? '1.3.0' : '1.0.0');
+      expect(runtime).toContain('version: ' + loader.load(checkpoint(key)).contentVersion);
+      const decisionSection = (text: string) => text.split('## Decide what to change')[1]?.split('## Intentionally unrelated projects')[0];
+      if (key === 'interpret-path-project') expect(decisionSection(runtime)).toBe(decisionSection(draft));
+      expect(runtime).toContain(key === 'design-path-project' ? '## Help before agreement' : 'exact latest');
+      expect(loader.load(checkpoint(key)).contentVersion).toBe(key === 'design-path-project' ? '1.3.1' : '1.0.1');
     }
   });
 

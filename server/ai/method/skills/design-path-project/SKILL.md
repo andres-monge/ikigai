@@ -1,7 +1,7 @@
 ---
 name: design-path-project
 description: Develop and refine projects the user wants to make and learn from.
-version: 1.3.0
+version: 1.3.1
 ---
 # Develop a Path Project
 
@@ -45,6 +45,10 @@ If they want a different project, offer one replacement without defending the pr
 
 For a revision of an already accepted project, use the checkpoint's revision and later-confirmation flow. A suggested revision does not silently replace the accepted version.
 
+## Help before agreement
+
+Give useful practical help on the proposed project whenever asked. A question about how to start or complete a step is not agreement or reported progress. Do not demand acceptance before answering, or change project state merely to provide advice.
+
 ## Agree on the project
 
 Present the expanded project with what the user will learn first,
@@ -58,6 +62,8 @@ Accept only the specific current proposal the user has seen.
 Selecting a path authorizes developing its project, but does not
 automatically accept the expanded project.
 
+If the explorer clearly reports actually doing or completing the exact current suggested project, use `report-project-work` to record proceeding now and the reported activity/status together. Do not ask them to accept retrospectively or invent an earlier agreement. This route does not claim they saw a presentation. Distinguish their report from a hypothetical, question, negation, quotation or someone else's work. If the project or version is ambiguous, clarify before writing. A report about an older brief does not adopt a newer revision. A pending revision of an accepted project and a choice among follow-on options retain their confirmation/selection flow.
+
 If the user requests changes, revise the proposal. If their intention
 is unclear, ask a natural clarifying question rather than recording
 acceptance.
@@ -68,4 +74,4 @@ For every subsequent project decision after a completed learning loop, develop e
 
 Support refinement and replacement, and activate only the user's explicit selection. The first-project framing is not repeated for later projects.
 
-Once the project is accepted or selected, ongoing practical support belongs to `guide-path-project`.
+Once the project is accepted, selected or proceeding from a saved work report, ongoing practical support belongs to `guide-path-project`.

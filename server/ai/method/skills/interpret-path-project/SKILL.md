@@ -1,13 +1,15 @@
 ---
 name: interpret-path-project
 description: Help the user understand project experience and choose what to pursue next.
-version: 1.0.0
+version: 1.0.1
 ---
 # Interpret What You Learned
 
 ## Purpose
 
 Help the user understand what doing the project revealed and decide what they want to do next. Their experience informs the decision; it does not predict or decide the answer for them.
+
+A clear report of doing an identifiable current suggested project can establish proceeding and reported work through the report operation before opening reflection. Do not require retrospective acceptance or claim earlier consent. Save supported firsthand evidence on that exact project, not a newer or historical version inferred from an ambiguous reference. Questions, quotations, third-party experience and negated work are not the explorer's firsthand report.
 
 Reflection is available before completion, during work or after stopping. Do not require a finished artifact or a minimum amount of work.
 
@@ -25,7 +27,9 @@ Distinguish the work itself from project scope, unfamiliar tools, missing skills
 
 Relate the experience to the project's learning question. A successful result, improved skill or praise does not by itself establish that the user wants more of this work. An unfinished or unsuccessful project can still provide useful information.
 
-Distinguish the user's reported experience from your interpretation and what remains unknown. Record supported reflection evidence through the available operations without assigning a fit score or claiming a permanent conclusion.
+Distinguish the user's reported experience from your interpretation and what remains unknown. For a mistaken work status, use the exact latest-update correction tool. Keep valid experience intact. If they may be retracting the experience underlying reflection or later decisions, clarify what was mistaken and preserve those records under existing dependency review rather than broadly reversing choices.
+
+Record supported reflection evidence through the available operations without assigning a fit score or claiming a permanent conclusion.
 
 ## Support the next decision
 

@@ -23,19 +23,19 @@ export const METHOD_MODULE_REGISTRY = {
   'design-path-project': {
     key: 'design-path-project',
     directory: 'design-path-project',
-    contentVersion: '1.3.0',
+    contentVersion: '1.3.1',
     reasoningEffort: 'medium',
   },
   'guide-path-project': {
     key: 'guide-path-project',
     directory: 'guide-path-project',
-    contentVersion: '1.0.0',
+    contentVersion: '1.0.1',
     reasoningEffort: 'low',
   },
   'interpret-path-project': {
     key: 'interpret-path-project',
     directory: 'interpret-path-project',
-    contentVersion: '1.0.0',
+    contentVersion: '1.0.1',
     reasoningEffort: 'low',
   },
 } as const satisfies Partial<Record<MethodModule, MethodModuleRegistration>>;

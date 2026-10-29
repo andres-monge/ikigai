@@ -14,7 +14,7 @@ A distinct direction the explorer could try in service of Your North Star, frame
 The group of three equally weighted Purpose Paths offered together for comparison. Revising the group creates a new set while retaining the earlier set as history; the explorer sees the current offered group.
 
 ### Path Project
-Work the user chooses to create and learn from, with a first version and a suggested starting point. Project acceptance is separate from starting or completing the work.
+Work the user chooses to create and learn from, with a first version and a suggested starting point. Project acceptance is separate from starting or completing the work. A current firsthand work report can establish proceeding without inventing prior assent; its report provenance remains distinct from confirmation.
 
 ### What You Learned
 Reflection on actual project experience, including what gives or drains energy and what remains uncertain. Reflection can happen before completion or after stopping.

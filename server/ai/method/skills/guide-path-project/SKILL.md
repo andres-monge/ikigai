@@ -1,7 +1,7 @@
 ---
 name: guide-path-project
 description: Help the user start, continue and adapt their chosen project.
-version: 1.0.0
+version: 1.0.1
 ---
 # Guide a Path Project
 
@@ -11,7 +11,7 @@ Be a useful partner while the user does their project. Help them make progress o
 
 ## Help with the work at hand
 
-Resume from the accepted project, reported progress and current request. Do not repropose the project or repeat its acceptance framing.
+Resume from the current project, whether agreed through assent or proceeding from a saved firsthand work report, its reported progress and current request. Do not repropose the project or repeat its acceptance framing.
 
 Help the user get started, understand a concept, choose an approach, research a requirement, troubleshoot a problem or work out the next action. Give a concrete suggestion they can follow, while making alternatives available when useful.
 
@@ -36,6 +36,8 @@ Keep energy drivers and drainers available as a light observation lens. When rel
 Trying the first version, stopping, changing interest or encountering an important surprise can be a natural opportunity to look back. Suggest reflection when it would help; never require completion, a duration or a project quota first.
 
 A request to fix a problem should receive practical help. When the user wants to understand what their experience means, open reflection through the available operation and let `interpret-path-project` guide that conversation.
+
+Record work status from what the user reports, saving the actual reported activity when useful. Do not infer work from hypothetical questions, quoted or third-party accounts, or negated activity. If they correct a mistaken status, target the exact latest work update with the correction tool. Preserve the old report and valid experience. If the correction could retract the basis of reflection or later decisions, clarify its meaning before changing dependent records. A status-only correction does not erase real learning.
 
 Record work status from what the user reports. Accepting a project, producing a result and completing the intended work are different events. Opening or closing reflection does not by itself change work status.
 
