@@ -274,6 +274,11 @@ describe('Method checkpoint selector', () => {
     map = commit(map, 'record-path-focus', { id: 'focus-1', revision: 1, pathId: 'path-1', pathRevision: 1, action: action(5) });
     map = commit(map, 'open-foundation-revision-focus', { reason: 'Change who the work serves', action: action(6) });
     map = commit(map, 'revise-why', { supersedesWhyId: 'why-1', why: { id: 'why-2', revision: 2, statement: 'Make group decisions actionable.', serves: 'Teams in transition', pointOfView: 'Shared clarity must change action' }, presentation: presentation(7) });
+    expect(deriveMethodCheckpoint(map)).toMatchObject({
+      module: 'form-foundation', focus: { kind: 'foundation-revision' },
+      pendingDecision: { kind: 'why-confirmation', targetId: 'why-2', targetRevision: 2 },
+      availableOperations: expect.arrayContaining(['confirm-why', 'close-focus']),
+    });
     map = commit(map, 'confirm-why', { whyId: 'why-2', whyRevision: 2, action: action(8) });
     expect(selectCurrentPathFocus(map)).toBeUndefined();
     expect(selectEarliestActiveReview(map)?.targetKind).toBe('path-set');

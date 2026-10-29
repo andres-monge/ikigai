@@ -354,8 +354,10 @@ export function deriveMethodCheckpoint(map: CareerMap): MethodCheckpoint {
   }
 
   if (map.focus && map.focus.kind !== 'peers' && (map.focus.kind !== 'reflection' || selectCurrentProjectLearning(map).reflection?.id === map.focus.reflectionId)) {
-    const pending = map.focus.kind === 'path-revision' ? pendingDecision(map) : null;
-    const focusDecision = pending?.module === 'create-purpose-paths'
+    const pending = map.focus.kind === 'path-revision' || map.focus.kind === 'foundation-revision'
+      ? pendingDecision(map)
+      : null;
+    const focusDecision = pending?.module === focusModule(map.focus)
       ? pending.decision
       : null;
     return {

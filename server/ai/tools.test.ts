@@ -177,6 +177,32 @@ function revisedPathsInOpenFocus(): CareerMap {
   return map;
 }
 
+function revisedWhyInOpenFocus(): CareerMap {
+  let map = pendingProject(false);
+  const apply = <T extends CareerMapOperation['type']>(type: T, payload: Extract<CareerMapOperation, { type: T }>['payload'], sequence: number) => {
+    const result = applyCareerMapOperation(map, {
+      type, sourceId: `foundation-focus-${sequence}`, expectedRevision: map.revision,
+      occurredAt: at(sequence), payload,
+    } as CareerMapOperation);
+    if (result.status !== 'committed') throw new Error(`Foundation focus fixture ${type} failed.`);
+    map = result.map;
+  };
+  apply('report-project-work', { projectId: 'project-1', projectRevision: 1, status: 'completed',
+    reportedActivity: 'I tried the prototype and enjoyed discussing it.', action: userAction(7) }, 7);
+  apply('open-reflection', { reflectionId: 'reflection-1', revision: 1,
+    projectId: 'project-1', projectRevision: 1, action: userAction(8) }, 8);
+  apply('append-reflection-evidence', { reflectionId: 'reflection-1', reflectionRevision: 1,
+    evidence: { id: 'learning-1', revision: 1, observation: 'I enjoyed discussing the prototype.',
+      signal: 'energy', interpretation: 'Discussion created energy.', provenance: userAction(9) } }, 9);
+  apply('open-foundation-revision-focus', { reason: 'Reconsider the contribution.', action: userAction(10) }, 10);
+  apply('revise-why', { supersedesWhyId: 'why-1',
+    why: { id: 'why-2', revision: 2, statement: 'Help neighbors feel connected.',
+      serves: 'Neighbors who feel isolated', pointOfView: 'Belonging supports agency.' },
+    presentation: { kind: 'model-presentation', assistantTurnId: 'revised-why-turn',
+      turnSequence: 11, completed: true, presentedAt: at(11) } }, 11);
+  return map;
+}
+
 class ReducerStorage {
   readonly persist = vi.fn(async (input: { operation: CareerMapOperation }): Promise<PersistCareerMapResult> => {
     const result = applyCareerMapOperation(this.map, input.operation);
@@ -524,6 +550,67 @@ describe('strict state-specific Method tools', () => {
     expect(storage.map.foundation.whyRevisions.find((why) => why.id === 'why-2')?.status).toBe('superseded');
     expect(storage.map.foundation.whyRevisions.find((why) => why.id === 'why-1')?.status).toBe('confirmed');
     expect(storage.map.pathSets.find((set) => set.id === 'set-1')?.status).toBe('suggested');
+  });
+
+  it('confirms the exact revised North Star through open Foundation focus and preserves prior learning', async () => {
+    const storage = new ReducerStorage(revisedWhyInOpenFocus());
+    const before = structuredClone(storage.map);
+    const loader = await createMethodModuleLoader();
+    const prepared = await refreshMethodState(storage, loader, 'explorer-1');
+    expect(toolNamesForCheckpoint(prepared.checkpoint)).toContain('confirm_why');
+    const tools = createMethodTools({ ...runtime(storage), loader, surface: 'agent-turn',
+      timing: { turnSequence: 12, occurredAt: at(12) }, prepared: { current: prepared },
+      currentMessage: 'I confirm this North Star and understand that the path set, project and reflection need review.',
+    });
+    const input = { whyId: 'why-2', whyRevision: 2, presentedInTurnId: 'revised-why-turn', sourceMessageId: 'current-message' };
+    expect(await tools.confirm_why.execute?.(input, { toolCallId: 'confirm-revised-why', messages: [] } as never))
+      .toMatchObject({ status: 'committed', derivedModule: 'create-purpose-paths' });
+    expect(storage.map.foundation.whyRevisions.at(-1)).toMatchObject({
+      id: 'why-2', revision: 2, status: 'confirmed', confirmation: { confirmedBy: { actionId: 'current-message' } },
+    });
+    expect(storage.map.projects).toEqual(before.projects);
+    expect(storage.map.reflections).toEqual(before.reflections);
+    expect(deriveMethodCheckpoint(storage.map).review).toMatchObject({ targetKind: 'path-set', targetId: 'set-1' });
+    const committed = structuredClone(storage.map);
+    expect(await tools.confirm_why.execute?.(input, { toolCallId: 'confirm-revised-why', messages: [] } as never))
+      .toMatchObject({ status: 'conflict', errorClass: 'stale-step-context' });
+    expect(storage.map).toEqual(committed);
+    expect(applyCareerMapOperation(storage.map, storage.persist.mock.calls[0][0].operation))
+      .toMatchObject({ status: 'replayed', map: committed });
+  });
+
+  it.each([
+    ['stale revision', { whyRevision: 99 }],
+    ['foreign target', { whyId: 'why-1' }],
+    ['wrong presentation', { presentedInTurnId: 'other-turn' }],
+    ['wrong current message', { sourceMessageId: 'other-message' }],
+  ])('preserves the %s guard for a revised North Star in open Foundation focus', async (_label, mismatch) => {
+    const storage = new ReducerStorage(revisedWhyInOpenFocus());
+    const before = structuredClone(storage.map);
+    const loader = await createMethodModuleLoader();
+    const tools = createMethodTools({ ...runtime(storage), loader, surface: 'agent-turn',
+      timing: { turnSequence: 12, occurredAt: at(12) }, prepared: { current: await refreshMethodState(storage, loader, 'explorer-1') },
+    });
+    expect(await tools.confirm_why.execute?.({ whyId: 'why-2', whyRevision: 2,
+      presentedInTurnId: 'revised-why-turn', sourceMessageId: 'current-message', ...mismatch,
+    }, { toolCallId: 'invalid-focused-why', messages: [] } as never))
+      .toMatchObject({ status: 'rejected', errorClass: 'ConfirmationTargetMismatchError' });
+    expect(storage.persist).not.toHaveBeenCalled();
+    expect(storage.map).toEqual(before);
+  });
+
+  it('does not confirm a revised North Star in its own presentation turn under Foundation focus', async () => {
+    const storage = new ReducerStorage(revisedWhyInOpenFocus());
+    const before = structuredClone(storage.map);
+    const loader = await createMethodModuleLoader();
+    const tools = createMethodTools({ ...runtime(storage), loader, surface: 'agent-turn',
+      timing: { turnSequence: 11, occurredAt: at(11) }, prepared: { current: await refreshMethodState(storage, loader, 'explorer-1') },
+    });
+    expect(await tools.confirm_why.execute?.({ whyId: 'why-2', whyRevision: 2,
+      presentedInTurnId: 'revised-why-turn', sourceMessageId: 'current-message',
+    }, { toolCallId: 'same-turn-focused-why', messages: [] } as never))
+      .toMatchObject({ status: 'rejected', errorClass: 'confirmation-not-auditable' });
+    expect(storage.map).toEqual(before);
   });
 
   it('exposes and commits a path-set basis review after a confirmed North Star revision', async () => {

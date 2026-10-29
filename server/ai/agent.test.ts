@@ -933,6 +933,56 @@ describe('amended Method agent core loop', () => {
     }
   });
 
+  it('confirms a focused North Star revision and refreshes through its basis review without re-proposing', async () => {
+    let map = pendingPathsMap();
+    const apply = (operation: CareerMapOperation) => {
+      const result = applyCareerMapOperation(map, operation);
+      expect(result.status).toBe('committed');
+      map = result.map;
+    };
+    apply({ type: 'open-foundation-revision-focus', sourceId: 'foundation-focus',
+      expectedRevision: map.revision, occurredAt: timestamp,
+      payload: { reason: 'Reconsider the contribution.', action: {
+        kind: 'user-message', actionId: 'focus-message', turnId: 'focus-turn',
+        turnSequence: 4, occurredAt: timestamp,
+      } },
+    });
+    apply({ type: 'revise-why', sourceId: 'revised-why', expectedRevision: map.revision, occurredAt: timestamp,
+      payload: { supersedesWhyId: 'why-1', why: { id: 'why-2', revision: 2,
+        statement: 'Help neighbors feel connected.', serves: 'Neighbors who feel isolated',
+        pointOfView: 'Belonging supports agency.',
+      }, presentation: { kind: 'model-presentation', assistantTurnId: 'revised-why-presentation',
+        turnSequence: 5, completed: true, presentedAt: timestamp,
+      } },
+    });
+    const storage = new InMemoryMethodStorage(map);
+    const model = streamModel([
+      operationChunks({ callId: 'confirm-focused-why', toolName: 'confirm_why', toolInput: {
+        whyId: 'why-2', whyRevision: 2, presentedInTurnId: 'revised-why-presentation', sourceMessageId: 'message-1',
+      } }),
+      operationChunks({ callId: 'review-old-paths', toolName: 'resolve_basis_review', toolInput: {
+        targetKind: 'path-set', targetId: 'set-1', targetRevision: 1, resolution: 'replaced',
+      } }),
+      operationChunks({ callId: 'finish-foundation-focus', toolName: 'close_focus', toolInput: {} }),
+      textChunks('Your revised North Star is confirmed. We can explore paths for it.'),
+    ]);
+    const statuses: string[] = [];
+    const modules: string[] = [];
+    const message = 'I confirm the revised North Star and understand that the old paths need to be replaced.';
+    const { agent } = await makeAgent({ model, storage, currentMessage: message, turnSequence: 6,
+      onOperationStatus: (event) => { if (event.phase === 'terminal') statuses.push(event.status); },
+      onPreparedStep: (trace) => { modules.push(trace.module); },
+    });
+    await collect(await agent.stream({ prompt: message }));
+    expect(statuses).toEqual(['saved', 'saved', 'saved']);
+    expect(modules).toEqual(['form-foundation', 'create-purpose-paths', 'form-foundation', 'create-purpose-paths']);
+    expect(storage.map.foundation.whyRevisions.map((why) => [why.id, why.status]))
+      .toEqual([['why-1', 'superseded'], ['why-2', 'confirmed']]);
+    expect(storage.map.pathSets[0].status).toBe('superseded');
+    expect(storage.map.focus).toBeUndefined();
+    expect(storage.map.operationHistory.filter((receipt) => receipt.operationType === 'revise-why')).toHaveLength(1);
+  });
+
   it.each([
     ['hedge', 'That might be right, but I am not ready to confirm it.', 'why'],
     ['quotation', 'You said “That captures your North Star.”', 'why'],
