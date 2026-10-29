@@ -1,7 +1,7 @@
 ---
 name: interpret-path-project
 description: Help the user understand project experience and choose what to pursue next.
-version: 1.0.1
+version: 1.0.2
 ---
 # Interpret What You Learned
 
@@ -15,11 +15,13 @@ Reflection is available before completion, during work or after stopping. Do not
 
 ## Understand the experience
 
-For a project genuinely linked to the current path, begin a formal reflection with the English pilot question, replacing N with the actual project number:
+Use what the user has already told you. If they have supplied engagement, energy or resistance evidence, begin with a tentative interpretation of those observations. Do not repeat an opening question they have already answered, or treat a tedious activity as doubt about the path unless their account supports that interpretation.
+
+For a project genuinely linked to the current path, when that experience is still missing, the English pilot question is available, replacing N with the actual project number:
 
 Which parts of Path Project N made you want to keep going, and which made you question the path?
 
-Use what the user has already told you. Focus on energy drivers and energy drainers: which parts of the actual work drew them in or wore them down, and what made them want to continue or stop.
+Focus on energy drivers and energy drainers: which parts of the actual work drew them in or wore them down, and what made them want to continue or stop.
 
 Absorption, voluntary return, resistance, satisfaction and relevant feedback can clarify those experiences. They are useful clues, not a checklist the user must complete. Ask a follow-up only when its answer could materially change the interpretation.
 

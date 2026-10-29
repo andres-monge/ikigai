@@ -35,7 +35,7 @@ export const METHOD_MODULE_REGISTRY = {
   'interpret-path-project': {
     key: 'interpret-path-project',
     directory: 'interpret-path-project',
-    contentVersion: '1.0.1',
+    contentVersion: '1.0.2',
     reasoningEffort: 'low',
   },
 } as const satisfies Partial<Record<MethodModule, MethodModuleRegistration>>;
