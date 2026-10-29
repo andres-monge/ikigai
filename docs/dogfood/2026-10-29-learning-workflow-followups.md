@@ -46,11 +46,24 @@ A supported browser-session reset restored documented IAB access. One normal att
 - SDK success: **redirect true**, authorization origin **accounts.google.com**.
 - After the await: **no returned error**, page still **localhost:5173/login**, button still **Opening Google…**.
 
-The installed SDK checks the scheme and attempts same-tab location assignment inside an empty catch. These observations do not distinguish a thrown exception, ignored navigation or host restriction. No Google page or explicit host-denial event was observed. The direct server probe from planning is separate evidence and is not substituted for this browser trace.
+The installed SDK checks the scheme and attempts same-tab location assignment inside an empty catch. Those initial observations did not distinguish a thrown exception, ignored navigation or host restriction. No Google page or explicit host-denial event was observed. The direct server probe from planning is separate evidence and is not substituted for this browser trace.
 
 The indefinite busy state has a narrower confirmed cause: Login enables busy before the call and clears it only for returned/thrown errors, so the observed successful return with no navigation has no recovery branch. A possible later UX scope is `client/src/pages/login.tsx` and its existing test: release busy after the SDK settles and provide neutral recovery copy without premature failure claims. The coordinator deferred that patch because it would not restore login. No timeout, redirect fallback, security-setting change or alternate browser/control mechanism was used.
 
-Temporary diagnostics in auth-client/login were removed and exact original byte hashes restored before build, review or commit. No full URL, query, header/cookie value, OAuth state/token/code, response-body dump, identity or error object was retained. No further login retry is authorized without new causal evidence.
+Temporary diagnostics in auth-client/login were removed and exact original byte hashes restored before build, review or commit. No full URL, query, header/cookie value, OAuth state/token/code, response-body dump, identity or error object was retained.
+
+A subsequent coordinator-approved diagnostic at baseline `61c85eb` instrumented the installed Better Auth **1.6.29** redirect callback without changing its conditions, safe-scheme check, location assignment, plugin order or catch behavior. The SDK file and generated Vite cache were verified checkout-local, with no symlink or hardlink sharing. After guarded main restart with zero active app leases, the browser received the module marker before **one** normal sign-in attempt in the existing isolated IAB session:
+
+- Callback entry: URL present, redirect true, browser window present.
+- The original safe-scheme guard passed and location was present.
+- The original location assignment was attempted and returned normally; the catch marker did not appear.
+- The post-assignment marker and later read-only observation still showed the local login page. No Google arrival or explicit host-denial message was observed.
+
+For this observed attempt, the callback was neither skipped nor stopped by its guard, and the assignment did not throw into the SDK catch. The remaining gap is **why the normally returning location assignment does not produce an observed navigation**. This does not establish a host-policy restriction, Google configuration failure or SDK defect. The supported Browser navigation wrapper returned before the social-response callback markers while the page remained local; that return is not evidence of Google arrival.
+
+The original SDK bytes and cache were restored before the final build. Comparison verified hashes, ownership, mode and modification times for the SDK and **67 cache entries**; all four protected WIP hashes match. Build passed after restoration, diagnostic markers were absent from the SDK, restored optimized bundle and built output, and the browser reloaded the restored app without another sign-in attempt. No lockfile, package version, global configuration, auth behavior, production fix, commit of dependency diagnostics, or founder session changed.
+
+The coordinating chat will arrange a human-operated normal-login comparison in a separate Chrome Incognito window at approved `http://localhost:5173`, using the dedicated test account and leaving the founder's existing session untouched. This is a proposed diagnostic comparison, not evidence that sign-in works or permission to bypass a restriction. No further instrumentation, automated sign-in attempt or auth change is authorized here while awaiting that result. Heartbeat remains off.
 
 ## Quality and integrity
 
@@ -61,8 +74,8 @@ Temporary diagnostics in auth-client/login were removed and exact original byte 
 - Read-only before/after comparison: all captured founder and dedicated-account canonical maps, durable turns, operation histories, conversation mappings and leases byte-equal. Founder remains revision 37 / 31 turns / 37 receipts; dedicated account revision 25 / 18 turns / 25 receipts. No app/model conversation turn was sent in this batch. Global active leases zero.
 - All four excluded WIP hashes match. Approved follow-up plan SHA-256 `395aa4a1ea6753897c689cf3c930e2e1e76ed16665a04bc8dd3c1bb89ab30761`; immutable October 13 plan SHA-256 `7af754024dffda000d561c1d5021602a2ae95378483e3dab22dbe2e70250ddd6`.
 
-Main PID 41478 and lab PID 41445 were restarted with verified ownership and zero active turns/jobs, serving `48f7bf1`; both returned HTTP 200. The task-owned disposable PostgreSQL cluster was stopped after checks. Health checks do not establish ongoing uptime or Google navigation success.
+At workflow verification, main PID 41478 and lab PID 41445 were restarted with verified ownership and zero active turns/jobs, serving `48f7bf1`; both returned HTTP 200. After the later auth diagnostic and restoration at `61c85eb`, main PID **61824** and the unchanged lab both returned HTTP 200; main PID/cwd/command/listener ownership and zero leases were verified before each diagnostic restart. The task-owned disposable PostgreSQL cluster was stopped after checks. Health checks do not establish ongoing uptime or Google navigation success.
 
-Raw first outputs, original-parent equality checks, requests, tool outcomes, before/after maps, reviews, sanitized auth metadata and integrity records remain ignored under `.context/revelio/workflow-followups-20261029/` and the existing replay store. Only this sanitized receipt and tracker update are committed.
+Raw first outputs, original-parent equality checks, requests, tool outcomes, before/after maps, reviews, sanitized auth metadata and integrity records remain ignored under `.context/revelio/workflow-followups-20261029/` and the existing replay store. The later SDK-boundary evidence and restoration proof remain ignored under `.context/revelio/auth-stall-20261029/`. Only this sanitized receipt and tracker update are committed.
 
 **Readiness:** the three workflow fixes are ready for local founder retest. Isolated Google sign-in and authenticated app/mobile/re-auth validation remain open, as does the separately retained reflection-question quality issue. Founder acceptance, founder saved past learning and U7/full-MVP acceptance are not established by these synthetic checks.
