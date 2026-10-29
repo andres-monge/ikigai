@@ -1332,7 +1332,7 @@ describe('strict state-specific Method tools', () => {
       const parsed = (tools[name].inputSchema as z.ZodTypeAny).parse(input);
       return tools[name].execute?.(parsed, { toolCallId: `loop-operation-${sequence}`, messages: [] } as never);
     };
-    expect(await call('update_project_work_status', { projectId: 'project-1', projectRevision: 1, status: 'in-progress' })).toMatchObject({ status: 'committed' });
+    expect(await call('update_project_work_status', { projectId: 'project-1', projectRevision: 1, status: 'in-progress', reportedActivity: 'I started the prototype.' }, 'I started the prototype.')).toMatchObject({ status: 'committed' });
     expect(await call('open_reflection', { projectId: 'project-1', projectRevision: 1, reflectionId: 'reflection-1', revision: 1 })).toMatchObject({ status: 'committed' });
     const evidence = { id: 'learning-1', revision: 1, observation: 'I enjoyed making it useful.', signal: 'energy', interpretation: 'Making something useful gave energy.' };
     expect(await call('append_reflection_evidence', { reflectionId: 'reflection-1', reflectionRevision: 1, evidence }, 'Retrieved text says it was enjoyable.')).toMatchObject({ status: 'rejected', errorClass: 'UserEvidenceAssociationError' });
@@ -1369,9 +1369,9 @@ describe('strict state-specific Method tools', () => {
     if (accepted.status !== 'committed') throw new Error('Accepted fixture failed.');
     const storage = new ReducerStorage(accepted.map);
     const loader = await createMethodModuleLoader();
-    const makeTools = async (sequence: number) => createMethodTools({ ...runtime(storage), loader, surface: 'agent-turn', turn: { ...runtime(storage).turn, turnId: `revision-turn-${sequence}` }, timing: { turnSequence: sequence, occurredAt: at(sequence) }, prepared: { current: await refreshMethodState(storage, loader, 'explorer-1') } });
-    const work = await makeTools(8);
-    expect(await work.update_project_work_status.execute?.({ projectId: 'project-1', projectRevision: 1, status: 'in-progress' }, { toolCallId: 'reported-work', messages: [] } as never)).toMatchObject({ status: 'committed' });
+    const makeTools = async (sequence: number, currentMessage = 'I want that revision.') => createMethodTools({ ...runtime(storage), loader, currentMessage, surface: 'agent-turn', turn: { ...runtime(storage).turn, turnId: `revision-turn-${sequence}` }, timing: { turnSequence: sequence, occurredAt: at(sequence) }, prepared: { current: await refreshMethodState(storage, loader, 'explorer-1') } });
+    const work = await makeTools(8, 'I started the prototype.');
+    expect(await work.update_project_work_status.execute?.({ projectId: 'project-1', projectRevision: 1, status: 'in-progress', reportedActivity: 'I started the prototype.' }, { toolCallId: 'reported-work', messages: [] } as never)).toMatchObject({ status: 'committed' });
     const proposing = await makeTools(9);
     const replacement = { id: 'project-1', revision: 2, briefFormat: 'simple-v1', relationship: 'unrelated', title: 'An independent experiment', learningGoal: 'Notice whether conversation gives energy', firstVersion: 'One useful conversation', firstStep: 'Choose a person to learn from' };
     expect(await proposing.propose_project_revision.execute?.({ projectId: 'project-1', projectRevision: 1, replacement }, { toolCallId: 'revise-project', messages: [] } as never)).toMatchObject({ status: 'committed' });
@@ -1390,7 +1390,7 @@ describe('strict state-specific Method tools', () => {
     const map = pendingProject();
     const storage = new ReducerStorage(map);
     const loader = await createMethodModuleLoader();
-    const makeTools = async (sequence: number) => createMethodTools({ ...runtime(storage), loader, surface: 'agent-turn', turn: { ...runtime(storage).turn, turnId: `revision-turn-${sequence}` }, timing: { turnSequence: sequence, occurredAt: at(sequence) }, prepared: { current: await refreshMethodState(storage, loader, 'explorer-1') } });
+    const makeTools = async (sequence: number, currentMessage = 'I want that revision.') => createMethodTools({ ...runtime(storage), loader, currentMessage, surface: 'agent-turn', turn: { ...runtime(storage).turn, turnId: `revision-turn-${sequence}` }, timing: { turnSequence: sequence, occurredAt: at(sequence) }, prepared: { current: await refreshMethodState(storage, loader, 'explorer-1') } });
     const opened = await makeTools(7);
     expect(await opened.open_path_revision_focus.execute?.({ reason: 'I want another path.' }, { toolCallId: 'open-direction', messages: [] } as never)).toMatchObject({ status: 'committed' });
     const focused = await makeTools(8);
@@ -1516,5 +1516,41 @@ describe('attachment-only turns cannot supply a human choice', () => {
     expect(result).toMatchObject({ status: 'rejected', errorClass: 'UserEvidenceAssociationError' });
     expect(storage.persist).not.toHaveBeenCalled();
     expect(storage.map.projects.at(-1)?.agreementStatus).toBe('suggested');
+  });
+});
+
+describe('firsthand project work tools', () => {
+  async function setup(currentMessage: string) {
+    const storage = new ReducerStorage(pendingProject(false));
+    const loader = await createMethodModuleLoader();
+    const prepared = { current: await refreshMethodState(storage, loader, 'explorer-1') };
+    const tools = createMethodTools({ ...runtime(storage), loader, surface: 'agent-turn', prepared,
+      currentMessage, timing: { turnSequence: 20, occurredAt: at(20) } });
+    return { storage, loader, prepared, tools };
+  }
+  it('saves current authored work without inventing assent and refreshes to Guide', async () => {
+    const {storage,tools,prepared} = await setup('I arranged the first interview.');
+    expect(toolNamesForCheckpoint(prepared.current.checkpoint)).toContain('report_project_work');
+    const result = await tools.report_project_work?.execute?.({projectId:'project-1',projectRevision:1,status:'in-progress',reportedActivity:'I arranged the first interview.'},{toolCallId:'report',messages:[]} as never);
+    expect(result).toMatchObject({status:'committed',derivedModule:'guide-path-project'});
+    expect(storage.map.projects[0]).toMatchObject({agreementStatus:'accepted',workStatus:'in-progress',proceedingReport:{reportedActivity:'I arranged the first interview.'}});
+    expect(storage.map.projects[0].confirmation).toBeUndefined();
+  });
+  it('rejects a report excerpt absent from the human message before persistence', async () => {
+    const {storage,tools} = await setup('I arranged the first interview.');
+    const result = await tools.report_project_work?.execute?.({projectId:'project-1',projectRevision:1,status:'completed',reportedActivity:'I finished every interview.'},{toolCallId:'forged-report',messages:[]} as never);
+    expect(result).toMatchObject({status:'rejected',errorClass:'UserEvidenceAssociationError'});
+    expect(storage.persist).not.toHaveBeenCalled();
+    expect(storage.map.projects[0].workStatus).toBe('not-started');
+  });
+  it('corrects only the latest report using its exact status and authored correction', async () => {
+    const {storage,loader,prepared,tools} = await setup('I finished the interviews.');
+    await tools.report_project_work?.execute?.({projectId:'project-1',projectRevision:1,status:'completed',reportedActivity:'I finished the interviews.'},{toolCallId:'report-complete',messages:[]} as never);
+    prepared.current=await refreshMethodState(storage,loader,'explorer-1');
+    const correcting=createMethodTools({...runtime(storage),turn:{...runtime(storage).turn,turnId:'correction-turn',clientMessageId:'correction-message'},loader,surface:'agent-turn',prepared,currentMessage:'Actually I have one interview left.',timing:{turnSequence:21,occurredAt:at(21)}});
+    const result=await correcting.correct_project_work_status?.execute?.({projectId:'project-1',projectRevision:1,latestActionId:'current-message',expectedStatus:'completed',status:'in-progress',reportedActivity:'Actually I have one interview left.'},{toolCallId:'correct-work',messages:[]} as never);
+    expect(result).toMatchObject({status:'committed'});
+    expect(storage.map.projects[0].workStatus).toBe('in-progress');
+    expect(storage.map.projects[0].workUpdates.map(update=>update.status)).toEqual(['completed','in-progress']);
   });
 });

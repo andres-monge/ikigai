@@ -2,7 +2,7 @@
 
 import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createCareerMap, readCareerMap, type CareerMap } from '@shared/career-map';
+import { applyCareerMapOperation, createCareerMap, readCareerMap, type CareerMap } from '@shared/career-map';
 import { MethodMap } from './method-map';
 import legacyProof from '@shared/career-map/test-fixtures/legacy-proof-v2.json';
 
@@ -253,4 +253,18 @@ describe('repeating learning presentation', () => {
     expect(document.body.textContent).not.toMatch(/begin Side Doors|Choose your Next Move|Choose one formal next step/);
     expect(map).toEqual(before);
   });
+});
+
+
+it('labels report-derived proceeding without claiming agreement and shows reported work', () => {
+  const proposed=applyCareerMapOperation(pathMap('active'), {type:'propose-first-project',sourceId:'ui-project',expectedRevision:0,occurredAt:presentation.presentedAt,payload:{project:{id:'ui-report-project',revision:1,briefFormat:'simple-v1',relationship:'linked',title:'Interview a volunteer',learningGoal:'Notice energy',firstVersion:'One interview',firstStep:'Arrange it'},presentation:{...presentation,turnSequence:3}}});
+  if(proposed.status!=='committed') throw new Error('UI project fixture failed');
+  const report=applyCareerMapOperation(proposed.map,{type:'report-project-work',sourceId:'ui-work-report',expectedRevision:proposed.map.revision,occurredAt:presentation.presentedAt,payload:{projectId:'ui-report-project',projectRevision:1,status:'in-progress',reportedActivity:'I arranged the first interview.',action:{kind:'user-message',actionId:'ui-message',turnId:'ui-turn',turnSequence:4,occurredAt:presentation.presentedAt}}});
+  if(report.status!=='committed') throw new Error('UI report fixture failed');
+  render(<MethodMap map={report.map}/>);
+  expect(screen.getByText('Proceeding from reported work')).toBeTruthy();
+  expect(screen.queryByText('Agreement: Accepted')).toBeNull();
+  expect(screen.queryByText('Accepted firsthand experiment')).toBeNull();
+  expect(screen.getByText('I arranged the first interview.')).toBeTruthy();
+  expect(screen.queryByRole('button')).toBeNull();
 });

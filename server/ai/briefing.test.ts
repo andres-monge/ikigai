@@ -700,3 +700,14 @@ describe('compileCareerMapBriefing', () => {
     expect(() => compileCareerMapBriefing({ ...createCareerMap('briefing-invalid'), pathSets: [{ id: 'broken' }] })).toThrow(CareerMapBriefingError);
   });
 });
+
+it('briefs reported proceeding and the exact latest work update without earlier assent', () => {
+  const map = commit(withPendingProject(), 'report-project-work', {
+    projectId:project.id,projectRevision:project.revision,status:'completed',reportedActivity:'I finished the interviews.',action:action(7),
+  });
+  const briefing=compileCareerMapBriefing(map).markdown;
+  expect(briefing).toContain('Proceeding from a current work report');
+  expect(briefing).toContain('I finished the interviews.');
+  expect(briefing).toContain('Latest work update action:');
+  expect(briefing).toContain('not evidence of earlier assent');
+});

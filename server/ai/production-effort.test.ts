@@ -214,7 +214,7 @@ describe('production effort at the outgoing Responses HTTP boundary', () => {
     }
     expect([...auditedProjectTools]).toEqual(expect.arrayContaining([
       'propose_first_project', 'replace_project_proposal', 'propose_project_revision',
-      'propose_follow_on_projects', 'replace_follow_on_project',
+      'propose_follow_on_projects', 'replace_follow_on_project', 'report_project_work', 'correct_project_work_status',
     ]));
   });
 

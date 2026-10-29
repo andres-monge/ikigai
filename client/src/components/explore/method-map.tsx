@@ -57,9 +57,14 @@ function ProjectCard({
       </div>
       {'workStatus' in project ? (
         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs font-extrabold uppercase tracking-[0.08em]">
-          <p>Agreement: {humanizeStatus(project.agreementStatus)}</p>
+          {project.proceedingReport && !project.proceedingReport.retractedBy && !project.confirmation
+            ? <p>Proceeding from reported work</p>
+            : <p>Agreement: {humanizeStatus(project.agreementStatus)}</p>}
           <p>Work: {humanizeStatus(project.workStatus)}</p>
         </div>
+      ) : null}
+      {'workUpdates' in project && project.workUpdates.at(-1)?.reportedActivity ? (
+        <p className="mt-3 whitespace-pre-wrap text-sm leading-6">{project.workUpdates.at(-1)!.reportedActivity}</p>
       ) : null}
       {project.relationship === 'unrelated' ? (
         <p className="mt-3 text-sm leading-6">Intentionally unrelated to your current Purpose Path.</p>
@@ -320,7 +325,9 @@ export function MethodMap({ map }: MethodMapProps) {
           <p className="method-map-label">
             {activeProject.agreementStatus === 'suggested'
               ? 'One proposal for collaborative refinement'
-              : 'Accepted firsthand experiment'}
+              : activeProject.proceedingReport && !activeProject.proceedingReport.retractedBy && !activeProject.confirmation
+                ? 'Current firsthand experiment'
+                : 'Accepted firsthand experiment'}
           </p>
           <h2 id="active-project-heading" className="text-2xl font-black">{activeProject.number === 1 ? 'First Path Project' : `Path Project ${activeProject.number}`}</h2>
           <div className="mt-4">

@@ -103,9 +103,11 @@ function appendProjectBrief(lines: string[], project: PathProjectInput): void {
 
 function appendProjectWork(lines: string[], project: CareerMap['projects'][number]): void {
   if (!project.workUpdates.length) return;
+  const latest = project.workUpdates.at(-1)!;
+  lines.push(`Latest work update action: ${latest.action.actionId}; expected status: ${latest.status}. A correction must target this exact latest update.`);
   lines.push('Work updates reported by the explorer:');
   for (const update of project.workUpdates) {
-    lines.push(`- ${update.status} (user turn ${update.action.turnSequence}; ${update.action.occurredAt})`);
+    lines.push(`- ${update.status} (user turn ${update.action.turnSequence}; ${update.action.occurredAt})${update.reportedActivity ? `: ${JSON.stringify(update.reportedActivity)}` : ''}${update.correctsActionId ? `; corrects ${update.correctsActionId}` : ''}`);
   }
 }
 
@@ -116,6 +118,9 @@ function appendExactProject(
   if (!project) throw new CareerMapBriefingError();
   lines.push(`Project ${project.number}: ${project.title} (${project.id}@${project.revision}; ${project.agreementStatus}; ${project.workStatus})`);
   lines.push(`Path basis${project.relationship === 'unrelated' ? ' (historical context only)' : ''}: ${project.basisPath.id}@${project.basisPath.revision}`);
+  if (project.proceedingReport) lines.push(project.proceedingReport.retractedBy
+    ? 'The previous work-report proceeding was explicitly retracted; no prior assent is implied.'
+    : `Proceeding from a current work report (user turn ${project.proceedingReport.action.turnSequence}); not evidence of earlier assent or presentation.`);
   appendProjectBrief(lines, project);
   appendProjectWork(lines, project);
   appendFirstProjectFraming(lines, project);
@@ -314,6 +319,11 @@ function appendProject(
   if (project) {
     lines.push('## Active Path Project');
     appendExactProject(lines, project);
+    const alternatives = map.projects.filter(item => item.id !== project.id || item.revision !== project.revision);
+    if (alternatives.length) {
+      lines.push('Other saved project versions (identity references only; do not silently activate or attach their work to the current brief):');
+      for (const item of alternatives) lines.push(`- ${JSON.stringify(item.title)}: ${item.id}@${item.revision}; ${item.agreementStatus}; ${item.workStatus}`);
+    }
   }
 
   const options = map.projectOptionSets.findLast((set) => set.status === 'suggested');

@@ -15,6 +15,8 @@ export interface InteractionOwnership {
  * first-project acceptance operations; later lifecycle operations stay closed.
  */
 export const interactionOwnership = {
+  'report-project-work': { owner: 'conversation-only', affordance: 'Chat composer', reason: 'The agent interprets current firsthand work and binds it to the exact project.' },
+  'correct-project-work-status': { owner: 'conversation-only', affordance: 'Chat composer', reason: 'A human correction must identify the latest reported work update.' },
   'request-new-project': { owner: 'conversation-only', affordance: 'Chat composer', reason: 'A new project requires the explorer’s explicit request.' },
   'record-path-focus': { owner: 'conversation-only', affordance: 'Chat composer', reason: 'Focus records the explorer’s current path choice.' },
   'confirm-legacy-path-focus': { owner: 'conversation-only', affordance: 'Chat composer', reason: 'Historical intent requires a fresh explicit focus choice.' },

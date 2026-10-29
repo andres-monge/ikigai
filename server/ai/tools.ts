@@ -9,6 +9,7 @@ import {
   learningEvidenceSchema,
   nextMoveKindSchema,
   projectWorkStatusSchema,
+  projectReportedActivitySchema,
   invalidationTargetKindSchema,
   pathProjectInputSchema,
   opaqueClientMessageIdSchema,
@@ -543,6 +544,8 @@ export const OPERATION_TO_TOOL_NAME = {
   'propose-project-revision': 'propose_project_revision',
   'confirm-project-revision': 'confirm_project_revision',
   'update-project-work-status': 'update_project_work_status',
+  'report-project-work': 'report_project_work',
+  'correct-project-work-status': 'correct_project_work_status',
   'propose-follow-on-projects': 'propose_follow_on_projects',
   'replace-follow-on-project': 'replace_follow_on_project',
   'select-follow-on-project': 'select_follow_on_project',
@@ -612,14 +615,25 @@ export function createMethodTools(runtime: MethodToolRuntime): ToolSet {
       exactPending('project-revision-confirmation', input.projectId, input.projectRevision);
       return { ...input, action: currentUserAction(runtime) };
     }),
-    update_project_work_status: operationTool(runtime, 'update-project-work-status', 'Save the explorer’s reported work status separately from acceptance, reflection and continuation; inactivity is not a report.', projectTargetSchema.extend({ status: projectWorkStatusSchema }).strict(), (input) => ({ ...input, action: currentUserAction(runtime) })),
+    report_project_work: operationTool(runtime, 'report-project-work', 'Record proceeding now and actual firsthand work on the exact current suggested project. The main agent must judge a real personal work report, not a hypothetical, question, negation, quotation or third-party activity. Copy reportedActivity verbatim as an exact substring of the current human message. This does not assert prior assent or presentation. Clarify ambiguous or old-version targets; never adopt an accepted-project revision or follow-on option through this tool.', projectTargetSchema.extend({ status: z.enum(['in-progress', 'stopped', 'completed']), reportedActivity: projectReportedActivitySchema }).strict(), (input) => {
+      assertUserAuthoredValue(runtime, input.reportedActivity);
+      return { ...input, action: currentUserAction(runtime) };
+    }),
+    update_project_work_status: operationTool(runtime, 'update-project-work-status', 'Save actual personally reported work on the current project, independently of agreement, reflection and continuation. Copy reportedActivity verbatim as an exact substring of the current human message. Questions about starting/completing, inactivity, negations, quotations and other people’s work are not personal progress reports. Use the correction tool for a mistaken earlier status.', projectTargetSchema.extend({ status: projectWorkStatusSchema, reportedActivity: projectReportedActivitySchema }).strict(), (input) => {
+      assertUserAuthoredValue(runtime, input.reportedActivity);
+      return { ...input, action: currentUserAction(runtime) };
+    }),
+    correct_project_work_status: operationTool(runtime, 'correct-project-work-status', 'Correct only the exact latest saved work update using its action ID and expected status from refreshed context. Copy the current human correction verbatim into reportedActivity. Preserve earlier reports and valid learning. If retracting proceeding would conflict with earlier independent reports or reflection/decisions, clarify rather than automatically reversing them. This is not a historical-project activation tool.', projectTargetSchema.extend({ latestActionId: entityIdSchema, expectedStatus: projectWorkStatusSchema, status: projectWorkStatusSchema, reportedActivity: projectReportedActivitySchema }).strict(), (input) => {
+      assertUserAuthoredValue(runtime, input.reportedActivity);
+      return { ...input, action: currentUserAction(runtime) };
+    }),
     propose_follow_on_projects: operationTool(runtime, 'propose-follow-on-projects', 'Offer exactly three distinct equal options after a learning loop. The application derives the current project or direction decision basis.', z.object({ setId: entityIdSchema, setRevision: revisionSchema, projects: z.array(projectToolInputSchema).length(3) }).strict(), (input) => ({ ...input, presentation: context().presentation })),
     replace_follow_on_project: operationTool(runtime, 'replace-follow-on-project', 'Replace one exact pending project option while preserving its two siblings and decision basis.', z.object({ sourceSetId: entityIdSchema, sourceSetRevision: revisionSchema, replacedProjectId: entityIdSchema, replacementSetId: entityIdSchema, replacementSetRevision: revisionSchema, replacement: projectToolInputSchema }).strict(), (input) => ({ ...input, presentation: context().presentation })),
     select_follow_on_project: operationTool(runtime, 'select-follow-on-project', 'Save the explorer’s explicit selection of one exact option from the pending three-project set delivered in a completed prior turn.', z.object({ setId: entityIdSchema, setRevision: revisionSchema, projectId: entityIdSchema, projectRevision: revisionSchema }).strict(), (input) => {
       exactPending('follow-on-project-selection', input.setId, input.setRevision);
       return { ...input, action: currentUserAction(runtime) };
     }),
-    open_reflection: operationTool(runtime, 'open-reflection', 'Open flexible reflection on the current accepted project at any work status.', projectTargetSchema.extend({ reflectionId: entityIdSchema, revision: revisionSchema }).strict(), (input) => ({ ...input, action: currentUserAction(runtime) })),
+    open_reflection: operationTool(runtime, 'open-reflection', 'Open flexible reflection on the current project at any work status, including proceeding from a saved actual-work report; no retrospective acceptance is needed.', projectTargetSchema.extend({ reflectionId: entityIdSchema, revision: revisionSchema }).strict(), (input) => ({ ...input, action: currentUserAction(runtime) })),
     append_reflection_evidence: operationTool(runtime, 'append-reflection-evidence', 'Record only actual supplied experience. Copy the observation verbatim from the current explorer message; keep interpretation separate and do not score it.', reflectionTargetSchema.extend({ evidence: learningInputSchema }).strict(), ({ evidence, ...input }) => {
       assertUserAuthoredValue(runtime, evidence.observation);
       return { ...input, evidence: { ...evidence, provenance: currentUserAction(runtime) } };

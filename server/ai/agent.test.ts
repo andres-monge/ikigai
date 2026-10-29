@@ -1495,3 +1495,21 @@ describe('amended Method agent core loop', () => {
     }
   });
 });
+
+it('refreshes report-derived proceeding into Guide then Interpret within one actual agent turn', async () => {
+  const storage=new InMemoryMethodStorage(pendingFirstProjectMap(false));
+  const message='I finished the interviews. I enjoyed listening but writing summaries drained me. Can we reflect on that?';
+  const model=streamModel([
+    operationChunks({callId:'report-work',toolName:'report_project_work',toolInput:{projectId:'project-1',projectRevision:1,status:'completed',reportedActivity:'I finished the interviews.'}}),
+    operationChunks({callId:'reflect-work',toolName:'open_reflection',toolInput:{projectId:'project-1',projectRevision:1,reflectionId:'reported-reflection',revision:1}}),
+    textChunks('You finished the interviews. Let’s look at what listening and summarizing felt like.'),
+  ]);
+  const traces:Array<{module:string;activeTools:string[]}>=[];
+  const {agent}=await makeAgent({model,storage,currentMessage:message,turnSequence:7,onPreparedStep:trace=>traces.push(trace)});
+  await collect(await agent.stream({prompt:message}));
+  expect(storage.map.projects[0]).toMatchObject({agreementStatus:'accepted',workStatus:'completed'});
+  expect(storage.map.projects[0].confirmation).toBeUndefined();
+  expect(storage.map.reflections[0]).toMatchObject({id:'reported-reflection',projectBasis:{id:'project-1',revision:1}});
+  expect(traces.map(trace=>trace.module)).toEqual(['design-path-project','guide-path-project','interpret-path-project']);
+  expect(model.doStreamCalls.map(call=>call.providerOptions?.openai?.reasoningEffort)).toEqual(['medium','low','low']);
+});
