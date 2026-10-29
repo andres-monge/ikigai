@@ -29,7 +29,7 @@ export const METHOD_MODULE_REGISTRY = {
   'guide-path-project': {
     key: 'guide-path-project',
     directory: 'guide-path-project',
-    contentVersion: '1.0.1',
+    contentVersion: '1.0.2',
     reasoningEffort: 'low',
   },
   'interpret-path-project': {

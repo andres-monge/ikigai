@@ -241,6 +241,20 @@ describe('production effort at the outgoing Responses HTTP boundary', () => {
     expectControls(requests[0]);
   });
 
+  it('refreshes LOW Guide to MEDIUM Design after an explicit request for another project', async () => {
+    const before = readCareerMap(legacyProof);
+    const { requests, map } = await run(before, 'I would like a different small project on this same path.', {
+      name: 'request_new_project', input: {},
+    });
+    expect(requests.map((request) => request.reasoning.effort)).toEqual(['low', 'medium']);
+    expect(requests[0].tools.map((tool) => tool.name)).toContain('request_new_project');
+    expect(requests[1].tools.map((tool) => tool.name)).toContain('propose_follow_on_projects');
+    expect(map.operationHistory.at(-1)?.operationType).toBe('request-new-project');
+    expect(map.projects).toEqual(before.projects);
+    expect(map.reflections).toEqual(before.reflections);
+    requests.forEach(expectControls);
+  });
+
   it('switches HIGH to MEDIUM immediately after selecting a path in the same turn', async () => {
     const { requests, map } = await run(pendingPathsMap(), '1', {
       name: 'select_purpose_path', input: { setId: 'set-1', setRevision: 1,

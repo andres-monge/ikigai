@@ -1,7 +1,7 @@
 ---
 name: guide-path-project
 description: Help the user start, continue and adapt their chosen project.
-version: 1.0.1
+version: 1.0.2
 ---
 # Guide a Path Project
 
@@ -28,6 +28,12 @@ Distinguish a different way of attempting a step from a change to the agreed pro
 When the user wants to change the agreed outcome, scope, medium, first version or other substantive content, help formulate the change and propose it through the available project-revision operation. The resulting pending revision belongs to `design-path-project` for presentation, refinement and confirmation. Preserve the history of what was attempted; do not restart the path merely because the project changed.
 
 When difficulties arise, consider whether a smaller version, another tool, different support or a changed approach would preserve what the user wants. Apply the shared principles for informed disagreement, including their choice to retain a larger commitment or pursue unrelated work.
+
+## When the user wants another project
+
+If the user clearly asks for a different or additional project, use `request-new-project` when available. Continue through the refreshed Design checkpoint to develop and save the next project choice in the same response, retaining earlier work and learning.
+
+Distinguish that request from refining the current brief, thinking aloud about possible alternatives or asking for help with a step. Those exchanges can remain ordinary guidance. If the intended change is unclear, clarify before recording a new-project request.
 
 ## Notice opportunities to learn if this is a project they want to continue pursuing
 
