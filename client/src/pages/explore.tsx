@@ -159,6 +159,28 @@ export function attachProjectBriefs(
   return attached;
 }
 
+export function attachProjectOptionSets(
+  messages: readonly NormalizedHistoryMessage[],
+  sets: readonly CareerMap['projectOptionSets'][number][],
+): Map<string, CareerMap['projectOptionSets'][number][]> {
+  const attached = new Map<string, CareerMap['projectOptionSets'][number][]>();
+  const seen = new Set<string>();
+  const presentedSets = sets.filter((set) => !sets.some((replacement) => (
+    replacement.supersedesSetId === set.id
+    && replacement.presentation.assistantTurnId === set.presentation.assistantTurnId
+  )));
+  for (const message of messages) {
+    if (message.role !== 'assistant' || !message.isFinalAssistantItem || !message.turn) continue;
+    for (const set of presentedSets) {
+      const key = `${set.id}@${set.revision}`;
+      if (set.presentation.assistantTurnId !== message.turn.turnId || seen.has(key)) continue;
+      seen.add(key);
+      attached.set(message.id, [...(attached.get(message.id) ?? []), set]);
+    }
+  }
+  return attached;
+}
+
 function prefersReducedMotion(): boolean {
   return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
@@ -919,6 +941,10 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
     () => attachProjectBriefs(messages, map?.projects ?? []),
     [messages, map?.projects],
   );
+  const projectOptionAttachments = useMemo(
+    () => attachProjectOptionSets(messages, map?.projectOptionSets ?? []),
+    [messages, map?.projectOptionSets],
+  );
   const checkpoint = map ? deriveMethodCheckpoint(map) : null;
   const currentSuggestedSet = map?.pathSets.findLast((set) => set.status === 'suggested');
   const directOperationType = checkpoint?.pendingDecision?.kind === 'path-selection'
@@ -1078,6 +1104,14 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
                 <div key={message.id} className="w-full space-y-5">
                   {(projectBriefAttachments.get(message.id) ?? []).map((project) => (
                     <ChatProjectBrief key={`${project.id}@${project.revision}`} project={project} />
+                  ))}
+                  {(projectOptionAttachments.get(message.id) ?? []).map((set) => (
+                    <section key={`${set.id}@${set.revision}`} aria-label={`Path Project ${set.projectNumber} options`}
+                      data-project-option-set={`${set.id}@${set.revision}`} className="w-full space-y-8">
+                      {set.projects.map((project) => (
+                        <ChatProjectBrief key={`${project.id}@${project.revision}`} project={project} />
+                      ))}
+                    </section>
                   ))}
                   <SafeMessage message={message} />
                   {(pathSetAttachments.get(message.id) ?? []).map((set) => {

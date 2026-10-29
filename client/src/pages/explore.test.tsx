@@ -2,12 +2,12 @@
 
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { applyCareerMapOperation, createCareerMap, type CareerMap, type CareerMapOperation } from '@shared/career-map';
+import { applyCareerMapOperation, createCareerMap, careerMapSchema, type CareerMap, type CareerMapOperation } from '@shared/career-map';
 import type { NormalizedHistoryMessage } from '@/components/explore/explore-state';
 import { ChatProjectBrief } from '@/components/explore/project-brief';
 import { _resetBrowserSupportCache } from '@/hooks/use-speech-to-text';
 import * as attachmentPreparation from '@/components/explore/prepare-attachment';
-import { attachProjectBriefs, attachPurposePathSets, Explore } from './explore';
+import { attachProjectBriefs, attachProjectOptionSets, attachPurposePathSets, Explore } from './explore';
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -127,6 +127,26 @@ function deliveredProjectMap(): CareerMap {
   commit({ type: 'deliver-first-project-framing', sourceId: 'delivery', expectedRevision: map.revision, occurredAt: presentation.presentedAt,
     payload: { projectId: 'simple-project', projectRevision: 1, assistantText: projectSupport, presentation: deliveryPresentation } });
   return map;
+}
+
+function followOnProjectsMap(status: 'suggested' | 'selected' | 'superseded' = 'suggested'): CareerMap {
+  const map = deliveredProjectMap();
+  map.projectOptionSets.push({
+    id: 'follow-on-set', revision: 1, status, projectNumber: 2,
+    basisPath: { id: 'path-1', revision: 1 },
+    basisAction: { sourceId: 'select', action: map.pathSets[0].confirmation!.confirmedBy },
+    ...(status === 'selected' ? { confirmation: { targetId: 'follow-on-set', targetRevision: 1, presentedInTurnId: 'turn-options',
+      confirmedBy: { kind: 'user-message' as const, actionId: 'option-choice', turnId: 'turn-choice', turnSequence: 9, occurredAt: presentation.presentedAt } } } : {}),
+    presentation: { ...presentation, assistantTurnId: 'turn-options', turnSequence: 8 },
+    projects: [1, 2, 3].map((number) => ({
+      id: `option-${number}`, revision: 1, briefFormat: 'simple-v1',
+      title: `Option ${number}`, learningGoal: `Learn ${number}`,
+      firstVersion: `Make ${number}`, firstStep: `Start ${number}`,
+      relationship: number === 3 ? 'unrelated' : 'linked', equalWeight: true,
+      selection: status === 'selected' ? (number === 2 ? 'active' : 'parked') : 'available',
+    })) as CareerMap['projectOptionSets'][number]['projects'],
+  });
+  return careerMapSchema.parse(map);
 }
 
 function projectMessage(id = 'project-final', turnId = 'turn-delivery'): NormalizedHistoryMessage {
@@ -371,6 +391,73 @@ describe('Explore U6 conversation-first workspace', () => {
     expect(brief.compareDocumentPosition(support) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(brief.querySelector('button')).toBeNull();
     expect(brief.textContent).not.toMatch(/Agreement:|Work:|delivered|simple-v1/);
+  });
+
+  it.each(['suggested', 'selected', 'superseded'] as const)('renders all three %s follow-on briefs once at their presenting Chat turn', async (status) => {
+    const map = followOnProjectsMap(status);
+    const messages = [projectMessage('options-final', 'turn-options'), projectMessage('selection-final', 'turn-selection')];
+    vi.mocked(fetch).mockImplementation(async (input: RequestInfo | URL) => {
+      if (String(input).includes('/history')) return jsonResponse({ status: 'ready', messages });
+      if (String(input).includes('/workspace')) return jsonResponse({ status: 'ready', map });
+      throw new Error('Unexpected request');
+    });
+    const view = render(<Explore {...props()} />);
+    const chat = screen.getByRole('tabpanel', { name: 'Chat' });
+    await within(chat).findByRole('heading', { name: 'Option 1' });
+    const assertBriefs = () => {
+      const group = within(chat).getByRole('region', { name: 'Path Project 2 options' });
+      expect(group.querySelectorAll('[data-project-brief]')).toHaveLength(3);
+      for (const project of map.projectOptionSets[0].projects) {
+        for (const value of [project.title, project.learningGoal, project.firstVersion, project.firstStep]) {
+          expect(within(group).getAllByText(value)).toHaveLength(1);
+        }
+      }
+      expect(within(group).getByText('Intentionally unrelated to your current Purpose Path.')).toBeTruthy();
+      expect(group.querySelector('button')).toBeNull();
+      expect(group.parentElement?.querySelector('article')?.textContent).toBe(projectSupport);
+      expect(chat.querySelectorAll('[data-project-option-set]')).toHaveLength(1);
+    };
+    assertBriefs();
+    view.unmount();
+    render(<Explore {...props()} />);
+    const reloaded = screen.getByRole('tabpanel', { name: 'Chat' });
+    await within(reloaded).findByRole('heading', { name: 'Option 1' });
+    expect(reloaded.querySelectorAll('[data-project-brief]')).toHaveLength(3);
+    expect(reloaded.querySelectorAll('[data-project-option-set]')).toHaveLength(1);
+  });
+
+  it('attaches option sets only once to the exact final display item, including read-only failed or cancelled turns', () => {
+    const set = followOnProjectsMap().projectOptionSets[0];
+    for (const status of ['completed', 'failed', 'cancelled'] as const) {
+      const final = { ...projectMessage('options-final', 'turn-options'), turn: { turnId: 'turn-options', status } };
+      const messages = [{ ...final, id: 'streamed', isFinalAssistantItem: undefined },
+        projectMessage('wrong-turn'), final, { ...final, id: 'duplicate' }];
+      const attached = attachProjectOptionSets(messages, [set, structuredClone(set)]);
+      expect([...attached.entries()]).toEqual([['options-final', [set]]]);
+    }
+    expect(attachProjectOptionSets([projectMessage()], [set]).size).toBe(0);
+    expect(attachProjectOptionSets([{ ...projectMessage('x', 'turn-options'), isFinalAssistantItem: undefined }], [set]).size).toBe(0);
+    expect(attachProjectOptionSets([{ ...projectMessage('x', 'turn-options'), turn: undefined }], [set]).size).toBe(0);
+  });
+
+  it.each(['turn-options', 'turn-earlier'])('shows only the final same-turn replacement while preserving history hosted by %s', (originalHost) => {
+    const map = followOnProjectsMap();
+    const original = map.projectOptionSets[0];
+    original.status = 'superseded';
+    original.presentation.assistantTurnId = originalHost;
+    const intermediate: CareerMap['projectOptionSets'][number] = {
+      ...structuredClone(original), id: 'intermediate-set', supersedesSetId: original.id,
+      presentation: { ...original.presentation, assistantTurnId: 'turn-options' },
+    };
+    const latest: CareerMap['projectOptionSets'][number] = {
+      ...structuredClone(intermediate), id: 'latest-set', status: 'suggested', supersedesSetId: intermediate.id,
+    };
+    map.projectOptionSets = [original, intermediate, latest];
+    careerMapSchema.parse(map);
+    const messages = [projectMessage('earlier-item', 'turn-earlier'), projectMessage('options-item', 'turn-options')];
+    const attached = attachProjectOptionSets(messages, map.projectOptionSets);
+    expect(attached.get('options-item')).toEqual([latest]);
+    expect(attached.get('earlier-item')).toEqual(originalHost === 'turn-earlier' ? [original] : undefined);
   });
 
   it('attaches each historical brief once to its exact framing delivery final item', () => {

@@ -10,7 +10,7 @@ export function projectBriefSections(project: ProjectBrief) {
   ];
 }
 
-export function ChatProjectBrief({ project }: { project: CareerMap['projects'][number] }) {
+export function ChatProjectBrief({ project }: { project: ProjectBrief & { id: string; revision: number } }) {
   return (
     <section data-project-brief={`${project.id}@${project.revision}`} className="mx-auto w-full max-w-[38rem] break-words text-[1.0625rem] font-medium leading-7 [unicode-bidi:plaintext]">
       <h2 className="text-xl font-bold">{project.title}</h2>
