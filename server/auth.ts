@@ -20,7 +20,7 @@ export {
 export const INTERNAL_CLIENT_IP_HEADER = 'x-revelio-client-ip';
 export const GOOGLE_IDENTITY_SCOPES = ['openid', 'email', 'profile'] as const;
 
-const LOCAL_AUTH_URL = 'http://localhost:5001';
+const LOCAL_AUTH_URL = 'http://localhost:5173';
 const PRODUCTION_AUTH_URL = 'https://revelio-me.vercel.app';
 
 export type AuthRuntimeEnv = Pick<

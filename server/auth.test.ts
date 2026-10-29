@@ -10,7 +10,7 @@ vi.mock('./env.js', () => ({
     GOOGLE_CLIENT_ID: 'google-client-id',
     GOOGLE_CLIENT_SECRET: 'google-client-secret',
     BETTER_AUTH_SECRET: 'a'.repeat(32),
-    BETTER_AUTH_URL: 'http://localhost:5001',
+    BETTER_AUTH_URL: 'http://localhost:5173',
     AUTH_SIGNUPS_ENABLED: false,
     NODE_ENV: 'test',
   },
@@ -34,7 +34,7 @@ const configuredEnv = {
   GOOGLE_CLIENT_ID: 'google-client-id',
   GOOGLE_CLIENT_SECRET: 'google-client-secret',
   BETTER_AUTH_SECRET: 'a'.repeat(32),
-  BETTER_AUTH_URL: 'http://localhost:5001',
+  BETTER_AUTH_URL: 'http://localhost:5173',
   AUTH_SIGNUPS_ENABLED: true,
   NODE_ENV: 'test' as const,
 };
@@ -51,8 +51,8 @@ describe('I2 Better Auth configuration', () => {
       disableImplicitSignUp: false,
       disableSignUp: false,
     });
-    expect(options.baseURL).toBe('http://localhost:5001');
-    expect(options.trustedOrigins).toEqual(['http://localhost:5001']);
+    expect(options.baseURL).toBe('http://localhost:5173');
+    expect(options.trustedOrigins).toEqual(['http://localhost:5173']);
   });
 
   it('fails signup closed without preventing repeat Google sign-in', () => {
