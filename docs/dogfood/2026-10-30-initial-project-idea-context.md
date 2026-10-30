@@ -1,0 +1,17 @@
+# Initial project idea versus developed project — 2026-10-30
+
+**DF-07's bounded presentation correction is implemented in `df936af`.** The founder accepts that the path card records a direction and initial project idea, while a separate project card shows the developed brief and status. No synchronization of those two texts is intended.
+
+The shared path card now labels the saved preview **Initial project idea**. Map adds “This was the initial idea. See the project card for the developed brief and current status.” only when an existing developed project has the exact same path ID and revision. Chat's original path presentation gets the initial-idea label without a live status annotation. Preview text, project content, status, history and storage are unchanged. There is no prose parsing, regex/status guessing, schema/reducer/state change, Method instruction change or Paths V6 redesign.
+
+## Evidence
+
+- Existing card tests were strengthened; four parameterized Map cases cover exact linkage, wrong path ID, wrong path revision and no project. They verify retained preview text, read-only rendering and remount from saved data. Five checks failed before implementation. Final **83 UI checks PASS** across Map, path card and Explore; typecheck, build and whitespace checks PASS.
+- One proportionate `ce-code-review`, run `20261030-112819-e2d0736c`, completed **Ready to merge**, no findings. Lite correctness review: 10 changed executable non-test lines, visible local presentation, no silent-pass class or hard floor. No additional reviewers, external peers or paid calls.
+- The existing private founder canonical snapshot passes the current map schema and renders through actual `MethodMap`. Its original stale status wording remains present alongside the initial-idea label and exact-linked-project context; the map is unchanged. This is a private static-render proof, **not founder-profile browser QA**.
+- Actual signed-in dedicated Chrome QA shows the note only on its exact-linked path, with the normal saved preview retained. Screenshots reviewed at 1280×900 and 390×844, light/dark, show readable text and no horizontal overflow. After reload and hydration, all three preview texts are identical, Map has one context note, and the selected project remains visible. Original Chat has zero live context notes. No browser fixture or authentication interception was used.
+- QA restored to light theme, default viewport, Chat and empty draft; session left open. All ten before/after canonical table comparisons for both accounts are equal, with zero active leases. Founder remains revision 37 / 31 turns; dedicated account revision 31 / 21 turns. No account/message/model write, founder-profile access, signout or repair.
+
+The existing Vite development service applied the frontend-only change; no main or lab restart was needed. Main PID 1048 and lab PID 41445 were retained. DF-18 capture readiness does not resolve its cause or repair the Failed turn. DF-16 remains a separate queued diagnosis/proposal; no login code changed in this batch. No push, PR, deployment or heartbeat.
+
+Private ignored `.context/revelio/df07-initial-idea-20261030/` retains red/green/check/build, the single review receipt, private canonical render proof and actual QA screenshots. No personal canonical payload or real-account pixels are committed. This correction does not imply universal proposal-quality or U7/full-journey acceptance.
