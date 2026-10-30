@@ -60,6 +60,9 @@ describe('PurposePathCard', () => {
     render(<PurposePathCard path={newPath} index={2} />);
     expect(screen.getByText('Path 03')).toBeTruthy();
     expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.getByText('Initial project idea')).toBeTruthy();
+    expect(screen.getByText(newPath.projectPreview)).toBeTruthy();
+    expect(screen.queryByText(/See the project card for the developed brief/)).toBeNull();
   });
 
   it('shows an explorer-facing learning question and hides provider citation markers in saved card text', () => {

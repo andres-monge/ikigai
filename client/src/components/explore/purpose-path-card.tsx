@@ -25,11 +25,13 @@ export function PurposePathCard({
   index,
   onStart,
   startDisabled = false,
+  hasDevelopedProject = false,
 }: {
   path: PurposePath;
   index: number;
   onStart?: () => void;
   startDisabled?: boolean;
+  hasDevelopedProject?: boolean;
 }) {
   const style = pathStyles[index] ?? pathStyles[0];
   return (
@@ -53,8 +55,11 @@ export function PurposePathCard({
         <p className="font-display text-lg font-extrabold leading-6">{stripProviderCitationMarkers(path.centralUnknown)}</p>
       </section>
       <section data-path-band="project" className={`method-path-band border-y-2 method-path-divider ${style.project}`}>
-        <h4 className="method-map-label method-path-band-label">First project</h4>
+        <h4 className="method-map-label method-path-band-label">Initial project idea</h4>
         <p className="text-sm leading-6">{stripProviderCitationMarkers(path.projectPreview)}</p>
+        {hasDevelopedProject ? (
+          <p className="text-sm leading-6">This was the initial idea. See the project card for the developed brief and current status.</p>
+        ) : null}
       </section>
       <section data-path-band="fit" className="method-path-band">
         <h4 className="method-map-label">Why it may fit</h4>

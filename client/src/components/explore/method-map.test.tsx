@@ -83,6 +83,32 @@ describe('MethodMap', () => {
     expect(screen.queryByRole('button')).toBeNull();
   });
 
+  it.each([
+    { basisPath: { id: 'path-1', revision: 1 }, linked: true },
+    { basisPath: { id: 'another-path', revision: 1 }, linked: false },
+    { basisPath: { id: 'path-1', revision: 2 }, linked: false },
+    { basisPath: undefined, linked: false },
+  ])('qualifies the original idea only for an exact saved project basis: $basisPath', ({ basisPath, linked }) => {
+    const map = pathMap('active');
+    const preview = 'The next piece of work has not been proposed.';
+    map.pathSets[0].paths[0].projectPreview = preview;
+    if (basisPath) map.projects.push({ ...simpleProject(), basisPath });
+    const before = JSON.stringify(map);
+    const { unmount } = render(<MethodMap map={map} />);
+    const card = screen.getAllByTestId('purpose-path-card')[0];
+    const context = 'This was the initial idea. See the project card for the developed brief and current status.';
+    expect(within(card).getByText('Initial project idea')).toBeTruthy();
+    expect(within(card).getByText(preview)).toBeTruthy();
+    expect(!!within(card).queryByText(context)).toBe(linked);
+    expect(screen.queryAllByText(context)).toHaveLength(linked ? 1 : 0);
+    expect(screen.queryByRole('button')).toBeNull();
+    unmount();
+    render(<MethodMap map={JSON.parse(before)} />);
+    expect(screen.queryAllByText(context)).toHaveLength(linked ? 1 : 0);
+    expect(screen.getByText(preview)).toBeTruthy();
+    expect(JSON.stringify(map)).toBe(before);
+  });
+
   it('does not present old paths or their project as serving a newly confirmed North Star', () => {
     const map = pathMap('active');
     map.projects.push({

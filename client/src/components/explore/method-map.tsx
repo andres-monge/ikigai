@@ -313,6 +313,9 @@ export function MethodMap({ map }: MethodMapProps) {
                   key={`${path.id}-${path.revision}`}
                   path={path}
                   index={index}
+                  hasDevelopedProject={map.projects.some((project) => (
+                    project.basisPath.id === path.id && project.basisPath.revision === path.revision
+                  ))}
                 />
               ))}
             </div>
