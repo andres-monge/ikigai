@@ -2,6 +2,8 @@
 
 **DF-18 remains unresolved; two source-level failure mechanisms are reproduced, and a live probe awaits coordinator approval.** No reply-delivery behavior changed, paid model request ran or account message was sent. The founder's personal conversation stays parked.
 
+Subsequent approved implementation and the first live probe are recorded in [the bounded-repair receipt](2026-10-30-bounded-binding-repairs-and-probe.md). It preserves the probe-planning mistake and does not close the original cause or deadline risk. The proposal and pre-implementation evidence below remain historical.
+
 ## Retained failure and source flow
 
 The original two-step selection committed its operation and produced visible output with a normal model stop. The durable turn remains Failed with two unresolved markers, revision 31 and `operationCommitted: true`. Its retained trace places terminal start at 29,760 ms and terminal completion at 37,272 ms: **7,512 ms**, including storage/recovery work, not an isolated provider-read measurement. By comparison, the retained healthy six-step continuation spent 4,011 ms in terminal handling; the later one-step help spent 4,970 ms, including its separately observed 2,305 ms provider read. These figures make read-deadline pressure plausible but do not establish the original failed-attempt cause.
