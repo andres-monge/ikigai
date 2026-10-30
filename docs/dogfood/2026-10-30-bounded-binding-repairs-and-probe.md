@@ -1,5 +1,7 @@
 # Bounded binding repairs and first live probe — 2026-10-30
 
+Subsequent decision: the admission-grace option below was approved and implemented in `033f8d7`. See [the final policy and single two-marker compatibility check](2026-10-30-binding-admission-grace.md). This receipt preserves the earlier probe's non-discriminating outcome and the proposal as it stood at that time.
+
 **Two independently proven defects are corrected; DF-18's historical cause remains open.** The single approved live probe completed, but did not exercise the intended two-step tool loop. No further model request, retry, historical repair or timeout-policy change followed.
 
 ## Implemented and verified
