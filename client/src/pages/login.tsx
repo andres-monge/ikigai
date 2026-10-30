@@ -31,10 +31,10 @@ export function Login() {
 
       if (result.error) {
         setErrorMessage(GENERIC_ERROR);
-        setIsSigningIn(false);
       }
     } catch {
       setErrorMessage(GENERIC_ERROR);
+    } finally {
       setIsSigningIn(false);
     }
   }

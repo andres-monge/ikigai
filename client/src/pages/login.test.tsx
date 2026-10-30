@@ -21,11 +21,19 @@ describe('Google login entry', () => {
     window.history.replaceState({}, '', '/login');
   });
 
-  it('starts only Google OAuth and fixes success/error callbacks', async () => {
-    signInSocial.mockResolvedValue({ data: { redirect: true }, error: null });
+  it('keeps pending Google sign-in exclusive and allows an explicit retry after a settled handoff stays on page', async () => {
+    let settle!: (value: unknown) => void;
+    signInSocial.mockImplementationOnce(() => new Promise((resolve) => { settle = resolve; }))
+      .mockResolvedValue({ data: { redirect: true }, error: null });
     render(<Login />);
 
     fireEvent.click(screen.getByRole('button', { name: /continue with google/i }));
+    const pending = screen.getByRole('button', { name: /opening google/i });
+    expect((pending as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(pending);
+    expect(signInSocial).toHaveBeenCalledTimes(1);
+
+    settle({ data: { redirect: true }, error: null });
 
     await waitFor(() => {
       expect(signInSocial).toHaveBeenCalledWith({
@@ -33,7 +41,14 @@ describe('Google login entry', () => {
         callbackURL: '/',
         errorCallbackURL: '/login',
       });
+      expect((screen.getByRole('button', { name: /continue with google/i }) as HTMLButtonElement).disabled).toBe(false);
     });
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(signInSocial).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: /continue with google/i }));
+    expect(signInSocial).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect((screen.getByRole('button', { name: /continue with google/i }) as HTMLButtonElement).disabled).toBe(false));
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('shows safe paused-signup copy without leaking OAuth details', () => {
@@ -56,6 +71,7 @@ describe('Google login entry', () => {
       'Google sign-in could not be completed. Please try again.',
     );
     expect(screen.queryByText(/token=secret/i)).toBeNull();
+    expect((screen.getByRole('button', { name: /continue with google/i }) as HTMLButtonElement).disabled).toBe(false);
   });
 
   it('turns resolved OAuth failures into safe retry copy', async () => {
@@ -71,5 +87,6 @@ describe('Google login entry', () => {
       'Google sign-in could not be completed. Please try again.',
     );
     expect(screen.queryByText(/token=secret/i)).toBeNull();
+    expect((screen.getByRole('button', { name: /continue with google/i }) as HTMLButtonElement).disabled).toBe(false);
   });
 });
