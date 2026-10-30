@@ -488,7 +488,7 @@ describe('protected Method routes', () => {
         markerWait: { budgetMs: 5000, expectedCount: 1, promiseSettled: 1, requestAborted: 0, deadlineAborted: 0 },
         attempts: [{ index: 1, readReturned: 1, httpStatus: 0, requestedLimit: 100, returnedCount: 1,
           hasMore: 1, cursorPresent: 1, matchCounts: [1], requestAborted: 0, deadlineAborted: 0 }],
-        exit: { phase: 3, complete: 1, readBudgetMs: 5000, requestAborted: 0, deadlineAborted: 0 },
+        exit: { phase: 3, complete: 1, admissionBudgetMs: 5000, perReadBudgetMs: 5000, totalReadBudgetMs: 10000, requestAborted: 0, deadlineAborted: 0 },
       });
       expect(JSON.stringify(latency.terminalBinding)).not.toMatch(/latency-marker|latency-context/);
       expect(JSON.stringify(logs)).not.toContain(SENTINEL);
@@ -2121,7 +2121,7 @@ describe('protected Method routes', () => {
   });
 
 
-  it.each(['missing', 'duplicate'] as const)(
+  it.each(['missing', 'duplicate', 'foreign'] as const)(
     'fails closed when internal context remains %s after bounded visibility retries',
     async (markerFailure) => {
       vi.stubEnv('NODE_ENV', 'development');
@@ -2140,6 +2140,7 @@ describe('protected Method routes', () => {
                 id: 'unbound-user', type: 'message', role: 'user',
                 content: [{ type: 'input_text', text: 'Help me reflect.' }],
               },
+              ...(markerFailure === 'foreign' ? [internalContextItem('foreign-internal-context', 'another-request-marker')] : []),
               ...(markerFailure === 'duplicate' ? [
                 internalContextItem('duplicate-internal-context-1', marker),
                 internalContextItem('duplicate-internal-context-2', marker),
@@ -2173,7 +2174,7 @@ describe('protected Method routes', () => {
         expect(failureResult).not.toHaveProperty('displayProjection');
         expect(storage.releaseTurnLease).toHaveBeenCalledOnce();
         expect((logs.at(-1)?.latency as Record<string, unknown>).terminalBinding).toMatchObject({
-          attempts: Array.from({ length: 5 }, () => ({ readReturned: 1, matchCounts: [markerFailure === 'missing' ? 0 : 2] })),
+          attempts: Array.from({ length: 5 }, () => ({ readReturned: 1, matchCounts: [markerFailure === 'duplicate' ? 2 : 0] })),
           exit: { phase: 4, complete: 0, requestAborted: 0, deadlineAborted: 0 },
         });
       } finally { vi.unstubAllEnvs(); }
@@ -2234,6 +2235,129 @@ describe('protected Method routes', () => {
       expect(storage.failAgentTurn).toHaveBeenCalledWith(expect.objectContaining({ errorClass: 'InternalContextBindingError' }));
     }
   });
+
+  it.each(['agent', 'workspace'] as const)('lets an admitted %s binding read finish after the admission window', async (entry) => {
+    vi.stubEnv('NODE_ENV', 'development');
+    vi.stubEnv('REVELIO_LATENCY_TRACE', '1');
+    try {
+      const direct = entry === 'workspace';
+      const marker = 'grace-context-';
+      const storage = direct ? createPathSelectionStorage() : createStorage({ getConversationMapping: vi.fn(async () => 'grace-conversation') });
+      const logs: Array<Record<string, unknown>> = [];
+      const listItems = vi.fn(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 2_600));
+        return { data: [
+          { id: 'grace-assistant', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: DIRECT_CONTINUATION_TEXT }] },
+          internalContextItem('grace-context-0', marker + '0'),
+          ...(listItems.mock.calls.length === 2 ? [internalContextItem('grace-context-1', marker + '1')] : []),
+          { id: 'grace-user', type: 'message', role: 'user', content: [{ type: 'input_text', text: 'That feels exactly right.' }] },
+        ], hasMore: false };
+      });
+      const model = direct ? proposeFirstProjectThenTextModel() : confirmWhyThenTextModel({
+        pending: pendingWhy().foundation.whyRevisions.at(-1)!, callId: 'grace-confirm',
+        sourceMessageId: 'client-message-1', text: DIRECT_CONTINUATION_TEXT });
+      const response = await (await request(testApp({ storage, requireAuth: authenticated, agentEnabled: true, model,
+        conversationClient: { listItems }, internalContextMarker: (index) => marker + index,
+        operationalLog: (log) => logs.push(log),
+      }))).post(direct ? '/api/agent/workspace/operations' : '/api/agent')
+        .send(direct ? selectPurposePathRequest({ operationId: 'grace-workspace' }) : { id: 'client-message-1', message: 'That feels exactly right.' });
+      expect(response.status).toBe(200);
+      expect(listItems).toHaveBeenCalledTimes(2);
+      expect(model.doStreamCalls).toHaveLength(2);
+      expect(storage.completeAgentTurn).toHaveBeenCalledOnce();
+      expect(storage.failAgentTurn).not.toHaveBeenCalled();
+      expect(storage.completeAgentTurn.mock.calls[0]?.[0]?.result?.internalContextItemIds).toEqual(['grace-context-0', 'grace-context-1']);
+      expect(storage.releaseTurnLease).toHaveBeenCalledOnce();
+      if (!direct) expect((logs.at(-1)?.latency as Record<string, unknown>).terminalBinding).toMatchObject({
+        attempts: [{ readReturned: 1, matchCounts: [1, 0], admissionClosed: 0, readDeadlineExpired: 0, totalDeadlineExpired: 0 },
+          { readReturned: 1, matchCounts: [1, 1], admissionClosed: 1, readDeadlineExpired: 0, totalDeadlineExpired: 0 }],
+        exit: { complete: 1, admissionBudgetMs: 5000, perReadBudgetMs: 5000, totalReadBudgetMs: 10000,
+          admissionClosed: 1, readDeadlineExpired: 0, totalDeadlineExpired: 0, deadlineAborted: 0 },
+      });
+    } finally { vi.unstubAllEnvs(); }
+  }, 8_000);
+
+  it.each(['first-hang', 'admission-cutoff', 'last-read-hang'] as const)('bounds normal binding: %s', async (scenario) => {
+    vi.stubEnv('NODE_ENV', 'development');
+    vi.stubEnv('REVELIO_LATENCY_TRACE', '1');
+    try {
+      const logs: Array<Record<string, unknown>> = [];
+      const storage = createStorage({ getConversationMapping: vi.fn(async () => 'bounded-grace-conversation') });
+      let releasePage!: (value: { data: unknown[]; hasMore: boolean }) => void;
+      const latePage = new Promise<{ data: unknown[]; hasMore: boolean }>((resolve) => { releasePage = resolve; });
+      const readStarts: number[] = [];
+      const listItems = vi.fn(async () => {
+        readStarts.push(performance.now());
+        if (scenario !== 'first-hang' && readStarts.length === 1) {
+          await new Promise((resolve) => setTimeout(resolve, scenario === 'admission-cutoff' ? 4_950 : 4_500));
+          return { data: [], hasMore: false };
+        }
+        return latePage;
+      });
+      await (await request(testApp({ storage, requireAuth: authenticated, agentEnabled: true,
+        model: new MockLanguageModelV4({ doStream: textStream('Bounded reply.') as never }),
+        conversationClient: { listItems }, internalContextMarker: () => 'bounded-grace-context',
+        operationalLog: (entry) => logs.push(entry),
+      }))).post('/api/agent').send({ id: 'client-message-1', message: 'Help me reflect.' });
+      expect(listItems).toHaveBeenCalledTimes(scenario === 'last-read-hang' ? 2 : 1);
+      expect(storage.completeAgentTurn).not.toHaveBeenCalled();
+      expect(storage.failAgentTurn).toHaveBeenCalledWith(expect.objectContaining({ errorClass: 'InternalContextBindingError' }));
+      expect(storage.releaseTurnLease).toHaveBeenCalledOnce();
+      const binding = (logs.at(-1)?.latency as Record<string, unknown>).terminalBinding as {
+        attempts: Array<{ elapsedMs: number }>; exit: { readPhaseElapsedMs: number };
+      };
+      expect(binding).toMatchObject({ exit: { complete: 0, admissionClosed: 1,
+        perReadBudgetMs: 5000, admissionBudgetMs: 5000, totalReadBudgetMs: 10000,
+        readDeadlineExpired: scenario === 'admission-cutoff' ? 0 : 1, totalDeadlineExpired: 0,
+        deadlineAborted: scenario === 'admission-cutoff' ? 0 : 1 } });
+      expect(binding.attempts.every((attempt) => attempt.elapsedMs < 5_500)).toBe(true);
+      expect(binding.exit.readPhaseElapsedMs).toBeLessThan(scenario === 'last-read-hang' ? 10_500 : 5_500);
+      expect(readStarts.every((start) => start - readStarts[0] < 5000)).toBe(true);
+      const captured = JSON.stringify(logs);
+      releasePage({ data: [internalContextItem('late-bound-context', 'bounded-grace-context')], hasMore: false });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(JSON.stringify(logs)).toBe(captured);
+      expect(storage.completeAgentTurn).not.toHaveBeenCalled();
+    } finally { vi.unstubAllEnvs(); }
+  }, 12_000);
+
+  it('cancels promptly while an admitted read is using grace', async () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    vi.stubEnv('REVELIO_LATENCY_TRACE', '1');
+    const exit = vi.spyOn(MethodLatencyTrace.prototype, 'bindingExit');
+    try {
+      let secondRead!: () => void;
+      const secondReadStarted = new Promise<void>((resolve) => { secondRead = resolve; });
+      const listItems = vi.fn(async () => {
+        if (listItems.mock.calls.length === 1) {
+          await new Promise((resolve) => setTimeout(resolve, 1_000));
+          return { data: [], hasMore: false };
+        }
+        secondRead();
+        return new Promise<never>(() => undefined);
+      });
+      const storage = createStorage({ getConversationMapping: vi.fn(async () => 'cancel-grace-conversation') });
+      const outbound = (await request(testApp({ storage, requireAuth: authenticated, agentEnabled: true,
+        model: new MockLanguageModelV4({ doStream: textStream('Partial reply.') as never }),
+        conversationClient: { listItems }, internalContextMarker: () => 'cancel-grace-context', operationalLog: vi.fn(),
+      }))).post('/api/agent').send({ id: 'client-message-1', message: 'Help me reflect.' });
+      const settled = Promise.resolve(outbound).catch(() => undefined);
+      await secondReadStarted;
+      await new Promise((resolve) => setTimeout(resolve, 4_050));
+      expect(storage.failAgentTurn).not.toHaveBeenCalled();
+      const cancelledAt = performance.now();
+      outbound.abort();
+      await settled;
+      await vi.waitFor(() => expect(storage.cancelAgentTurn).toHaveBeenCalledOnce());
+      expect(performance.now() - cancelledAt).toBeLessThan(500);
+      expect(storage.completeAgentTurn).not.toHaveBeenCalled();
+      expect(storage.failAgentTurn).not.toHaveBeenCalled();
+      expect(storage.releaseTurnLease).toHaveBeenCalledOnce();
+      expect(listItems).toHaveBeenCalledTimes(2);
+      expect(exit).toHaveBeenCalledWith(expect.objectContaining({ phase: 1, complete: 0, requestAborted: 1,
+        admissionClosed: 1, readDeadlineExpired: 0, totalDeadlineExpired: 0, deadlineAborted: 0 }));
+    } finally { exit.mockRestore(); vi.unstubAllEnvs(); }
+  }, 8_000);
 
   it.each([503, 401])('captures known HTTP %i and exhausts only retryable failures', async (status) => {
     vi.stubEnv('NODE_ENV', 'development');
@@ -2325,7 +2449,7 @@ describe('protected Method routes', () => {
       const binding = (logs.at(-1)?.latency as Record<string, unknown>).terminalBinding;
       expect(binding).toMatchObject({
         attempts: [{ readReturned: 0, httpStatus: retryFirst ? 503 : 0, matchCounts: [], requestAborted: 0, deadlineAborted: retryFirst ? 0 : 1 }],
-        exit: { phase: retryFirst ? 2 : 1, complete: 0, readBudgetMs: 500, requestAborted: 0, deadlineAborted: 1 },
+        exit: { phase: retryFirst ? 2 : 1, complete: 0, readPhaseElapsedMs: expect.any(Number), admissionBudgetMs: 500, perReadBudgetMs: 500, totalReadBudgetMs: 500, requestAborted: 0, deadlineAborted: 1 },
       });
       const captured = JSON.stringify(logs);
       releasePage({ data: [internalContextItem('too-late', 'hanging-failure-context-0')], hasMore: false });

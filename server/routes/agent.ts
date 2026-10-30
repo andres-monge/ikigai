@@ -482,6 +482,33 @@ function awaitWithAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T>
   });
 }
 
+function terminalBindingReadWindow(budgetMs: number, allowReadGrace: boolean, requestSignal?: AbortSignal) {
+  const startedAt = performance.now();
+  const totalBudgetMs = allowReadGrace ? budgetMs * 2 : budgetMs;
+  const admissionDeadline = AbortSignal.timeout(budgetMs);
+  const totalDeadline = allowReadGrace ? AbortSignal.timeout(totalBudgetMs) : admissionDeadline;
+  const admissionSignal = requestSignal
+    ? AbortSignal.any([requestSignal, admissionDeadline, totalDeadline])
+    : AbortSignal.any([admissionDeadline, totalDeadline]);
+  const admissionClosed = () => admissionDeadline.aborted || performance.now() - startedAt >= budgetMs;
+  const totalExpired = () => totalDeadline.aborted || performance.now() - startedAt >= totalBudgetMs;
+  const assertOpen = (expired: boolean) => {
+    if (requestSignal?.aborted) throw requestSignal.reason;
+    if (expired) throw new DOMException('Terminal binding deadline expired', 'TimeoutError');
+  };
+  return {
+    startedAt, totalBudgetMs, admissionSignal, admissionClosed, totalExpired,
+    startRead() {
+      assertOpen(admissionClosed() || totalExpired());
+      const readStartedAt = performance.now();
+      const readDeadline = AbortSignal.timeout(budgetMs);
+      const signal = AbortSignal.any([totalDeadline, readDeadline, ...(requestSignal ? [requestSignal] : [])]);
+      const expired = () => readDeadline.aborted || performance.now() - readStartedAt >= budgetMs;
+      return { signal, expired, assertOpen: () => assertOpen(expired() || totalExpired()) };
+    },
+  };
+}
+
 async function waitForProvisioningHandoff(input: {
   storage: Pick<IStorage, 'getConversationMapping' | 'getTurnLease'>;
   userId: string;
@@ -787,7 +814,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
       markers: readonly string[];
       complete: boolean;
     }> | undefined;
-    const terminalProviderState = (timeoutMs = 5_000, requestSignal?: AbortSignal) => {
+    const terminalProviderState = (timeoutMs = 5_000, requestSignal?: AbortSignal, options: { allowReadGrace?: boolean } = {}) => {
       terminalProviderStatePromise ??= (async () => {
         if (!methodResult || !conversationId) {
           return { items: [], internalContextItemIds: [], markers: [], complete: false };
@@ -801,26 +828,25 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
         if (markers.length === 0) {
           return { items: [], internalContextItemIds: [], markers, complete: false };
         }
-        const timeoutSignal = AbortSignal.timeout(timeoutMs);
-        const terminalSignal = requestSignal
-          ? AbortSignal.any([requestSignal, timeoutSignal])
-          : timeoutSignal;
+        const readWindow = terminalBindingReadWindow(timeoutMs, options.allowReadGrace === true, requestSignal);
         let latest = {
           items: [] as unknown[], internalContextItemIds: [] as string[], markers, complete: false,
         };
         for (let attempt = 0; attempt < 5; attempt += 1) {
+          const read = readWindow.startRead();
           let items: unknown[] = [];
           try {
             items = await awaitWithAbort(
               listRecentConversationItems({
                 client: conversationClient(),
                 conversationId,
-                abortSignal: terminalSignal,
+                abortSignal: read.signal,
               }),
-              terminalSignal,
+              read.signal,
             );
+            read.assertOpen();
           } catch (error) {
-            if (terminalSignal.aborted || !(error instanceof ConversationHistoryProviderError && error.retryable)) throw error;
+            if (read.signal.aborted || !(error instanceof ConversationHistoryProviderError && error.retryable)) throw error;
           }
           const resolved = resolveInternalContextItemIds(items, markers);
           latest = {
@@ -829,8 +855,9 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
             markers,
             complete: resolved.complete,
           };
+          read.assertOpen();
           if (resolved.complete) return latest;
-          if (attempt < 4) await abortableDelay(100, terminalSignal);
+          if (attempt < 4) await abortableDelay(100, readWindow.admissionSignal);
         }
         return latest;
       })().catch(() => ({
@@ -1118,7 +1145,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
             if (revision !== undefined) {
               response.locals.methodLog = { ...response.locals.methodLog, revision };
             }
-            const providerState = await terminalProviderState(5_000, abort.signal);
+            const providerState = await terminalProviderState(5_000, abort.signal, { allowReadGrace: true });
             if (!providerState.complete) {
               const bindingError = new Error('Direct continuation provider items were not durably bound.');
               bindingError.name = 'InternalContextBindingError';
@@ -1343,11 +1370,12 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
       markers: readonly string[];
       complete: boolean;
     }> | undefined;
-    const terminalProviderState = (timeoutMs = 5_000, requestSignal?: AbortSignal) => {
+    const terminalProviderState = (timeoutMs = 5_000, requestSignal?: AbortSignal, options: { allowReadGrace?: boolean } = {}) => {
       terminalProviderStatePromise ??= (async () => {
         const bindingStarted = performance.now();
         let phase: 0 | 1 | 2 | 3 | 4 = 0;
-        let timeoutSignal: AbortSignal | undefined;
+        let readWindow: ReturnType<typeof terminalBindingReadWindow> | undefined;
+        let lastReadDeadlineExpired = false;
         try {
           if (!methodResult || !conversationId) {
             return { items: [], internalContextItemIds: [], markers: [], complete: false };
@@ -1367,14 +1395,12 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
           if (markers.length === 0) {
             return { items: [], internalContextItemIds: [], markers, complete: false };
           }
-          timeoutSignal = AbortSignal.timeout(timeoutMs);
-          const terminalSignal = requestSignal
-            ? AbortSignal.any([requestSignal, timeoutSignal])
-            : timeoutSignal;
+          readWindow = terminalBindingReadWindow(timeoutMs, options.allowReadGrace === true, requestSignal);
           let latest = {
             items: [] as unknown[], internalContextItemIds: [] as string[], markers, complete: false,
           };
           for (let attempt = 0; attempt < 5; attempt += 1) {
+            const read = readWindow.startRead();
             phase = 1;
             const readStarted = performance.now();
             let pageCounts = { returnedCount: -1, hasMore: -1, cursorPresent: -1 };
@@ -1392,15 +1418,17 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
                     return page;
                   } } : client,
                   conversationId,
-                  abortSignal: terminalSignal,
+                  abortSignal: read.signal,
                 }),
-                terminalSignal,
+                read.signal,
               );
               readReturned = 1;
+              read.assertOpen();
             } catch (error) {
               try { if (error instanceof ConversationHistoryProviderError) httpStatus = error.httpStatus ?? 0; } catch {}
-              if (terminalSignal.aborted || !(error instanceof ConversationHistoryProviderError && error.retryable)) throw error;
+              if (read.signal.aborted || !(error instanceof ConversationHistoryProviderError && error.retryable)) throw error;
             } finally {
+              lastReadDeadlineExpired = read.expired();
               try {
                 const elapsedMs = performance.now() - readStarted;
                 const observedMarkers = latency && readReturned ? items.flatMap((item) => {
@@ -1410,21 +1438,32 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
                 latency?.bindingAttempt({ index: attempt + 1, elapsedMs,
                   readReturned, httpStatus, requestedLimit: 100, ...pageCounts,
                   matchCounts: readReturned ? markers.map((marker) => observedMarkers.filter((candidate) => candidate === marker).length) : [],
-                  requestAborted: requestSignal?.aborted ? 1 : 0, deadlineAborted: timeoutSignal.aborted ? 1 : 0 });
+                  requestAborted: requestSignal?.aborted ? 1 : 0, admissionClosed: readWindow.admissionClosed() ? 1 : 0,
+                  readDeadlineExpired: lastReadDeadlineExpired ? 1 : 0,
+                  totalDeadlineExpired: readWindow.totalExpired() ? 1 : 0,
+                  deadlineAborted: lastReadDeadlineExpired || readWindow.totalExpired() ? 1 : 0 });
               } catch {}
             }
             const resolved = resolveInternalContextItemIds(items, markers);
             latest = { items, internalContextItemIds: resolved.itemIds, markers, complete: resolved.complete };
+            lastReadDeadlineExpired = read.expired();
+            read.assertOpen();
             if (resolved.complete) { phase = 3; return latest; }
-            if (attempt < 4) { phase = 2; await abortableDelay(100, terminalSignal); }
+            if (attempt < 4) { phase = 2; await abortableDelay(100, readWindow.admissionSignal); }
           }
           phase = 4;
           return latest;
         } finally {
           try {
             latency?.bindingExit({ phase, elapsedMs: performance.now() - bindingStarted, complete: phase === 3 ? 1 : 0,
-              readBudgetMs: timeoutMs, requestAborted: requestSignal?.aborted ? 1 : 0,
-              deadlineAborted: timeoutSignal?.aborted ? 1 : 0 });
+              readPhaseElapsedMs: readWindow ? performance.now() - readWindow.startedAt : 0,
+              admissionBudgetMs: timeoutMs, perReadBudgetMs: timeoutMs,
+              totalReadBudgetMs: readWindow?.totalBudgetMs ?? (options.allowReadGrace ? timeoutMs * 2 : timeoutMs),
+              requestAborted: requestSignal?.aborted ? 1 : 0,
+              admissionClosed: readWindow?.admissionClosed() ? 1 : 0,
+              readDeadlineExpired: lastReadDeadlineExpired ? 1 : 0,
+              totalDeadlineExpired: readWindow?.totalExpired() ? 1 : 0,
+              deadlineAborted: lastReadDeadlineExpired || readWindow?.totalExpired() ? 1 : 0 });
           } catch {}
         }
       })().catch(() => ({
@@ -1780,7 +1819,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
             const authoritative = await storage.loadCareerMap(identity.userId);
             const revision = authoritative.status === 'ready' ? authoritative.map.revision : undefined;
             if (revision !== undefined) response.locals.methodLog = { ...response.locals.methodLog, revision };
-            const providerState = await terminalProviderState(5_000, abort.signal);
+            const providerState = await terminalProviderState(5_000, abort.signal, { allowReadGrace: true });
             if (!providerState.complete) {
               const bindingError = new Error('Internal context provider items were not durably bound.');
               bindingError.name = 'InternalContextBindingError';

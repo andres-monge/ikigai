@@ -10,18 +10,25 @@ type BindingMarkerWait = {
   elapsedMs: number; budgetMs: number; expectedCount: number; promiseSettled: Flag;
   requestAborted: Flag; deadlineAborted: Flag;
 };
+type BindingReadDeadlines = {
+  admissionClosed: Flag; readDeadlineExpired: Flag; totalDeadlineExpired: Flag;
+  deadlineAborted: Flag;
+};
 // Unknown page metadata uses -1; HTTP status 0 means unavailable, not success.
-type BindingAttempt = {
+type BindingAttempt = BindingReadDeadlines & {
   index: number; elapsedMs: number; readReturned: Flag; httpStatus: number;
   requestedLimit: number; returnedCount: number; hasMore: number; cursorPresent: number;
-  matchCounts: number[]; requestAborted: Flag; deadlineAborted: Flag;
+  matchCounts: number[]; requestAborted: Flag;
 };
 // Phases: marker wait, provider read, inter-attempt delay, resolved, exhausted.
-type BindingExit = {
-  phase: 0 | 1 | 2 | 3 | 4; elapsedMs: number; complete: Flag; readBudgetMs: number;
-  requestAborted: Flag; deadlineAborted: Flag;
+type BindingExit = BindingReadDeadlines & {
+  phase: 0 | 1 | 2 | 3 | 4; elapsedMs: number; complete: Flag; readPhaseElapsedMs: number;
+  admissionBudgetMs: number; perReadBudgetMs: number; totalReadBudgetMs: number;
+  requestAborted: Flag;
 };
 const flag = (value: number) => value === 0 || value === 1;
+const readDeadlines = (value: BindingReadDeadlines) => flag(value.admissionClosed)
+  && flag(value.readDeadlineExpired) && flag(value.totalDeadlineExpired) && flag(value.deadlineAborted);
 const count = (value: number) => Number.isSafeInteger(value) && value >= 0;
 const duration = (value: number) => Number.isFinite(value) && value >= 0;
 
@@ -47,7 +54,7 @@ export class MethodLatencyTrace {
 
   bindingAttempt(value: BindingAttempt): void {
     if (this.binding?.exit || value.index !== (this.binding?.attempts.length ?? 0) + 1 || value.index > 5
-      || !duration(value.elapsedMs) || !flag(value.readReturned) || !flag(value.requestAborted) || !flag(value.deadlineAborted)
+      || !duration(value.elapsedMs) || !flag(value.readReturned) || !flag(value.requestAborted) || !readDeadlines(value)
       || value.requestedLimit !== 100 || !(value.returnedCount === -1 || count(value.returnedCount))
       || ![-1, 0, 1].includes(value.hasMore) || ![-1, 0, 1].includes(value.cursorPresent)
       || !(value.httpStatus === 0 || (Number.isInteger(value.httpStatus) && value.httpStatus >= 100 && value.httpStatus <= 599))
@@ -58,17 +65,24 @@ export class MethodLatencyTrace {
       requestedLimit: value.requestedLimit, returnedCount: value.returnedCount, hasMore: value.hasMore,
       cursorPresent: value.cursorPresent, matchCounts: [...value.matchCounts],
       requestAborted: value.requestAborted, deadlineAborted: value.deadlineAborted,
+      admissionClosed: value.admissionClosed, readDeadlineExpired: value.readDeadlineExpired,
+      totalDeadlineExpired: value.totalDeadlineExpired,
     });
   }
 
   bindingExit(value: BindingExit): void {
     if (this.binding?.exit || !Number.isInteger(value.phase) || value.phase < 0 || value.phase > 4
-      || !duration(value.elapsedMs) || !duration(value.readBudgetMs) || !flag(value.complete)
-      || !flag(value.requestAborted) || !flag(value.deadlineAborted)) return;
+      || !duration(value.elapsedMs) || !duration(value.readPhaseElapsedMs) || !duration(value.admissionBudgetMs)
+      || !duration(value.perReadBudgetMs) || !duration(value.totalReadBudgetMs) || !flag(value.complete)
+      || !flag(value.requestAborted) || !readDeadlines(value)) return;
     this.binding ??= { attempts: [] };
     this.binding.exit = {
       phase: value.phase, elapsedMs: Math.round(value.elapsedMs), complete: value.complete,
-      readBudgetMs: value.readBudgetMs, requestAborted: value.requestAborted, deadlineAborted: value.deadlineAborted,
+      readPhaseElapsedMs: Math.round(value.readPhaseElapsedMs), admissionBudgetMs: value.admissionBudgetMs,
+      perReadBudgetMs: value.perReadBudgetMs, totalReadBudgetMs: value.totalReadBudgetMs,
+      requestAborted: value.requestAborted, deadlineAborted: value.deadlineAborted,
+      admissionClosed: value.admissionClosed, readDeadlineExpired: value.readDeadlineExpired,
+      totalDeadlineExpired: value.totalDeadlineExpired,
     };
   }
 

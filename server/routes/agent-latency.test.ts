@@ -47,11 +47,14 @@ describe('Method latency trace', () => {
     trace.bindingMarkers(markers);
     const attempt = { index: 1, elapsedMs: 10, readReturned: 1 as const, httpStatus: 0, requestedLimit: 100,
       returnedCount: 100, hasMore: 1, cursorPresent: 1, matchCounts: Array(REVELIO_MAX_AGENT_STEPS).fill(1),
-      requestAborted: 0 as const, deadlineAborted: 0 as const, privateValue: 'private-marker-provider-payload' };
+      requestAborted: 0 as const, admissionClosed: 0 as const, readDeadlineExpired: 0 as const, totalDeadlineExpired: 0 as const, deadlineAborted: 0 as const, privateValue: 'private-marker-provider-payload' };
     trace.bindingAttempt({ ...attempt, elapsedMs: NaN });
+    trace.bindingAttempt({ ...attempt, admissionClosed: 2 as never });
+    trace.bindingAttempt({ ...attempt, readDeadlineExpired: NaN as never });
+    trace.bindingAttempt({ ...attempt, totalDeadlineExpired: -1 as never });
     trace.bindingAttempt({ ...attempt, matchCounts: Array(REVELIO_MAX_AGENT_STEPS + 1).fill(1) });
     for (let index = 1; index <= 6; index += 1) trace.bindingAttempt({ ...attempt, index });
-    trace.bindingExit({ phase: 4, elapsedMs: Infinity, complete: 0, readBudgetMs: 5000, requestAborted: 0, deadlineAborted: 0 });
+    trace.bindingExit({ phase: 4, elapsedMs: Infinity, complete: 0, readPhaseElapsedMs: 3, admissionBudgetMs: 5000, perReadBudgetMs: 5000, totalReadBudgetMs: 10000, requestAborted: 0, admissionClosed: 0, readDeadlineExpired: 0, totalDeadlineExpired: 0, deadlineAborted: 0 });
     const captured = trace.summary().terminalBinding as { markerWait: unknown; attempts: unknown[]; exit?: unknown };
     expect(captured.attempts).toHaveLength(5);
     expect(captured).not.toHaveProperty('exit');
@@ -59,7 +62,7 @@ describe('Method latency trace', () => {
       promiseSettled: 1, requestAborted: 0, deadlineAborted: 0 });
     expect(captured.attempts[0]).toEqual({ index: 1, elapsedMs: 10, readReturned: 1, httpStatus: 0,
       requestedLimit: 100, returnedCount: 100, hasMore: 1, cursorPresent: 1, matchCounts: Array(REVELIO_MAX_AGENT_STEPS).fill(1),
-      requestAborted: 0, deadlineAborted: 0 });
+      requestAborted: 0, admissionClosed: 0, readDeadlineExpired: 0, totalDeadlineExpired: 0, deadlineAborted: 0 });
     expect(JSON.stringify(captured)).not.toContain('private-marker-provider-payload');
   });
 
@@ -69,7 +72,7 @@ describe('Method latency trace', () => {
     trace.bindingMarkers({ elapsedMs: 2, budgetMs: 5000, expectedCount, promiseSettled: 1,
       requestAborted: 0, deadlineAborted: 0 });
     trace.bindingAttempt({ index: 1, elapsedMs: 3, readReturned: 1, httpStatus: 0, requestedLimit: 100,
-      returnedCount: 100, hasMore: 1, cursorPresent: 1, matchCounts, requestAborted: 0, deadlineAborted: 0 });
+      returnedCount: 100, hasMore: 1, cursorPresent: 1, matchCounts, requestAborted: 0, admissionClosed: 0, readDeadlineExpired: 0, totalDeadlineExpired: 0, deadlineAborted: 0 });
     expect(trace.summary().terminalBinding).toMatchObject({
       markerWait: { expectedCount }, attempts: [{ matchCounts }],
     });
@@ -79,14 +82,18 @@ describe('Method latency trace', () => {
     const trace = new MethodLatencyTrace();
     const matchCounts = [1];
     const attempt = { index: 1, elapsedMs: 3, readReturned: 1 as const, httpStatus: 0, requestedLimit: 100,
-      returnedCount: 1, hasMore: 0, cursorPresent: 0, matchCounts, requestAborted: 0 as const, deadlineAborted: 0 as const };
+      returnedCount: 1, hasMore: 0, cursorPresent: 0, matchCounts, requestAborted: 0 as const, admissionClosed: 0 as const, readDeadlineExpired: 0 as const, totalDeadlineExpired: 0 as const, deadlineAborted: 0 as const };
     trace.bindingAttempt(attempt);
-    trace.bindingExit({ phase: 3, elapsedMs: 4, complete: 1, readBudgetMs: 5000, requestAborted: 0, deadlineAborted: 0 });
+    trace.bindingExit({ phase: 3, elapsedMs: 4, complete: 1, readPhaseElapsedMs: 3, admissionBudgetMs: 5000, perReadBudgetMs: 5000, totalReadBudgetMs: 10000, requestAborted: 0, admissionClosed: 0, readDeadlineExpired: 0, totalDeadlineExpired: 0, deadlineAborted: 0 });
+    expect(trace.summary().terminalBinding).toMatchObject({ exit: {
+      admissionBudgetMs: 5000, perReadBudgetMs: 5000, totalReadBudgetMs: 10000,
+      readPhaseElapsedMs: 3, admissionClosed: 0, readDeadlineExpired: 0, totalDeadlineExpired: 0,
+    } });
     const original = trace.summary();
     matchCounts[0] = 99;
     trace.bindingAttempt({ ...attempt, index: 2 });
     trace.bindingMarkers({ elapsedMs: 0, budgetMs: 5000, expectedCount: 1, promiseSettled: 1, requestAborted: 0, deadlineAborted: 0 });
-    trace.bindingExit({ phase: 1, elapsedMs: 9, complete: 0, readBudgetMs: 5000, requestAborted: 0, deadlineAborted: 1 });
+    trace.bindingExit({ phase: 1, elapsedMs: 9, complete: 0, readPhaseElapsedMs: 3, admissionBudgetMs: 5000, perReadBudgetMs: 5000, totalReadBudgetMs: 10000, requestAborted: 0, admissionClosed: 1, readDeadlineExpired: 1, totalDeadlineExpired: 0, deadlineAborted: 1 });
     expect(trace.summary()).toEqual(original);
     (original.terminalBinding as { attempts: Array<{ matchCounts: number[] }> }).attempts[0].matchCounts[0] = 50;
     expect(trace.summary().terminalBinding).toMatchObject({ attempts: [{ matchCounts: [1] }] });
