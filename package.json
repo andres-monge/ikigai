@@ -26,7 +26,8 @@
     "test:method": "npm test -- server/ai/method/loader.test.ts server/ai/method/evaluation.test.ts --run",
     "test:method-bundle": "npm run build && METHOD_PRODUCTION_SMOKE=1 npm run test:method",
     "eval:method": "node --env-file-if-exists=.env --import tsx scripts/eval-revelio-method.mjs",
-    "method:reset": "node --import tsx scripts/reset-method-data.ts"
+    "method:reset": "node --import tsx scripts/reset-method-data.ts",
+    "early-access": "node --import tsx scripts/early-access.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.44",
