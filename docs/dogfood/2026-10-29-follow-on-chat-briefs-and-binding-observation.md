@@ -47,8 +47,18 @@ The dedicated map remains revision 31 with 31 operation receipts. Only the one a
 
 Guarded restarts used fresh zero-lease and exact PID/cwd/command/listener checks, retaining existing environment/trace flags. Main serves c615 on 5173 without instrumentation; lab 5174 is unchanged. No founder profile access, signout, push, PR, deployment or heartbeat.
 
-DF-17's presentation gate now passes. The previous overall live-loop verdict remains **QUALIFIED by DF-18**; one healthy help turn is not full reliability or founder acceptance. Human review of the actual options and broader MVP/U7/U10/erasure gates remain open.
+DF-17's presentation gate now passes. The previous overall live-loop verdict remains **QUALIFIED by DF-18**; one healthy help turn is not full reliability or overall founder acceptance. The scoped founder review below approves one actual follow-on presentation; the remaining options and broader MVP/U7/U10/erasure gates remain open.
 
 Minimum next reliability step: keep DF-18 open and preserve its exact failed record. If further investigation is authorized, capture numeric per-attempt binding evidence during the next ordinary request/failure through the existing trace before selecting a cause-specific regression/fix. No further diagnostic variants, paid retries or speculative production correction are authorized by this receipt.
 
 Private ignored `.context/revelio/loop-blockers-implementation-20261029/` retains full first help input/reply, numeric capture, restoration hashes, schema-valid red/green logs, review/resolution, account integrity and actual Chat screenshots/text. Account identities, historical answers and pixels are not copied into Git.
+
+## Founder product review — 2026-10-30
+
+After contextual review of all three sections of the actual QA follow-on **A Self-Serve Materials Spot**, the founder said: “i think this is a good project presentation, i wouldn't change anything”. This is **founder PASS for this example and its current three-section presentation**, with no change chosen.
+
+DF-06's original preparation-scope bundling was already corrected. Its broader verbosity concern remains historical; this review does not authorize shortening, a Method/skill change or a UI rewrite. It does not automatically judge an unreviewed personal customer proposal, the other options or all proposal quality, and does not accept U7 or the full journey. DF-18 remains separate and unresolved.
+
+This update records the coordinator-relayed founder decision only. No application change, new tests, model calls, duplicate review or heartbeat was performed.
+
+For **DF-03**, the founder separately agreed to retain the repeated-discovery finding and observe whether it recurs in future testing. One occurrence is insufficient to establish an instruction, context or model cause. No instruction change or extra test/model run was requested, and no blocker classification beyond the observed impact is assumed. The coordinator will review DF-07's stale path summary next; that review has no recorded verdict here.
