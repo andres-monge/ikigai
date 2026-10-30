@@ -18,7 +18,8 @@ import type {
   PersistCareerMapResult,
 } from '../storage.js';
 import { MethodOwnerBusyError } from '../storage.js';
-import { createDisplayRecovery } from '../ai/history.js';
+import { ConversationHistoryProviderError, createDisplayRecovery } from '../ai/history.js';
+import { MethodLatencyTrace } from './agent-latency.js';
 import { PURPOSE_PATHS_OFFER_ENGLISH } from '../ai/method/base-instructions.js';
 import { OpenAITranscriptionError } from '../ai/transcription.js';
 import { createAgentRouter } from './agent.js';
@@ -465,7 +466,7 @@ describe('protected Method routes', () => {
         conversationClient: {
           listItems: vi.fn(async () => ({
             data: [internalContextItem('latency-context', 'latency-marker')],
-            hasMore: false,
+            hasMore: true, lastId: SENTINEL,
           })),
         },
         internalContextMarker: () => 'latency-marker',
@@ -483,6 +484,13 @@ describe('protected Method routes', () => {
         terminalDoneMs: expect.any(Number),
         steps: expect.any(Array),
       });
+      expect(latency.terminalBinding).toMatchObject({
+        markerWait: { budgetMs: 5000, expectedCount: 1, promiseSettled: 1, requestAborted: 0, deadlineAborted: 0 },
+        attempts: [{ index: 1, readReturned: 1, httpStatus: 0, requestedLimit: 100, returnedCount: 1,
+          hasMore: 1, cursorPresent: 1, matchCounts: [1], requestAborted: 0, deadlineAborted: 0 }],
+        exit: { phase: 3, complete: 1, readBudgetMs: 5000, requestAborted: 0, deadlineAborted: 0 },
+      });
+      expect(JSON.stringify(latency.terminalBinding)).not.toMatch(/latency-marker|latency-context/);
       expect(JSON.stringify(logs)).not.toContain(SENTINEL);
       expect(JSON.stringify(logs)).not.toContain('latency-conversation');
     } finally {
@@ -2049,172 +2057,293 @@ describe('protected Method routes', () => {
   });
 
   it('retries bounded provider projection until delayed internal context becomes visible', async () => {
-    const marker = 'delayed-context-0';
-    let listCall = 0;
-    const conversationClient = {
-      listItems: vi.fn(async () => {
-        listCall += 1;
-        return {
-          data: [
-            {
-              id: 'delayed-assistant', type: 'message', role: 'assistant',
-              content: [{ type: 'output_text', text: 'A safely projected reply.' }],
-            },
-            ...(listCall >= 3 ? [internalContextItem('delayed-internal-context', marker)] : []),
-            {
-              id: 'delayed-user', type: 'message', role: 'user',
-              content: [{ type: 'input_text', text: 'Help me reflect.' }],
-            },
-          ],
-          hasMore: false,
-        };
-      }),
-    };
-    const storage = createStorage({
-      getConversationMapping: vi.fn(async () => 'delayed-context-conversation'),
-    });
-    const response = await (await request(testApp({
-      storage,
-      requireAuth: authenticated,
-      agentEnabled: true,
-      model: new MockLanguageModelV4({ doStream: textStream('A safely projected reply.') as never }),
-      conversationClient,
-      internalContextMarker: () => marker,
-      operationalLog: vi.fn(),
-    }))).post('/api/agent').send({ id: 'client-message-1', message: 'Help me reflect.' });
-
-    expect(response.status).toBe(200);
-    expect(conversationClient.listItems).toHaveBeenCalledTimes(3);
-    expect(storage.completeAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
-      result: expect.objectContaining({
-        kind: 'completed',
-        internalContextItemIds: ['delayed-internal-context'],
-        displayProjection: {
-          userItemId: 'delayed-user',
-          assistantItemIds: ['delayed-assistant'],
-        },
-      }),
-    }));
-    expect(storage.failAgentTurn).not.toHaveBeenCalled();
-  });
-
-  it.each(['missing', 'duplicate'] as const)(
-    'fails closed when internal context remains %s after bounded visibility retries',
-    async (markerFailure) => {
-      const marker = 'never-unambiguous-context-0';
+    vi.stubEnv('NODE_ENV', 'development');
+    vi.stubEnv('REVELIO_LATENCY_TRACE', '1');
+    try {
+      const marker = 'delayed-context-';
+      const logs: Array<Record<string, unknown>> = [];
+      let listCall = 0;
       const conversationClient = {
-        listItems: vi.fn(async () => ({
-          data: [
-            {
-              id: 'unbound-assistant', type: 'message', role: 'assistant',
-              content: [{ type: 'output_text', text: 'Unbound reply.' }],
-            },
-            {
-              id: 'unbound-user', type: 'message', role: 'user',
-              content: [{ type: 'input_text', text: 'Help me reflect.' }],
-            },
-            ...(markerFailure === 'duplicate' ? [
-              internalContextItem('duplicate-internal-context-1', marker),
-              internalContextItem('duplicate-internal-context-2', marker),
-            ] : []),
-          ],
-          hasMore: false,
-        })),
+        listItems: vi.fn(async () => {
+          listCall += 1;
+          return {
+            data: [
+              {
+                id: 'delayed-assistant', type: 'message', role: 'assistant',
+                content: [{ type: 'output_text', text: 'A safely projected reply.' }],
+              },
+              internalContextItem('delayed-internal-context-0', marker + '0'),
+              ...(listCall >= 3 ? [internalContextItem('delayed-internal-context-1', marker + '1')] : []),
+              {
+                id: 'delayed-user', type: 'message', role: 'user',
+                content: [{ type: 'input_text', text: 'That feels exactly right.' }],
+              },
+            ],
+            hasMore: false,
+          };
+        }),
       };
       const storage = createStorage({
-        getConversationMapping: vi.fn(async () => 'incomplete-context-conversation'),
+        getConversationMapping: vi.fn(async () => 'delayed-context-conversation'),
       });
       const response = await (await request(testApp({
         storage,
         requireAuth: authenticated,
         agentEnabled: true,
-        model: new MockLanguageModelV4({ doStream: textStream('Unbound reply.') as never }),
+        model: confirmWhyThenTextModel({ pending: pendingWhy().foundation.whyRevisions.at(-1)!, callId: 'trace-confirm',
+          sourceMessageId: 'client-message-1', text: 'A safely projected reply.' }),
         conversationClient,
-        internalContextMarker: () => marker,
-        operationalLog: vi.fn(),
-      }))).post('/api/agent').send({ id: 'client-message-1', message: 'Help me reflect.' });
+        internalContextMarker: (index) => marker + index,
+        operationalLog: (entry) => logs.push(entry),
+      }))).post('/api/agent').send({ id: 'client-message-1', message: 'That feels exactly right.' });
 
       expect(response.status).toBe(200);
-      expect(response.text).not.toContain('"type":"finish"');
-      expect(response.text).toContain('The agent request failed.');
-      expect(conversationClient.listItems).toHaveBeenCalledTimes(5);
-      expect(storage.completeAgentTurn).not.toHaveBeenCalled();
-      expect(storage.failAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
-        errorClass: 'InternalContextBindingError',
+      expect(conversationClient.listItems).toHaveBeenCalledTimes(3);
+      expect(storage.completeAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
+        result: expect.objectContaining({
+          kind: 'completed',
+          internalContextItemIds: ['delayed-internal-context-0', 'delayed-internal-context-1'],
+          displayProjection: {
+            userItemId: 'delayed-user',
+            assistantItemIds: ['delayed-assistant'],
+          },
+        }),
       }));
-      const failureResult = storage.failAgentTurn.mock.calls[0]?.[0]?.result;
-      expect(failureResult).not.toHaveProperty('displayProjection');
-      expect(storage.releaseTurnLease).toHaveBeenCalledOnce();
+      expect(storage.failAgentTurn).not.toHaveBeenCalled();
+      expect((logs.at(-1)?.latency as Record<string, unknown>).terminalBinding).toMatchObject({
+        markerWait: { expectedCount: 2, promiseSettled: 1 },
+        attempts: [{ matchCounts: [1, 0], readReturned: 1 }, { matchCounts: [1, 0], readReturned: 1 },
+          { matchCounts: [1, 1], readReturned: 1 }],
+        exit: { phase: 3, complete: 1 },
+      });
+      expect(JSON.stringify((logs.at(-1)?.latency as Record<string, unknown>).terminalBinding)).not.toContain(marker);
+    } finally { vi.unstubAllEnvs(); }
+  });
+
+
+  it.each(['missing', 'duplicate'] as const)(
+    'fails closed when internal context remains %s after bounded visibility retries',
+    async (markerFailure) => {
+      vi.stubEnv('NODE_ENV', 'development');
+      vi.stubEnv('REVELIO_LATENCY_TRACE', '1');
+      try {
+        const logs: Array<Record<string, unknown>> = [];
+        const marker = 'never-unambiguous-context-0';
+        const conversationClient = {
+          listItems: vi.fn(async () => ({
+            data: [
+              {
+                id: 'unbound-assistant', type: 'message', role: 'assistant',
+                content: [{ type: 'output_text', text: 'Unbound reply.' }],
+              },
+              {
+                id: 'unbound-user', type: 'message', role: 'user',
+                content: [{ type: 'input_text', text: 'Help me reflect.' }],
+              },
+              ...(markerFailure === 'duplicate' ? [
+                internalContextItem('duplicate-internal-context-1', marker),
+                internalContextItem('duplicate-internal-context-2', marker),
+              ] : []),
+            ],
+            hasMore: false,
+          })),
+        };
+        const storage = createStorage({
+          getConversationMapping: vi.fn(async () => 'incomplete-context-conversation'),
+        });
+        const response = await (await request(testApp({
+          storage,
+          requireAuth: authenticated,
+          agentEnabled: true,
+          model: new MockLanguageModelV4({ doStream: textStream('Unbound reply.') as never }),
+          conversationClient,
+          internalContextMarker: () => marker,
+          operationalLog: (entry) => logs.push(entry),
+        }))).post('/api/agent').send({ id: 'client-message-1', message: 'Help me reflect.' });
+
+        expect(response.status).toBe(200);
+        expect(response.text).not.toContain('"type":"finish"');
+        expect(response.text).toContain('The agent request failed.');
+        expect(conversationClient.listItems).toHaveBeenCalledTimes(5);
+        expect(storage.completeAgentTurn).not.toHaveBeenCalled();
+        expect(storage.failAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
+          errorClass: 'InternalContextBindingError',
+        }));
+        const failureResult = storage.failAgentTurn.mock.calls[0]?.[0]?.result;
+        expect(failureResult).not.toHaveProperty('displayProjection');
+        expect(storage.releaseTurnLease).toHaveBeenCalledOnce();
+        expect((logs.at(-1)?.latency as Record<string, unknown>).terminalBinding).toMatchObject({
+          attempts: Array.from({ length: 5 }, () => ({ readReturned: 1, matchCounts: [markerFailure === 'missing' ? 0 : 2] })),
+          exit: { phase: 4, complete: 0, requestAborted: 0, deadlineAborted: 0 },
+        });
+      } finally { vi.unstubAllEnvs(); }
     },
   );
 
+
+  it.each([['production', '1'], ['development', '0']])('does not add capture or provider calls with %s / trace %s', async (nodeEnv, enabledTrace) => {
+    vi.stubEnv('NODE_ENV', nodeEnv);
+    vi.stubEnv('REVELIO_LATENCY_TRACE', enabledTrace);
+    try {
+      const logs: Array<Record<string, unknown>> = [];
+      const storage = createStorage({ getConversationMapping: vi.fn(async () => 'untraced-conversation') });
+      const listItems = vi.fn(async () => ({ data: [], hasMore: false }));
+      await (await request(testApp({ storage, requireAuth: authenticated, agentEnabled: true,
+        model: new MockLanguageModelV4({ doStream: textStream('Normal reply.') as never }),
+        conversationClient: { listItems }, operationalLog: (entry) => logs.push(entry),
+      }))).post('/api/agent').send({ id: 'client-message-1', message: 'Help me reflect.' });
+      expect(logs.at(-1)).not.toHaveProperty('latency');
+      expect(listItems).toHaveBeenCalledOnce();
+      expect(storage.completeAgentTurn).toHaveBeenCalledOnce();
+      expect(storage.failAgentTurn).not.toHaveBeenCalled();
+    } finally { vi.unstubAllEnvs(); }
+  });
+
+  it('captures only the known provider HTTP error status and preserves the original failure', async () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    vi.stubEnv('REVELIO_LATENCY_TRACE', '1');
+    try {
+      const logs: Array<Record<string, unknown>> = [];
+      const storage = createStorage({ getConversationMapping: vi.fn(async () => 'private-http-conversation') });
+      const error = new ConversationHistoryProviderError('list', 503);
+      error.message = SENTINEL;
+      const listItems = vi.fn(async () => { throw error; });
+      await (await request(testApp({ storage, requireAuth: authenticated, agentEnabled: true,
+        model: new MockLanguageModelV4({ doStream: textStream('Normal reply.') as never }),
+        conversationClient: { listItems }, internalContextMarker: () => SENTINEL,
+        operationalLog: (entry) => logs.push(entry),
+      }))).post('/api/agent').send({ id: 'client-message-1', message: 'Help me reflect.' });
+      const binding = (logs.at(-1)?.latency as Record<string, unknown>).terminalBinding;
+      expect(binding).toMatchObject({ attempts: [{ readReturned: 0, httpStatus: 503,
+        returnedCount: -1, hasMore: -1, cursorPresent: -1, matchCounts: [] }],
+        exit: { phase: 1, complete: 0, requestAborted: 0, deadlineAborted: 0 } });
+      expect(JSON.stringify(binding)).not.toContain(SENTINEL);
+      expect(JSON.stringify(binding)).not.toContain('private-http-conversation');
+      expect(listItems).toHaveBeenCalledOnce();
+      expect(storage.completeAgentTurn).not.toHaveBeenCalled();
+      expect(storage.failAgentTurn).toHaveBeenCalledWith(expect.objectContaining({ errorClass: 'InternalContextBindingError' }));
+      expect(storage.releaseTurnLease).toHaveBeenCalledOnce();
+    } finally { vi.unstubAllEnvs(); }
+  });
+
+  it('ignores recorder failures without changing the binding outcome', async () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    vi.stubEnv('REVELIO_LATENCY_TRACE', '1');
+    const spies = [vi.spyOn(MethodLatencyTrace.prototype, 'bindingMarkers'),
+      vi.spyOn(MethodLatencyTrace.prototype, 'bindingAttempt'), vi.spyOn(MethodLatencyTrace.prototype, 'bindingExit')];
+    spies.forEach((spy) => spy.mockImplementation(() => { throw new Error(SENTINEL); }));
+    try {
+      const storage = createStorage({ getConversationMapping: vi.fn(async () => 'recorder-failure-conversation') });
+      const listItems = vi.fn(async () => ({ data: [], hasMore: false }));
+      await (await request(testApp({ storage, requireAuth: authenticated, agentEnabled: true,
+        model: new MockLanguageModelV4({ doStream: textStream('Normal reply.') as never }),
+        conversationClient: { listItems }, operationalLog: vi.fn(),
+      }))).post('/api/agent').send({ id: 'client-message-1', message: 'Help me reflect.' });
+      expect(storage.completeAgentTurn).toHaveBeenCalledOnce();
+      expect(storage.failAgentTurn).not.toHaveBeenCalled();
+      expect(listItems).toHaveBeenCalledOnce();
+      expect(storage.releaseTurnLease).toHaveBeenCalledOnce();
+    } finally { spies.forEach((spy) => spy.mockRestore()); vi.unstubAllEnvs(); }
+  });
+
   it('bounds failure recovery even when provider item listing ignores its abort signal', async () => {
-    const providerFailure = new Error('private provider failure');
-    providerFailure.name = 'APICallError';
-    const conversationClient = {
-      listItems: vi.fn(() => new Promise<never>(() => undefined)),
-    };
-    const storage = createStorage({
-      getConversationMapping: vi.fn(async () => 'hanging-failure-conversation'),
-    });
-    const response = await (await request(testApp({
-      storage,
-      requireAuth: authenticated,
-      agentEnabled: true,
-      model: new MockLanguageModelV4({ doStream: errorStream(providerFailure) as never }),
-      conversationClient,
-      internalContextMarker: () => 'hanging-failure-context-0',
-      operationalLog: vi.fn(),
-    }))).post('/api/agent').send({ id: 'client-message-1', message: 'Help me reflect.' });
+    vi.stubEnv('NODE_ENV', 'development');
+    vi.stubEnv('REVELIO_LATENCY_TRACE', '1');
+    try {
+      const logs: Array<Record<string, unknown>> = [];
+      let releasePage!: (page: { data: unknown[]; hasMore: boolean }) => void;
+      const latePage = new Promise<{ data: unknown[]; hasMore: boolean }>((resolve) => { releasePage = resolve; });
+      const providerFailure = new Error('private provider failure');
+      providerFailure.name = 'APICallError';
+      const conversationClient = {
+        listItems: vi.fn(() => latePage),
+      };
+      const storage = createStorage({
+        getConversationMapping: vi.fn(async () => 'hanging-failure-conversation'),
+      });
+      const response = await (await request(testApp({
+        storage,
+        requireAuth: authenticated,
+        agentEnabled: true,
+        model: new MockLanguageModelV4({ doStream: errorStream(providerFailure) as never }),
+        conversationClient,
+        internalContextMarker: () => 'hanging-failure-context-0',
+        operationalLog: (entry) => logs.push(entry),
+      }))).post('/api/agent').send({ id: 'client-message-1', message: 'Help me reflect.' });
 
-    expect(response.status).toBe(200);
-    expect(response.text).toContain('The agent request failed.');
-    expect(conversationClient.listItems).toHaveBeenCalledOnce();
-    expect(storage.failAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
-      result: expect.objectContaining({
-        internalContextMarkers: ['hanging-failure-context-0'],
-      }),
-    }));
-    expect(storage.releaseTurnLease).toHaveBeenCalledOnce();
+      expect(response.status).toBe(200);
+      expect(response.text).toContain('The agent request failed.');
+      expect(conversationClient.listItems).toHaveBeenCalledOnce();
+      expect(storage.failAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
+        result: expect.objectContaining({
+          internalContextMarkers: ['hanging-failure-context-0'],
+        }),
+      }));
+      expect(storage.releaseTurnLease).toHaveBeenCalledOnce();
+      const binding = (logs.at(-1)?.latency as Record<string, unknown>).terminalBinding;
+      expect(binding).toMatchObject({
+        attempts: [{ readReturned: 0, httpStatus: 0, matchCounts: [], requestAborted: 0, deadlineAborted: 1 }],
+        exit: { phase: 1, complete: 0, readBudgetMs: 500, requestAborted: 0, deadlineAborted: 1 },
+      });
+      const captured = JSON.stringify(logs);
+      releasePage({ data: [internalContextItem('too-late', 'hanging-failure-context-0')], hasMore: false });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(JSON.stringify(logs)).toBe(captured);
+      expect(storage.completeAgentTurn).not.toHaveBeenCalled();
+    } finally { vi.unstubAllEnvs(); }
   }, 2_000);
 
-  it('cancels promptly when provider item listing ignores the request abort signal', async () => {
-    let listingStarted!: () => void;
-    const listingStartedGate = new Promise<void>((resolve) => { listingStarted = resolve; });
-    const conversationClient = {
-      listItems: vi.fn(() => {
-        listingStarted();
-        return new Promise<never>(() => undefined);
-      }),
-    };
-    const storage = createStorage({
-      getConversationMapping: vi.fn(async () => 'hanging-cancel-conversation'),
+
+  it.each(['read', 'delay'] as const)('preserves prompt cancellation during binding %s', async (phase) => {
+    vi.stubEnv('NODE_ENV', 'development');
+    vi.stubEnv('REVELIO_LATENCY_TRACE', '1');
+    const exit = vi.spyOn(MethodLatencyTrace.prototype, 'bindingExit');
+    let outbound: ReturnType<Awaited<ReturnType<typeof request>>['post']>;
+    const recordAttempt = MethodLatencyTrace.prototype.bindingAttempt;
+    const attempt = vi.spyOn(MethodLatencyTrace.prototype, 'bindingAttempt').mockImplementation(function (value) {
+      recordAttempt.call(this, value);
+      if (phase === 'delay') queueMicrotask(() => outbound.abort());
     });
-    const outbound = (await request(testApp({
-      storage,
-      requireAuth: authenticated,
-      agentEnabled: true,
-      model: new MockLanguageModelV4({ doStream: textStream('Safe partial reply.') as never }),
-      conversationClient,
-      internalContextMarker: () => 'hanging-cancel-context-0',
-      operationalLog: vi.fn(),
-    }))).post('/api/agent').send({ id: 'client-message-1', message: 'Help me reflect.' });
-    const settled = Promise.resolve(outbound).catch(() => undefined);
+    try {
+      let listingStarted!: () => void;
+      const listingStartedGate = new Promise<void>((resolve) => { listingStarted = resolve; });
+      const conversationClient = {
+        listItems: vi.fn(() => {
+          listingStarted();
+          return phase === 'read' ? new Promise<never>(() => undefined) : Promise.resolve({ data: [], hasMore: false });
+        }),
+      };
+      const storage = createStorage({
+        getConversationMapping: vi.fn(async () => 'hanging-cancel-conversation'),
+      });
+      outbound = (await request(testApp({
+        storage,
+        requireAuth: authenticated,
+        agentEnabled: true,
+        model: new MockLanguageModelV4({ doStream: textStream('Safe partial reply.') as never }),
+        conversationClient,
+        internalContextMarker: () => 'hanging-cancel-context-0',
+        operationalLog: vi.fn(),
+      }))).post('/api/agent').send({ id: 'client-message-1', message: 'Help me reflect.' });
+      const settled = Promise.resolve(outbound).catch(() => undefined);
 
-    await listingStartedGate;
-    outbound.abort();
-    await settled;
+      await listingStartedGate;
+      if (phase === 'read') outbound.abort();
+      await settled;
 
-    await vi.waitFor(() => expect(storage.cancelAgentTurn).toHaveBeenCalledOnce());
-    expect(storage.cancelAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
-      result: expect.objectContaining({
-        internalContextMarkers: ['hanging-cancel-context-0'],
-      }),
-    }));
-    expect(storage.completeAgentTurn).not.toHaveBeenCalled();
-    expect(storage.failAgentTurn).not.toHaveBeenCalled();
-    expect(storage.releaseTurnLease).toHaveBeenCalledOnce();
+      await vi.waitFor(() => expect(storage.cancelAgentTurn).toHaveBeenCalledOnce());
+      expect(storage.cancelAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
+        result: expect.objectContaining({
+          internalContextMarkers: ['hanging-cancel-context-0'],
+        }),
+      }));
+      expect(storage.completeAgentTurn).not.toHaveBeenCalled();
+      expect(storage.failAgentTurn).not.toHaveBeenCalled();
+      expect(storage.releaseTurnLease).toHaveBeenCalledOnce();
+      expect(exit).toHaveBeenCalledWith(expect.objectContaining({ phase: phase === 'read' ? 1 : 2, complete: 0, requestAborted: 1, deadlineAborted: 0 }));
+    } finally { attempt.mockRestore(); exit.mockRestore(); vi.unstubAllEnvs(); }
   }, 2_000);
+
 
   it('streams a search-only answer with paired sanitized citation data and no save status', async () => {
     const userText = 'What does the current official registry say?';

@@ -32,6 +32,7 @@ import { createMethodModuleLoader, type MethodModuleLoader } from '../ai/method/
 import { MethodLatencyTrace, methodLatencyEnabled } from './agent-latency.js';
 import {
   OpenAIConversationClient,
+  ConversationHistoryProviderError,
   createConversationHistoryCursorCodec,
   createDisplayRecovery,
   listConversationItems,
@@ -40,6 +41,7 @@ import {
   resolveAssistantDisplayProjection,
   resolveDisplayProjection,
   resolveInternalContextItemIds,
+  providerInternalContextMarker,
   type ConversationItemsClient,
 } from '../ai/history.js';
 import {
@@ -1338,45 +1340,88 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
     }> | undefined;
     const terminalProviderState = (timeoutMs = 5_000, requestSignal?: AbortSignal) => {
       terminalProviderStatePromise ??= (async () => {
-        if (!methodResult || !conversationId) {
-          return { items: [], internalContextItemIds: [], markers: [], complete: false };
-        }
-        const markerTimeoutSignal = AbortSignal.timeout(timeoutMs);
-        const markerSignal = requestSignal
-          ? AbortSignal.any([requestSignal, markerTimeoutSignal])
-          : markerTimeoutSignal;
-        const markers = await awaitWithAbort(methodResult.internalContextMarkers, markerSignal)
-          .catch(() => methodResult?.observedInternalContextMarkers() ?? []);
-        if (markers.length === 0) {
-          return { items: [], internalContextItemIds: [], markers, complete: false };
-        }
-        const timeoutSignal = AbortSignal.timeout(timeoutMs);
-        const terminalSignal = requestSignal
-          ? AbortSignal.any([requestSignal, timeoutSignal])
-          : timeoutSignal;
-        let latest = {
-          items: [] as unknown[], internalContextItemIds: [] as string[], markers, complete: false,
-        };
-        for (let attempt = 0; attempt < 5; attempt += 1) {
-          const items = await awaitWithAbort(
-            listRecentConversationItems({
-              client: conversationClient(),
-              conversationId,
-              abortSignal: terminalSignal,
-            }),
-            terminalSignal,
-          );
-          const resolved = resolveInternalContextItemIds(items, markers);
-          latest = {
-            items,
-            internalContextItemIds: resolved.itemIds,
-            markers,
-            complete: resolved.complete,
+        const bindingStarted = performance.now();
+        let phase: 0 | 1 | 2 | 3 | 4 = 0;
+        let timeoutSignal: AbortSignal | undefined;
+        try {
+          if (!methodResult || !conversationId) {
+            return { items: [], internalContextItemIds: [], markers: [], complete: false };
+          }
+          const markerTimeoutSignal = AbortSignal.timeout(timeoutMs);
+          const markerSignal = requestSignal
+            ? AbortSignal.any([requestSignal, markerTimeoutSignal])
+            : markerTimeoutSignal;
+          let promiseSettled: 0 | 1 = 1;
+          const markers = await awaitWithAbort(methodResult.internalContextMarkers, markerSignal)
+            .catch(() => { promiseSettled = 0; return methodResult?.observedInternalContextMarkers() ?? []; });
+          try {
+            latency?.bindingMarkers({ elapsedMs: performance.now() - bindingStarted, budgetMs: timeoutMs,
+              expectedCount: markers.length, promiseSettled, requestAborted: requestSignal?.aborted ? 1 : 0,
+              deadlineAborted: markerTimeoutSignal.aborted ? 1 : 0 });
+          } catch {}
+          if (markers.length === 0) {
+            return { items: [], internalContextItemIds: [], markers, complete: false };
+          }
+          timeoutSignal = AbortSignal.timeout(timeoutMs);
+          const terminalSignal = requestSignal
+            ? AbortSignal.any([requestSignal, timeoutSignal])
+            : timeoutSignal;
+          let latest = {
+            items: [] as unknown[], internalContextItemIds: [] as string[], markers, complete: false,
           };
-          if (resolved.complete) return latest;
-          if (attempt < 4) await abortableDelay(100, terminalSignal);
+          for (let attempt = 0; attempt < 5; attempt += 1) {
+            phase = 1;
+            const readStarted = performance.now();
+            let pageCounts = { returnedCount: -1, hasMore: -1, cursorPresent: -1 };
+            let items: unknown[] = [];
+            let readReturned: 0 | 1 = 0;
+            let httpStatus = 0;
+            const client = conversationClient();
+            try {
+              items = await awaitWithAbort(
+                listRecentConversationItems({
+                  client: latency ? { listItems: async (input) => {
+                    const page = await client.listItems(input);
+                    try { pageCounts = { returnedCount: page.data.length, hasMore: page.hasMore ? 1 : 0,
+                      cursorPresent: page.lastId ? 1 : 0 }; } catch {}
+                    return page;
+                  } } : client,
+                  conversationId,
+                  abortSignal: terminalSignal,
+                }),
+                terminalSignal,
+              );
+              readReturned = 1;
+            } catch (error) {
+              try { if (error instanceof ConversationHistoryProviderError) httpStatus = error.httpStatus ?? 0; } catch {}
+              throw error;
+            } finally {
+              try {
+                const elapsedMs = performance.now() - readStarted;
+                const observedMarkers = latency && readReturned ? items.flatMap((item) => {
+                  const candidate = providerInternalContextMarker(item);
+                  return candidate ? [candidate.marker] : [];
+                }) : [];
+                latency?.bindingAttempt({ index: attempt + 1, elapsedMs,
+                  readReturned, httpStatus, requestedLimit: 100, ...pageCounts,
+                  matchCounts: readReturned ? markers.map((marker) => observedMarkers.filter((candidate) => candidate === marker).length) : [],
+                  requestAborted: requestSignal?.aborted ? 1 : 0, deadlineAborted: timeoutSignal.aborted ? 1 : 0 });
+              } catch {}
+            }
+            const resolved = resolveInternalContextItemIds(items, markers);
+            latest = { items, internalContextItemIds: resolved.itemIds, markers, complete: resolved.complete };
+            if (resolved.complete) { phase = 3; return latest; }
+            if (attempt < 4) { phase = 2; await abortableDelay(100, terminalSignal); }
+          }
+          phase = 4;
+          return latest;
+        } finally {
+          try {
+            latency?.bindingExit({ phase, elapsedMs: performance.now() - bindingStarted, complete: phase === 3 ? 1 : 0,
+              readBudgetMs: timeoutMs, requestAborted: requestSignal?.aborted ? 1 : 0,
+              deadlineAborted: timeoutSignal?.aborted ? 1 : 0 });
+          } catch {}
         }
-        return latest;
       })().catch(() => ({
         items: [],
         internalContextItemIds: [],
