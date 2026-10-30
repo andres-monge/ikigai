@@ -20,6 +20,7 @@ import {
 } from '../../shared/streaming-schemas.js';
 import type { IStorage } from '../storage.js';
 import { PURPOSE_PATHS_OFFER_ENGLISH } from './method/base-instructions.js';
+import { REVELIO_MAX_AGENT_STEPS } from './limits.js';
 import { resolveNativeSearchCitationClaim } from './research.js';
 
 const conversationIdSchema = z.string().min(1).max(200);
@@ -419,7 +420,7 @@ export function resolveAssistantDisplayProjection(
   });
 }
 
-const internalContextMarkerListSchema = z.array(z.string().min(1).max(200)).max(20)
+const internalContextMarkerListSchema = z.array(z.string().min(1).max(200)).max(REVELIO_MAX_AGENT_STEPS)
   .refine((markers) => new Set(markers).size === markers.length);
 const internalContextPayloadSchema = z.object({
   version: z.literal(1),
@@ -529,8 +530,6 @@ export async function listRecentConversationItems(input: {
 type AgentTurnRecord = Awaited<ReturnType<IStorage['listAgentTurns']>>[number];
 
 const internalContextItemIdsSchema = z.array(providerItemIdSchema).max(100);
-const persistedInternalContextMarkersSchema = z.array(z.string().min(1).max(200)).max(20)
-  .refine((markers) => new Set(markers).size === markers.length);
 
 function internalContextItemIds(turns: readonly AgentTurnRecord[]): Set<string> {
   const ids = new Set<string>();
@@ -551,7 +550,7 @@ function pendingInternalContextMarkerBatches(turns: readonly AgentTurnRecord[]):
   for (const turn of turns) {
     const terminal = turn.terminalResult;
     if (!terminal || typeof terminal !== 'object') continue;
-    const parsed = persistedInternalContextMarkersSchema.safeParse(
+    const parsed = internalContextMarkerListSchema.safeParse(
       (terminal as Record<string, unknown>).internalContextMarkers,
     );
     if (!parsed.success) continue;
@@ -559,8 +558,8 @@ function pendingInternalContextMarkerBatches(turns: readonly AgentTurnRecord[]):
   }
   const values = [...markers];
   return Array.from(
-    { length: Math.ceil(values.length / 20) },
-    (_, index) => values.slice(index * 20, (index + 1) * 20),
+    { length: Math.ceil(values.length / REVELIO_MAX_AGENT_STEPS) },
+    (_, index) => values.slice(index * REVELIO_MAX_AGENT_STEPS, (index + 1) * REVELIO_MAX_AGENT_STEPS),
   );
 }
 

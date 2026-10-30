@@ -1,0 +1,1 @@
+export const REVELIO_MAX_AGENT_STEPS = 50;

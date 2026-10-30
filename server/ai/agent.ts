@@ -9,6 +9,7 @@ import {
 } from 'ai';
 import { APICallError } from '@ai-sdk/provider';
 import { createHash } from 'node:crypto';
+import { REVELIO_MAX_AGENT_STEPS } from './limits.js';
 import { BASE_INSTRUCTIONS_VERSION, BASE_METHOD_INSTRUCTIONS, PURPOSE_PATHS_OFFER_ENGLISH, isPurposePathSetOperation, shouldPresentCanonicalPurposePathsOffer } from './method/base-instructions.js';
 import type { MethodModuleLoader } from './method/loader.js';
 import { methodReasoningEffort } from './method/registry.js';
@@ -35,8 +36,6 @@ export const REVELIO_COMPACT_THRESHOLD = 200_000;
 // Reasoning and a compaction pass can consume output tokens before any
 // visible reply or tool call. Keep the provider's suggested starting buffer.
 export const REVELIO_MAX_OUTPUT_TOKENS = 25_000;
-// Bounds one internal provider/tool loop, not the number of explorer turns.
-export const REVELIO_MAX_AGENT_STEPS = 50;
 export const METHOD_INTERNAL_CONTEXT_MARKER = 'SERVER REFRESH CONTEXT';
 const METHOD_DIRECT_CONTINUATION_SEED = 'SERVER DIRECT CONTINUATION SEED';
 

@@ -1014,7 +1014,19 @@ describe('protected OpenAI Conversation history adapter', () => {
     ], ['marker-a'])).toEqual({ itemIds: [], complete: false });
   });
 
-  it('batches unresolved markers from multiple turns within the resolver bound', async () => {
+  it.each([21, 50])('binds all %i supported unique markers while rejecting malformed or oversized marker lists', (size) => {
+    const markers = Array.from({ length: size }, (_, i) => `bounded-marker-${i}`);
+    const contextItem = (marker: string, i: number) => ({ id: `bounded-item-${i}`, type: 'message', role: 'user',
+      content: [{ type: 'input_text', text: `SERVER REFRESH CONTEXT\n${JSON.stringify({ version: 1, marker })}` }] });
+    const items = markers.map(contextItem);
+    expect(resolveInternalContextItemIds(items, markers)).toEqual({ itemIds: items.map(item => item.id), complete: true });
+    for (const invalid of [Array.from({ length: 51 }, (_, i) => `oversized-${i}`), [''], ['x'.repeat(201)]]) {
+      expect(resolveInternalContextItemIds(invalid.map(contextItem), invalid)).toEqual({ itemIds: [], complete: false });
+    }
+    expect(resolveInternalContextItemIds(items, [markers[0], markers[0]])).toEqual({ itemIds: [], complete: false });
+  });
+
+  it.each([11, 31])('excludes pending context from legacy direct projections across %i-marker batches', async (size) => {
     const contextItem = (id: string, marker: string) => ({
       id,
       type: 'message',
@@ -1028,8 +1040,8 @@ describe('protected OpenAI Conversation history adapter', () => {
     const firstAssistantText = 'First visible answer.';
     const secondUserText = 'Second visible question.';
     const secondAssistantText = 'Second visible answer.';
-    const firstMarkers = Array.from({ length: 11 }, (_, index) => `first-marker-${index}`);
-    const secondMarkers = Array.from({ length: 11 }, (_, index) => `second-marker-${index}`);
+    const firstMarkers = Array.from({ length: size }, (_, index) => `first-marker-${index}`);
+    const secondMarkers = Array.from({ length: size === 11 ? 11 : 30 }, (_, index) => `second-marker-${index}`);
     const chronologicalItems = [
       { id: 'first-visible-user', type: 'message', role: 'user', content: [{ type: 'input_text', text: firstUserText }] },
       ...firstMarkers.map((marker, index) => contextItem(`first-context-${index}`, marker)),
@@ -1057,7 +1069,11 @@ describe('protected OpenAI Conversation history adapter', () => {
         listAgentTurns: vi.fn(async () => [
           durableTurn({
             turnId: 'first-turn',
-            terminalResult: recovery(firstUserText, firstAssistantText, firstMarkers),
+            terminalResult: {
+              ...recovery(firstUserText, firstAssistantText, firstMarkers),
+              // Even a retained direct projection cannot authorize showing server context.
+              displayProjection: { userItemId: 'first-context-0', assistantItemIds: ['first-visible-assistant'] },
+            },
           }),
           durableTurn({
             turnId: 'second-turn',

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MethodLatencyTrace, methodLatencyEnabled } from './agent-latency';
-import { REVELIO_MAX_AGENT_STEPS } from '../ai/agent.js';
+import { REVELIO_MAX_AGENT_STEPS } from '../ai/limits.js';
 
 afterEach(() => vi.unstubAllEnvs());
 

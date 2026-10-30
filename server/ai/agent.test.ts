@@ -14,11 +14,11 @@ import type { IStorage, PersistCareerMapResult } from '../storage.js';
 import {
   createMethodAgent,
   METHOD_INTERNAL_CONTEXT_MARKER,
-  REVELIO_MAX_AGENT_STEPS,
   REVELIO_AGENT_MODEL,
   REVELIO_MAX_OUTPUT_TOKENS,
   type MethodAgentTurnStreamResult,
 } from './agent.js';
+import { REVELIO_MAX_AGENT_STEPS } from './limits.js';
 import { createMethodModuleLoader } from './method/loader.js';
 import { BASE_METHOD_INSTRUCTIONS, PURPOSE_PATHS_OFFER_ENGLISH, R22_CANONICAL_ENGLISH } from './method/base-instructions.js';
 

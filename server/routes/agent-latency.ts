@@ -1,5 +1,5 @@
 import { performance } from 'node:perf_hooks';
-import { REVELIO_MAX_AGENT_STEPS } from '../ai/agent.js';
+import { REVELIO_MAX_AGENT_STEPS } from '../ai/limits.js';
 
 type Phase = 'map-ready' | 'lease-ready' | 'provider-start' | 'safe-text' | 'terminal-start' | 'terminal-done';
 type StepPhase = 'prepare-start' | 'prepare-end' | 'step-start' | 'step-finish'
