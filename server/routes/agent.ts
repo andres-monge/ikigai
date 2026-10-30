@@ -29,7 +29,7 @@ import {
 } from '../ai/agent.js';
 import { reconcileCancelledToolCalls } from '../ai/cancelled-tool-calls.js';
 import { createMethodModuleLoader, type MethodModuleLoader } from '../ai/method/loader.js';
-import { MethodLatencyTrace, methodLatencyEnabled } from './agent-latency.js';
+import { MethodLatencyTrace, MethodRequestTiming, methodLatencyEnabled } from './agent-latency.js';
 import {
   OpenAIConversationClient,
   ConversationHistoryProviderError,
@@ -57,7 +57,7 @@ import {
   operationStatusStreamPartSchema,
   methodWorkspaceRecoverySchema,
 } from '../../shared/streaming-schemas.js';
-import { methodRouteLabel } from './agent-logging.js';
+import { observeMethodRequest, methodRouteLabel } from './agent-logging.js';
 import {
   MAX_TRANSCRIPT_CODE_UNITS,
   OPENAI_TRANSCRIPTION_MODEL,
@@ -679,26 +679,15 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
   router.options(GUARDED_METHOD_PATHS, methodPostGuard);
   router.all('/audio/transcribe', audioMetadataGuard);
   router.use((request, response, next) => {
-    const startedAt = Date.now();
     const requestId = nextId();
     const route = methodRouteLabel(request.method, `${request.baseUrl}${request.path}`);
-    const latency = methodLatencyEnabled() && (route === 'agent-turn' || route === 'workspace-operation')
+    response.locals.methodLatency = methodLatencyEnabled() && (route === 'agent-turn' || route === 'workspace-operation')
       ? new MethodLatencyTrace() : undefined;
-    response.locals.methodLatency = latency;
+    response.locals.methodTiming = route === 'agent-turn' || route === 'workspace-operation'
+      ? new MethodRequestTiming() : undefined;
     response.setHeader('x-request-id', requestId);
     response.setHeader('cache-control', 'no-store');
-    response.on('finish', () => {
-      const metadata = response.locals.methodLog as Record<string, unknown> | undefined;
-      log({
-        type: 'method_request',
-        requestId,
-        route,
-        status: response.statusCode,
-        durationMs: Date.now() - startedAt,
-        ...(latency ? { latency: latency.summary() } : {}),
-        ...(metadata ?? {}),
-      });
-    });
+    observeMethodRequest(response, { requestId, route, log });
     next();
   });
   router.use(options.requireAuth ?? requireAuth);
@@ -790,6 +779,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
     }
     const identity = getProtectedIdentity(response);
     const latency = response.locals.methodLatency as MethodLatencyTrace | undefined;
+    const timing = response.locals.methodTiming as MethodRequestTiming | undefined;
     const abort = attachAbort(request, response);
     if (clientDisconnected(request, response, abort.signal)) {
       abort.detach();
@@ -1026,7 +1016,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
               };
             },
             onLatencyStep: latency ? (index, phase) => latency.step(index, phase) : undefined,
-            onLatencySafeText: latency ? () => latency.mark('safe-text') : undefined,
+            onLatencySafeText: () => { latency?.mark('safe-text'); timing?.mark('safe-text'); },
             onOperationStatus: async (event) => {
               if (event.phase === 'terminal' && event.status === 'saved') {
                 continuationOperationSaved = true;
@@ -1067,6 +1057,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
             },
           });
           latency?.mark('provider-start');
+          timing?.mark('provider-start');
           methodResult = await agent.stream({
             continueFromConversation: true,
             abortSignal: abort.signal,
@@ -1224,6 +1215,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
             .catch(() => false);
         }
         latency?.mark('terminal-done');
+        timing?.mark('terminal-done');
         return terminalFailureClass
           ? { type: 'error', errorText: 'The agent request failed.' }
           : undefined;
@@ -1349,6 +1341,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
     }
     const identity = getProtectedIdentity(response);
     const latency = response.locals.methodLatency as MethodLatencyTrace | undefined;
+    const timing = response.locals.methodTiming as MethodRequestTiming | undefined;
     const abort = attachAbort(request, response);
     if (clientDisconnected(request, response, abort.signal)) {
       abort.detach();
@@ -1704,7 +1697,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
               };
             },
             onLatencyStep: latency ? (index, phase) => latency.step(index, phase) : undefined,
-            onLatencySafeText: latency ? () => latency.mark('safe-text') : undefined,
+            onLatencySafeText: () => { latency?.mark('safe-text'); timing?.mark('safe-text'); },
             onOperationStatus: async (event) => {
               if (event.phase === 'terminal' && event.status === 'saved') {
                 operationSaved = true;
@@ -1746,6 +1739,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
             },
           });
           latency?.mark('provider-start');
+          timing?.mark('provider-start');
           methodResult = await agent.stream({
             prompt: [{ role: 'user', content: prepared.content }],
             abortSignal: abort.signal,
@@ -1905,6 +1899,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
           leaseFinalized = true;
         }
         latency?.mark('terminal-done');
+        timing?.mark('terminal-done');
         return terminalFailureClass
           ? { type: 'error', errorText: 'The agent request failed.' }
           : undefined;

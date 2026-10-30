@@ -43,3 +43,31 @@ export function methodRouteLabel(method: string, requestPath: string): MethodRou
     default: return 'method-unmatched';
   }
 }
+
+export function methodBuildVersion(value: string | undefined): string {
+  return value && /^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/.test(value) ? value : 'unknown';
+}
+
+/** Reuses the Method request record, including requests that close before finish. */
+export function observeMethodRequest(
+  response: { statusCode: number; locals: { methodLog?: Record<string, unknown>; methodLatency?: { summary(): Record<string, unknown> }; methodTiming?: { summary(): Record<string, number> } }; once(event: string, listener: () => void): unknown },
+  input: { requestId: string; route: MethodRouteLabel; log: (entry: Record<string, unknown>) => void },
+): void {
+  const started = Date.now();
+  const buildVersion = methodBuildVersion(process.env.REVELIO_BUILD_VERSION);
+  let emitted = false;
+  const emit = (outcome: 'response-finished' | 'response-closed') => {
+    if (emitted) return;
+    emitted = true;
+    input.log({
+      type: 'method_request', requestId: input.requestId, route: input.route,
+      status: response.statusCode, durationMs: Date.now() - started,
+      ...(response.locals.methodLog ?? {}),
+      ...(response.locals.methodLatency ? { latency: response.locals.methodLatency.summary() } : {}),
+      ...(response.locals.methodTiming ? { serverTiming: response.locals.methodTiming.summary() } : {}),
+      buildVersion, outcome, browserDelivery: 'unknown',
+    });
+  };
+  response.once('finish', () => emit('response-finished'));
+  response.once('close', () => emit('response-closed'));
+}

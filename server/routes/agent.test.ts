@@ -2194,6 +2194,11 @@ describe('protected Method routes', () => {
         conversationClient: { listItems }, operationalLog: (entry) => logs.push(entry),
       }))).post('/api/agent').send({ id: 'client-message-1', message: 'Help me reflect.' });
       expect(logs.at(-1)).not.toHaveProperty('latency');
+      expect(logs.at(-1)).toMatchObject({ outcome: 'response-finished', browserDelivery: 'unknown',
+        turnId: expect.any(String), serverTiming: { providerStartMs: expect.any(Number),
+          firstSafeServerTextMs: expect.any(Number), terminalHandlingDoneMs: expect.any(Number) } });
+      expect(logs).toHaveLength(1);
+      expect(JSON.stringify(logs)).not.toContain('untraced-conversation');
       expect(listItems).toHaveBeenCalledOnce();
       expect(storage.completeAgentTurn).toHaveBeenCalledOnce();
       expect(storage.failAgentTurn).not.toHaveBeenCalled();

@@ -153,3 +153,16 @@ export class MethodLatencyTrace {
 export function methodLatencyEnabled(): boolean {
   return process.env.NODE_ENV === 'development' && process.env.REVELIO_LATENCY_TRACE === '1';
 }
+
+/** Small server-side timings always available; detailed tracing remains opt-in. */
+export class MethodRequestTiming {
+  private readonly started = performance.now();
+  private readonly phases: Partial<Record<'providerStartMs' | 'firstSafeServerTextMs' | 'terminalHandlingDoneMs', number>> = {};
+
+  mark(phase: 'provider-start' | 'safe-text' | 'terminal-done'): void {
+    const key = { 'provider-start': 'providerStartMs', 'safe-text': 'firstSafeServerTextMs', 'terminal-done': 'terminalHandlingDoneMs' }[phase] as keyof typeof this.phases;
+    this.phases[key] ??= Math.round(performance.now() - this.started);
+  }
+
+  summary(): Record<string, number> { return { ...this.phases }; }
+}
