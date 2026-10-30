@@ -57,11 +57,26 @@ export async function retrieveConversation(input: {
       report.pagination = report.pagesRead ? 'partial' : 'unavailable'; break;
     }
     let page;
+    const pageAbort = new AbortController();
+    const forwardAbort = () => pageAbort.abort(input.abortSignal?.reason);
+    input.abortSignal?.addEventListener('abort', forwardAbort, {once:true});
+    const deadline = setTimeout(() => pageAbort.abort(new Error('Provider page read timed out.')), 10_000);
+    let rejectAbortedRead: (() => void) | undefined;
     try {
-      page = await input.client.listItems({conversationId:snapshot.conversationId, after, limit:100, order:'asc', abortSignal:input.abortSignal});
+      const providerRead = input.client.listItems({conversationId:snapshot.conversationId, after, limit:100, order:'asc', abortSignal:pageAbort.signal});
+      const abortedRead = new Promise<never>((_,reject) => {
+        rejectAbortedRead = () => reject(pageAbort.signal.reason ?? new Error('Provider page read aborted.'));
+        if (pageAbort.signal.aborted) rejectAbortedRead();
+        else pageAbort.signal.addEventListener('abort', rejectAbortedRead, {once:true});
+      });
+      page = await Promise.race([providerRead, abortedRead]);
     } catch {
       report.gaps.push({source:participantKey, reason:input.abortSignal?.aborted ? 'cancelled' : 'provider-read-failed'});
       report.pagination = report.pagesRead ? 'partial' : 'unavailable'; break;
+    } finally {
+      clearTimeout(deadline);
+      input.abortSignal?.removeEventListener('abort', forwardAbort);
+      if (rejectAbortedRead) pageAbort.signal.removeEventListener('abort', rejectAbortedRead);
     }
     if (!page || !Array.isArray(page.data) || page.data.length > 100 || typeof page.hasMore !== 'boolean') {
       report.gaps.push({source:participantKey, reason:'invalid-page'});

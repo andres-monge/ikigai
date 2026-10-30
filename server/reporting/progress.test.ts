@@ -4,6 +4,15 @@ import {fixtureSnapshot,proposedProjectFixture,fixtureCommit,fixtureAction,fixtu
 import {renderProgressMarkdown} from './render.js';
 const derive=(map:ReturnType<typeof proposedProjectFixture>)=>deriveParticipantProgress('person',fixtureSnapshot(map));
 describe('independent progress evidence',()=>{
+ it('does not restore corrected completion from a pending revision copy',()=>{
+  let map=fixtureCommit(proposedProjectFixture(),'report-project-work',{projectId:'project',projectRevision:1,status:'completed',reportedActivity:'I finished the sketch',action:fixtureAction(7)});
+  map=fixtureCommit(map,'propose-project-revision',{projectId:'project',projectRevision:1,replacement:{id:'pending-revision',revision:1,title:'A revised sketch',briefFormat:'simple-v1',learningGoal:'Notice energy',firstVersion:'One sketch',firstStep:'Choose a question'},presentation:fixturePresentation(8)});
+  map=fixtureCommit(map,'correct-project-work-status',{projectId:'project',projectRevision:1,latestActionId:'action-7',expectedStatus:'completed',status:'in-progress',reportedActivity:'I had not finished',action:fixtureAction(9)});
+  const report=derive(map);
+  expect(report.milestones.workCompleted).toMatchObject({historicalCount:1,currentCount:0});
+  expect(report.milestones.workReported.currentCount).toBe(1);
+  expect(report.workUpdates.find(update=>update.actionId==='action-7')?.entities).toHaveLength(2);
+ });
  it('separates recorded proposal from acceptance and work',()=>{
   const result=derive(proposedProjectFixture());
   expect(result.milestones.projectProposed.historicalCount).toBe(1);

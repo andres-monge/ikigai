@@ -86,6 +86,7 @@ export function deriveParticipantProgress(participantKey: string, snapshot: Repo
   for(const project of map.projects){
     const onPath=Boolean(activePath&&project.basisPath.id===activePath.id&&project.basisPath.revision===activePath.revision);
     const valid=onPath&&!activeReview('project',project)&&!['superseded','parked'].includes(project.agreementStatus);
+    const workValid=valid&&project.agreementStatus==='accepted';
     add('projectProposed',presentationKey(project.presentation),project,project.presentation,valid);
     if(project.confirmation)add('projectAccepted',project.confirmation.confirmedBy.actionId,project,project.confirmation.confirmedBy,valid&&project.agreementStatus==='accepted');
     const lineage=projectLineage(project);
@@ -96,10 +97,10 @@ export function deriveParticipantProgress(participantKey: string, snapshot: Repo
       if(prior){if(!prior.entities.includes(ref(project)))prior.entities.push(ref(project));}
       else updates.set(key,{actionId:update.action.actionId,turnId:update.action.turnId,recordedAt:iso(update.action.occurredAt)??'unknown',status:update.status,...(update.correctsActionId?{correctsActionId:update.correctsActionId}:{}),entities:[ref(project)],operationSources:receipts.filter(row=>update.sourceId?row.operationSourceId===update.sourceId:row.confirmationProvenance?.actionId===update.action.actionId).map(row=>row.operationSourceId)});
       if(update.status==='not-started')continue;
-      const work=add('workReported',key,project,update.action,valid&&project.workStatus!=='not-started','self-reported',lineage,update.sourceId);
+      const work=add('workReported',key,project,update.action,workValid&&project.workStatus!=='not-started','self-reported',lineage,update.sourceId);
       if(work)work.correctionActionIds=[...new Set([...(work.correctionActionIds??[]),...corrections.map(item=>item.action.actionId)])];
       if(update.status==='completed'){
-        const completion=add('workCompleted',key,project,update.action,valid&&project.workStatus==='completed','self-reported',lineage,update.sourceId);
+        const completion=add('workCompleted',key,project,update.action,workValid&&project.workStatus==='completed','self-reported',lineage,update.sourceId);
         if(completion)completion.correctionActionIds=corrections.map(item=>item.action.actionId);
       }
     }

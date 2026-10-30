@@ -5,6 +5,27 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { writePrivateOutput } from './private-output';
 const roots:string[]=[];
 afterEach(async()=>{await Promise.all(roots.splice(0).map(p=>rm(p,{recursive:true,force:true})));});
+it('resumes shared Markdown erasure after the source report was already redacted',async()=>{
+ const {registerPrivateOutput,applyPrivatePurge}=await import('./private-output');
+ const {buildCohortReport,renderCohortMarkdown}=await import('./workflow');
+ const {writeFile}=await import('node:fs/promises');
+ const repo=await mkdtemp(join(tmpdir(),'reporting-'));roots.push(repo);
+ const roster={version:1 as const,participants:['alice','bob'].map(key=>({key,stage:'invited' as const,stageAt:'2030-01-01T00:00:00Z',source:'fictional'})),exclusions:[]};
+ const source={identityExists:async()=>true,loadParticipantSnapshot:async()=>({observedAt:'2030-01-01T00:00:00Z',map:null,history:[],turns:[],conversationId:null})};
+ const original=await buildCohortReport(roster,source,'test');
+ await writePrivateOutput(repo,'report.json',JSON.stringify(original),['alice','bob']);
+ await registerPrivateOutput(repo,'report.json',['alice','bob'],'cohort-report',true);
+ await writePrivateOutput(repo,'report.md',renderCohortMarkdown(original),['alice','bob']);
+ await registerPrivateOutput(repo,'report.md',['alice','bob'],'cohort-markdown',true,'report.json');
+ // Reproduce interruption between source-manifest update and companion regeneration.
+ const redacted=await buildCohortReport({...roster,participants:roster.participants.filter(p=>p.key==='bob')},source,'test');
+ await writeFile(join(repo,'.context/early-access/report.json'),JSON.stringify(redacted));
+ await registerPrivateOutput(repo,'report.json',['bob'],'cohort-report',true);
+ await applyPrivatePurge(repo,'alice');
+ expect(await readFile(join(repo,'.context/early-access/report.md'),'utf8')).not.toContain('alice');
+ expect(await readFile(join(repo,'.context/early-access/report.md'),'utf8')).toContain('bob');
+ expect(JSON.parse(await readFile(join(repo,'.context/early-access/report.md.manifest.json'),'utf8')).participantKeys).toEqual(['bob']);
+});
 describe('private output',()=>{
  it('writes restricted output and associated manifest without overwriting',async()=>{const repo=await mkdtemp(join(tmpdir(),'reporting-'));roots.push(repo);const path=await writePrivateOutput(repo,'reports/run.json','{}',['person']);expect(await readFile(path,'utf8')).toBe('{}');expect((await stat(path)).mode&0o777).toBe(0o600);expect((await stat(join(repo,'.context/early-access/reports'))).mode&0o777).toBe(0o700);expect(await readFile(path+'.manifest.json','utf8')).toContain('person');await expect(writePrivateOutput(repo,'reports/run.json','changed',['person'])).rejects.toThrow();});
  it('rejects traversal and symlink escapes',async()=>{const repo=await mkdtemp(join(tmpdir(),'reporting-'));roots.push(repo);await expect(writePrivateOutput(repo,'../escape','x',['p'])).rejects.toThrow();await mkdir(join(repo,'.context'),{recursive:true});await symlink(tmpdir(),join(repo,'.context/early-access'));await expect(writePrivateOutput(repo,'escape','x',['p'])).rejects.toThrow();});

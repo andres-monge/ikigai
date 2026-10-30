@@ -25,6 +25,38 @@ describe('private conversation review', () => {
     const report=await retrieveConversation({participantKey:'fictional',snapshot:snapshot(),client:{listItems}});
     expect(report.pagination).toBe('partial');expect(report.complete).toBe(false);expect(report.messages[0].text).toBe('Question');expect(JSON.stringify(report)).not.toContain('api-key-private');
   });
+  it.each([true,false])('returns a retrieved prefix when a later page stalls (honors abort: %s)',async(honorsAbort)=>{
+    vi.useFakeTimers();
+    try {
+      const listItems=vi.fn().mockResolvedValueOnce({data:[message('one','user','Saved prefix')],hasMore:true,lastId:'next'})
+        .mockImplementationOnce(({abortSignal}:{abortSignal?:AbortSignal})=>new Promise((_,reject)=>{
+          if(honorsAbort)abortSignal?.addEventListener('abort',()=>reject(new Error('aborted')),{once:true});
+        }));
+      const pending=retrieveConversation({participantKey:'fictional',snapshot:snapshot(),client:{listItems}});
+      await vi.advanceTimersByTimeAsync(10_001);
+      expect(listItems.mock.calls[1][0].abortSignal).toBeInstanceOf(AbortSignal);
+      expect(listItems.mock.calls[1][0].abortSignal.aborted).toBe(true);
+      const report=await pending;
+      expect(report.pagination).toBe('partial');expect(report.complete).toBe(false);
+      expect(report.messages.map(item=>item.text)).toEqual(['Saved prefix']);
+      expect(report.gaps).toContainEqual({source:'fictional',reason:'provider-read-failed'});
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {vi.useRealTimers();}
+  });
+  it('returns the prefix promptly when the caller cancels a stalled page',async()=>{
+    vi.useFakeTimers();
+    try {
+      const controller=new AbortController();
+      const listItems=vi.fn().mockResolvedValueOnce({data:[message('one','user','Saved prefix')],hasMore:true,lastId:'next'})
+        .mockImplementationOnce(()=>new Promise(()=>{}));
+      const pending=retrieveConversation({participantKey:'fictional',snapshot:snapshot(),client:{listItems},abortSignal:controller.signal});
+      await vi.advanceTimersByTimeAsync(0);controller.abort();
+      const report=await pending;
+      expect(report.pagination).toBe('partial');expect(report.messages[0].text).toBe('Saved prefix');
+      expect(report.gaps).toContainEqual({source:'fictional',reason:'cancelled'});
+      expect(listItems.mock.calls[1][0].abortSignal.aborted).toBe(true);expect(vi.getTimerCount()).toBe(0);
+    }finally{vi.useRealTimers();}
+  });
   it.each(['missing','repeating','malformed'])('reports %s pagination explicitly',async(kind)=>{
     const listItems=vi.fn().mockResolvedValue(kind==='malformed'?{data:'bad',hasMore:false}:{data:[],hasMore:true,...(kind==='repeating'?{lastId:'same'}:{})});
     const report=await retrieveConversation({participantKey:'fictional',snapshot:snapshot(),client:{listItems}});

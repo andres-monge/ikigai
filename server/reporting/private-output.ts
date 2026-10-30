@@ -109,7 +109,7 @@ export async function previewPrivatePurge(repoRoot:string,key:string):Promise<Pu
   const item:PurgeItem={path:manifest.path,action,format,...(manifest.derivedFrom?{derivedFrom:manifest.derivedFrom}:{})};
   try{
    if(action==='regenerate'){
-    const source=data.manifests.find(m=>m.path===manifest.derivedFrom&&m.format==='cohort-report'&&m.participantKeys.includes(key));
+    const source=data.manifests.find(m=>m.path===manifest.derivedFrom&&m.format==='cohort-report');
     if(!source)throw new Error('Shared Markdown needs its registered report source.');
     await redactedContent(repoRoot,{path:source.path,action:'redact',format:'cohort-report'},key);
    }else if(action!=='delete')await redactedContent(repoRoot,item,key);
