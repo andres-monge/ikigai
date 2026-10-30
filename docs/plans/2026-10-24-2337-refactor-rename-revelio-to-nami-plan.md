@@ -82,7 +82,7 @@ execution: code
 
 ## Founder steps (manual, outside the repo)
 
-1. ~~Claim `heynami.vercel.app`~~ Done 2026-10-30: it is the project's only production domain. `revelio-me.vercel.app` now returns 404, so the old-domain redirect in step 4 needs the old domain re-added first if wanted.
+1. ~~Claim `heynami.vercel.app`~~ Done 2026-10-30: it is the project's only production domain. `revelio-me.vercel.app` was re-aliased to the same production deployment on 2026-10-30 (`vercel alias set`), so both domains serve it until step 4's redirect. Note: production's API has crashed since the 2026-09-03 deploy (extensionless ESM imports in `shared/career-map`); that fix is handled on the U7 branch and must land before cutover can be verified.
 2. Google Cloud console: add `https://heynami.vercel.app/api/auth/callback/google` as an authorized redirect URI, keep the old one until cutover; update the OAuth consent screen app name to Nami.
 3. Vercel env: set `BETTER_AUTH_URL` to the new origin (and `VITE_APP_ORIGIN` if U1 uses it); rename `REVELIO_METHOD_*` in local `.env`.
 4. Deploy; add a redirect from `revelio-me.vercel.app` to the new origin; sign in again once.
