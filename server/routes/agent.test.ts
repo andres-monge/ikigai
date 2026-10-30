@@ -2199,13 +2199,49 @@ describe('protected Method routes', () => {
     } finally { vi.unstubAllEnvs(); }
   });
 
-  it('captures only the known provider HTTP error status and preserves the original failure', async () => {
+  it.each([
+    { entry: 'agent', failure: 'once' },
+    { entry: 'workspace', failure: 'once' },
+    { entry: 'workspace', failure: 'always' },
+    { entry: 'workspace', failure: 'non-retryable' },
+  ])('keeps bounded binding retries for $entry / $failure', async ({ entry, failure }) => {
+    const direct = entry === 'workspace';
+    const storage = direct ? createPathSelectionStorage() : createStorage({ getConversationMapping: vi.fn(async () => 'retry-conversation') });
+    const listItems = vi.fn(async () => {
+      if (failure === 'non-retryable') throw new ConversationHistoryProviderError('list', 401);
+      if (failure === 'always' || listItems.mock.calls.length === 1) throw new ConversationHistoryProviderError('list', 503);
+      return { data: [{ id: 'retry-assistant', type: 'message', role: 'assistant',
+        content: [{ type: 'output_text', text: DIRECT_CONTINUATION_TEXT }] }], hasMore: false };
+    });
+    const app = testApp({ storage, requireAuth: authenticated, agentEnabled: true,
+      model: direct ? proposeFirstProjectThenTextModel() : confirmWhyThenTextModel({
+        pending: pendingWhy().foundation.whyRevisions.at(-1)!, callId: 'retry-confirm',
+        sourceMessageId: 'client-message-1', text: DIRECT_CONTINUATION_TEXT }),
+      conversationClient: { listItems }, operationalLog: vi.fn(),
+    });
+    const response = await (await request(app)).post(direct ? '/api/agent/workspace/operations' : '/api/agent')
+      .send(direct ? selectPurposePathRequest({ operationId: 'retry-workspace-action' }) : { id: 'client-message-1', message: 'That feels exactly right.' });
+    expect(response.status).toBe(200);
+    expect(storage.releaseTurnLease).toHaveBeenCalledOnce();
+    if (failure === 'once') {
+      expect(listItems).toHaveBeenCalledTimes(2);
+      expect(storage.completeAgentTurn).toHaveBeenCalledOnce();
+      expect(storage.failAgentTurn).not.toHaveBeenCalled();
+      expect(storage.completeAgentTurn.mock.calls[0]?.[0]?.result?.internalContextItemIds).toHaveLength(2);
+    } else {
+      expect(listItems).toHaveBeenCalledTimes(failure === 'always' ? 5 : 1);
+      expect(storage.completeAgentTurn).not.toHaveBeenCalled();
+      expect(storage.failAgentTurn).toHaveBeenCalledWith(expect.objectContaining({ errorClass: 'InternalContextBindingError' }));
+    }
+  });
+
+  it.each([503, 401])('captures known HTTP %i and exhausts only retryable failures', async (status) => {
     vi.stubEnv('NODE_ENV', 'development');
     vi.stubEnv('REVELIO_LATENCY_TRACE', '1');
     try {
       const logs: Array<Record<string, unknown>> = [];
       const storage = createStorage({ getConversationMapping: vi.fn(async () => 'private-http-conversation') });
-      const error = new ConversationHistoryProviderError('list', 503);
+      const error = new ConversationHistoryProviderError('list', status);
       error.message = SENTINEL;
       const listItems = vi.fn(async () => { throw error; });
       await (await request(testApp({ storage, requireAuth: authenticated, agentEnabled: true,
@@ -2214,12 +2250,12 @@ describe('protected Method routes', () => {
         operationalLog: (entry) => logs.push(entry),
       }))).post('/api/agent').send({ id: 'client-message-1', message: 'Help me reflect.' });
       const binding = (logs.at(-1)?.latency as Record<string, unknown>).terminalBinding;
-      expect(binding).toMatchObject({ attempts: [{ readReturned: 0, httpStatus: 503,
-        returnedCount: -1, hasMore: -1, cursorPresent: -1, matchCounts: [] }],
-        exit: { phase: 1, complete: 0, requestAborted: 0, deadlineAborted: 0 } });
+      expect(binding).toMatchObject({ attempts: Array.from({ length: status === 503 ? 5 : 1 }, () => ({ readReturned: 0, httpStatus: status,
+        returnedCount: -1, hasMore: -1, cursorPresent: -1, matchCounts: [] })),
+        exit: { phase: status === 503 ? 4 : 1, complete: 0, requestAborted: 0, deadlineAborted: 0 } });
       expect(JSON.stringify(binding)).not.toContain(SENTINEL);
       expect(JSON.stringify(binding)).not.toContain('private-http-conversation');
-      expect(listItems).toHaveBeenCalledOnce();
+      expect(listItems).toHaveBeenCalledTimes(status === 503 ? 5 : 1);
       expect(storage.completeAgentTurn).not.toHaveBeenCalled();
       expect(storage.failAgentTurn).toHaveBeenCalledWith(expect.objectContaining({ errorClass: 'InternalContextBindingError' }));
       expect(storage.releaseTurnLease).toHaveBeenCalledOnce();
@@ -2246,7 +2282,7 @@ describe('protected Method routes', () => {
     } finally { spies.forEach((spy) => spy.mockRestore()); vi.unstubAllEnvs(); }
   });
 
-  it('bounds failure recovery even when provider item listing ignores its abort signal', async () => {
+  it.each([false, true])('bounds failure recovery even when provider item listing ignores its abort signal (retry first: %s)', async (retryFirst) => {
     vi.stubEnv('NODE_ENV', 'development');
     vi.stubEnv('REVELIO_LATENCY_TRACE', '1');
     try {
@@ -2256,7 +2292,13 @@ describe('protected Method routes', () => {
       const providerFailure = new Error('private provider failure');
       providerFailure.name = 'APICallError';
       const conversationClient = {
-        listItems: vi.fn(() => latePage),
+        listItems: vi.fn(async () => {
+          if (retryFirst) {
+            await new Promise((resolve) => setTimeout(resolve, 450));
+            throw new ConversationHistoryProviderError('list', 503);
+          }
+          return latePage;
+        }),
       };
       const storage = createStorage({
         getConversationMapping: vi.fn(async () => 'hanging-failure-conversation'),
@@ -2282,8 +2324,8 @@ describe('protected Method routes', () => {
       expect(storage.releaseTurnLease).toHaveBeenCalledOnce();
       const binding = (logs.at(-1)?.latency as Record<string, unknown>).terminalBinding;
       expect(binding).toMatchObject({
-        attempts: [{ readReturned: 0, httpStatus: 0, matchCounts: [], requestAborted: 0, deadlineAborted: 1 }],
-        exit: { phase: 1, complete: 0, readBudgetMs: 500, requestAborted: 0, deadlineAborted: 1 },
+        attempts: [{ readReturned: 0, httpStatus: retryFirst ? 503 : 0, matchCounts: [], requestAborted: 0, deadlineAborted: retryFirst ? 0 : 1 }],
+        exit: { phase: retryFirst ? 2 : 1, complete: 0, readBudgetMs: 500, requestAborted: 0, deadlineAborted: 1 },
       });
       const captured = JSON.stringify(logs);
       releasePage({ data: [internalContextItem('too-late', 'hanging-failure-context-0')], hasMore: false });
@@ -2294,7 +2336,7 @@ describe('protected Method routes', () => {
   }, 2_000);
 
 
-  it.each(['read', 'delay'] as const)('preserves prompt cancellation during binding %s', async (phase) => {
+  it.each(['read', 'delay', 'retry-delay'] as const)('preserves prompt cancellation during binding %s', async (phase) => {
     vi.stubEnv('NODE_ENV', 'development');
     vi.stubEnv('REVELIO_LATENCY_TRACE', '1');
     const exit = vi.spyOn(MethodLatencyTrace.prototype, 'bindingExit');
@@ -2302,7 +2344,7 @@ describe('protected Method routes', () => {
     const recordAttempt = MethodLatencyTrace.prototype.bindingAttempt;
     const attempt = vi.spyOn(MethodLatencyTrace.prototype, 'bindingAttempt').mockImplementation(function (value) {
       recordAttempt.call(this, value);
-      if (phase === 'delay') queueMicrotask(() => outbound.abort());
+      if (phase !== 'read') queueMicrotask(() => outbound.abort());
     });
     try {
       let listingStarted!: () => void;
@@ -2310,6 +2352,7 @@ describe('protected Method routes', () => {
       const conversationClient = {
         listItems: vi.fn(() => {
           listingStarted();
+          if (phase === 'retry-delay') return Promise.reject(new ConversationHistoryProviderError('list', 503));
           return phase === 'read' ? new Promise<never>(() => undefined) : Promise.resolve({ data: [], hasMore: false });
         }),
       };

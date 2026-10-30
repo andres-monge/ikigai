@@ -809,14 +809,19 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
           items: [] as unknown[], internalContextItemIds: [] as string[], markers, complete: false,
         };
         for (let attempt = 0; attempt < 5; attempt += 1) {
-          const items = await awaitWithAbort(
-            listRecentConversationItems({
-              client: conversationClient(),
-              conversationId,
-              abortSignal: terminalSignal,
-            }),
-            terminalSignal,
-          );
+          let items: unknown[] = [];
+          try {
+            items = await awaitWithAbort(
+              listRecentConversationItems({
+                client: conversationClient(),
+                conversationId,
+                abortSignal: terminalSignal,
+              }),
+              terminalSignal,
+            );
+          } catch (error) {
+            if (terminalSignal.aborted || !(error instanceof ConversationHistoryProviderError && error.retryable)) throw error;
+          }
           const resolved = resolveInternalContextItemIds(items, markers);
           latest = {
             items,
@@ -1394,7 +1399,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
               readReturned = 1;
             } catch (error) {
               try { if (error instanceof ConversationHistoryProviderError) httpStatus = error.httpStatus ?? 0; } catch {}
-              throw error;
+              if (terminalSignal.aborted || !(error instanceof ConversationHistoryProviderError && error.retryable)) throw error;
             } finally {
               try {
                 const elapsedMs = performance.now() - readStarted;
