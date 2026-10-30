@@ -7,15 +7,15 @@ import {
   revisionRefSchema,
   revisionSchema,
   userActionProvenanceSchema,
-} from './common';
-import { foundationStateSchema } from './foundation';
-import { purposePathSetSchema } from './paths';
-import { pathProjectSchema, pathProjectInputSchema, projectOptionSetSchema, validateProjectBrief } from './projects';
-import { continueChoiceSchema, nextMoveSchema, reflectionSessionSchema } from './learning';
-import { commitmentIntentSchema, peerExposureSchema, provisionalCommitmentSchema } from './peers';
-import { proofInventorySchema, routeOutcomeSchema, sideDoorSetSchema } from './side-doors';
+} from './common.js';
+import { foundationStateSchema } from './foundation.js';
+import { purposePathSetSchema } from './paths.js';
+import { pathProjectSchema, pathProjectInputSchema, projectOptionSetSchema, validateProjectBrief } from './projects.js';
+import { continueChoiceSchema, nextMoveSchema, reflectionSessionSchema } from './learning.js';
+import { commitmentIntentSchema, peerExposureSchema, provisionalCommitmentSchema } from './peers.js';
+import { proofInventorySchema, routeOutcomeSchema, sideDoorSetSchema } from './side-doors.js';
 
-import { careerMapSchema as careerMapV2Schema } from './legacy-v2/model';
+import { careerMapSchema as careerMapV2Schema } from './legacy-v2/model.js';
 export { careerMapV2Schema };
 
 export const CAREER_MAP_SCHEMA_VERSION = 3;

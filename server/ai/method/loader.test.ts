@@ -274,15 +274,4 @@ describe.runIf(process.env.METHOD_PRODUCTION_SMOKE === '1')('production Method b
     }
   });
 
-  it('loads all five registered SKILL.md files from the Vercel includeFiles source tree', async () => {
-    const productionRoot = resolveMethodSkillsRoot({ environment: 'production', deployment: 'vercel' });
-    expect(productionRoot).toBe(path.resolve(process.cwd(), 'server/ai/method/skills'));
-
-    const loader = await createMethodModuleLoader({ environment: 'production', deployment: 'vercel' });
-    for (const key of METHOD_MODULE_KEYS) {
-      const bundle = loader.load(checkpoint(key));
-      expect(bundle.sourcePath).toBe(path.join(productionRoot, key, 'SKILL.md'));
-      expect(bundle.instructions.length).toBeGreaterThan(200);
-    }
-  });
 });

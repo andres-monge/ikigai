@@ -1,6 +1,6 @@
-import { invalidationTargetOrder, type Invalidation, type InvalidationTargetKind, type RevisionRef, type UserActionProvenance } from './common';
-import type { CareerMap, Focus } from './model';
-import type { CareerMapOperationType } from './operations';
+import { invalidationTargetOrder, type Invalidation, type InvalidationTargetKind, type RevisionRef, type UserActionProvenance } from './common.js';
+import type { CareerMap, Focus } from './model.js';
+import type { CareerMapOperationType } from './operations.js';
 
 export type MethodModule =
   | 'form-foundation'

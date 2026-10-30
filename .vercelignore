@@ -5,6 +5,9 @@ dist/
 tests/
 **/*.test.ts
 
-# Development files
+.context
+.claude
+docs
+scripts
 .env
 .env.*

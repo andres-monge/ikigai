@@ -9,7 +9,7 @@ import {
   revisionSchema,
   timestampSchema,
   userActionProvenanceSchema,
-} from './common';
+} from './common.js';
 
 export const pathProjectInputSchema = z.object({
   id: entityIdSchema,

@@ -5,13 +5,13 @@ import {
   mapRevisionSchema,
   operationReceiptSchema,
   userActionProvenanceSchema,
-} from './common';
-import { foundationStateSchema } from './foundation';
-import { purposePathSetSchema } from './paths';
-import { pathProjectSchema, projectOptionSetSchema } from './projects';
-import { continueChoiceSchema, nextMoveSchema, reflectionSessionSchema } from './learning';
-import { commitmentIntentSchema, peerExposureSchema, provisionalCommitmentSchema } from './peers';
-import { proofInventorySchema, routeOutcomeSchema, sideDoorSetSchema } from './side-doors';
+} from './common.js';
+import { foundationStateSchema } from './foundation.js';
+import { purposePathSetSchema } from './paths.js';
+import { pathProjectSchema, projectOptionSetSchema } from './projects.js';
+import { continueChoiceSchema, nextMoveSchema, reflectionSessionSchema } from './learning.js';
+import { commitmentIntentSchema, peerExposureSchema, provisionalCommitmentSchema } from './peers.js';
+import { proofInventorySchema, routeOutcomeSchema, sideDoorSetSchema } from './side-doors.js';
 
 export const CAREER_MAP_SCHEMA_VERSION = 2;
 

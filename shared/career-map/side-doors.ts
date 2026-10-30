@@ -7,7 +7,7 @@ import {
   revisionRefSchema,
   revisionSchema,
   userActionProvenanceSchema,
-} from './common';
+} from './common.js';
 
 export const proofInventoryInputSchema = z.object({
   id: entityIdSchema,

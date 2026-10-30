@@ -5,7 +5,7 @@ import {
   revisionSchema,
   userActionProvenanceSchema,
   userEvidenceProvenanceSchema,
-} from './common';
+} from './common.js';
 
 export const learningEvidenceSchema = z.object({
   id: entityIdSchema,

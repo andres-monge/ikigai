@@ -6,7 +6,7 @@ import {
   revisionRefSchema,
   revisionSchema,
   userActionProvenanceSchema,
-} from './common';
+} from './common.js';
 
 export const peerExposureInputSchema = z.object({
   id: entityIdSchema,

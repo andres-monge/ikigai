@@ -50,7 +50,6 @@ export interface MethodModuleLoader {
 export interface MethodSkillsRootOptions {
   readonly environment?: string;
   readonly cwd?: string;
-  readonly deployment?: 'node' | 'vercel';
 }
 
 export interface CreateMethodModuleLoaderOptions extends MethodSkillsRootOptions {
@@ -69,12 +68,8 @@ interface ParsedSkillFile {
 export function resolveMethodSkillsRoot(options: MethodSkillsRootOptions = {}): string {
   const environment = options.environment ?? process.env.NODE_ENV ?? 'development';
   const cwd = options.cwd ?? process.cwd();
-  const deployment = options.deployment ?? (process.env.VERCEL === '1' ? 'vercel' : 'node');
-
   if (environment === 'production') {
-    return deployment === 'vercel'
-      ? path.resolve(cwd, 'server/ai/method/skills')
-      : path.resolve(cwd, 'dist/method-skills');
+    return path.resolve(cwd, 'dist/method-skills');
   }
 
   return fileURLToPath(new URL('./skills', import.meta.url));

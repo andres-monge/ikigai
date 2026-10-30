@@ -18,9 +18,9 @@ import { z } from 'zod';
 import {
   careerMapOperationSchemas,
   type CareerMapOperationType,
-} from './career-map/operations';
-import { invalidationTargetKindSchema, methodModuleSchema } from './career-map/common';
-import { careerMapSchema } from './career-map/model';
+} from './career-map/operations.js';
+import { invalidationTargetKindSchema, methodModuleSchema } from './career-map/common.js';
+import { careerMapSchema } from './career-map/model.js';
 
 /* -------------------------------------------------------------------------- */
 /* METHOD UI TRANSPORT                                                        */

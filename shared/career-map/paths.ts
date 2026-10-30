@@ -6,7 +6,7 @@ import {
   modelPresentationSchema,
   revisionRefSchema,
   revisionSchema,
-} from './common';
+} from './common.js';
 
 // Provider citations belong to conversation transport, never to saved card copy.
 const providerCitationMarker = /cite[^]*|【\s*turn\d+(?:search|view|fetch)\d+[^】]*】|\bcite\s+turn\d+(?:search|view|fetch)\d+\b/giu;

@@ -6,18 +6,18 @@ import {
   type InvalidationTargetKind,
   type ModelPresentation,
   type UserActionProvenance,
-} from './common';
-import { careerMapSchema, type CareerMap } from './model';
+} from './common.js';
+import { careerMapSchema, type CareerMap } from './model.js';
 import {
   parseCareerMapOperation,
   type CareerMapOperation,
   type CareerMapOperationType,
-} from './operations';
-import type { PurposePath, PurposePathInput, PurposePathSet } from './paths';
-import { pathProjectInputSchema, type PathProjectInput, type ProjectOptionSet } from './projects';
-import { isExactFirstProjectFramingDelivery } from './authority';
-import type { SideDoorInput, SideDoorSet } from './side-doors';
-import { selectActivePurposePath, selectCurrentProjectLearning, selectCurrentPathSelectionSourceId, selectProjectDecisionBasis, hasCompletedLearningLoop, isActiveBasisReview, selectEarliestActiveReview, selectLatestAcceptedProject, deriveMethodCheckpoint } from './selector';
+} from './operations.js';
+import type { PurposePath, PurposePathInput, PurposePathSet } from './paths.js';
+import { pathProjectInputSchema, type PathProjectInput, type ProjectOptionSet } from './projects.js';
+import { isExactFirstProjectFramingDelivery } from './authority.js';
+import type { SideDoorInput, SideDoorSet } from './side-doors.js';
+import { selectActivePurposePath, selectCurrentProjectLearning, selectCurrentPathSelectionSourceId, selectProjectDecisionBasis, hasCompletedLearningLoop, isActiveBasisReview, selectEarliestActiveReview, selectLatestAcceptedProject, deriveMethodCheckpoint } from './selector.js';
 
 type RejectionCode =
   | 'invalid-map'

@@ -7,9 +7,9 @@ import {
   revisionSchema,
   timestampSchema,
   userActionProvenanceSchema,
-} from './common';
-import { foundationEvidenceSchema, realityConstraintSchema, whyInputSchema } from './foundation';
-import { purposePathInputSchema } from './paths';
+} from './common.js';
+import { foundationEvidenceSchema, realityConstraintSchema, whyInputSchema } from './foundation.js';
+import { purposePathInputSchema } from './paths.js';
 import {
   pathProjectInputSchema,
   projectAcceptancePhraseSchema,
@@ -17,10 +17,10 @@ import {
   projectWorkStatusSchema,
   projectReportedActivitySchema,
   validateProjectBrief,
-} from './projects';
-import { learningEvidenceSchema, nextMoveKindSchema } from './learning';
-import { peerExposureInputSchema } from './peers';
-import { proofInventoryInputSchema, sideDoorInputSchema } from './side-doors';
+} from './projects.js';
+import { learningEvidenceSchema, nextMoveKindSchema } from './learning.js';
+import { peerExposureInputSchema } from './peers.js';
+import { proofInventoryInputSchema, sideDoorInputSchema } from './side-doors.js';
 
 const expectedRevisionSchema = z.number().int().nonnegative();
 
