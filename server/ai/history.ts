@@ -909,10 +909,13 @@ export class OpenAIConversationClient implements ConversationItemsClient {
       'list',
       input.abortSignal,
     );
+    if (!body || !Array.isArray(body.data) || typeof body.has_more !== 'boolean') {
+      throw new ConversationHistoryProviderError('list');
+    }
     return {
-      data: Array.isArray(body?.data) ? body.data : [],
-      hasMore: body?.has_more === true,
-      lastId: typeof body?.last_id === 'string' ? body.last_id : undefined,
+      data: body.data,
+      hasMore: body.has_more,
+      lastId: typeof body.last_id === 'string' ? body.last_id : undefined,
     };
   }
 }

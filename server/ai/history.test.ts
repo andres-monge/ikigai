@@ -1475,3 +1475,8 @@ describe('attachment label projection without originals', () => {
   });
 
 });
+
+it.each([{}, {data: 'bad', has_more: false}, {data: [], has_more: 'false'}])('rejects malformed successful list bodies instead of inventing an empty history: %j', async body => {
+  const client = new OpenAIConversationClient('fixture-key', vi.fn(async () => new Response(JSON.stringify(body), {status:200})) as typeof fetch);
+  await expect(client.listItems({conversationId:'fixture-conversation',limit:100,order:'asc'})).rejects.toBeInstanceOf(ConversationHistoryProviderError);
+});
