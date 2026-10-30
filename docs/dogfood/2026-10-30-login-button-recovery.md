@@ -1,0 +1,24 @@
+# Login button recovery — 2026-10-30
+
+**DF-16 fixed in `4ff170a`; DF-15's in-app navigation cause remains open.** Login now releases its busy state in `finally` after the existing SDK call settles. A pending call still disables the button. A non-error settlement restores **Continue with Google** without claiming failure; a second attempt requires another explicit click. Returned/thrown errors retain the existing safe message and reusable button.
+
+The change touches only `login.tsx` and its existing test file. The same-origin auth client, Google provider, success/error callbacks, redirect behavior and all server origin/state/PKCE/cookie/ownership guards are unchanged. No timeout, automatic retry, direct navigation fallback, URL inspection or broader OAuth change was added.
+
+The confirmed mechanism was that Login previously cleared busy only on errors. The installed SDK's default redirect plugin attempts a scheme-guarded location assignment before the fetch promise returns a non-error result. Promise settlement does not establish Google arrival, so the fix never infers a failure from remaining on the page. The old page can briefly become reusable while normal navigation finishes.
+
+## Verification
+
+- Strengthened the existing success-entry test with a controlled pending promise, duplicate-click rejection, non-error/no-navigation recovery, no false alert and an explicit second SDK invocation. Existing returned/thrown-error cases now also assert button reuse. One expected regression failed before implementation; final **20 Login/App-auth checks PASS**, plus typecheck, build and whitespace checks. No model generation was used.
+- One proportionate lite `ce-code-review`, `20261030-113517-a8b1834d`, completed **Ready to merge**, no findings. Two changed executable non-test lines; no additional reviewers, external peers or paid calls. Existing callback/session guards and installed SDK hook timing were inspected.
+- **Injected stalled condition in real QA Chrome: PASS.** A labeled temporary component preview bundled the actual Login with a synthetic sign-in module, with no auth SDK, auth endpoint or Google URL. It made zero authentication requests. One click showed the disabled pending button; explicit synthetic settlement restored it with no alert. A second explicit click increased the synthetic invocation count to two and disabled the pending button again; settlement restored reuse. This proves recovery under the injected condition, not a spontaneous Chrome OAuth defect or real authentication.
+- The two served fixture files were removed **before the final build and commit**; neither exists in source/public output or the final build. Only private ignored source/evidence remains. No actual OAuth callback/state/cookie interception or transfer was used.
+- **One fresh normal QA Chrome sign-out/sign-in compatibility check: PASS.** After all other UI checks, normal app signout reached the login page. One Google-button invocation returned to the authenticated app with the same dedicated identity. No password, MFA, CAPTCHA, alternate account or repeat Google attempt was needed. Google arrival was not separately captured during the transient navigation; the verified result is the ordinary signout/login round trip and restored authenticated app.
+- Saved Chat and the selected **A Self-Serve Materials Spot** project were present on return. After reload/hydration, the same account, Chat history, Accepted / Not started project and read-only historical records were verified again. QA remains light theme, default viewport, Chat, empty draft and signed in. Founder profile was untouched.
+
+## Integrity and serving
+
+Before/after read-only comparisons across all five canonical tables for both accounts are equal. Founder remains revision 37 / 31 turns; dedicated account revision 31 / 21 turns; zero active leases. Every prior turn, including the original Failed DF-18 selection, is unchanged. Authentication-session changes from the authorized normal signout/signin are expected and are separate from these canonical-data comparisons. No app conversation/model turn or project/status write occurred.
+
+The frontend-only change was loaded by the existing Vite service; no main or lab restart was needed. Main PID 1048 on 5173 and unchanged lab PID 41445 on 5174 both return HTTP 200. No pending restart, founder-profile access, push, PR, deployment or heartbeat.
+
+Private ignored `.context/revelio/df16-login-recovery-20261030/` retains the approved proposal, red/green/check/build, single review, labeled synthetic screenshot, normal-return screenshot and reload/integrity proof. No credentials, authorization URLs, cookies or real-account pixels are committed. Synthetic recovery and normal Chrome compatibility are distinct claims; neither diagnoses DF-15 or guarantees universal Google availability.
