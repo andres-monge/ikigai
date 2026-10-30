@@ -35,7 +35,7 @@ export async function privateOutputPath(repoRoot: string, relativePath: string, 
 }
 
 export async function writePrivateOutput(repoRoot: string, relativePath: string, content: string, participantKeys: string[]): Promise<string> {
-  if (!participantKeys.every(key => /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$/.test(key))) throw new Error('Invalid artifact participant key.');
+  if (!participantKeys.every(participantKeyValid)) throw new Error('Invalid artifact participant key.');
   const path = await privateOutputPath(repoRoot, relativePath, true);
   const manifestPath = await privateOutputPath(repoRoot, relativePath + '.manifest.json', true);
   const manifest = await open(manifestPath, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY | constants.O_NOFOLLOW, 0o600);
@@ -96,7 +96,6 @@ async function redactedContent(repoRoot:string,item:PurgeItem,key:string):Promis
  }
  if(item.format==='roster'){
   const {parseCohort}=await import('./cohort.js');const cohort=parseCohort(data);const participant=cohort.participants.find(p=>p.key===key);const id=participant?.userId;
-  // Remove the participant's identifying enrollment note and binding, retaining unrelated entries.
   cohort.participants=cohort.participants.filter(p=>p.key!==key);if(id)cohort.exclusions=cohort.exclusions.filter(p=>p.userId!==id);
   return {content:JSON.stringify(cohort,null,2),keys:cohort.participants.map(p=>p.key)};
  }

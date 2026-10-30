@@ -40,7 +40,6 @@ export async function runEarlyAccess(args:string[],repoRoot=resolve(fileURLToPat
  const cohort=command==='resolve-identity'?undefined:parseCohort(JSON.parse(await readFile(await privateOutputPath(repoRoot,values.cohort??'roster.json'),'utf8')));
  if(command==='conversation'&&!key)throw new Error('Conversation requires a roster participant key.');
  const participant=command==='conversation'?requireReviewParticipant(cohort!,key!):undefined;
- // Validate private paths before opening database/provider connections.
  await privateOutputPath(repoRoot,values.output,true);
  const configuration=reportingConnections(values.target,process.env);
  const source=createReportingSource(configuration);
