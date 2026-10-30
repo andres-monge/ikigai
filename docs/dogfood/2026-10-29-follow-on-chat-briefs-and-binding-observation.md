@@ -61,4 +61,21 @@ DF-06's original preparation-scope bundling was already corrected. Its broader v
 
 This update records the coordinator-relayed founder decision only. No application change, new tests, model calls, duplicate review or heartbeat was performed.
 
-For **DF-03**, the founder separately agreed to retain the repeated-discovery finding and observe whether it recurs in future testing. One occurrence is insufficient to establish an instruction, context or model cause. No instruction change or extra test/model run was requested, and no blocker classification beyond the observed impact is assumed. The coordinator will review DF-07's stale path summary next; that review has no recorded verdict here.
+For **DF-03**, the founder separately agreed to retain the repeated-discovery finding and observe whether it recurs in future testing. One occurrence is insufficient to establish an instruction, context or model cause. No instruction change or extra test/model run was requested, and no blocker classification beyond the observed impact is assumed.
+
+## DF-07 source-based proposal — 2026-10-30
+
+**Founder decision:** the distinction is clear enough: a path card describes a direction and its initial project idea; a separate current-project card shows the developed project and status. The founder does not expect the path's first-project idea to match every later project change. Only investigation of the stale current-status claim was approved; no implementation or model run is authorized.
+
+After the DF-18 scoped review completed, read-only source inspection found:
+
+- `shared/career-map/paths.ts:23` defines `projectPreview` as saved free text, with no structured project-status field. Inspection of the existing private founder snapshot locates the observed “has not been proposed” claim in that field, without copying personal content or identifiers here.
+- `client/src/components/explore/purpose-path-card.tsx:55` labels the field **First project** and renders its saved text directly. There is no hardcoded “not proposed” status to remove. The same card is used for Chat path presentations and read-only Map.
+- `shared/career-map/reducer.ts:558` saves a first project separately with an exact `basisPath` ID/revision and its own agreement/work status; replacement also preserves that basis. It does not rewrite the path preview.
+- `client/src/components/explore/method-map.tsx:250` already matches current project records to the active path revision; its separate project card renders agreement/work status. Earlier projects and learning remain available read-only. This supports the founder's distinction rather than a synchronization repair.
+
+**Proposed smallest correction, pending coordinator review:** label the saved preview **Initial project idea** in the shared card. When Map has a developed project on that exact path revision, add neutral context beside the preview: “Recorded with this path. See the project card for the developed brief and current status.” Derive that context from existing exact project/path references, without inspecting the preview's prose. Keep the original preview visible and unchanged; this makes any original status language explicitly historical rather than silently replacing it. Chat's original path presentation remains an initial idea without a live status annotation.
+
+Expected implementation scope, only if approved: `purpose-path-card.tsx`, its existing tests, `method-map.tsx` and its existing tests. Verify the initial label, exact linked-project context, absent context for no project or another path revision, preserved preview text and read-only history. No tests were added or run for this proposal. If explicit historical context is insufficient, return for product review rather than parsing or rewriting saved sentences.
+
+No schema, reducer, state machine, saved history, Method instruction, current-project content or Paths V6 redesign is proposed. DF-18 implementation remains separate; this investigation made no application changes, account/browser actions, model calls or restart. Heartbeat remains off.
