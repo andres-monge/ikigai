@@ -51,7 +51,7 @@ export function deriveParticipantProgress(participantKey: string, snapshot: Repo
   const receipts=[...new Map(snapshot.history.map(row=>[row.operationSourceId,row])).values()];
   if(receipts.length!==map.revision || receipts.some((row,index)=>row.resultRevision!==index+1)) report.gaps.push('receipt-history-incomplete');
   const facts=new Map<string,ProgressFact>();
-  const activeReview=(kind:string,entity:RevisionRef)=>map.invalidations.some(item=>item.status==='pending'&&item.targetKind===kind&&item.targetId===entity.id&&item.targetRevision===entity.revision);
+  const activeReview=(kind:CareerMap['invalidations'][number]['targetKind'],entity:RevisionRef)=>map.invalidations.some(item=>item.status==='pending'&&item.targetKind===kind&&item.targetId===entity.id&&item.targetRevision===entity.revision);
   const add=(milestone:Milestone, identity:string, entity:RevisionRef, provenance:UserActionProvenance|ModelPresentation|undefined, current:boolean, evidence:ProgressFact['evidence']='observed', attainmentId=identity,sourceId?:string)=>{
     const presentation=provenance?.kind==='model-presentation';
     const action=provenance&&!presentation?provenance as UserActionProvenance:undefined;
@@ -109,17 +109,16 @@ export function deriveParticipantProgress(participantKey: string, snapshot: Repo
     if(!reflection.evidence.length)continue;
     const project=map.projects.find(item=>ref(item)===ref(reflection.projectBasis));
     const valid=Boolean(project&&!activeReview('reflection',reflection)&&!activeReview('project',project)&&!['parked','superseded'].includes(project.agreementStatus));
-    // Saved firsthand evidence is independent of whether the reflection has closed.
     const first=reflection.evidence.slice().sort((a,b)=>a.provenance.occurredAt.localeCompare(b.provenance.occurredAt))[0];
     const provenance=first.provenance.kind==='user-source'?undefined:first.provenance;
     const fact=add('reflectionSaved',ref(reflection),reflection,provenance,valid,'self-reported');
     if(fact&&!provenance)fact.recordedAt=iso(first.provenance.occurredAt);
   }
+  const selectedMove=selectCurrentProjectLearning(map).move;
   for(const move of map.nextMoves){
     const choice=map.continueChoices.find(item=>ref(item)===ref(move.continueChoiceBasis));
     const reflection=choice&&map.reflections.find(item=>ref(item)===ref(choice.reflectionBasis));
     if(!reflection?.evidence.length)continue;
-    const selectedMove=selectCurrentProjectLearning(map).move;
     const valid=facts.get(`reflectionSaved:${ref(reflection)}`)?.current===true&&selectedMove?.id===move.id&&selectedMove.revision===move.revision&&!activeReview('next-move',move);
     add('experienceBackedDecision',move.action.actionId,move,move.action,valid,'self-reported');
   }

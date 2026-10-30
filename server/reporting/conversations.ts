@@ -125,7 +125,6 @@ export async function retrieveConversation(input: {
     }
   }
 
-  // Unlike the browser projection, review keeps every text part without truncation.
   const visible: Array<{id:string;role:'user'|'assistant';text:string}> = [];
   for (const [id,item] of items) {
     if (internalIds.has(id) || item.type !== 'message' || (item.role !== 'user' && item.role !== 'assistant')) continue;
@@ -142,7 +141,6 @@ export async function retrieveConversation(input: {
     if (unsupported) report.gaps.push({source:alias('item',id),reason:'unsupported-message-content'});
     if (texts.length) visible.push({id,role:item.role,text:texts.join('')});
   }
-  // Recovery digests identify human attempts even when the browser has no usable assistant projection.
   for (const turn of snapshot.turns) {
     if (turn.origin !== 'agent-turn') continue;
     const recovery = record(record(turn.terminalResult)?.displayRecovery);
@@ -151,7 +149,6 @@ export async function retrieveConversation(input: {
     if (matchIndex < 0) continue;
     const binding = {source:`turn/${turn.turnId}`,status:turn.status};
     bindings.set(visible[matchIndex].id,binding);
-    // Adjacency supplies review context, not proof that a partial reply was delivered.
     for (let index=matchIndex+1; index<visible.length && visible[index].role!=='user'; index++) {
       if (!bindings.has(visible[index].id)) bindings.set(visible[index].id,binding);
     }
@@ -160,8 +157,9 @@ export async function retrieveConversation(input: {
     const binding = bindings.get(item.id);
     report.messages.push({source:alias('item',item.id),role:item.role,text:item.text,context:providerOnlyIds.has(item.id)?'provider-review-context':binding?'bound-turn':'unbound-review-context',delivery:'unknown',...(canonicalPresentations.has(item.id)?{browserPresentation:canonicalPresentations.get(item.id)}:{}),...(binding?{turn:binding}:{})});
   }
+  const boundTurnSources = new Set(report.messages.flatMap(message => message.turn ? [message.turn.source] : []));
   for (const turn of report.turns) {
-    if (turn.origin === 'agent-turn' && !report.messages.some(message=>message.turn?.source===turn.source)) {
+    if (turn.origin === 'agent-turn' && !boundTurnSources.has(turn.source)) {
       report.gaps.push({source:turn.source,reason:'recorded-turn-content-unavailable'});
     }
   }

@@ -1,4 +1,3 @@
-/** Fictional deterministic input built through the production reducer. */
 import { applyCareerMapOperation, createCareerMap, type CareerMap, type CareerMapOperation, type PurposePathInput } from '../../shared/career-map/index.js';
 import type { ReportingSnapshot } from './source.js';
 export const fixtureTime = (n: number) => new Date(Date.UTC(2030, 0, 1, 0, n)).toISOString();
