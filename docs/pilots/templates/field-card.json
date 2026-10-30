@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "entries": [{
+    "participantKeys": ["person-one"],
+    "date": "2030-01-01",
+    "job": {"text":"Choose one small experiment about work they might enjoy","evidence":"self-reported","source":"fictional-turn-reference"},
+    "currentWay": {"text":"Unknown","evidence":"unknown","source":null},
+    "firstTry": {"text":"A project was proposed; no work report yet","evidence":"observed","source":"fictional-map-entity-reference"},
+    "whereItBroke": {"text":"Unknown; proposal without work is not failure","evidence":"unknown","source":null},
+    "ourResponse": {"text":"Unknown","evidence":"unknown","source":null},
+    "nextTimeWhatTheyChose": {"text":"Unknown","evidence":"unknown","source":null},
+    "founderAssistance": {"text":"Unknown","evidence":"unknown","source":null},
+    "returnInvitation": {"text":"Unknown","evidence":"unknown","source":null}
+  }]
+}

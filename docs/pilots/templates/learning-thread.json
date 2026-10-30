@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "entries": [{
+    "participantKeys": ["person-one"],
+    "date": "2030-01-01",
+    "productVersion": "unknown",
+    "believed": "A small proposal might help this person choose work to try.",
+    "saw": {"text":"The person asked for a smaller version before deciding","evidence":"observed","source":"fictional-conversation-source"},
+    "interpretation": {"text":"Scope may matter; no evidence yet of starting or of failure","evidence":"inferred","source":"fictional-conversation-source"},
+    "decided": "Offer a smaller version and leave the decision with the person.",
+    "owner": "Founder",
+    "nextOutcomeToCheck": "When a real opportunity comes up, what do they choose and what happens?"
+  }]
+}

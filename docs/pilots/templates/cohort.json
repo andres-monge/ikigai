@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "participants": [
+    {"key":"person-one","stage":"invited","stageAt":"2030-01-01T00:00:00Z","source":"Fictional invitation reference"},
+    {"key":"person-two","stage":"agreed","stageAt":"2030-01-02T00:00:00Z","source":"Fictional agreement","noticeReference":"invitation-notice-v1","agreementReference":"fictional-message-reference"}
+  ],
+  "exclusions": [
+    {"userId":"fictional-founder-id","role":"founder","source":"Replace with explicit verified founder identity"},
+    {"userId":"fictional-qa-id","role":"qa","source":"Replace with explicit verified QA identity"}
+  ]
+}
