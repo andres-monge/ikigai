@@ -22,10 +22,10 @@ execution: code
 ## Key Decisions
 
 - **Name: Nami** (session-settled: user-directed — chosen over Navi because Navii, heynavii.ai, is a voice-first AI career coach in the same space; no career product named Nami was found).
-- **New production domain on free `*.vercel.app`** (session-settled: user-directed — no purchase before traction). Candidates that returned `DEPLOYMENT_NOT_FOUND` on 2026-10-24: `meetnami`, `heynami`, `trynami`, `nami-app`. Taken: `nami`, `namiapp`, `nami-me`, `nami-map`. Availability is only confirmed by claiming the name in Vercel.
+- **New production domain: `heynami.vercel.app`** (session-settled: user-directed — free `*.vercel.app`, no purchase before traction). It returned `DEPLOYMENT_NOT_FOUND` on 2026-10-24; availability is only confirmed by claiming it in Vercel. Fallbacks that were also free: `meetnami`, `trynami`, `nami-app`. Taken: `nami`, `namiapp`, `nami-me`, `nami-map`.
 - **Domain lives in one setting** (session-settled: user-approved) so a later move to a custom domain is a config change: buy, add in Vercel, add Google redirect URI, change `BETTER_AUTH_URL`, redirect old domain.
 - **Full rename of internal identifiers** (session-settled: user-directed — chosen over leaving legacy names).
-- **Icon only** (session-settled: user-directed — palette, fonts and layout unchanged).
+- **Icon only: restore the compass** (session-settled: user-directed — palette, fonts and layout unchanged). The favicon was a compass until `9c7f529` (2026-04-12) replaced it with the sunrise for the "Revela" rebrand; the in-app header never changed and still renders lucide `Compass` (`client/src/components/header.tsx`), so the favicon will match the app again.
 - **Dated docs stay as written** (session-settled: user-approved). Living docs and persona agents are renamed; `AGENTS.md` notes the former name.
 - **Project identity:** rename `package.json` `name` to `nami` only; the `ikigai` folder and GitHub repo stay (session-settled: user-approved).
 
@@ -67,7 +67,8 @@ execution: code
 - `.env.example` heading and production URL comment.
 
 ### U5. Icon
-- Draft 2–3 SVG marks in the current palette for founder choice; then generate `favicon.svg`, `favicon.ico`, `apple-touch-icon.png`, `assets/og-image.png`.
+- Restore `client/public/favicon.svg` from `d7bf4ab` (lucide compass, stroke and needle `#4DB6AC`); regenerate `favicon.ico` (16/32/48) and `apple-touch-icon.png` (180×180) from it rather than reusing the January binaries, so all three match.
+- `assets/og-image.png` (2026-01-03) contains no product name but still shows the ikigai Venn diagram and "Find your thing. Then pick a side quest" — it predates the Method. Replacing it is out of this plan's icon-only scope; flag it to the founder as a separate decision.
 
 ### U6. Docs and agents
 - Rename in `AGENTS.md`, `docs/thesis.md`, the active revamp plan's prose (keep its filename; it is referenced by path), and `.claude/agents/persona-*.md`.
@@ -81,8 +82,8 @@ execution: code
 
 ## Founder steps (manual, outside the repo)
 
-1. Claim the Vercel subdomain (rename the project or add the domain).
-2. Google Cloud console: add `https://<new>.vercel.app/api/auth/callback/google` as an authorized redirect URI, keep the old one until cutover; update the OAuth consent screen app name to Nami.
+1. ~~Claim `heynami.vercel.app`~~ Done 2026-10-30: it is the project's only production domain. `revelio-me.vercel.app` now returns 404, so the old-domain redirect in step 4 needs the old domain re-added first if wanted.
+2. Google Cloud console: add `https://heynami.vercel.app/api/auth/callback/google` as an authorized redirect URI, keep the old one until cutover; update the OAuth consent screen app name to Nami.
 3. Vercel env: set `BETTER_AUTH_URL` to the new origin (and `VITE_APP_ORIGIN` if U1 uses it); rename `REVELIO_METHOD_*` in local `.env`.
 4. Deploy; add a redirect from `revelio-me.vercel.app` to the new origin; sign in again once.
 5. After a week, remove the old Google redirect URI.
