@@ -1,14 +1,15 @@
 import { useSyncExternalStore } from 'react';
 
 export type Theme = 'light' | 'dark';
-const STORAGE_KEY = 'revelio-theme';
+const STORAGE_KEY = 'nami-theme';
+const LEGACY_STORAGE_KEY = 'revelio-theme';
 let theme: Theme | undefined;
 let choice: Theme | null = null;
 const listeners = new Set<() => void>();
 
 function readStoredTheme(): Theme | null {
   try {
-    const value = localStorage.getItem(STORAGE_KEY);
+    const value = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY);
     return value === 'light' || value === 'dark' ? value : null;
   } catch {
     return null;

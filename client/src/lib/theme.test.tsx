@@ -24,7 +24,7 @@ async function controls(count = 1) {
 }
 function bootstrap() {
   const html = readFileSync('client/index.html', 'utf8');
-  const script = html.match(/<script[^>]*data-revelio-theme[^>]*>([\s\S]*?)<\/script>/)?.[1];
+  const script = html.match(/<script[^>]*data-nami-theme[^>]*>([\s\S]*?)<\/script>/)?.[1];
   expect(script, 'early theme bootstrap exists').toBeTruthy();
   new Function('window', 'document', 'localStorage', script!)(window, document, localStorage);
 }
@@ -51,7 +51,7 @@ describe('theme preference lifecycle', () => {
   it('keeps a new explicit choice when the OS changes later', async () => {
     await controls();
     fireEvent.click(screen.getByRole('button'));
-    expect(localStorage.getItem('revelio-theme')).toBe('dark');
+    expect(localStorage.getItem('nami-theme')).toBe('dark');
     changeSystem(false);
     expect(screen.getByRole('button').textContent).toBe('dark');
     expect(document.documentElement.classList.contains('dark')).toBe(true);
@@ -83,6 +83,26 @@ describe('theme preference lifecycle', () => {
     expect(screen.getByRole('button').textContent).toBe(value);
     changeSystem(!dark);
     expect(screen.getByRole('button').textContent).toBe(value);
+    fireEvent.click(screen.getByRole('button'));
+    expect(localStorage.getItem('nami-theme')).toBe(value === 'light' ? 'dark' : 'light');
+  });
+
+  it('prefers a Nami choice over the former storage key', async () => {
+    localStorage.setItem('revelio-theme', 'light');
+    localStorage.setItem('nami-theme', 'dark');
+    bootstrap();
+    await controls();
+    expect(screen.getByRole('button').textContent).toBe('dark');
+    expect(document.documentElement.classList.contains('dark')).toBe(true);
+  });
+
+  it('agrees with bootstrap when the Nami key is present but invalid', async () => {
+    localStorage.setItem('revelio-theme', 'dark');
+    localStorage.setItem('nami-theme', '');
+    bootstrap();
+    const initial = document.documentElement.classList.contains('dark');
+    await controls();
+    expect(screen.getByRole('button').getAttribute('aria-pressed')).toBe(String(initial));
   });
 
   it.each(['light', 'dark', 'invalid', null])('bootstrap and mounted theme agree for stored %s', async (value) => {

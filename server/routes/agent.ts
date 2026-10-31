@@ -10,6 +10,7 @@ import {
   type UIMessageChunk,
 } from 'ai';
 import { z } from 'zod';
+import { configuredMethodOrigin, parseAppOrigin } from '../../shared/app-origin.js';
 import { env, parseAgentEnabled } from '../env.js';
 import { getProtectedIdentity, requireAuth } from '../auth-middleware.js';
 import {
@@ -21,8 +22,8 @@ import {
 } from '../storage.js';
 import { storage as defaultStorage } from '../storage-instance.js';
 import {
-  REVELIO_AGENT_MODEL,
-  REVELIO_AGENT_PROVIDER,
+  NAMI_AGENT_MODEL,
+  NAMI_AGENT_PROVIDER,
   createMethodAgent,
   type MethodAgentTurnDiagnostics,
   type MethodAgentTurnStreamResult,
@@ -123,16 +124,6 @@ export interface AgentRouterOptions {
   methodRequestOrigin?: string;
 }
 
-function configuredMethodOrigin(value: string): string | undefined {
-  try {
-    const parsed = new URL(value);
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return undefined;
-    return parsed.origin;
-  } catch {
-    return undefined;
-  }
-}
-
 function requestHasExactOrigin(request: Request, expectedOrigin: string | undefined): boolean {
   if (!expectedOrigin) return false;
   const value = request.get('origin');
@@ -150,7 +141,7 @@ function hasValidMethodRequestMetadata(
   expectedOrigin: string | undefined,
 ): boolean {
   return requestHasExactOrigin(request, expectedOrigin)
-    && request.get('x-revelio-request') === '1';
+    && request.get('x-nami-request') === '1';
 }
 
 function guardCustomMethodPost(expectedOrigin: string | undefined): RequestHandler {
@@ -189,7 +180,7 @@ function normalizedAudioMediaType(value: string | undefined): TranscriptionMedia
  * the request stream, so callers can mount it before body parsers and logging.
  */
 export function createAudioTranscriptionMetadataGuard(expectedOriginValue: string | undefined): RequestHandler {
-  const expectedOrigin = configuredMethodOrigin(expectedOriginValue ?? '');
+  const expectedOrigin = parseAppOrigin(expectedOriginValue ?? '');
   return (request, response, next) => {
     if (request.method !== 'POST') {
       response.status(405).json({ error: 'Method audio preflight is not supported' });
@@ -630,9 +621,9 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
   const nextId = options.id ?? randomUUID;
   const loaderPromise = Promise.resolve(options.loader ?? createMethodModuleLoader());
   const log = options.operationalLog ?? ((entry) => console.log(JSON.stringify(entry)));
-  const methodRequestOrigin = configuredMethodOrigin(
-    options.methodRequestOrigin ?? env.BETTER_AUTH_URL,
-  );
+  const methodRequestOrigin = options.methodRequestOrigin
+    ? parseAppOrigin(options.methodRequestOrigin)
+    : configuredMethodOrigin(env.BETTER_AUTH_URL, { nodeEnv: env.NODE_ENV, vercel: process.env.VERCEL });
   const historyCursorCodec = createConversationHistoryCursorCodec(
     createHash('sha256').update(env.BETTER_AUTH_SECRET).digest('hex'),
   );
@@ -644,7 +635,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
     defaultOpenAI ??= createOpenAI({ apiKey: env.OPENAI_API_KEY });
     return defaultOpenAI;
   };
-  const model = () => options.model ?? openAI().responses(REVELIO_AGENT_MODEL);
+  const model = () => options.model ?? openAI().responses(NAMI_AGENT_MODEL);
   const conversationClient = () => options.conversationClient
     ?? (defaultConversationClient ??= new OpenAIConversationClient(env.OPENAI_API_KEY));
   const nativeWebSearchTool = () => options.nativeWebSearchTool
@@ -719,11 +710,11 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
         abortSignal: abort.signal,
       });
       throwIfRouteAborted(abort.signal);
-      response.locals.methodLog = { provider: REVELIO_AGENT_PROVIDER };
+      response.locals.methodLog = { provider: NAMI_AGENT_PROVIDER };
       response.json(history);
     } catch (error) {
       if (abort.signal.aborted) return;
-      response.locals.methodLog = { provider: REVELIO_AGENT_PROVIDER, errorClass: safeErrorClass(error) };
+      response.locals.methodLog = { provider: NAMI_AGENT_PROVIDER, errorClass: safeErrorClass(error) };
       response.status(error instanceof MethodOwnerBusyError ? 409 : 502).json({
         error: 'History is temporarily unavailable',
         errorClass: safeErrorClass(error),
@@ -976,7 +967,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
       const loader = await loaderPromise;
       let streamError: unknown;
       response.locals.methodLog = {
-        provider: REVELIO_AGENT_PROVIDER,
+        provider: NAMI_AGENT_PROVIDER,
         turnId: turn.turnId,
         operationId: opaqueOperationId(parsed.data.operationId),
         revision: operationEnvelope.authoritativeRevision,
@@ -1659,7 +1650,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
       const loader = await loaderPromise;
       if (!conversationId) throw new Error('ConversationProvisioningUnavailable');
       const activeConversationId = conversationId;
-      response.locals.methodLog = { provider: REVELIO_AGENT_PROVIDER, turnId: turn.turnId };
+      response.locals.methodLog = { provider: NAMI_AGENT_PROVIDER, turnId: turn.turnId };
       throwIfRouteAborted(abort.signal);
       const uiStream = createUIMessageStream({
         execute: async ({ writer }) => {
@@ -1922,7 +1913,7 @@ export function createAgentRouter(options: AgentRouterOptions = {}): Router {
           }).catch(() => undefined);
         }
       }
-      response.locals.methodLog = { ...response.locals.methodLog, provider: REVELIO_AGENT_PROVIDER, errorClass: safeErrorClass(error) };
+      response.locals.methodLog = { ...response.locals.methodLog, provider: NAMI_AGENT_PROVIDER, errorClass: safeErrorClass(error) };
       if (!response.headersSent && !abort.signal.aborted) {
         response.status(error instanceof MethodOwnerBusyError ? 409 : 502).json({
           error: 'Agent request failed',

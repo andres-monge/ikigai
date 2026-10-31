@@ -22,7 +22,7 @@ export class OpenAITranscriptionError extends Error {
 const TRANSCRIPTION_PROMPT = [
   'Transcribe verbatim, preserving the English, Spanish, or code-switched languages actually spoken.',
   'Do not translate or force one output language.',
-  'Vocabulary hints: Revelio, Ikigai, Career Map, Why, Purpose Paths, First Project.',
+  'Vocabulary hints: Nami, Ikigai, Career Map, Why, Purpose Paths, First Project.',
 ].join(' ');
 
 function abortReason(signal: AbortSignal): unknown {

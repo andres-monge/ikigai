@@ -23,7 +23,7 @@ export const interactionOwnership = {
   'append-foundation-evidence': { owner: 'conversation-only', affordance: 'Chat composer', reason: 'The explorer’s own words and context are the evidence payload.' },
   'correct-foundation-evidence': { owner: 'conversation-only', affordance: 'Chat composer', reason: 'A correction must identify the exact user-authored evidence and replacement text.' },
   'record-reality-constraint': { owner: 'conversation-only', affordance: 'Chat composer', reason: 'Constraints are explorer-authored facts, not inferred form values.' },
-  'propose-why': { owner: 'conversation-only', affordance: 'Chat composer', reason: 'Revelio composes the provisional interpretation; the UI never invents canonical text.' },
+  'propose-why': { owner: 'conversation-only', affordance: 'Chat composer', reason: 'Nami composes the provisional interpretation; the UI never invents canonical text.' },
   'revise-why': { owner: 'conversation-only', affordance: 'Chat composer', reason: 'North Star revision is collaborative and remains Suggested until a later action.' },
   'confirm-why': { owner: 'conversation-only', affordance: 'Chat composer', reason: 'The main agent judges later-turn North Star confirmation in context.' },
   'propose-purpose-paths': { owner: 'conversation-only', affordance: 'Chat composer', reason: 'The agent must produce a validated exact-three set grounded in the confirmed North Star.' },

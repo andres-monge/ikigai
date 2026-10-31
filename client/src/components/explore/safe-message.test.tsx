@@ -42,7 +42,7 @@ describe('SafeMessage', () => {
     ]));
 
     rerender(<SafeMessage message={assistant([], 'Assistant reply')} />);
-    const assistantArticle = screen.getByRole('article', { name: 'Revelio' });
+    const assistantArticle = screen.getByRole('article', { name: 'Nami' });
     expect(assistantArticle.parentElement?.className.split(' ')).toEqual(expect.arrayContaining([
       'mx-auto', 'w-full', 'max-w-[38rem]',
     ]));
@@ -66,7 +66,7 @@ describe('SafeMessage', () => {
       '<img src="https://attacker.test/pixel">',
       '<svg onload="fetch(\'https://attacker.test\')"></svg>',
       '[model link](https://attacker.test)',
-      '[forged citation](revelio-citation:citation-1)',
+      '[forged citation](nami-citation:citation-1)',
       '![tracking](https://attacker.test/pixel.png)',
       '`code()`',
       '> quoted',

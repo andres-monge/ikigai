@@ -234,7 +234,7 @@ describe('Explore U6 conversation-first workspace', () => {
       ? jsonResponse({ status: 'empty', messages: [] })
       : jsonResponse({ status: 'ready', map }));
     render(<Explore {...props()} />);
-    const textbox = await screen.findByRole('textbox', { name: 'Message Revelio' });
+    const textbox = await screen.findByRole('textbox', { name: 'Message Nami' });
     fireEvent.change(textbox, { target: { value: 'Keep this unsent thought' } });
     fireEvent.click(screen.getByRole('tab', { name: 'Your Map' }));
     await screen.findByRole('heading', { name: 'Your North Star' });
@@ -263,7 +263,7 @@ describe('Explore U6 conversation-first workspace', () => {
     expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('Keep this unsent thought');
     expect(vi.mocked(fetch).mock.calls.length).toBe(reads);
     fireEvent.click(screen.getByRole('button', { name: 'Switch to light mode' }));
-    expect(localStorage.getItem('revelio-theme')).toBe('light');
+    expect(localStorage.getItem('nami-theme')).toBe('light');
   });
 
   it('sends attachment-only file bytes and retains exact files on a recoverable failure', async () => {
@@ -604,7 +604,7 @@ describe('Explore U6 conversation-first workspace', () => {
     expect(within(mapPanel).queryByRole('button')).toBeNull();
   });
 
-  it('keeps the Revelio opening at the oldest boundary after the first reply', async () => {
+  it('keeps the Nami opening at the oldest boundary after the first reply', async () => {
     const turnResponse = deferred<Response>();
     let historyReads = 0;
     vi.mocked(fetch).mockImplementation(async (input: RequestInfo | URL) => {
@@ -631,7 +631,7 @@ describe('Explore U6 conversation-first workspace', () => {
     expect(openingArticle.classList.contains('mx-auto')).toBe(true);
     expect(openingArticle.classList.contains('w-full')).toBe(true);
     expect(openingArticle.classList.contains('max-w-[38rem]')).toBe(true);
-    const textbox = screen.getByRole('textbox', { name: 'Message Revelio' });
+    const textbox = screen.getByRole('textbox', { name: 'Message Nami' });
     fireEvent.change(textbox, { target: { value: 'Building useful tools.' } });
     const send = screen.getByRole('button', { name: 'Send' });
     await waitFor(() => expect((send as HTMLButtonElement).disabled).toBe(false));
@@ -671,7 +671,7 @@ describe('Explore U6 conversation-first workspace', () => {
     });
 
     render(<Explore {...props()} />);
-    const textbox = await screen.findByRole('textbox', { name: 'Message Revelio' });
+    const textbox = await screen.findByRole('textbox', { name: 'Message Nami' });
     const message = 'Please change one of these paths.';
     fireEvent.change(textbox, { target: { value: message } });
     const send = screen.getByRole('button', { name: 'Send' });
@@ -679,7 +679,7 @@ describe('Explore U6 conversation-first workspace', () => {
     fireEvent.click(send);
 
     await waitFor(() => expect((textbox as HTMLTextAreaElement).value).toBe(message));
-    expect(screen.getByText('Revelio’s reply failed. Your submitted message is available to edit.')).toBeTruthy();
+    expect(screen.getByText('Nami’s reply failed. Your submitted message is available to edit.')).toBeTruthy();
     expect(screen.getAllByTestId('purpose-path-card')).toHaveLength(6);
   });
 
@@ -720,14 +720,14 @@ describe('Explore U6 conversation-first workspace', () => {
     });
 
     render(<Explore {...props()} />);
-    const textbox = await screen.findByRole('textbox', { name: 'Message Revelio' });
+    const textbox = await screen.findByRole('textbox', { name: 'Message Nami' });
     fireEvent.change(textbox, { target: { value: 'Here is my answer.' } });
     const send = screen.getByRole('button', { name: 'Send' });
     await waitFor(() => expect((send as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(send);
 
     await waitFor(() => expect(streamController).toBeTruthy());
-    expect(await screen.findByRole('status', { name: 'Revelio is responding.' })).toBeTruthy();
+    expect(await screen.findByRole('status', { name: 'Nami is responding.' })).toBeTruthy();
 
     await act(async () => {
       streamController!.enqueue(encoder.encode([
@@ -738,7 +738,7 @@ describe('Explore U6 conversation-first workspace', () => {
     });
 
     expect(await screen.findByText('First response token.')).toBeTruthy();
-    expect(screen.queryByRole('status', { name: 'Revelio is responding.' })).toBeNull();
+    expect(screen.queryByRole('status', { name: 'Nami is responding.' })).toBeNull();
 
     await act(async () => {
       streamController!.enqueue(encoder.encode([
@@ -764,7 +764,7 @@ describe('Explore U6 conversation-first workspace', () => {
       return Promise.reject(new Error(`Unexpected request: ${url}`));
     });
     render(<Explore {...props()} />);
-    const textbox = await screen.findByRole('textbox', { name: 'Message Revelio' });
+    const textbox = await screen.findByRole('textbox', { name: 'Message Nami' });
     fireEvent.change(textbox, { target: { value: 'Keep this draft' } });
     fireEvent.click(screen.getByRole('tab', { name: 'Your Map' }));
     fireEvent.click(screen.getByRole('tab', { name: 'Chat' }));
@@ -811,7 +811,7 @@ describe('Explore U6 conversation-first workspace', () => {
 
     try {
       render(<Explore {...props()} />);
-      const textbox = await screen.findByRole('textbox', { name: 'Message Revelio' });
+      const textbox = await screen.findByRole('textbox', { name: 'Message Nami' });
       fireEvent.click(screen.getByRole('button', { name: 'Record a message' }));
 
       await screen.findByRole('button', { name: 'Stop recording' });
@@ -854,7 +854,7 @@ describe('Explore U6 conversation-first workspace', () => {
 
     try {
       render(<Explore {...props()} />);
-      const textbox = await screen.findByRole('textbox', { name: 'Message Revelio' });
+      const textbox = await screen.findByRole('textbox', { name: 'Message Nami' });
       fireEvent.change(textbox, { target: { value: 'Typed context' } });
       const start = screen.getByRole('button', { name: 'Record a message' });
       start.focus();
@@ -868,7 +868,7 @@ describe('Explore U6 conversation-first workspace', () => {
       const cancelProcessing = await screen.findByRole('button', { name: 'Cancel transcription' });
       expect(document.activeElement).toBe(cancelProcessing);
       const audioCall = vi.mocked(fetch).mock.calls.find(([input]) => String(input) === '/api/agent/audio/transcribe');
-      expect(audioCall?.[1]?.headers).toMatchObject({ 'X-Revelio-Request': '1' });
+      expect(audioCall?.[1]?.headers).toMatchObject({ 'X-Nami-Request': '1' });
       expect(String(audioCall?.[0])).not.toContain('language=');
 
       fireEvent.change(textbox, { target: { value: 'Typed context, edited while processing' } });
@@ -898,7 +898,7 @@ describe('Explore U6 conversation-first workspace', () => {
 
       try {
         render(<Explore {...props()} />);
-        const textbox = await screen.findByRole('textbox', { name: 'Message Revelio' });
+        const textbox = await screen.findByRole('textbox', { name: 'Message Nami' });
         fireEvent.change(textbox, { target: { value: `Keep ${phase} draft` } });
         fireEvent.click(screen.getByRole('button', { name: 'Record a message' }));
 
@@ -947,7 +947,7 @@ describe('Explore U6 conversation-first workspace', () => {
 
       try {
         render(<Explore {...props()} />);
-        const textbox = await screen.findByRole('textbox', { name: 'Message Revelio' });
+        const textbox = await screen.findByRole('textbox', { name: 'Message Nami' });
         fireEvent.change(textbox, { target: { value: 'Do not send yet' } });
         fireEvent.click(screen.getByRole('button', { name: 'Record a message' }));
         if (phase !== 'requesting') await screen.findByRole('button', { name: 'Stop recording' });
@@ -997,7 +997,7 @@ describe('Explore U6 conversation-first workspace', () => {
 
     try {
       render(<Explore {...props()} onSignOut={onSignOut} />);
-      const textbox = await screen.findByRole('textbox', { name: 'Message Revelio' });
+      const textbox = await screen.findByRole('textbox', { name: 'Message Nami' });
       fireEvent.change(textbox, { target: { value: 'Preserve on departure' } });
       fireEvent.click(screen.getByRole('button', { name: 'Record a message' }));
       fireEvent.click(await screen.findByRole('button', { name: 'Stop recording' }));
@@ -1046,7 +1046,7 @@ describe('Explore U6 conversation-first workspace', () => {
       view.rerender(<Explore {...props()} isSigningOut />);
       expect(uploadSignal?.aborted).toBe(true);
       await act(async () => { transcription.resolve(jsonResponse({ text: 'Too late' })); });
-      expect((screen.getByRole('textbox', { name: 'Message Revelio' }) as HTMLTextAreaElement).value).toBe('');
+      expect((screen.getByRole('textbox', { name: 'Message Nami' }) as HTMLTextAreaElement).value).toBe('');
     } finally {
       voice.restore();
     }
@@ -1066,7 +1066,7 @@ describe('Explore U6 conversation-first workspace', () => {
 
     try {
       render(<Explore {...props()} />);
-      const textbox = await screen.findByRole('textbox', { name: 'Message Revelio' });
+      const textbox = await screen.findByRole('textbox', { name: 'Message Nami' });
       fireEvent.change(textbox, { target: { value: 'Typed fallback' } });
       fireEvent.click(screen.getByRole('button', { name: 'Record a message' }));
       expect((await screen.findByRole('alert')).textContent).toMatch(/Microphone access denied.*type your answer or try recording again/i);
@@ -1088,7 +1088,7 @@ describe('Explore U6 conversation-first workspace', () => {
     vi.stubGlobal('MediaRecorder', undefined);
     _resetBrowserSupportCache();
     render(<Explore {...props()} />);
-    const textbox = await screen.findByRole('textbox', { name: 'Message Revelio' });
+    const textbox = await screen.findByRole('textbox', { name: 'Message Nami' });
     fireEvent.change(textbox, { target: { value: 'Typing still works' } });
     const unavailable = screen.getByRole('button', { name: 'Microphone unavailable' });
     expect((unavailable as HTMLButtonElement).disabled).toBe(false);
@@ -1120,7 +1120,7 @@ describe('Explore U6 conversation-first workspace', () => {
 
       try {
         render(<Explore {...props()} />);
-        const textbox = await screen.findByRole('textbox', { name: 'Message Revelio' });
+        const textbox = await screen.findByRole('textbox', { name: 'Message Nami' });
         fireEvent.change(textbox, { target: { value: 'Affected draft' } });
         if (limitReason === 'time-limit') vi.useFakeTimers();
         await act(async () => {
@@ -1226,7 +1226,7 @@ describe('Explore U6 conversation-first workspace', () => {
       confirmationProvenance: { kind: 'ui-action', actionId: sourceMessageId, turnId: 'server-turn-4', turnSequence: 4, occurredAt: '2030-01-01T00:00:03.000Z' },
     });
     refetchWorkspace.resolve(jsonResponse({ status: 'ready', map: refreshed }));
-    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Message Revelio' })));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Message Nami' })));
     expect(operationBody).toMatchObject({
       expectedRevision: 0,
       operation: { type: 'select-purpose-path', input: {
@@ -1254,7 +1254,7 @@ describe('Explore U6 conversation-first workspace', () => {
     render(<Explore {...props()} />);
     fireEvent.click(await screen.findByRole('button', { name: 'Start path 1: Path 1' }));
 
-    expect(await screen.findByRole('status', { name: 'Revelio is responding.' })).toBeTruthy();
+    expect(await screen.findByRole('status', { name: 'Nami is responding.' })).toBeTruthy();
 
     await act(async () => {
       operationResponse.resolve(jsonResponse({
@@ -1267,7 +1267,7 @@ describe('Explore U6 conversation-first workspace', () => {
         retryable: false,
       }, 409));
     });
-    await waitFor(() => expect(screen.queryByRole('status', { name: 'Revelio is responding.' })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('status', { name: 'Nami is responding.' })).toBeNull());
   });
 
   it.each([false, true])('uses revision confirmation for a revised Purpose Path set with open focus=%s', async (openFocus) => {
@@ -1526,7 +1526,7 @@ describe('Explore U6 conversation-first workspace', () => {
     });
 
     render(<Explore {...props()} />);
-    const textbox = await screen.findByRole('textbox', { name: 'Message Revelio' });
+    const textbox = await screen.findByRole('textbox', { name: 'Message Nami' });
     fireEvent.change(textbox, { target: { value: 'Complete this turn.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
@@ -1579,7 +1579,7 @@ describe('Explore U6 conversation-first workspace', () => {
     });
 
     render(<Explore {...props()} />);
-    const textbox = await screen.findByRole('textbox', { name: 'Message Revelio' });
+    const textbox = await screen.findByRole('textbox', { name: 'Message Nami' });
     fireEvent.change(textbox, { target: { value: 'Give me a multi-step reply.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
@@ -1615,7 +1615,7 @@ describe('Explore U6 conversation-first workspace', () => {
     });
 
     render(<Explore {...props()} />);
-    const textbox = await screen.findByRole('textbox', { name: 'Message Revelio' });
+    const textbox = await screen.findByRole('textbox', { name: 'Message Nami' });
     fireEvent.change(textbox, { target: { value: 'Continue despite the failed history.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
@@ -1654,7 +1654,7 @@ describe('Explore U6 conversation-first workspace', () => {
     });
 
     const view = render(<Explore {...props()} />);
-    const textbox = await screen.findByRole('textbox', { name: 'Message Revelio' });
+    const textbox = await screen.findByRole('textbox', { name: 'Message Nami' });
     fireEvent.change(textbox, { target: { value: 'Leave during this turn.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     await screen.findByRole('button', { name: 'Stop' });
@@ -1693,7 +1693,7 @@ describe('Explore U6 conversation-first workspace', () => {
       throw new Error(`Unexpected request: ${url}`);
     });
     render(<Explore {...props()} />);
-    const textbox = await screen.findByRole('textbox', { name: 'Message Revelio' });
+    const textbox = await screen.findByRole('textbox', { name: 'Message Nami' });
     fireEvent.change(textbox, { target: { value: 'Create paths.' } });
     const send = screen.getByRole('button', { name: 'Send' });
     await waitFor(() => expect((send as HTMLButtonElement).disabled).toBe(false));
@@ -1751,13 +1751,13 @@ describe('Explore U6 conversation-first workspace', () => {
     });
 
     render(<Explore {...props()} />);
-    const textbox = await screen.findByRole('textbox', { name: 'Message Revelio' });
+    const textbox = await screen.findByRole('textbox', { name: 'Message Nami' });
     fireEvent.change(textbox, { target: { value: 'Save this, then explain.' } });
     const send = screen.getByRole('button', { name: 'Send' });
     await waitFor(() => expect((send as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(send);
 
-    expect(await screen.findByText('Your map was updated, but Revelio’s follow-up reply did not finish.')).toBeTruthy();
+    expect(await screen.findByText('Your map was updated, but Nami’s follow-up reply did not finish.')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Continue in Chat' })).toBeTruthy();
     expect(historyReads).toBeGreaterThan(1);
   });
@@ -1784,19 +1784,19 @@ describe('Explore U6 conversation-first workspace', () => {
       throw new Error(`Unexpected request: ${url}`);
     });
     const first = render(<Explore {...props()} />);
-    expect(await screen.findByText('Your map was updated, but Revelio’s follow-up reply did not finish.')).toBeTruthy();
+    expect(await screen.findByText('Your map was updated, but Nami’s follow-up reply did not finish.')).toBeTruthy();
     first.unmount();
     render(<Explore {...props()} />);
-    expect(await screen.findByText('Your map was updated, but Revelio’s follow-up reply did not finish.')).toBeTruthy();
+    expect(await screen.findByText('Your map was updated, but Nami’s follow-up reply did not finish.')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Start path/ })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Continue in Chat' }));
-    const textbox = screen.getByRole('textbox', { name: 'Message Revelio' });
+    const textbox = screen.getByRole('textbox', { name: 'Message Nami' });
     await waitFor(() => expect(document.activeElement).toBe(textbox));
     fireEvent.change(textbox, { target: { value: 'Help me design a first project for this path.' } });
     expect((screen.getByRole('button', { name: 'Send' }) as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     await waitFor(() => expect(continued).toBe(true));
-    await waitFor(() => expect(screen.queryByText('Your map was updated, but Revelio’s follow-up reply did not finish.')).toBeNull());
+    await waitFor(() => expect(screen.queryByText('Your map was updated, but Nami’s follow-up reply did not finish.')).toBeNull());
   });
 
   it('keeps a committed direct Start truthful when continuation fails before streaming', async () => {
@@ -1836,7 +1836,7 @@ describe('Explore U6 conversation-first workspace', () => {
     render(<Explore {...props()} />);
     fireEvent.click(await screen.findByRole('button', { name: 'Start path 1: Path 1' }));
 
-    expect(await screen.findByText('Your map was updated, but Revelio’s follow-up reply did not finish.')).toBeTruthy();
+    expect(await screen.findByText('Your map was updated, but Nami’s follow-up reply did not finish.')).toBeTruthy();
     expect(screen.queryByText('Something went wrong. Try again.')).toBeNull();
   });
 
@@ -1917,7 +1917,7 @@ describe('Explore U6 conversation-first workspace', () => {
     render(<Explore {...props()} />);
     fireEvent.click(await screen.findByRole('button', { name: 'Start path 1: Path 1' }));
 
-    expect(await screen.findByText('Your map was updated, but Revelio’s follow-up reply did not finish.')).toBeTruthy();
+    expect(await screen.findByText('Your map was updated, but Nami’s follow-up reply did not finish.')).toBeTruthy();
     expect(screen.queryByText('Something went wrong. Try again.')).toBeNull();
   });
 
@@ -1952,7 +1952,7 @@ describe('Explore U6 conversation-first workspace', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Start path 1: Path 1' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Stop' }));
 
-    expect(await screen.findByText('Revelio could not confirm whether your map was updated. Refresh before trying again.')).toBeTruthy();
+    expect(await screen.findByText('Nami could not confirm whether your map was updated. Refresh before trying again.')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
 
     const refreshing = await screen.findByRole('button', { name: 'Refreshing…' });
@@ -1966,7 +1966,7 @@ describe('Explore U6 conversation-first workspace', () => {
       refreshWorkspace.resolve(jsonResponse({ status: 'ready', map: suggestedPathsMap() }));
       await Promise.all([refreshHistory.promise, refreshWorkspace.promise]);
     });
-    await waitFor(() => expect(screen.queryByText('Revelio could not confirm whether your map was updated. Refresh before trying again.')).toBeNull());
+    await waitFor(() => expect(screen.queryByText('Nami could not confirm whether your map was updated. Refresh before trying again.')).toBeNull());
   });
 
   it('does not let a stale refresh erase a new optimistic message or live reply', async () => {
@@ -1999,7 +1999,7 @@ describe('Explore U6 conversation-first workspace', () => {
 
     render(<Explore {...props()} />);
     fireEvent.click(await screen.findByRole('button', { name: 'Try again' }));
-    const textbox = screen.getByRole('textbox', { name: 'Message Revelio' });
+    const textbox = screen.getByRole('textbox', { name: 'Message Nami' });
     fireEvent.change(textbox, { target: { value: 'Keep this optimistic message.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     await waitFor(() => expect(streamController).toBeTruthy());

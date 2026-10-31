@@ -18,7 +18,7 @@ vi.mock('./env.js', () => ({
 vi.mock('./auth.js', () => ({
   AuthConfigurationError: mocks.AuthConfigurationError,
   getAuth: mocks.getAuth,
-  INTERNAL_CLIENT_IP_HEADER: 'x-revelio-client-ip',
+  INTERNAL_CLIENT_IP_HEADER: 'x-nami-client-ip',
   resolveTrustedClientIp: () => '127.0.0.1',
 }));
 
@@ -66,14 +66,15 @@ describe('Express auth integration', () => {
       incoming.on('data', (chunk: Buffer) => { body += chunk.toString(); });
       incoming.on('end', () => {
         response.setHeader('content-type', 'application/json');
-        response.end(JSON.stringify({ body, clientIp: incoming.headers['x-revelio-client-ip'] }));
+        response.end(JSON.stringify({ body, clientIp: incoming.headers['x-nami-client-ip'] }));
       });
     });
 
     const response = await (await request(createApp()))
       .post('/api/auth/sign-in/social')
       .set('content-type', contentType)
-      .set('x-revelio-client-ip', '198.51.100.8')
+      .set('x-nami-client-ip', '198.51.100.8')
+      .set('x-revelio-client-ip', '203.0.113.9')
       .send(payload)
       .timeout({ response: 1_000, deadline: 2_000 });
 

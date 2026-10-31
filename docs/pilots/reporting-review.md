@@ -1,6 +1,6 @@
 # Early-access reporting and conversation review
 
-Use this workflow to learn what helps each participant and what to investigate next. It follows [Hiten Shah's Early Access Playbook v2.0](https://docs.google.com/document/d/1bo9n52j_M4Nx094TObZQVAq1htlB6h9XlySLgFsH710/edit): keep a Working Bet, examine actual attempts and record decisions in one Learning Thread. Full Revelio conversations are primary evidence; interviews and messages can complement them. There is no PMF or love score.
+Use this workflow to learn what helps each participant and what to investigate next. It follows [Hiten Shah's Early Access Playbook v2.0](https://docs.google.com/document/d/1bo9n52j_M4Nx094TObZQVAq1htlB6h9XlySLgFsH710/edit): keep a Working Bet, examine actual attempts and record decisions in one Learning Thread. Full Nami conversations are primary evidence; interviews and messages can complement them. There is no PMF or love score.
 
 ## Private workspace and enrollment
 
@@ -51,7 +51,7 @@ AI assisting the founder may flag source-linked corrections, rephrasing, unmet r
 
 Use durable turn status and request references to investigate technical failure before interpreting behavior. Existing `method_request` records classify the route, HTTP status, duration, safe turn/error metadata, response finish versus premature close, and browser delivery as unknown.
 
-Set `REVELIO_BUILD_VERSION` in the running application's build/deploy environment to a source commit or release token: 1–80 characters, leading alphanumeric, with letters, digits, `.`, `_`, `-`. Missing/invalid values remain unknown; never substitute the reporting checkout's current HEAD for a historical app version.
+Set `NAMI_BUILD_VERSION` in the running application's build/deploy environment to a source commit or release token: 1–80 characters, leading alphanumeric, with letters, digits, `.`, `_`, `-`. Missing/invalid values remain unknown; never substitute the reporting checkout's current HEAD for a historical app version.
 
 The small `serverTiming` fields are request-relative server elapsed milliseconds: `providerStartMs`, `firstSafeServerTextMs`, `terminalHandlingDoneMs`. Terminal handling does not prove persistence success; consult durable turn status. Server completion/response finish never proves browser delivery. Detailed dev latency tracing remains opt-in. Historical missing timing/version evidence remains unknown. Reproduce a specific incident with its request/turn reference when necessary; do not turn missing telemetry into a product judgment.
 

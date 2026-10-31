@@ -5,12 +5,13 @@ import { createCareerMap } from '../shared/career-map/index.js';
 import { createApiRequestLogger, createApp } from './app.js';
 import { normalizeMethodRequestPath } from './routes/agent-logging.js';
 import { storage as defaultStorage } from './storage-instance.js';
+import { env } from './env.js';
 
 const { transcribeProtectedAudio } = vi.hoisted(() => {
   // The production provider factory is created during module evaluation; keep
   // this worker deterministic without relying on a developer's ambient key.
   process.env.OPENAI_API_KEY = 'test-protected-audio-key';
-  process.env.BETTER_AUTH_URL = 'https://revelio.test';
+  process.env.BETTER_AUTH_URL = 'https://nami.test';
   return { transcribeProtectedAudio: vi.fn() };
 });
 
@@ -19,14 +20,14 @@ vi.mock('./ai/transcription.js', async (importOriginal) => {
   return { ...original, transcribeOpenAIAudio: transcribeProtectedAudio };
 });
 
-const METHOD_ORIGIN = 'https://revelio.test';
+const METHOD_ORIGIN = 'https://nami.test';
 const WEBM_HEADER = Buffer.from('1a45dfa39f4286810142f7810142f2810442f381084282847765626d4287810442858102', 'hex');
 
 function protectedAudio(client: Awaited<ReturnType<typeof request>>) {
   return client
     .post('/api/agent/audio/transcribe')
     .set('Origin', METHOD_ORIGIN)
-    .set('X-Revelio-Request', '1')
+    .set('X-Nami-Request', '1')
     .set('Content-Type', 'audio/webm');
 }
 
@@ -124,7 +125,7 @@ describe('protected Method parser error boundary', () => {
       sentinel: 'PRIVATE_MALFORMED_JSON_SENTINEL',
       send: async (app: ReturnType<typeof createApp>, sentinel: string) => (await request(app))
         .post('/api/agent')
-        .set('Origin', METHOD_ORIGIN).set('X-Revelio-Request', '1')
+        .set('Origin', METHOD_ORIGIN).set('X-Nami-Request', '1')
         .set('content-type', 'application/json')
         .send(`{"id":"message","message":"${sentinel}`),
     },
@@ -137,7 +138,7 @@ describe('protected Method parser error boundary', () => {
       sentinel: 'PRIVATE_OVERSIZED_JSON_SENTINEL',
       send: async (app: ReturnType<typeof createApp>, sentinel: string) => (await request(app))
         .post('/api/agent')
-        .set('Origin', METHOD_ORIGIN).set('X-Revelio-Request', '1')
+        .set('Origin', METHOD_ORIGIN).set('X-Nami-Request', '1')
         .set('content-type', 'application/json')
         .send({ id: 'message', message: sentinel.repeat(164_000) }),
     },
@@ -151,7 +152,7 @@ describe('protected Method parser error boundary', () => {
       send: async (app: ReturnType<typeof createApp>, sentinel: string) => (await request(app))
         .post('/api/agent/audio/transcribe')
         .set('Origin', METHOD_ORIGIN)
-        .set('X-Revelio-Request', '1')
+        .set('X-Nami-Request', '1')
         .set('content-type', 'audio/webm')
         .send(Buffer.concat([WEBM_HEADER, Buffer.from(sentinel), Buffer.alloc(11 * 1024 * 1024 + 1)])),
     },
@@ -176,7 +177,7 @@ describe('protected Method parser error boundary', () => {
       sentinel: 'PRIVATE_MIXED_CASE_PARSER_SENTINEL',
       send: async (app: ReturnType<typeof createApp>, sentinel: string) => (await request(app))
         .post('/api/AGENT/')
-        .set('Origin', METHOD_ORIGIN).set('X-Revelio-Request', '1')
+        .set('Origin', METHOD_ORIGIN).set('X-Nami-Request', '1')
         .set('content-type', 'application/json')
         .send(`{"id":"message","message":"${sentinel}`),
     },
@@ -226,6 +227,38 @@ describe('protected Method parser error boundary', () => {
 });
 
 describe('protected Method audio provider boundary', () => {
+  it('uses the configured Vercel origin before parsing audio', async () => {
+    const originalOrigin = env.BETTER_AUTH_URL;
+    vi.stubEnv('VERCEL', '1');
+    try {
+      for (const value of ['', 'not-a-url', 'http://localhost:5173']) {
+        env.BETTER_AUTH_URL = value;
+        const response = await protectedAudio(await request(createApp())).send(WEBM_HEADER);
+        expect(response.status).toBe(403);
+      }
+
+      env.BETTER_AUTH_URL = METHOD_ORIGIN;
+      const app = createApp();
+      const crossOrigin = await (await request(app))
+        .post('/api/agent/audio/transcribe')
+        .set('Origin', 'https://other.example')
+        .set('X-Nami-Request', '1')
+        .set('Content-Type', 'audio/webm')
+        .send(WEBM_HEADER);
+      const matchingOrigin = await (await request(app))
+        .post('/api/agent/audio/transcribe')
+        .set('Origin', METHOD_ORIGIN)
+        .set('X-Nami-Request', '1')
+        .set('Content-Type', 'application/json')
+        .send('{}');
+      expect(crossOrigin.status).toBe(403);
+      expect(matchingOrigin.status).toBe(400);
+      expect(transcribeProtectedAudio).not.toHaveBeenCalled();
+    } finally {
+      env.BETTER_AUTH_URL = originalOrigin;
+    }
+  });
+
   it('rejects invalid metadata before parsers and protected request logging', async () => {
     vi.stubEnv('AGENT_ENABLED', 'true');
     const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => undefined);
@@ -235,13 +268,13 @@ describe('protected Method audio provider boundary', () => {
     const crossOrigin = await (await request(app))
       .post('/api/agent/audio/transcribe')
       .set('Origin', 'https://attacker.example')
-      .set('X-Revelio-Request', '1')
+      .set('X-Nami-Request', '1')
       .set('Content-Type', 'audio/webm')
       .send(Buffer.concat([WEBM_HEADER, Buffer.from('PRIVATE_EARLY_REJECT_SENTINEL')]));
     const unsupported = await (await request(app))
       .post('/api/agent/audio/transcribe')
       .set('Origin', METHOD_ORIGIN)
-      .set('X-Revelio-Request', '1')
+      .set('X-Nami-Request', '1')
       .set('Content-Type', 'application/json')
       .send('{"PRIVATE_PREPARSER_SENTINEL":');
     const preflight = await (await request(app))
@@ -276,7 +309,7 @@ describe('protected Method audio provider boundary', () => {
     const response = await (await request(createApp()))
       .post('/api//agent/audio/transcribe')
       .set('Origin', METHOD_ORIGIN)
-      .set('X-Revelio-Request', '1')
+      .set('X-Nami-Request', '1')
       .set('Content-Type', 'application/json')
       .send(body);
 
@@ -346,7 +379,7 @@ describe('protected Method audio provider boundary', () => {
         headers: {
           'content-type': 'audio/webm',
           origin: METHOD_ORIGIN,
-          'x-revelio-request': '1',
+          'x-nami-request': '1',
         },
         body: Buffer.concat([WEBM_HEADER, Buffer.from('PRIVATE_ABORTED_AUDIO_SENTINEL')]),
         signal: controller.signal,
@@ -372,7 +405,7 @@ describe('attachment-sized protected JSON', () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const data = Buffer.alloc(140_000); data.write('%PDF-');
     const response = await (await request(createApp())).post('/api/agent')
-      .set('Origin', METHOD_ORIGIN).set('X-Revelio-Request', '1')
+      .set('Origin', METHOD_ORIGIN).set('X-Nami-Request', '1')
       .send({ id: 'attachment-body-message', message: '', attachments: [{ name: 'PRIVATE_FILE.pdf', mediaType: 'application/pdf', data: data.toString('base64') }] });
     expect(response.status).toBe(409);
     expect(read).toHaveBeenCalledOnce();
@@ -383,7 +416,7 @@ describe('attachment-sized protected JSON', () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const response = await (await request(createApp())).post('/api/agent')
-      .set('Origin', METHOD_ORIGIN).set('X-Revelio-Request', '1')
+      .set('Origin', METHOD_ORIGIN).set('X-Nami-Request', '1')
       .send({ id: 'large-message', message: 'PRIVATE_FILE' + 'a'.repeat(4_250_000) });
     expect(response.status).toBe(413);
     expect(response.body.error).toMatch(/Remove or replace/);

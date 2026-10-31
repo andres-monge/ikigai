@@ -24,7 +24,7 @@ afterEach(async () => {
 });
 
 async function copySkillsFixture(): Promise<string> {
-  const root = await mkdtemp(path.join(tmpdir(), 'revelio-method-skills-'));
+  const root = await mkdtemp(path.join(tmpdir(), 'nami-method-skills-'));
   temporaryRoots.push(root);
   await cp(sourceSkillsRoot, root, { recursive: true });
   return root;
@@ -81,7 +81,7 @@ describe('repository-owned Method module loader', () => {
       if (key === 'interpret-path-project') expect(decisionSection(runtime)).toBe(decisionSection(draft));
       expect(runtime).toContain(key === 'design-path-project' ? '## Help before agreement' : 'exact latest');
       expect(loader.load(checkpoint(key)).contentVersion).toBe({
-        'design-path-project': '1.3.2', 'guide-path-project': '1.0.2', 'interpret-path-project': '1.0.2',
+        'design-path-project': '1.3.3', 'guide-path-project': '1.0.2', 'interpret-path-project': '1.0.2',
       }[key]);
     }
   });

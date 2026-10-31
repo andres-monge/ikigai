@@ -37,7 +37,7 @@ export function createLabApp(store: Awaited<ReturnType<typeof createLabStore>>, 
   route('put', '/api/jobs/:id/feedback', (request) => store.feedback(request.params.id, request.body));
   app.get('/ui.js', (_request, response) => response.type('application/javascript').send(assets?.javascript ?? ''));
   app.get('/style.css', (_request, response) => response.type('text/css').send(assets?.css ?? ''));
-  app.get('/', (_request, response) => response.type('html').send(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Revelio experiments</title><link rel="stylesheet" href="/style.css"></head><body><div id="root">Loading local experiments…</div><script type="module" src="/ui.js"></script></body></html>`));
+  app.get('/', (_request, response) => response.type('html').send(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Nami experiments</title><link rel="stylesheet" href="/style.css"></head><body><div id="root">Loading local experiments…</div><script type="module" src="/ui.js"></script></body></html>`));
   app.use((_request, response) => response.status(404).json({ error: 'Not found.' }));
   app.use((_error: unknown, _request: express.Request, response: express.Response, _next: express.NextFunction) => response.status(400).json({ error: 'Invalid request.' }));
   return app;
@@ -56,7 +56,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
       readFile(path.join(directory, 'style.css'), 'utf8'),
     ]).then(([store, bundle, css]) => {
       const app = createLabApp(store, port, { javascript: bundle.outputFiles[0].text, css });
-      const server = app.listen(port, '127.0.0.1', () => console.log(`Revelio experiments: http://127.0.0.1:${port}`));
+      const server = app.listen(port, '127.0.0.1', () => console.log(`Nami experiments: http://127.0.0.1:${port}`));
       server.on('error', () => { console.error('Local interface could not listen.'); process.exitCode = 1; });
     }).catch(() => { console.error('Local interface setup failed. Inspect private configuration.'); process.exitCode = 1; });
   }

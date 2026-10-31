@@ -1,5 +1,5 @@
 /**
- * Live synthetic evaluation for the Revelio Method modules.
+ * Live synthetic evaluation for the Nami Method modules.
  *
  * The harness uses synthetic explorer conversations, the real G1-selected
  * provider route, and the U2 in-memory reducer. Retained output contains only
@@ -49,13 +49,13 @@ import { methodReasoningEffort } from '../server/ai/method/registry.ts';
 import { createMethodModuleLoader } from '../server/ai/method/loader.ts';
 import { compileCareerMapBriefing } from '../server/ai/briefing.ts';
 import { REVISE_PURPOSE_PATHS_TOOL_DESCRIPTION, normalizeRevisedPurposePathRevisions, revisePurposePathsToolInputSchema } from '../server/ai/tools.ts';
-import { firstRejectedOperationDiagnostic } from './eval-revelio-rejection-diagnostic.mjs';
+import { firstRejectedOperationDiagnostic } from './eval-nami-rejection-diagnostic.mjs';
 
 const allowedModels = new Set(['gpt-6.1-sol']);
-const modelId = process.env.REVELIO_METHOD_MODEL || 'gpt-6.1-sol';
+const modelId = process.env.NAMI_METHOD_MODEL || 'gpt-6.1-sol';
 const apiKey = process.env.OPENAI_API_KEY;
 const reasoningEffort = 'module-specific';
-const requestTimeoutMs = Number(process.env.REVELIO_METHOD_TIMEOUT_MS || 60_000);
+const requestTimeoutMs = Number(process.env.NAMI_METHOD_TIMEOUT_MS || 60_000);
 const runStartedAt = new Date().toISOString();
 
 class EvaluationAssertionError extends Error {
@@ -70,10 +70,10 @@ function assert(condition, message) {
 }
 
 if (!allowedModels.has(modelId)) {
-  throw new EvaluationAssertionError(`REVELIO_METHOD_MODEL must be ${[...allowedModels].join(' or ')}; received ${modelId}.`);
+  throw new EvaluationAssertionError(`NAMI_METHOD_MODEL must be ${[...allowedModels].join(' or ')}; received ${modelId}.`);
 }
 if (!Number.isSafeInteger(requestTimeoutMs) || requestTimeoutMs <= 0) {
-  throw new EvaluationAssertionError('REVELIO_METHOD_TIMEOUT_MS must be a positive integer.');
+  throw new EvaluationAssertionError('NAMI_METHOD_TIMEOUT_MS must be a positive integer.');
 }
 
 const pathInputSchema = purposePathInputSchema.omit({ id: true, revision: true, sources: true });

@@ -19,7 +19,7 @@ export interface SpeechToTextPolicy {
 export const METHOD_SPEECH_TO_TEXT_POLICY = {
   endpoint: '/api/agent/audio/transcribe',
   includeLanguageQuery: false,
-  headers: { 'X-Revelio-Request': '1' },
+  headers: { 'X-Nami-Request': '1' },
   recordingTimesliceMs: 250,
   maxRecordingMs: 300_000,
   transcriptionTimeoutMs: 105_000,

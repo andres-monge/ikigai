@@ -11,7 +11,7 @@ import {
 describe('Method evaluation assertions', () => {
   it('executes every declared U7 semantic-intent fixture before retaining its metadata', () => {
     const source = readFileSync(
-      new URL('../../../scripts/eval-revelio-method.mjs', import.meta.url),
+      new URL('../../../scripts/eval-nami-method.mjs', import.meta.url),
       'utf8',
     );
     const fixtureBlock = source.slice(
@@ -51,11 +51,11 @@ describe('Method evaluation assertions', () => {
   });
 
   it('uses module effort and natural presentation contracts in the offline eval source', () => {
-    const source = readFileSync(new URL('../../../scripts/eval-revelio-method.mjs', import.meta.url), 'utf8');
+    const source = readFileSync(new URL('../../../scripts/eval-nami-method.mjs', import.meta.url), 'utf8');
     expect(source).toContain('reasoningEffort: methodReasoningEffort(bundle.key)');
     expect(source).toContain("process.argv.includes('--offline-contracts-only')");
     expect(source).toContain('test-fixtures/legacy-proof-v2.json');
-    expect(source).not.toContain('REVELIO_METHOD_REASONING_EFFORT');
+    expect(source).not.toContain('NAMI_METHOD_REASONING_EFFORT');
     expect(source).not.toContain('firstProjectAccepted || requestedOperationCompleted');
     expect(source).not.toContain('summarizeR22Presentation');
     expect(source).not.toContain('FIRST_PROJECT_ACCEPTANCE_PHRASE_ENGLISH');

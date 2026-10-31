@@ -232,7 +232,7 @@ export const claimLinkedCitationStreamPartSchema = z.object({
 
 export type ClaimLinkedCitationStreamPart = z.infer<typeof claimLinkedCitationStreamPartSchema>;
 
-export type RevelioUIDataTypes = {
+export type NamiUIDataTypes = {
   operationStatus: OperationStatusData;
   claimCitation: ClaimLinkedCitation;
 };

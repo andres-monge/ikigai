@@ -3,7 +3,7 @@ import { fromNodeHeaders } from 'better-auth/node';
 import {
   AuthConfigurationError,
   getAuth,
-  type RevelioAuth,
+  type NamiAuth,
 } from './auth.js';
 
 export interface ProtectedIdentity {
@@ -13,7 +13,7 @@ export interface ProtectedIdentity {
   image: string | null;
 }
 
-type SessionReader = Pick<RevelioAuth, 'api'>;
+type SessionReader = Pick<NamiAuth, 'api'>;
 
 export async function resolveProtectedIdentity(
   request: Pick<Request, 'headers'>,

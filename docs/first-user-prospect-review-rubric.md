@@ -1,6 +1,6 @@
 # First-user prospect screening rubric
 
-This is the canonical founder-calibrated rubric for screening potential Revelio
+This is the canonical founder-calibrated rubric for screening potential Nami
 first users after evidence collection and qualification. It governs screening
 from 2026-09-15 onward.
 
@@ -61,13 +61,13 @@ above. Common reasons include:
 
 `do_not_advance` means “do not put this person into the strong first-user pool
 on the available evidence.” It does not mean the person could never benefit
-from Revelio.
+from Nami.
 
 ## Previous action is a bonus, not a requirement
 
 Courses, projects, jobs, conversations, research, applications, experiments,
 and other attempts can show a bias for action and make someone more likely to
-engage with Revelio. A candidate can still advance without previous attempts
+engage with Nami. A candidate can still advance without previous attempts
 when the unresolved problem is clearly substantial or persistent.
 
 Do not merge persistence with previous action. Persistence describes how long
@@ -136,7 +136,7 @@ early product learning.
 
 The candidate may advance as an explicit portable-problem exception when the
 core work-fit problem is severe and general, the possible solution does not
-depend on local institutions, and there is enough evidence that Revelio's
+depend on local institutions, and there is enough evidence that Nami's
 method could apply. Record the exception in the reasoning.
 
 ## Founder review flag
@@ -219,7 +219,7 @@ than matching surface language.
 - **C-0130 — originalsensei21 — [evidence](https://www.reddit.com/r/findapath/comments/1vuslss/did_trying_different_things_actually_help_you):** Advance. The author is
   stuck without a direction and explicitly wants to learn how small experiments
   can create genuine clarity rather than merely keep them busy. The concise post
-  contains enough first-person strain and unusually direct openness to Revelio's
+  contains enough first-person strain and unusually direct openness to Nami's
   method; do not require a quantified duration or crisis language.
 - **C-0146 — Infinite_Page_6207 — [evidence](https://www.reddit.com/r/findapath/comments/1vrpwu3/feeling_completely_lost_about_my_career):** Advance. The author remains
   in an uninteresting customer-service job every day because they cannot identify
@@ -246,8 +246,8 @@ than matching surface language.
 - **C-0104 — Catherine Egu — [evidence](https://www.linkedin.com/feed/update/urn:li:activity:7495595931493650432):** Do not advance. This is professional content and light reflection, not strong evidence of a substantial personal unresolved-fit problem.
 - **C-0124 — Many-Level6936 — [evidence](https://www.reddit.com/r/MakeNewFriendsHere/comments/1u90jnn/comment/osed5ef):** Do not advance. A terse reference to GMAT preparation and a next career move does not establish the substantial problem required for screening.
 - **C-0214 — ExcitingTrifle963 — [evidence](https://www.reddit.com/r/careerguidance/comments/1uv92ac/should_i_pursue_nursing):** Do not advance. Nursing is effectively the chosen direction; the remaining doubts concern burnout and a partner's contamination-related constraint rather than discovering broader work fit.
-- **C-0304 — Active_Repeat3835 — [evidence](https://www.reddit.com/r/findapath/comments/1wfgl8c/im_struggling_and_i_dont_know_what_to_do):** Do not advance. The distress is severe, but the immediate need is to escape an intolerable boss and obtain a scholarship or accessible replacement job. Desperation alone does not establish openness to the slower work-fit discovery process that Revelio requires.
-- **R22-1we9qb8 — Squirrel-Unfair — [evidence](https://www.reddit.com/r/careerguidance/comments/1we9qb8/im_concerned_about_ai_everyone_says_to_look_at):** Do not advance. Persistent anxiety about AI replacing careers is meaningful distress, but generalized fear and values pressure do not by themselves establish a concrete unresolved work-fit problem that Revelio can help the person explore.
+- **C-0304 — Active_Repeat3835 — [evidence](https://www.reddit.com/r/findapath/comments/1wfgl8c/im_struggling_and_i_dont_know_what_to_do):** Do not advance. The distress is severe, but the immediate need is to escape an intolerable boss and obtain a scholarship or accessible replacement job. Desperation alone does not establish openness to the slower work-fit discovery process that Nami requires.
+- **R22-1we9qb8 — Squirrel-Unfair — [evidence](https://www.reddit.com/r/careerguidance/comments/1we9qb8/im_concerned_about_ai_everyone_says_to_look_at):** Do not advance. Persistent anxiety about AI replacing careers is meaningful distress, but generalized fear and values pressure do not by themselves establish a concrete unresolved work-fit problem that Nami can help the person explore.
 - **R22-1wdwwci — Traditional_Form_130 — [evidence](https://www.reddit.com/r/careerguidance/comments/1wdwwci/geographygis_grad_deciding_between_an_applied):** Do not advance. Although data science and urban planning are distinct fields, the post frames the decision almost entirely as a graduate-program, salary, flexibility, and return-on-investment comparison. Detailed research and a consequential choice do not replace strong evidence of an unresolved personal fit problem.
 - **C-0247 — Kindly_Ad3753 — [evidence](https://www.reddit.com/r/careerguidance/comments/1wft42r/do_i_walk_away_after_all_the_hard_work_and):** Do not advance. The author gives a detailed account of repeatedly testing medicine, psychology, and research, but explicitly says the purpose of the post is unclear and does not seek advice, a process, or another approach. Rich self-reflection and unresolved feelings do not by themselves establish openness to a solution.
 - **C-0348 — Fantastic_Handle_293 — [evidence](https://www.reddit.com/r/findapath/comments/1wenac3/i_dont_know_what_to_do_anymore_i_was_put_into):** Do not advance. Although two possible occupations are named, the immediate request is primarily about leaving an unwanted college program and communicating with the author's mother amid failing classes and a financial penalty. A situational family or education crisis should not be reinterpreted as openness to work-fit discovery merely because occupations appear in the post.

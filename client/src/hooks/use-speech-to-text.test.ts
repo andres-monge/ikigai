@@ -340,7 +340,7 @@ describe('useSpeechToText', () => {
       expect.objectContaining({
         headers: {
           'Content-Type': 'audio/webm;codecs=opus',
-          'X-Revelio-Request': '1',
+          'X-Nami-Request': '1',
         },
       }),
     );

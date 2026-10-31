@@ -28,7 +28,8 @@ describe('lazy auth exact-origin configuration', () => {
   it.each([
     ['test', 'http://localhost:5173'],
     ['development', 'http://localhost:5173'],
-    ['production', 'https://revelio-me.vercel.app'],
+    ['production', 'https://heynami.vercel.app'],
+    ['production', 'https://other.example.test'],
   ])('initializes %s only at its approved origin', async (nodeEnv, url) => {
     Object.assign(mocks.env, { NODE_ENV: nodeEnv, BETTER_AUTH_URL: url });
     const { getAuth } = await import('./auth.js');
@@ -45,12 +46,24 @@ describe('lazy auth exact-origin configuration', () => {
     ['test', 'http://127.0.0.1:5173'],
     ['test', 'http://localhost:5174'],
     ['production', 'http://localhost:5173'],
-    ['production', 'https://other.example.test'],
+    ['production', ''],
+    ['production', 'not-a-url'],
+    ['production', 'http://other.example.test'],
+    ['production', 'https://heynami.vercel.app/path'],
   ])('rejects an unapproved %s origin before opening a pool', async (nodeEnv, url) => {
     Object.assign(mocks.env, { NODE_ENV: nodeEnv, BETTER_AUTH_URL: url });
     const { getAuth, AuthConfigurationError } = await import('./auth.js');
     expect(getAuth).toThrow(AuthConfigurationError);
     expect(mocks.pool).not.toHaveBeenCalled();
     expect(mocks.betterAuth).not.toHaveBeenCalled();
+  });
+
+  it('fails closed in Vercel preview even when NODE_ENV is misreported as development', async () => {
+    vi.stubEnv('VERCEL', '1');
+    Object.assign(mocks.env, { NODE_ENV: 'development', BETTER_AUTH_URL: 'http://localhost:5173' });
+    const { getAuth, AuthConfigurationError } = await import('./auth.js');
+    expect(getAuth).toThrow(AuthConfigurationError);
+    expect(mocks.pool).not.toHaveBeenCalled();
+    vi.unstubAllEnvs();
   });
 });

@@ -9,7 +9,7 @@ import {
 } from 'ai';
 import { APICallError } from '@ai-sdk/provider';
 import { createHash } from 'node:crypto';
-import { REVELIO_MAX_AGENT_STEPS } from './limits.js';
+import { NAMI_MAX_AGENT_STEPS } from './limits.js';
 import { BASE_INSTRUCTIONS_VERSION, BASE_METHOD_INSTRUCTIONS, PURPOSE_PATHS_OFFER_ENGLISH, isPurposePathSetOperation, shouldPresentCanonicalPurposePathsOffer } from './method/base-instructions.js';
 import type { MethodModuleLoader } from './method/loader.js';
 import { methodReasoningEffort } from './method/registry.js';
@@ -28,14 +28,14 @@ import {
   type NativeSearchStep,
 } from './research.js';
 
-export const REVELIO_AGENT_MODEL = 'gpt-6.1-sol';
-export const REVELIO_AGENT_PROVIDER = 'openai-responses';
+export const NAMI_AGENT_MODEL = 'gpt-6.1-sol';
+export const NAMI_AGENT_PROVIDER = 'openai-responses';
 // Keep routine turns below the compaction trigger while retaining ample room
 // in Sol's context window for the response and tool continuation.
-export const REVELIO_COMPACT_THRESHOLD = 200_000;
+export const NAMI_COMPACT_THRESHOLD = 200_000;
 // Reasoning and a compaction pass can consume output tokens before any
 // visible reply or tool call. Keep the provider's suggested starting buffer.
-export const REVELIO_MAX_OUTPUT_TOKENS = 25_000;
+export const NAMI_MAX_OUTPUT_TOKENS = 25_000;
 export const METHOD_INTERNAL_CONTEXT_MARKER = 'SERVER REFRESH CONTEXT';
 const METHOD_DIRECT_CONTINUATION_SEED = 'SERVER DIRECT CONTINUATION SEED';
 
@@ -468,10 +468,10 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
   const toolLoopAgent = new ToolLoopAgent({
     model: privacySafeStreamingModel(options.model, options.onError),
     ...streamTextErrorHandler,
-    maxOutputTokens: REVELIO_MAX_OUTPUT_TOKENS,
+    maxOutputTokens: NAMI_MAX_OUTPUT_TOKENS,
     tools,
     toolChoice: 'auto',
-    stopWhen: [stepCountIs(REVELIO_MAX_AGENT_STEPS)],
+    stopWhen: [stepCountIs(NAMI_MAX_AGENT_STEPS)],
     prepareStep: async ({ stepNumber, messages }) => {
       options.onLatencyStep?.(stepNumber, 'prepare-start');
       throwIfAborted(requestAbortSignal);
@@ -542,7 +542,7 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
               ] : []),
             ].join('\n\n'),
             ...(stepNumber === 0
-              ? { contextManagement: [{ type: 'compaction', compactThreshold: REVELIO_COMPACT_THRESHOLD }] }
+              ? { contextManagement: [{ type: 'compaction', compactThreshold: NAMI_COMPACT_THRESHOLD }] }
               : {}),
           },
         },
@@ -643,7 +643,7 @@ export function createMethodAgent(options: CreateMethodAgentOptions) {
             const reasoningTokens = reportedTokenTotal(steps.map((step) => step.usage.outputTokenDetails?.reasoningTokens));
             options.onTurnDiagnostics?.({
               finishReason: safeFinishReason(outerFinish?.finishReason),
-              stepFinishReasons: steps.slice(0, REVELIO_MAX_AGENT_STEPS).map((step) => safeFinishReason(step.finishReason)),
+              stepFinishReasons: steps.slice(0, NAMI_MAX_AGENT_STEPS).map((step) => safeFinishReason(step.finishReason)),
               stepCount: steps.length,
               visibleOutput: finalVisibleText.trim().length > 0,
               usageReported: inputTokens !== undefined && outputTokens !== undefined,

@@ -8,7 +8,7 @@ import { privateArtifactPath } from '../../scripts/replay-private-paths.js';
 import { createCareerMap, applyCareerMapOperation } from '../../shared/career-map/index.js';
 import { validatePrivateRoot, createLabStore, type LabRunner } from '../../scripts/replay-lab/store.js';
 import { createLabApp } from '../../scripts/replay-lab/server.js';
-import type { ReplayCase } from '../../scripts/replay-revelio.js';
+import type { ReplayCase } from '../../scripts/replay-nami.js';
 import { resolveDisplayProjection } from './history.js';
 
 const temporaryRoots: string[] = [];
@@ -16,7 +16,7 @@ afterEach(async () => { await Promise.all(temporaryRoots.map((root) => rm(root, 
 const read = async <T,>(file: string): Promise<T> => JSON.parse(await readFile(file, 'utf8'));
 const write = async (file: string, value: unknown) => { await mkdir(path.dirname(file), { recursive: true }); await writeFile(file, JSON.stringify(value)); };
 async function setup(runner?: LabRunner) {
-  const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'revelio-lab-'))); temporaryRoots.push(root);
+  const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'nami-lab-'))); temporaryRoots.push(root);
   await writeFile(path.join(root, 'accepted-v4.txt'), 'Exact accepted voice.');
   await writeFile(path.join(root, 'base-template.txt'), 'Shared product rules.\n{{VOICE}}\n{{CONTROLS}}');
   const draft = path.join(root, 'candidates', 'seed', 'draft');
@@ -100,7 +100,7 @@ describe('private replay lab', () => {
     expect((await (await request(app)).get('/api/state').set('Host', 'localhost:5174')).status).toBe(200);
   });
   it('accepts only ignored untracked scoped storage inside Git and rejects forced tracked artifacts', async () => {
-    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'revelio-private-git-'))); temporaryRoots.push(root);
+    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'nami-private-git-'))); temporaryRoots.push(root);
     execFileSync('git', ['init', '-q', root]);
     await writeFile(path.join(root, '.gitignore'), '.context/\n');
     const privateRoot = path.join(root, '.context/revelio/replay');

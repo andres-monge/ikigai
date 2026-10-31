@@ -5,13 +5,13 @@ import os from 'node:os';
 import * as agentModule from './agent.js';
 import { createCareerMap, applyCareerMapOperation } from '../../shared/career-map/index.js';
 import { createAgentTurnPersistenceContext, type IStorage } from '../storage.js';
-import { createReplayStorage, createReplayFetch, runReplay, replayPrefixPreserved } from '../../scripts/replay-revelio.js';
+import { createReplayStorage, createReplayFetch, runReplay, replayPrefixPreserved } from '../../scripts/replay-nami.js';
 
 const turn = { userId: 'replay-user', turnId: 'replay-turn', clientMessageId: 'message-replay', leaseId: 'replay-lease', requestFingerprint: 'replay-fingerprint', origin: 'agent-turn' as const };
 const operation = { type: 'append-foundation-evidence' as const, sourceId: 'replay-op', expectedRevision: 0, occurredAt: '2026-10-02T10:00:00.000Z', payload: { evidence: { id: 'replay-evidence', revision: 1, category: 'fascination' as const, content: 'Making useful tools', provenance: { kind: 'user-message' as const, actionId: turn.clientMessageId, turnId: turn.turnId, turnSequence: 1, occurredAt: '2026-10-02T10:00:00.000Z' } } } };
 function input(): Parameters<IStorage['persistCareerMapOperation']>[0] { return { userId: turn.userId, leaseId: turn.leaseId, context: createAgentTurnPersistenceContext(turn, { turnSequence: 1, occurredAt: operation.occurredAt }), operation, moduleVersion: 'replay-test' }; }
 
-describe('isolated Revelio replay', () => {
+describe('isolated Nami replay', () => {
   it('accepts provider-added empty output-text defaults without accepting changed history', () => {
     const prior = [{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Confirmed direction.' }] }, { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Yes.' }] }];
     const seeded = prior.map((item, index) => ({ ...item, id: `msg_${index}`, status: 'completed', content: item.content.map(part => part.type === 'output_text' ? { ...part, annotations: [], logprobs: [] } : part) }));

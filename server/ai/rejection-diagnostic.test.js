@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { firstRejectedOperationDiagnostic, formatRejectedOperationDiagnostic } from '../../scripts/eval-revelio-rejection-diagnostic.mjs';
+import { firstRejectedOperationDiagnostic, formatRejectedOperationDiagnostic } from '../../scripts/eval-nami-rejection-diagnostic.mjs';
 
 describe('Method evaluation rejection diagnostics', () => {
   it('shows the reducer reason and counts without leaking card content', () => {

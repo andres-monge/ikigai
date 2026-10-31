@@ -1,5 +1,7 @@
 # AGENTS.md
 
+Nami was named Revelio before October 2026. Dated historical documents retain the former name and their original meaning.
+
 ## Sources of truth
 
 - Existing behavior is defined by current code and tests.
@@ -9,6 +11,6 @@
 
 ## Local development ports and browser access
 
-- Main Revelio app: HTTP `localhost:5173` or `127.0.0.1:5173`.
+- Main Nami app: HTTP `localhost:5173` or `127.0.0.1:5173`.
 - Complementary sites, including the prompt experiment lab: HTTP `localhost:5174` or `127.0.0.1:5174`.
 - Use these standard ports. Before browser or computer use, confirm the local origin and port are approved by the enterprise allowlist. If access is blocked, stop and report it; never work around the restriction. This local-origin rule does not prohibit authorized external browsing.

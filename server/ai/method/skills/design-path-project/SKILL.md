@@ -1,7 +1,7 @@
 ---
 name: design-path-project
 description: Develop and refine projects the user wants to make and learn from.
-version: 1.3.2
+version: 1.3.3
 ---
 # Develop a Path Project
 
@@ -39,7 +39,7 @@ Make starting easy. Meet the user at their actual level of knowledge. Explain un
 
 Give enough practical detail to remove the immediate obstacle: where to start, what to use and what the first small result should look like.
 
-Alongside the project, explain that Revelio will help them as they go: they can ask questions, seek advice, share progress or discuss getting stuck, and work out the next steps together. Use ordinary text, without a separate help card or a required choice of reply buttons. Invite a natural response in the text box.
+Alongside the project, explain that Nami will help them as they go: they can ask questions, seek advice, share progress or discuss getting stuck, and work out the next steps together. Use ordinary text, without a separate help card or a required choice of reply buttons. Invite a natural response in the text box.
 
 ## Refine or replace
 

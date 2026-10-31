@@ -16,7 +16,7 @@ it('rotates verbs without an immediate repeat and clears its timer when removed'
   const view = render(<ActivityIndicator />);
 
   expect(screen.getByText('Accomplishing…')).toBeTruthy();
-  expect(screen.getByRole('status', { name: 'Revelio is responding.' })).toBeTruthy();
+  expect(screen.getByRole('status', { name: 'Nami is responding.' })).toBeTruthy();
   act(() => { vi.advanceTimersByTime(1500); });
   expect(screen.getByText('Actioning…')).toBeTruthy();
   act(() => { vi.advanceTimersByTime(1500); });

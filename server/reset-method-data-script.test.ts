@@ -207,7 +207,7 @@ describe('Method reset argument and environment boundaries', () => {
       OPENAI_API_KEY: 'file-key',
     }));
     expect(loadMethodResetRuntime({
-      REVELIO_ENV_FILE: '/explicit/reset.env',
+      NAMI_ENV_FILE: '/explicit/reset.env',
       NODE_ENV: 'production',
       DATABASE_URL: 'postgresql://inherited:pw@inherited.example.com/db',
     }, readExplicit)).toMatchObject({
@@ -218,7 +218,7 @@ describe('Method reset argument and environment boundaries', () => {
     expect(readExplicit).toHaveBeenCalledWith('/explicit/reset.env');
 
     expect(loadMethodResetRuntime({
-      REVELIO_ENV_FILE: '/explicit/incomplete.env',
+      NAMI_ENV_FILE: '/explicit/incomplete.env',
       NODE_ENV: 'production',
       DATABASE_URL: 'postgresql://stale:pw@stale.example.com/db',
       BETTER_AUTH_DATABASE_URL: 'postgresql://stale:pw@stale.example.com/db',
@@ -232,7 +232,7 @@ describe('Method reset argument and environment boundaries', () => {
       openAiApiKey: '',
     });
     expect(loadMethodResetRuntime({
-      REVELIO_ENV_FILE: '/explicit/no-node-env.env',
+      NAMI_ENV_FILE: '/explicit/no-node-env.env',
       NODE_ENV: 'development',
     }, () => ({})).nodeEnv).toBe('development');
 

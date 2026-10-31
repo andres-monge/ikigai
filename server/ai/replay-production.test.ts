@@ -4,7 +4,7 @@ import path from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import { applyCareerMapOperation, createCareerMap, type CareerMap } from '../../shared/career-map/index.js';
 import { createAgentTurnPersistenceContext, type IStorage } from '../storage.js';
-import { createReplayStorage, runReplay } from '../../scripts/replay-revelio.js';
+import { createReplayStorage, runReplay } from '../../scripts/replay-nami.js';
 import { METHOD_MODULE_KEYS, methodReasoningEffort } from './method/registry.js';
 
 const at = '2030-01-01T00:00:00.000Z';

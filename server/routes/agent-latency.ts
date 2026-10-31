@@ -1,5 +1,5 @@
 import { performance } from 'node:perf_hooks';
-import { REVELIO_MAX_AGENT_STEPS } from '../ai/limits.js';
+import { NAMI_MAX_AGENT_STEPS } from '../ai/limits.js';
 
 type Phase = 'map-ready' | 'lease-ready' | 'provider-start' | 'safe-text' | 'terminal-start' | 'terminal-done';
 type StepPhase = 'prepare-start' | 'prepare-end' | 'step-start' | 'step-finish'
@@ -43,7 +43,7 @@ export class MethodLatencyTrace {
 
   bindingMarkers(value: BindingMarkerWait): void {
     if (this.binding?.exit || this.binding?.markerWait || !duration(value.elapsedMs) || !duration(value.budgetMs)
-      || !count(value.expectedCount) || value.expectedCount > REVELIO_MAX_AGENT_STEPS || !flag(value.promiseSettled)
+      || !count(value.expectedCount) || value.expectedCount > NAMI_MAX_AGENT_STEPS || !flag(value.promiseSettled)
       || !flag(value.requestAborted) || !flag(value.deadlineAborted)) return;
     this.binding ??= { attempts: [] };
     this.binding.markerWait = {
@@ -58,7 +58,7 @@ export class MethodLatencyTrace {
       || value.requestedLimit !== 100 || !(value.returnedCount === -1 || count(value.returnedCount))
       || ![-1, 0, 1].includes(value.hasMore) || ![-1, 0, 1].includes(value.cursorPresent)
       || !(value.httpStatus === 0 || (Number.isInteger(value.httpStatus) && value.httpStatus >= 100 && value.httpStatus <= 599))
-      || !Array.isArray(value.matchCounts) || value.matchCounts.length > REVELIO_MAX_AGENT_STEPS || !value.matchCounts.every(count)) return;
+      || !Array.isArray(value.matchCounts) || value.matchCounts.length > NAMI_MAX_AGENT_STEPS || !value.matchCounts.every(count)) return;
     this.binding ??= { attempts: [] };
     this.binding.attempts.push({
       index: value.index, elapsedMs: Math.round(value.elapsedMs), readReturned: value.readReturned, httpStatus: value.httpStatus,
@@ -91,7 +91,7 @@ export class MethodLatencyTrace {
   }
 
   step(index: number, phase: StepPhase): void {
-    if (!Number.isSafeInteger(index) || index < 0 || index >= REVELIO_MAX_AGENT_STEPS) return;
+    if (!Number.isSafeInteger(index) || index < 0 || index >= NAMI_MAX_AGENT_STEPS) return;
     const now = performance.now();
     if (phase === 'search-start' || phase === 'search-end' || phase === 'tool-start' || phase === 'tool-end') {
       let spans = this.toolSpans.get(index);
@@ -151,7 +151,7 @@ export class MethodLatencyTrace {
 }
 
 export function methodLatencyEnabled(): boolean {
-  return process.env.NODE_ENV === 'development' && process.env.REVELIO_LATENCY_TRACE === '1';
+  return process.env.NODE_ENV === 'development' && process.env.NAMI_LATENCY_TRACE === '1';
 }
 
 /** Small server-side timings always available; detailed tracing remains opt-in. */

@@ -1,5 +1,5 @@
 {
-  "name": "rest-express",
+  "name": "nami",
   "version": "1.0.0",
   "type": "module",
   "license": "MIT",
@@ -27,7 +27,7 @@
     "test:e2e:headed": "playwright test --headed",
     "test:method": "npm test -- server/ai/method/loader.test.ts server/ai/method/evaluation.test.ts --run",
     "test:method-bundle": "npm run build && METHOD_PRODUCTION_SMOKE=1 npm run test:method",
-    "eval:method": "node --env-file-if-exists=.env --import tsx scripts/eval-revelio-method.mjs",
+    "eval:method": "node --env-file-if-exists=.env --import tsx scripts/eval-nami-method.mjs",
     "method:reset": "node --import tsx scripts/reset-method-data.ts",
     "early-access": "node --import tsx scripts/early-access.ts"
   },

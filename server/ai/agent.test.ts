@@ -14,11 +14,11 @@ import type { IStorage, PersistCareerMapResult } from '../storage.js';
 import {
   createMethodAgent,
   METHOD_INTERNAL_CONTEXT_MARKER,
-  REVELIO_AGENT_MODEL,
-  REVELIO_MAX_OUTPUT_TOKENS,
+  NAMI_AGENT_MODEL,
+  NAMI_MAX_OUTPUT_TOKENS,
   type MethodAgentTurnStreamResult,
 } from './agent.js';
-import { REVELIO_MAX_AGENT_STEPS } from './limits.js';
+import { NAMI_MAX_AGENT_STEPS } from './limits.js';
 import { createMethodModuleLoader } from './method/loader.js';
 import { BASE_METHOD_INSTRUCTIONS, PURPOSE_PATHS_OFFER_ENGLISH, R22_CANONICAL_ENGLISH } from './method/base-instructions.js';
 
@@ -428,7 +428,7 @@ describe('amended Method agent core loop', () => {
 
   it('keeps Sol and one native SDK loop without evidence or raw-result plumbing', () => {
     const source = readFileSync(new URL('./agent.ts', import.meta.url), 'utf8');
-    expect(REVELIO_AGENT_MODEL).toBe('gpt-6.1-sol');
+    expect(NAMI_AGENT_MODEL).toBe('gpt-6.1-sol');
     expect(source).not.toMatch(/classifyMethodTurn|classifyConsequentialAuthorization|MethodTurnRoute/);
     expect(source).not.toMatch(/continue_natural_conversation|NATURAL_CONVERSATION_TOOL_NAME/);
     expect(source).not.toMatch(/NativeSearchEvidence|evidenceManifest|researchResolutionPending/);
@@ -562,8 +562,8 @@ describe('amended Method agent core loop', () => {
 
     await collect(await agent.stream({ prompt: explorerMessage }));
 
-    expect(REVELIO_MAX_AGENT_STEPS).toBe(50);
-    expect(model.doStreamCalls).toHaveLength(REVELIO_MAX_AGENT_STEPS);
+    expect(NAMI_MAX_AGENT_STEPS).toBe(50);
+    expect(model.doStreamCalls).toHaveLength(NAMI_MAX_AGENT_STEPS);
     expect(storage.map.foundation.whyRevisions).toHaveLength(0);
   });
 
@@ -1487,9 +1487,9 @@ describe('amended Method agent core loop', () => {
     expect(model.doStreamCalls[0]?.providerOptions?.openai?.contextManagement).toEqual([
       { type: 'compaction', compactThreshold: 200_000 },
     ]);
-    expect(model.doStreamCalls.every((call) => call.maxOutputTokens === REVELIO_MAX_OUTPUT_TOKENS)).toBe(true);
+    expect(model.doStreamCalls.every((call) => call.maxOutputTokens === NAMI_MAX_OUTPUT_TOKENS)).toBe(true);
     expect(model.doStreamCalls.every((call) => call.providerOptions?.openai?.reasoningEffort === 'low')).toBe(true);
-    expect(REVELIO_MAX_OUTPUT_TOKENS).toBeGreaterThanOrEqual(25_000);
+    expect(NAMI_MAX_OUTPUT_TOKENS).toBeGreaterThanOrEqual(25_000);
     expect(model.doStreamCalls[1]?.providerOptions?.openai).not.toHaveProperty('contextManagement');
     expect(model.doStreamCalls.every((call) => {
       const instructions = String(call.providerOptions?.openai?.instructions);

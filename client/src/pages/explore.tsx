@@ -56,7 +56,7 @@ interface PersistenceError {
 
 const committedReplyFailure: PersistenceError = {
   kind: 'reply-failed',
-  message: 'Your map was updated, but Revelio’s follow-up reply did not finish.',
+  message: 'Your map was updated, but Nami’s follow-up reply did not finish.',
   action: 'continue',
 };
 
@@ -81,7 +81,7 @@ interface ExploreProps {
 
 const requestHeaders = {
   'Content-Type': 'application/json',
-  'X-Revelio-Request': '1',
+  'X-Nami-Request': '1',
 };
 const HISTORY_READ_TIMEOUT_MS = 15_000;
 const WORKSPACE_READ_TIMEOUT_MS = 5_000;
@@ -493,7 +493,7 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
     // so a later automatic stop can be attributed to the new result.
     speech.clearAutomaticCompletionReason();
     setMicNotice(null);
-    speech.startRecording('revelio-draft');
+    speech.startRecording('nami-draft');
   }, [speech.clearAutomaticCompletionReason, speech.startRecording]);
 
   const announceVoiceSendBlock = useCallback(() => {
@@ -634,7 +634,7 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
         if (!readsEstablishAbsence || receipt) {
           retainHighestPriorityError({
             kind: 'unknown',
-            message: 'Revelio could not confirm whether your map was updated. Refresh before trying again.',
+            message: 'Nami could not confirm whether your map was updated. Refresh before trying again.',
             action: 'refresh',
           });
         }
@@ -658,7 +658,7 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
       finishAttempt(attempt.operationId);
       retainHighestPriorityError({
         kind: 'unknown',
-        message: 'Revelio could not confirm whether your map was updated. Refresh before trying again.',
+        message: 'Nami could not confirm whether your map was updated. Refresh before trying again.',
         action: 'refresh',
       });
     }
@@ -780,7 +780,7 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
         if (status === 'completed-replay') setTurnNotice(null);
         else if (status === 'in-flight') setTurnNotice('This message is already in progress. Refreshing its latest state.');
         else if (status === 'cancelled-replay') setTurnNotice('This message was already stopped.');
-        else setTurnNotice('Revelio could not complete that reply. Your map may still contain an earlier saved change.');
+        else setTurnNotice('Nami could not complete that reply. Your map may still contain an earlier saved change.');
       } else if (!response.ok) {
         throw new Error('AgentRequestFailed');
       } else {
@@ -791,8 +791,8 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
           const restored = restoreSubmission(message, submittedFiles);
           if (pendingAttemptsRef.current.size === 0) {
             setTurnNotice(restored
-              ? 'Revelio’s reply failed. Your submitted message is available to edit.'
-              : 'Revelio’s reply failed. Your current draft is unchanged.');
+              ? 'Nami’s reply failed. Your submitted message is available to edit.'
+              : 'Nami’s reply failed. Your current draft is unchanged.');
           }
         }
       }
@@ -804,8 +804,8 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
         setTurnNotice(restored ? 'Stopped. Your submitted message has been restored.' : 'Stopped. Your current draft is unchanged.');
       } else {
         setTurnNotice(restored
-          ? 'Revelio is temporarily unavailable. Your submitted message has been restored.'
-          : 'Revelio is temporarily unavailable. Your current draft is unchanged.');
+          ? 'Nami is temporarily unavailable. Your submitted message has been restored.'
+          : 'Nami is temporarily unavailable. Your current draft is unchanged.');
       }
     } finally {
       latency?.mark('refetch-start');
@@ -1017,7 +1017,7 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
       <header className="shrink-0 border-b-2 border-black bg-white px-4 py-3 sm:px-6">
         <div className="mx-auto flex max-w-[112rem] items-center justify-between gap-2 sm:gap-4">
           <div className="min-w-0">
-            <h1 className="font-display text-xl font-black leading-none tracking-tight sm:text-2xl">Revelio</h1>
+            <h1 className="font-display text-xl font-black leading-none tracking-tight sm:text-2xl">Nami</h1>
             <p className="mt-1 truncate font-display text-[0.65rem] font-bold uppercase tracking-[0.12em] text-stone-600 sm:text-xs">Figure out what to work on next</p>
           </div>
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">
@@ -1085,7 +1085,7 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
                 </div>
               ) : null}
               {(historyState === 'empty' || historyState === 'ready') && !olderCursor ? (
-                <article aria-label="Revelio" className="mx-auto w-full max-w-[38rem]">
+                <article aria-label="Nami" className="mx-auto w-full max-w-[38rem]">
                   <p className="text-[1.0625rem] font-medium leading-7">
                     Hey! I’m here to help you figure out what to work on next, so I’ll ask a few questions to get
                     to know you first.
@@ -1217,14 +1217,14 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
                 setRecoverableSubmission(null);
                 setAttachmentError(null);
               }}>Restore previous submission (replaces current draft)</button> : null}
-              <label htmlFor="revelio-draft" className="sr-only">Message Revelio</label>
+              <label htmlFor="nami-draft" className="sr-only">Message Nami</label>
               <div className="explore-composer flex items-end gap-1 border-2 border-black bg-white p-2 shadow-[3px_3px_0_rgba(0,0,0,0.65)] transition-[border-color,box-shadow] focus-within:border-ikigai-teal">
                 <button type="button" aria-label="Add attachments" title="Add attachments" disabled={preparingFiles || bootstrapPending}
                   onClick={() => pickerRef.current?.click()} className="grid h-11 w-9 shrink-0 place-items-center focus-visible:outline focus-visible:outline-2 disabled:opacity-40">
                   <Plus aria-hidden="true" className="h-5 w-5" />
                 </button>
                 <textarea
-                  id="revelio-draft"
+                  id="nami-draft"
                   ref={draftRef}
                   rows={1}
                   value={draft}
@@ -1338,7 +1338,7 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
             {workspaceState === 'repair-required' ? (
               <div role="alert" className="border-2 border-red-900 bg-red-50 p-5">
                 <h3 className="text-xl font-black">Your map needs repair</h3>
-                <p className="mt-2 text-sm leading-6">Revelio has stopped Method actions to protect your saved work. Please contact support before continuing.</p>
+                <p className="mt-2 text-sm leading-6">Nami has stopped Method actions to protect your saved work. Please contact support before continuing.</p>
               </div>
             ) : null}
             {(workspaceState === 'ready' || workspaceState === 'empty') && map ? (
@@ -1348,7 +1348,7 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
               <div className="max-w-2xl border-2 border-dashed border-black bg-white/70 p-6 sm:p-8">
                 <h3 className="font-display text-2xl font-black">Nothing on your map yet</h3>
                 <p className="mt-3 text-sm leading-6 text-stone-700">
-                  This is the record of what you and Revelio work out together: what pulls you in, why it matters
+                  This is the record of what you and Nami work out together: what pulls you in, why it matters
                   to you, the directions worth trying, and the project you take on first. Nothing lands here until
                   you’ve confirmed it, so you can change your mind in the chat at any point.
                 </p>

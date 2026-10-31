@@ -4,6 +4,7 @@ import { betterAuth, type BetterAuthOptions } from 'better-auth';
 import { createAuthMiddleware } from 'better-auth/api';
 import { Pool, type PoolConfig } from 'pg';
 import { env, type Env } from './env.js';
+import { configuredAppOrigin } from '../shared/app-origin.js';
 import {
   AuthDatabaseConfigurationError,
   buildAuthDatabasePoolOptions,
@@ -17,11 +18,8 @@ export {
   withAuthSchemaSearchPath,
 } from './auth-database.js';
 
-export const INTERNAL_CLIENT_IP_HEADER = 'x-revelio-client-ip';
+export const INTERNAL_CLIENT_IP_HEADER = 'x-nami-client-ip';
 export const GOOGLE_IDENTITY_SCOPES = ['openid', 'email', 'profile'] as const;
-
-const LOCAL_AUTH_URL = 'http://localhost:5173';
-const PRODUCTION_AUTH_URL = 'https://revelio-me.vercel.app';
 
 export type AuthRuntimeEnv = Pick<
   Env,
@@ -32,17 +30,13 @@ export type AuthRuntimeEnv = Pick<
   | 'BETTER_AUTH_URL'
   | 'AUTH_SIGNUPS_ENABLED'
   | 'NODE_ENV'
->;
+> & { VERCEL?: string };
 
 export class AuthConfigurationError extends Error {
   constructor() {
     super('Authentication is not configured');
     this.name = 'AuthConfigurationError';
   }
-}
-
-function normalizeBaseUrl(value: string): string {
-  return value.replace(/\/+$/, '');
 }
 
 /**
@@ -63,18 +57,17 @@ export function buildAuthPoolOptions(runtimeEnv: AuthRuntimeEnv): PoolConfig {
   }
 }
 
-function expectedAuthUrl(nodeEnv: AuthRuntimeEnv['NODE_ENV']): string {
-  return nodeEnv === 'production' ? PRODUCTION_AUTH_URL : LOCAL_AUTH_URL;
-}
-
 function assertAuthConfigured(runtimeEnv: AuthRuntimeEnv): void {
-  const baseUrl = normalizeBaseUrl(runtimeEnv.BETTER_AUTH_URL);
+  const baseUrl = configuredAppOrigin(runtimeEnv.BETTER_AUTH_URL, {
+    nodeEnv: runtimeEnv.NODE_ENV,
+    vercel: runtimeEnv.VERCEL ?? process.env.VERCEL,
+  });
   const hasCredentials =
     runtimeEnv.GOOGLE_CLIENT_ID.length > 0 &&
     runtimeEnv.GOOGLE_CLIENT_SECRET.length > 0 &&
     runtimeEnv.BETTER_AUTH_SECRET.length >= 32;
 
-  if (!hasCredentials || baseUrl !== expectedAuthUrl(runtimeEnv.NODE_ENV)) {
+  if (!hasCredentials || !baseUrl) {
     throw new AuthConfigurationError();
   }
 }
@@ -87,10 +80,14 @@ export function buildAuthOptions(
   runtimeEnv: AuthRuntimeEnv,
   database: BetterAuthOptions['database'],
 ): BetterAuthOptions {
-  const baseURL = normalizeBaseUrl(runtimeEnv.BETTER_AUTH_URL);
+  const baseURL = configuredAppOrigin(runtimeEnv.BETTER_AUTH_URL, {
+    nodeEnv: runtimeEnv.NODE_ENV,
+    vercel: runtimeEnv.VERCEL ?? process.env.VERCEL,
+  });
+  if (!baseURL) throw new AuthConfigurationError();
 
   return {
-    appName: 'Revelio',
+    appName: 'Nami',
     baseURL,
     basePath: '/api/auth',
     secret: runtimeEnv.BETTER_AUTH_SECRET,
@@ -137,7 +134,7 @@ export function buildAuthOptions(
       defaultCookieAttributes: {
         httpOnly: true,
         sameSite: 'lax',
-        secure: runtimeEnv.NODE_ENV === 'production',
+        secure: runtimeEnv.NODE_ENV === 'production' || runtimeEnv.VERCEL === '1' || process.env.VERCEL === '1',
       },
     },
   };
@@ -180,16 +177,16 @@ function createAuth(runtimeEnv: AuthRuntimeEnv) {
   return betterAuth(buildAuthOptions(runtimeEnv, pool));
 }
 
-export type RevelioAuth = ReturnType<typeof createAuth>;
+export type NamiAuth = ReturnType<typeof createAuth>;
 
-let authInstance: RevelioAuth | undefined;
+let authInstance: NamiAuth | undefined;
 
 /**
  * Auth is initialized only at an auth/protected call site. Missing founder
  * provisioning therefore fails those surfaces closed without taking down the
  * anonymous legacy application.
  */
-export function getAuth(): RevelioAuth {
-  authInstance ??= createAuth(env);
+export function getAuth(): NamiAuth {
+  authInstance ??= createAuth({ ...env, VERCEL: process.env.VERCEL });
   return authInstance;
 }

@@ -205,7 +205,7 @@ export function ActivityIndicator() {
 
   return (
     <div className="mx-auto w-full max-w-[38rem] text-sm font-bold text-stone-600">
-      <span role="status" aria-label="Revelio is responding." className="sr-only">Revelio is responding.</span>
+      <span role="status" aria-label="Nami is responding." className="sr-only">Nami is responding.</span>
       <span aria-hidden="true" className="inline-flex items-center gap-2">
         <Loader2 className="h-4 w-4 motion-safe:animate-spin" />
         <span>{verbs[verbIndex]}…</span>

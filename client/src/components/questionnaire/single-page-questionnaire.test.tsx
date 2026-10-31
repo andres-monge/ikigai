@@ -101,7 +101,7 @@ describe('SinglePageQuestionnaire speech-to-text defaults', () => {
     });
 
     const request = vi.mocked(fetch).mock.calls[0]?.[1];
-    expect(new Headers(request?.headers).has('X-Revelio-Request')).toBe(false);
+    expect(new Headers(request?.headers).has('X-Nami-Request')).toBe(false);
     expect((screen.getAllByRole('textbox')[0] as HTMLTextAreaElement).value).toBe('texto dictado');
     expect(screen.getAllByRole('button', { name: 'Habla tu respuesta' })).toHaveLength(8);
   });

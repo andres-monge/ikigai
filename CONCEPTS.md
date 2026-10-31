@@ -2,7 +2,7 @@
 
 Shared domain vocabulary for this project — entities, named processes, and status concepts with project-specific meaning. Seeded with core domain vocabulary, then accretes as ce-compound and ce-compound-refresh process learnings; direct edits are fine. Glossary only, not a spec or catch-all.
 
-## Revelio Method
+## Nami Method
 
 ### Your North Star
 The explorer's confirmed direction for the contribution they want to make, used to judge whether proposed paths serve the same purpose. A new interest can prompt reflection on this direction without automatically changing it.

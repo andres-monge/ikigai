@@ -1,6 +1,6 @@
 /**
  * @description
- * Structured error handling utilities for the Revelio application.
+ * Structured error handling utilities for the Nami application.
  * Provides consistent error formatting while preserving debugging information
  * for development/test environments and protecting users in production.
  */

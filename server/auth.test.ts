@@ -99,7 +99,7 @@ describe('I2 Better Auth configuration', () => {
       {
         ...configuredEnv,
         NODE_ENV: 'production',
-        BETTER_AUTH_URL: 'https://revelio-me.vercel.app',
+        BETTER_AUTH_URL: 'https://heynami.vercel.app',
       },
       { kind: 'test-database' },
     );

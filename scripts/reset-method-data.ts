@@ -369,7 +369,7 @@ export function loadMethodResetRuntime(
   readEnvFile: EnvFileReader = defaultEnvFileReader,
 ): MethodResetRuntime {
   const merged: Record<string, string | undefined> = { ...source };
-  const explicitEnvFile = source.REVELIO_ENV_FILE;
+  const explicitEnvFile = source.NAMI_ENV_FILE;
   if (explicitEnvFile) {
     const explicit = readEnvFile(explicitEnvFile);
     if (explicit.NODE_ENV !== undefined) merged.NODE_ENV = explicit.NODE_ENV;

@@ -1,1 +1,1 @@
-export const REVELIO_MAX_AGENT_STEPS = 50;
+export const NAMI_MAX_AGENT_STEPS = 50;

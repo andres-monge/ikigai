@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { createOpenAI } from '@ai-sdk/openai';
 import { parse as parseEnv } from 'dotenv';
 import { applyCareerMapOperation, careerMapSchema, readCareerMap, type CareerMap, userActionProvenanceSchema } from '../shared/career-map/index.js';
-import { createMethodAgent, REVELIO_AGENT_MODEL, type MethodPreparedStepTrace } from '../server/ai/agent.js';
+import { createMethodAgent, NAMI_AGENT_MODEL, type MethodPreparedStepTrace } from '../server/ai/agent.js';
 import { BASE_INSTRUCTIONS_VERSION } from '../server/ai/method/base-instructions.js';
 import { METHOD_MODULE_KEYS, methodReasoningEffort, isRegisteredMethodModule, type RegisteredMethodModuleKey } from '../server/ai/method/registry.js';
 import { createMethodModuleLoader } from '../server/ai/method/loader.js';
@@ -236,7 +236,7 @@ export async function runReplay(options: { casePath: string; instructionsPath: s
     }
     return result.json();
   };
-  const conversation = await api('conversations', { metadata: { purpose: 'revelio-isolated-replay', run: runId } });
+  const conversation = await api('conversations', { metadata: { purpose: 'nami-isolated-replay', run: runId } });
   if (conversation.id === fixture.sourceConversationId) throw new Error('Source Conversation returned as replay.');
   await writeFile(path.join(outputPath, 'branch.json'), JSON.stringify({ runId, conversationId: conversation.id }), { mode: 0o600 });
   const seededItems = [];
@@ -256,7 +256,7 @@ export async function runReplay(options: { casePath: string; instructionsPath: s
   const storage = createReplayStorage(fixture.initialMap, fixture.priorTurns, turn);
   const openai = createOpenAI({ apiKey: env.OPENAI_API_KEY, fetch: guardedFetch });
   const agent = createMethodAgent({
-    model: openai.responses(REVELIO_AGENT_MODEL), nativeWebSearchTool: openai.tools.webSearch(),
+    model: openai.responses(NAMI_AGENT_MODEL), nativeWebSearchTool: openai.tools.webSearch(),
     storage, loader, userId: turn.userId, conversationId: conversation.id, turn,
     turnSequence: nextMethodTurnSequence(fixture.initialMap), occurredAt: new Date().toISOString(),
     currentMessage: fixture.currentMessage, baseInstructions, replayReasoningEffort: reasoningEffort === 'production' ? undefined : reasoningEffort,
@@ -284,7 +284,7 @@ export async function runReplay(options: { casePath: string; instructionsPath: s
   let finalMap = (await storage.loadCareerMap(turn.userId)).map;
 
   const report = {
-    runId, label: fixture.label, sourceDigest: digest(sourceText), sourceSchemaVersion, mapMigrated: sourceSchemaVersion !== fixture.initialMap.schemaVersion, model: REVELIO_AGENT_MODEL,
+    runId, label: fixture.label, sourceDigest: digest(sourceText), sourceSchemaVersion, mapMigrated: sourceSchemaVersion !== fixture.initialMap.schemaVersion, model: NAMI_AGENT_MODEL,
     reasoningEffort, effortByModule, modelCalls, replayThroughGenerationMs: performance.now() - replayStarted, baseVersion: BASE_INSTRUCTIONS_VERSION, baseDigest: digest(baseInstructions),
     modules: Object.fromEntries(loader.registeredKeys.map((key) => { const module = loader.load({ module: key }); return [key, { version: module.contentVersion, digest: module.contentDigest }]; })),
     provenance: fixture.provenance, traces, diagnostics, errors,
@@ -297,7 +297,7 @@ export async function runReplay(options: { casePath: string; instructionsPath: s
   await writeFile(path.join(outputPath, 'result.json'), JSON.stringify(report, null, 2), { mode: 0o600 });
   await writeFile(path.join(outputPath, 'final-map.json'), JSON.stringify(finalMap, null, 2), { mode: 0o600 });
   await writeFile(path.join(outputPath, 'provider-requests.json'), JSON.stringify(providerRequests, null, 2), { mode: 0o600 });
-  await writeFile(path.join(outputPath, 'comparison.md'), `# ${fixture.label}\n\nHistorical reply:\n\n${fixture.historicalReply}\n\nCandidate (${REVELIO_AGENT_MODEL}, ${reasoningEffort} effort; frozen current instructions):\n\n${reply}\n`, { mode: 0o600 });
+  await writeFile(path.join(outputPath, 'comparison.md'), `# ${fixture.label}\n\nHistorical reply:\n\n${fixture.historicalReply}\n\nCandidate (${NAMI_AGENT_MODEL}, ${reasoningEffort} effort; frozen current instructions):\n\n${reply}\n`, { mode: 0o600 });
   if (options.captureContinuation) {
     deadlineSignal.throwIfAborted();
     // Bind the completed branch through the same provider projection used by the app.
@@ -335,7 +335,7 @@ export async function runReplay(options: { casePath: string; instructionsPath: s
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const [casePath, instructionsPath, outputPath, envPath] = process.argv.slice(2);
   if (!casePath || !instructionsPath || !outputPath || !envPath) {
-    console.error('Usage: node --import tsx scripts/replay-revelio.ts CASE_JSON INSTRUCTIONS_DIR NEW_OUTPUT_DIR ENV_FILE');
+    console.error('Usage: node --import tsx scripts/replay-nami.ts CASE_JSON INSTRUCTIONS_DIR NEW_OUTPUT_DIR ENV_FILE');
     process.exitCode = 1;
   } else {
     runReplay({ casePath, instructionsPath, outputPath, envPath }).then((result) => console.log(JSON.stringify(result))).catch((error) => {

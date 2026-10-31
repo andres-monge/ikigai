@@ -1,8 +1,8 @@
 /**
  * @description
- * Funnel metrics report script for the Revelio analytics system.
+ * Funnel metrics report script for the Nami analytics system.
  *
- * Calculates and displays funnel metrics for the Revelio analytics system:
+ * Calculates and displays funnel metrics for the Nami analytics system:
  * - Landing → Start conversion
  * - Completion rate
  * - Section drop-off analysis
@@ -114,7 +114,7 @@ async function generateReport(): Promise<void> {
     : null;
 
   console.log('\n' + '='.repeat(70));
-  console.log(' REVELIO - ANALYTICS REPORT');
+  console.log(' NAMI - ANALYTICS REPORT');
   console.log('='.repeat(70));
   console.log(`\n  Period: ${days ? `Last ${days} days` : 'All time'}`);
   console.log(`  Generated: ${new Date().toISOString()}`);

@@ -58,11 +58,11 @@ Courses are expensive, do not scale, and can start you on your journey but not g
 
 A personalized guide to walk you through every step of the way that doesn't cost a fortune.
 
-Revelio helps the explorer name a provisional **North Star**: a service-oriented direction that can guide several distinct paths without becoming a fixed job, identity, or destiny. Action can strengthen or revise it.
+Nami helps the explorer name a provisional **North Star**: a service-oriented direction that can guide several distinct paths without becoming a fixed job, identity, or destiny. Action can strengthen or revise it.
 
-Before choosing a path, Revelio treats the explorer's reactions as new evidence. It helps interpret attraction, rejection, and uncertainty about the work itself, then suggests three distinct ways to serve the North Star that the explorer could plausibly try through small projects. Each path should reveal a different question about whether the explorer wants to keep doing that work. Curiosity can justify a tentative path; the project is how they learn more, not a test they must pass before seeing the path.
+Before choosing a path, Nami treats the explorer's reactions as new evidence. It helps interpret attraction, rejection, and uncertainty about the work itself, then suggests three distinct ways to serve the North Star that the explorer could plausibly try through small projects. Each path should reveal a different question about whether the explorer wants to keep doing that work. Curiosity can justify a tentative path; the project is how they learn more, not a test they must pass before seeing the path.
 
-An interest that points to a different contribution may expose a limit in the current North Star. Revelio should name that tension and help the explorer examine it. The explorer decides whether to revise the North Star; until then, Revelio neither forces the interest into an ill-fitting path nor silently changes the direction.
+An interest that points to a different contribution may expose a limit in the current North Star. Nami should name that tension and help the explorer examine it. The explorer decides whether to revise the North Star; until then, Nami neither forces the interest into an ill-fitting path nor silently changes the direction.
 
 - Guiding self-reflection
 - Suggesting possible paths to explore
@@ -72,4 +72,4 @@ An interest that points to a different contribution may expose a limit in the cu
 - Deciding when to stop exploring and commit
 - Using the body of work you already have under your belt to help you start your new career path
 
-With AI, it should now be possible and that's exactly what I'm trying to build with Revelio. If you're trying to figure out what to work on next, give it a go and let me know how I can help.
+With AI, it should now be possible and that's exactly what I'm trying to build with Nami. If you're trying to figure out what to work on next, give it a go and let me know how I can help.

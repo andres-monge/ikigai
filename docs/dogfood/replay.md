@@ -5,7 +5,7 @@ The bounded replay amendment in the active revamp plan controls this workflow. T
 Keep the case, source capture, editable instruction copies and output in the Git-ignored `.context/revelio/replay/` directory inside the active worktree. Never add private artifacts to Git. Each run freezes `base.txt` and the copied `skills/` directory, records their digests, seeds a newly created provider Conversation, and applies operations to an in-memory clone through the shared reducer.
 
 ```sh
-node --import tsx scripts/replay-revelio.ts PRIVATE_CASE_JSON PRIVATE_INSTRUCTIONS_DIR NEW_PRIVATE_OUTPUT_DIR ENV_FILE
+node --import tsx scripts/replay-nami.ts PRIVATE_CASE_JSON PRIVATE_INSTRUCTIONS_DIR NEW_PRIVATE_OUTPUT_DIR ENV_FILE
 ```
 
 The instruction directory contains `base.txt` and `skills/` with the same bundle layout as `server/ai/method/skills`. The output directory must be new. The environment file supplies only the provider API key to this run. The case contains `label`, `sourceConversationId`, `initialMap`, `priorTurns`, `priorItems`, `currentMessage`, `historicalReply`, and a `provenance` manifest describing checkpoint recovery and omissions. Recover those fields from retained evidence; do not substitute invented transcript or later map facts.

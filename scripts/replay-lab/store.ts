@@ -2,8 +2,8 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { access, lstat, mkdir, readFile, readdir, realpath, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { runReplay, type ReplayCase } from '../replay-revelio.js';
-import { REVELIO_AGENT_MODEL } from '../../server/ai/agent.js';
+import { runReplay, type ReplayCase } from '../replay-nami.js';
+import { NAMI_AGENT_MODEL } from '../../server/ai/agent.js';
 import { careerMapSchema } from '../../shared/career-map/index.js';
 import { METHOD_MODULE_KEYS } from '../../server/ai/method/registry.js';
 import { createMethodModuleLoader, MethodModuleLoadError } from '../../server/ai/method/loader.js';
@@ -224,7 +224,7 @@ export async function createLabStore(options: { root: string; envPath: string; r
     await saveText(path.join(directory, 'instructions/base.txt'), frozenBase ?? runTemplate.replaceAll('{{VOICE}}', config.voice).replaceAll('{{CONTROLS}}', controls));
     await saveSkills(path.join(directory, 'instructions/skills'), config.skills);
     const job: Job = { id, candidateId: config.id, candidateName: config.name, version: config.version, checkpointId: checkpoint.id, ...(parentId ? { parentId } : {}), createdAt: new Date().toISOString(), status: 'queued', currentMessage: fixture.currentMessage, feedback: { preference: 'none', comment: '' }, config,
-      caveats: ['Historical inputs may be reconstructed; see checkpoint provenance.', 'Only available provider items are retained. Hidden reasoning is unavailable.'], metadata: { model: REVELIO_AGENT_MODEL, effort: config.kind === 'learning' ? 'production' : 'low', ...(config.effortByModule ? { effortByModule: config.effortByModule } : {}), provenance: fixture.provenance } };
+      caveats: ['Historical inputs may be reconstructed; see checkpoint provenance.', 'Only available provider items are retained. Hidden reasoning is unavailable.'], metadata: { model: NAMI_AGENT_MODEL, effort: config.kind === 'learning' ? 'production' : 'low', ...(config.effortByModule ? { effortByModule: config.effortByModule } : {}), provenance: fixture.provenance } };
     await persistJob(job); queue.push(id);
     return id;
   }
@@ -269,7 +269,7 @@ export async function createLabStore(options: { root: string; envPath: string; r
     return value;
   }
   async function state(): Promise<LabState> {
-    return { candidates: await Promise.all((await ids(file('candidates'))).map(getCandidate)), checkpoints: (await checkpoints()).map((checkpoint) => { const { availableProviderItems, ...provenance } = checkpoint.provenance; return { ...checkpoint, provenance }; }), jobs: [...jobs.values()].map(({ config, traces, providerItems, operations, ...summary }) => structuredClone(summary)), model: REVELIO_AGENT_MODEL, effort: 'low', concurrency: 2, acceptedVoice, privateRoot: root };
+    return { candidates: await Promise.all((await ids(file('candidates'))).map(getCandidate)), checkpoints: (await checkpoints()).map((checkpoint) => { const { availableProviderItems, ...provenance } = checkpoint.provenance; return { ...checkpoint, provenance }; }), jobs: [...jobs.values()].map(({ config, traces, providerItems, operations, ...summary }) => structuredClone(summary)), model: NAMI_AGENT_MODEL, effort: 'low', concurrency: 2, acceptedVoice, privateRoot: root };
   }
   async function idle() { while (tasks.size || queue.length) { pump(); await Promise.all([...tasks]); } }
   return { state, getCheckpoint, getCandidate, createCandidate, updateCandidate, batch, getJob, continueJob, feedback, idle };

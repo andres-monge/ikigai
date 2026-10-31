@@ -43,7 +43,7 @@ export function Login() {
     <main className="min-h-screen bg-ikigai-beige px-6 py-16 text-slate-900">
       <section className="mx-auto flex min-h-[70vh] max-w-lg flex-col justify-center">
         <p className="mb-3 text-sm font-semibold uppercase tracking-[0.18em] text-ikigai-blue">
-          Revelio
+          Nami
         </p>
         <h1 className="text-4xl font-semibold tracking-tight">Figure out what to work on next.</h1>
         <p className="mt-5 text-lg leading-8 text-slate-600">
@@ -66,7 +66,7 @@ export function Login() {
         </button>
 
         <p className="mt-4 text-sm text-slate-500">
-          Revelio requests only your basic Google identity: name, email, and profile image.
+          Nami requests only your basic Google identity: name, email, and profile image.
         </p>
       </section>
     </main>

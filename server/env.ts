@@ -1,6 +1,6 @@
 /**
  * @description
- * Centralized environment variable management for the Revelio application.
+ * Centralized environment variable management for the Nami application.
  * This module loads, validates, and exports all required environment variables
  * using Zod schemas to ensure type safety and proper configuration at runtime.
  *

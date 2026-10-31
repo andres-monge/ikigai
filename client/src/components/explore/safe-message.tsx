@@ -162,9 +162,9 @@ function citationRemarkPlugin(citations: readonly ClaimLinkedCitation[]) {
           for (const citation of group) {
             nextChildren.push({
               type: 'link',
-              url: `revelio-citation:${citation.citationId}`,
+              url: `nami-citation:${citation.citationId}`,
               children: [{ type: 'text', value: '↗' }],
-              data: { hProperties: { 'data-revelio-citation': citation.citationId } },
+              data: { hProperties: { 'data-nami-citation': citation.citationId } },
             });
           }
           cursor = claimEnd;
@@ -180,23 +180,23 @@ function citationRemarkPlugin(citations: readonly ClaimLinkedCitation[]) {
 export const SafeMessage = memo(function SafeMessage({ message }: { message: NormalizedHistoryMessage }) {
   const text = message.parts.map((part) => part.text).join('');
   const citations = eligibleCitations(message, text);
-  const citationByUrl = new Map(citations.map((citation) => [`revelio-citation:${citation.citationId}`, citation]));
+  const citationByUrl = new Map(citations.map((citation) => [`nami-citation:${citation.citationId}`, citation]));
   const articleClass = message.role === 'assistant'
     ? 'max-w-none'
     : 'ml-auto w-fit max-w-[85%] border-2 border-black bg-ikigai-cream px-4 py-3';
   return (
     <div className="mx-auto w-full max-w-[38rem]">
-      <article aria-label={message.role === 'assistant' ? 'Revelio' : 'You'} className={articleClass}>
+      <article aria-label={message.role === 'assistant' ? 'Nami' : 'You'} className={articleClass}>
         {message.role === 'assistant' ? (
           <div className="safe-message break-words text-[1.0625rem] font-medium leading-7 [unicode-bidi:plaintext]">
             <ReactMarkdown
               allowedElements={['p', 'h2', 'h3', 'h4', 'strong', 'em', 'ol', 'ul', 'li', 'a']}
               unwrapDisallowed
               remarkPlugins={[citationRemarkPlugin(citations)]}
-              urlTransform={(url) => url.startsWith('revelio-citation:') ? url : ''}
+              urlTransform={(url) => url.startsWith('nami-citation:') ? url : ''}
               components={{
                 a: ({ href, children, node }) => {
-                  const marker = node?.properties?.['data-revelio-citation'];
+                  const marker = node?.properties?.['data-nami-citation'];
                   const citation = typeof marker === 'string' && href ? citationByUrl.get(href) : undefined;
                   return citation ? citationLink(citation) : <>{children}</>;
                 },

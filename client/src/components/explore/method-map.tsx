@@ -230,7 +230,7 @@ function HistoricalMethodState({ map }: MethodMapProps) {
               <li key={`${outcome.id}-${outcome.revision}`}><strong>{outcome.result.replaceAll('-', ' ')}:</strong> {outcome.learning}</li>
             ))}
           </ul>
-          <p className="mt-4 text-xs font-bold">Only explorer-reported outcomes appear here. Revelio does not send outreach.</p>
+          <p className="mt-4 text-xs font-bold">Only explorer-reported outcomes appear here. Nami does not send outreach.</p>
         </details>
       ) : null}
       </div>
@@ -275,7 +275,7 @@ export function MethodMap({ map }: MethodMapProps) {
       <section className="max-w-2xl border-2 border-dashed border-black bg-white/70 p-6 sm:p-8">
         <h2 className="font-display text-2xl font-black">Nothing on your map yet</h2>
         <p className="mt-3 text-sm leading-6 text-stone-700">
-          This is the record of what you and Revelio work out together: what pulls you in, why it matters to
+          This is the record of what you and Nami work out together: what pulls you in, why it matters to
           you, the directions worth trying, and the project you take on first. Nothing lands here until you’ve
           confirmed it, so you can change your mind in the chat at any point.
         </p>

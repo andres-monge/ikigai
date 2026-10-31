@@ -2,7 +2,7 @@ import { createOpenAI } from '@ai-sdk/openai';
 import { describe, expect, it } from 'vitest';
 import { applyCareerMapOperation, createCareerMap, readCareerMap, type CareerMap, type CareerMapOperation } from '../../shared/career-map/index.js';
 import type { IStorage, PersistCareerMapResult } from '../storage.js';
-import { createMethodAgent, REVELIO_AGENT_MODEL } from './agent.js';
+import { createMethodAgent, NAMI_AGENT_MODEL } from './agent.js';
 import { createMethodModuleLoader } from './method/loader.js';
 import legacyProof from '../../shared/career-map/test-fixtures/legacy-proof-v2.json';
 
@@ -115,7 +115,7 @@ function responseStream(index: number, reply?: ToolReply): Response {
       name: reply.name, arguments: JSON.stringify(reply.input), status: 'completed' }
     : { type: 'message', id: `item-${index}` };
   const events = [
-    { type: 'response.created', response: { id, created_at: 1, model: REVELIO_AGENT_MODEL } },
+    { type: 'response.created', response: { id, created_at: 1, model: NAMI_AGENT_MODEL } },
     { type: 'response.output_item.added', output_index: 0, item },
     ...(!reply ? [{ type: 'response.output_text.delta', item_id: item.id,
       output_index: 0, delta: 'What would you like to make next?' }] : []),
@@ -136,7 +136,7 @@ async function run(map: CareerMap, message = 'Help me explore.', firstReply?: To
     return responseStream(requests.length, requests.length === 1 ? firstReply : undefined);
   } });
   const agent = createMethodAgent({
-    model: provider.responses(REVELIO_AGENT_MODEL), nativeWebSearchTool: provider.tools.webSearch(),
+    model: provider.responses(NAMI_AGENT_MODEL), nativeWebSearchTool: provider.tools.webSearch(),
     storage: storage as unknown as Pick<IStorage, 'loadCareerMap' | 'persistCareerMapOperation' | 'listAgentTurns'>,
     loader: await createMethodModuleLoader(), userId: 'explorer-1', conversationId: 'conv_local_test',
     turn: { turnId: 'current-turn', leaseId: 'lease', clientMessageId: 'current-message',
@@ -150,7 +150,7 @@ async function run(map: CareerMap, message = 'Help me explore.', firstReply?: To
 }
 
 function expectControls(request: WireRequest) {
-  expect(request.model).toBe(REVELIO_AGENT_MODEL);
+  expect(request.model).toBe(NAMI_AGENT_MODEL);
   expect(request.conversation).toBe('conv_local_test');
   expect(request.store).toBe(true);
   expect(request.parallel_tool_calls).toBe(false);

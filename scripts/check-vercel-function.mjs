@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { parse } from 'dotenv';
+import { configuredAppOrigin } from '../shared/app-origin.ts';
 
 if (process.versions.node.split('.')[0] !== '24') {
   throw new Error('Vercel function verification requires Node 24');
@@ -77,6 +78,24 @@ async function assertSafePackage(root) {
     }
   }
   await scan(output);
+
+  const expectedOrigin = configuredAppOrigin(process.env.BETTER_AUTH_URL ?? '', {
+    nodeEnv: 'production', vercel: '1',
+  });
+  if (!expectedOrigin) {
+    throw new Error('Set a valid HTTPS BETTER_AUTH_URL origin for the package check');
+  }
+  const html = await readFile(path.join(output, 'static/index.html'), 'utf8');
+  for (const [attribute, name, value] of [
+    ['property', 'og:url', `${expectedOrigin}/`],
+    ['property', 'og:image', `${expectedOrigin}/assets/og-image.png`],
+    ['name', 'twitter:url', `${expectedOrigin}/`],
+    ['name', 'twitter:image', `${expectedOrigin}/assets/og-image.png`],
+  ]) {
+    if (!html.includes(`<meta ${attribute}="${name}" content="${value}"`)) {
+      throw new Error(`Deployment share metadata does not match BETTER_AUTH_URL: ${name}`);
+    }
+  }
 }
 
 const probe = `
@@ -99,7 +118,7 @@ try {
 }
 `;
 
-const isolated = await mkdtemp(path.join(tmpdir(), 'revelio-vercel-function-'));
+const isolated = await mkdtemp(path.join(tmpdir(), 'nami-vercel-function-'));
 try {
   await assertSafePackage(artifact);
   await cp(artifact, isolated, { recursive: true });

@@ -54,7 +54,7 @@ export function observeMethodRequest(
   input: { requestId: string; route: MethodRouteLabel; log: (entry: Record<string, unknown>) => void },
 ): void {
   const started = Date.now();
-  const buildVersion = methodBuildVersion(process.env.REVELIO_BUILD_VERSION);
+  const buildVersion = methodBuildVersion(process.env.NAMI_BUILD_VERSION);
   let emitted = false;
   const emit = (outcome: 'response-finished' | 'response-closed') => {
     if (emitted) return;

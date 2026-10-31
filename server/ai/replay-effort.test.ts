@@ -3,7 +3,7 @@ import { simulateReadableStream } from 'ai';
 import { MockLanguageModelV4 } from 'ai/test';
 import { expect, it } from 'vitest';
 import { createCareerMap } from '../../shared/career-map/index.js';
-import { createReplayStorage } from '../../scripts/replay-revelio.js';
+import { createReplayStorage } from '../../scripts/replay-nami.js';
 import { createMethodAgent, type CreateMethodAgentOptions } from './agent.js';
 import { createMethodModuleLoader } from './method/loader.js';
 

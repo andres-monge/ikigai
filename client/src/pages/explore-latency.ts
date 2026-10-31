@@ -8,7 +8,7 @@ export interface ClientLatencyTrace {
 }
 
 export function createClientLatencyTrace(route: 'agent-turn' | 'workspace-operation'): ClientLatencyTrace | undefined {
-  if (!import.meta.env.DEV || import.meta.env.VITE_REVELIO_LATENCY_TRACE !== '1') return undefined;
+  if (!import.meta.env.DEV || import.meta.env.VITE_NAMI_LATENCY_TRACE !== '1') return undefined;
   const started = performance.now();
   const phases = new Map<ClientPhase, number>();
   let requestId: string | undefined;

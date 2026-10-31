@@ -26,7 +26,7 @@ import { createAgentRouter } from './agent.js';
 
 const USER_ID = 'opaque-user-1';
 const SENTINEL = 'private-prompt-map-history-source-provider-sentinel';
-const METHOD_REQUEST_ORIGIN = 'https://revelio.test';
+const METHOD_REQUEST_ORIGIN = 'https://nami.test';
 const WEBM_AUDIO = Buffer.from('1a45dfa39f4286810142f7810142f2810442f381084282847765626d4287810442858102', 'hex');
 const MP4_AUDIO = Buffer.from('00000018667479706d7034320000000069736f6d6d703432', 'hex');
 const GUARDED_METHOD_POST_PATHS = new Set([
@@ -445,7 +445,7 @@ async function request(app: express.Express) {
       return GUARDED_METHOD_POST_PATHS.has(path.split('?')[0] ?? path)
         ? pending
             .set('Origin', METHOD_REQUEST_ORIGIN)
-            .set('X-Revelio-Request', '1')
+            .set('X-Nami-Request', '1')
             .set('Content-Type', path.includes('/audio/transcribe') ? 'audio/webm' : 'application/json')
         : pending;
     },
@@ -455,7 +455,7 @@ async function request(app: express.Express) {
 describe('protected Method routes', () => {
   it('emits opt-in numeric latency data without private request or provider text', async () => {
     vi.stubEnv('NODE_ENV', 'development');
-    vi.stubEnv('REVELIO_LATENCY_TRACE', '1');
+    vi.stubEnv('NAMI_LATENCY_TRACE', '1');
     try {
       const logs: Array<Record<string, unknown>> = [];
       const response = await (await request(testApp({
@@ -635,17 +635,23 @@ describe('protected Method routes', () => {
         },
         {
           label: 'sibling Vercel origin',
-          apply: (pending: SupertestRequest) => pending.set('Origin', 'https://revelio-me-git-feature.vercel.app'),
+          apply: (pending: SupertestRequest) => pending.set('Origin', 'https://heynami-git-feature.vercel.app'),
         },
         {
           label: 'missing custom header',
           apply: (pending: SupertestRequest) => pending.set('Origin', METHOD_REQUEST_ORIGIN),
         },
         {
+          label: 'former custom header',
+          apply: (pending: SupertestRequest) => pending
+            .set('Origin', METHOD_REQUEST_ORIGIN)
+            .set('X-Revelio-Request', '1'),
+        },
+        {
           label: 'invalid custom header',
           apply: (pending: SupertestRequest) => pending
             .set('Origin', METHOD_REQUEST_ORIGIN)
-            .set('X-Revelio-Request', 'true'),
+            .set('X-Nami-Request', 'true'),
         },
       ];
 
@@ -681,23 +687,25 @@ describe('protected Method routes', () => {
 
     it.each([
       ['missing origin', (pending: SupertestRequest) => pending
-        .set('X-Revelio-Request', '1').set('Content-Type', 'audio/webm'), 403],
+        .set('X-Nami-Request', '1').set('Content-Type', 'audio/webm'), 403],
       ['malformed origin', (pending: SupertestRequest) => pending
-        .set('Origin', 'not-an-origin').set('X-Revelio-Request', '1').set('Content-Type', 'audio/webm'), 403],
+        .set('Origin', 'not-an-origin').set('X-Nami-Request', '1').set('Content-Type', 'audio/webm'), 403],
       ['origin path', (pending: SupertestRequest) => pending
-        .set('Origin', `${METHOD_REQUEST_ORIGIN}/path`).set('X-Revelio-Request', '1').set('Content-Type', 'audio/webm'), 403],
+        .set('Origin', `${METHOD_REQUEST_ORIGIN}/path`).set('X-Nami-Request', '1').set('Content-Type', 'audio/webm'), 403],
       ['sibling origin', (pending: SupertestRequest) => pending
-        .set('Origin', 'https://revelio-me-git-feature.vercel.app').set('X-Revelio-Request', '1').set('Content-Type', 'audio/webm'), 403],
+        .set('Origin', 'https://heynami-git-feature.vercel.app').set('X-Nami-Request', '1').set('Content-Type', 'audio/webm'), 403],
       ['cross origin', (pending: SupertestRequest) => pending
-        .set('Origin', 'https://attacker.example').set('X-Revelio-Request', '1').set('Content-Type', 'audio/webm'), 403],
+        .set('Origin', 'https://attacker.example').set('X-Nami-Request', '1').set('Content-Type', 'audio/webm'), 403],
       ['missing Method header', (pending: SupertestRequest) => pending
         .set('Origin', METHOD_REQUEST_ORIGIN).set('Content-Type', 'audio/webm'), 403],
+      ['former Method header', (pending: SupertestRequest) => pending
+        .set('Origin', METHOD_REQUEST_ORIGIN).set('X-Revelio-Request', '1').set('Content-Type', 'audio/webm'), 403],
       ['invalid Method header', (pending: SupertestRequest) => pending
-        .set('Origin', METHOD_REQUEST_ORIGIN).set('X-Revelio-Request', 'true').set('Content-Type', 'audio/webm'), 403],
+        .set('Origin', METHOD_REQUEST_ORIGIN).set('X-Nami-Request', 'true').set('Content-Type', 'audio/webm'), 403],
       ['unsupported media', (pending: SupertestRequest) => pending
-        .set('Origin', METHOD_REQUEST_ORIGIN).set('X-Revelio-Request', '1').set('Content-Type', 'audio/mpeg'), 400],
+        .set('Origin', METHOD_REQUEST_ORIGIN).set('X-Nami-Request', '1').set('Content-Type', 'audio/mpeg'), 400],
       ['unsupported WebM codec', (pending: SupertestRequest) => pending
-        .set('Origin', METHOD_REQUEST_ORIGIN).set('X-Revelio-Request', '1').set('Content-Type', 'audio/webm; codecs=vorbis'), 400],
+        .set('Origin', METHOD_REQUEST_ORIGIN).set('X-Nami-Request', '1').set('Content-Type', 'audio/webm; codecs=vorbis'), 400],
     ] as const)('rejects %s audio metadata before auth, logging, parsing, or provider work', async (
       _label, apply, status,
     ) => {
@@ -773,7 +781,7 @@ describe('protected Method routes', () => {
       })))
         .post(path)
         .set('Origin', METHOD_REQUEST_ORIGIN)
-        .set('X-Revelio-Request', '1')
+        .set('X-Nami-Request', '1')
         .type('form')
         .send(body);
 
@@ -802,9 +810,9 @@ describe('protected Method routes', () => {
         operationalLog,
       })))
         .options(path)
-        .set('Origin', 'https://revelio-me-git-feature.vercel.app')
+        .set('Origin', 'https://heynami-git-feature.vercel.app')
         .set('Access-Control-Request-Method', 'POST')
-        .set('Access-Control-Request-Headers', 'content-type,x-revelio-request')
+        .set('Access-Control-Request-Headers', 'content-type,x-nami-request')
         .set('Cookie', 'better-auth.session_token=opaque');
 
       expect(response.status).toBe(405);
@@ -2058,7 +2066,7 @@ describe('protected Method routes', () => {
 
   it('retries bounded provider projection until delayed internal context becomes visible', async () => {
     vi.stubEnv('NODE_ENV', 'development');
-    vi.stubEnv('REVELIO_LATENCY_TRACE', '1');
+    vi.stubEnv('NAMI_LATENCY_TRACE', '1');
     try {
       const marker = 'delayed-context-';
       const logs: Array<Record<string, unknown>> = [];
@@ -2125,7 +2133,7 @@ describe('protected Method routes', () => {
     'fails closed when internal context remains %s after bounded visibility retries',
     async (markerFailure) => {
       vi.stubEnv('NODE_ENV', 'development');
-      vi.stubEnv('REVELIO_LATENCY_TRACE', '1');
+      vi.stubEnv('NAMI_LATENCY_TRACE', '1');
       try {
         const logs: Array<Record<string, unknown>> = [];
         const marker = 'never-unambiguous-context-0';
@@ -2184,7 +2192,7 @@ describe('protected Method routes', () => {
 
   it.each([['production', '1'], ['development', '0']])('does not add capture or provider calls with %s / trace %s', async (nodeEnv, enabledTrace) => {
     vi.stubEnv('NODE_ENV', nodeEnv);
-    vi.stubEnv('REVELIO_LATENCY_TRACE', enabledTrace);
+    vi.stubEnv('NAMI_LATENCY_TRACE', enabledTrace);
     try {
       const logs: Array<Record<string, unknown>> = [];
       const storage = createStorage({ getConversationMapping: vi.fn(async () => 'untraced-conversation') });
@@ -2243,7 +2251,7 @@ describe('protected Method routes', () => {
 
   it.each(['agent', 'workspace'] as const)('lets an admitted %s binding read finish after the admission window', async (entry) => {
     vi.stubEnv('NODE_ENV', 'development');
-    vi.stubEnv('REVELIO_LATENCY_TRACE', '1');
+    vi.stubEnv('NAMI_LATENCY_TRACE', '1');
     try {
       const direct = entry === 'workspace';
       const marker = 'grace-context-';
@@ -2284,7 +2292,7 @@ describe('protected Method routes', () => {
 
   it.each(['first-hang', 'admission-cutoff', 'last-read-hang'] as const)('bounds normal binding: %s', async (scenario) => {
     vi.stubEnv('NODE_ENV', 'development');
-    vi.stubEnv('REVELIO_LATENCY_TRACE', '1');
+    vi.stubEnv('NAMI_LATENCY_TRACE', '1');
     try {
       const logs: Array<Record<string, unknown>> = [];
       const storage = createStorage({ getConversationMapping: vi.fn(async () => 'bounded-grace-conversation') });
@@ -2328,7 +2336,7 @@ describe('protected Method routes', () => {
 
   it('cancels promptly while an admitted read is using grace', async () => {
     vi.stubEnv('NODE_ENV', 'development');
-    vi.stubEnv('REVELIO_LATENCY_TRACE', '1');
+    vi.stubEnv('NAMI_LATENCY_TRACE', '1');
     const exit = vi.spyOn(MethodLatencyTrace.prototype, 'bindingExit');
     try {
       let secondRead!: () => void;
@@ -2366,7 +2374,7 @@ describe('protected Method routes', () => {
 
   it.each([503, 401])('captures known HTTP %i and exhausts only retryable failures', async (status) => {
     vi.stubEnv('NODE_ENV', 'development');
-    vi.stubEnv('REVELIO_LATENCY_TRACE', '1');
+    vi.stubEnv('NAMI_LATENCY_TRACE', '1');
     try {
       const logs: Array<Record<string, unknown>> = [];
       const storage = createStorage({ getConversationMapping: vi.fn(async () => 'private-http-conversation') });
@@ -2393,7 +2401,7 @@ describe('protected Method routes', () => {
 
   it('ignores recorder failures without changing the binding outcome', async () => {
     vi.stubEnv('NODE_ENV', 'development');
-    vi.stubEnv('REVELIO_LATENCY_TRACE', '1');
+    vi.stubEnv('NAMI_LATENCY_TRACE', '1');
     const spies = [vi.spyOn(MethodLatencyTrace.prototype, 'bindingMarkers'),
       vi.spyOn(MethodLatencyTrace.prototype, 'bindingAttempt'), vi.spyOn(MethodLatencyTrace.prototype, 'bindingExit')];
     spies.forEach((spy) => spy.mockImplementation(() => { throw new Error(SENTINEL); }));
@@ -2413,7 +2421,7 @@ describe('protected Method routes', () => {
 
   it.each([false, true])('bounds failure recovery even when provider item listing ignores its abort signal (retry first: %s)', async (retryFirst) => {
     vi.stubEnv('NODE_ENV', 'development');
-    vi.stubEnv('REVELIO_LATENCY_TRACE', '1');
+    vi.stubEnv('NAMI_LATENCY_TRACE', '1');
     try {
       const logs: Array<Record<string, unknown>> = [];
       let releasePage!: (page: { data: unknown[]; hasMore: boolean }) => void;
@@ -2467,7 +2475,7 @@ describe('protected Method routes', () => {
 
   it.each(['read', 'delay', 'retry-delay'] as const)('preserves prompt cancellation during binding %s', async (phase) => {
     vi.stubEnv('NODE_ENV', 'development');
-    vi.stubEnv('REVELIO_LATENCY_TRACE', '1');
+    vi.stubEnv('NAMI_LATENCY_TRACE', '1');
     const exit = vi.spyOn(MethodLatencyTrace.prototype, 'bindingExit');
     let outbound: ReturnType<Awaited<ReturnType<typeof request>>['post']>;
     const recordAttempt = MethodLatencyTrace.prototype.bindingAttempt;
@@ -2801,7 +2809,7 @@ describe('protected Method routes', () => {
         headers: {
           'content-type': 'application/json',
           origin: METHOD_REQUEST_ORIGIN,
-          'x-revelio-request': '1',
+          'x-nami-request': '1',
         },
         body: JSON.stringify({ id: firstTurn.clientMessageId, message: 'First durable message.' }),
       });

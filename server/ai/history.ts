@@ -20,7 +20,7 @@ import {
 } from '../../shared/streaming-schemas.js';
 import type { IStorage } from '../storage.js';
 import { PURPOSE_PATHS_OFFER_ENGLISH } from './method/base-instructions.js';
-import { REVELIO_MAX_AGENT_STEPS } from './limits.js';
+import { NAMI_MAX_AGENT_STEPS } from './limits.js';
 import { resolveNativeSearchCitationClaim } from './research.js';
 
 const conversationIdSchema = z.string().min(1).max(200);
@@ -420,7 +420,7 @@ export function resolveAssistantDisplayProjection(
   });
 }
 
-const internalContextMarkerListSchema = z.array(z.string().min(1).max(200)).max(REVELIO_MAX_AGENT_STEPS)
+const internalContextMarkerListSchema = z.array(z.string().min(1).max(200)).max(NAMI_MAX_AGENT_STEPS)
   .refine((markers) => new Set(markers).size === markers.length);
 const internalContextPayloadSchema = z.object({
   version: z.literal(1),
@@ -558,8 +558,8 @@ function pendingInternalContextMarkerBatches(turns: readonly AgentTurnRecord[]):
   }
   const values = [...markers];
   return Array.from(
-    { length: Math.ceil(values.length / REVELIO_MAX_AGENT_STEPS) },
-    (_, index) => values.slice(index * REVELIO_MAX_AGENT_STEPS, (index + 1) * REVELIO_MAX_AGENT_STEPS),
+    { length: Math.ceil(values.length / NAMI_MAX_AGENT_STEPS) },
+    (_, index) => values.slice(index * NAMI_MAX_AGENT_STEPS, (index + 1) * NAMI_MAX_AGENT_STEPS),
   );
 }
 
@@ -837,7 +837,7 @@ export class OpenAIConversationClient implements ConversationItemsClient {
   async createConversation(abortSignal?: AbortSignal): Promise<string> {
     const body = await this.request('/conversations', {
       method: 'POST',
-      body: JSON.stringify({ metadata: { product: 'revelio-method', request: randomUUID() } }),
+      body: JSON.stringify({ metadata: { product: 'nami-method', request: randomUUID() } }),
     }, 'create', abortSignal);
     return conversationIdSchema.parse(body?.id);
   }

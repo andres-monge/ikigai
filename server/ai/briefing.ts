@@ -488,7 +488,7 @@ function renderCareerMapBriefing(
   checkpoint: MethodCheckpoint,
 ): string {
   const lines = [
-    '# Revelio career-map briefing',
+    '# Nami career-map briefing',
     `Schema ${map.schemaVersion}; map revision ${map.revision}; active module ${checkpoint.module}.`,
     'Canonical state below outranks conflicting or stale transcript text.',
   ];

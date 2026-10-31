@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MethodLatencyTrace, methodLatencyEnabled } from './agent-latency';
-import { REVELIO_MAX_AGENT_STEPS } from '../ai/limits.js';
+import { NAMI_MAX_AGENT_STEPS } from '../ai/limits.js';
 
 afterEach(() => vi.unstubAllEnvs());
 
 describe('Method latency trace', () => {
   it('runs only with the explicit development switch', () => {
     vi.stubEnv('NODE_ENV', 'production');
-    vi.stubEnv('REVELIO_LATENCY_TRACE', '1');
+    vi.stubEnv('NAMI_LATENCY_TRACE', '1');
     expect(methodLatencyEnabled()).toBe(false);
     vi.stubEnv('NODE_ENV', 'development');
     expect(methodLatencyEnabled()).toBe(true);
@@ -40,33 +40,33 @@ describe('Method latency trace', () => {
   });
   it('bounds binding capture to fixed finite numeric fields', () => {
     const trace = new MethodLatencyTrace();
-    const markers = { elapsedMs: 2, budgetMs: 5000, expectedCount: REVELIO_MAX_AGENT_STEPS, promiseSettled: 1 as const,
+    const markers = { elapsedMs: 2, budgetMs: 5000, expectedCount: NAMI_MAX_AGENT_STEPS, promiseSettled: 1 as const,
       requestAborted: 0 as const, deadlineAborted: 0 as const, privateValue: 'private-marker-provider-payload' };
-    trace.bindingMarkers({ ...markers, expectedCount: REVELIO_MAX_AGENT_STEPS + 1 });
+    trace.bindingMarkers({ ...markers, expectedCount: NAMI_MAX_AGENT_STEPS + 1 });
     expect(trace.summary()).not.toHaveProperty('terminalBinding');
     trace.bindingMarkers(markers);
     const attempt = { index: 1, elapsedMs: 10, readReturned: 1 as const, httpStatus: 0, requestedLimit: 100,
-      returnedCount: 100, hasMore: 1, cursorPresent: 1, matchCounts: Array(REVELIO_MAX_AGENT_STEPS).fill(1),
+      returnedCount: 100, hasMore: 1, cursorPresent: 1, matchCounts: Array(NAMI_MAX_AGENT_STEPS).fill(1),
       requestAborted: 0 as const, admissionClosed: 0 as const, readDeadlineExpired: 0 as const, totalDeadlineExpired: 0 as const, deadlineAborted: 0 as const, privateValue: 'private-marker-provider-payload' };
     trace.bindingAttempt({ ...attempt, elapsedMs: NaN });
     trace.bindingAttempt({ ...attempt, admissionClosed: 2 as never });
     trace.bindingAttempt({ ...attempt, readDeadlineExpired: NaN as never });
     trace.bindingAttempt({ ...attempt, totalDeadlineExpired: -1 as never });
-    trace.bindingAttempt({ ...attempt, matchCounts: Array(REVELIO_MAX_AGENT_STEPS + 1).fill(1) });
+    trace.bindingAttempt({ ...attempt, matchCounts: Array(NAMI_MAX_AGENT_STEPS + 1).fill(1) });
     for (let index = 1; index <= 6; index += 1) trace.bindingAttempt({ ...attempt, index });
     trace.bindingExit({ phase: 4, elapsedMs: Infinity, complete: 0, readPhaseElapsedMs: 3, admissionBudgetMs: 5000, perReadBudgetMs: 5000, totalReadBudgetMs: 10000, requestAborted: 0, admissionClosed: 0, readDeadlineExpired: 0, totalDeadlineExpired: 0, deadlineAborted: 0 });
     const captured = trace.summary().terminalBinding as { markerWait: unknown; attempts: unknown[]; exit?: unknown };
     expect(captured.attempts).toHaveLength(5);
     expect(captured).not.toHaveProperty('exit');
-    expect(captured.markerWait).toEqual({ elapsedMs: 2, budgetMs: 5000, expectedCount: REVELIO_MAX_AGENT_STEPS,
+    expect(captured.markerWait).toEqual({ elapsedMs: 2, budgetMs: 5000, expectedCount: NAMI_MAX_AGENT_STEPS,
       promiseSettled: 1, requestAborted: 0, deadlineAborted: 0 });
     expect(captured.attempts[0]).toEqual({ index: 1, elapsedMs: 10, readReturned: 1, httpStatus: 0,
-      requestedLimit: 100, returnedCount: 100, hasMore: 1, cursorPresent: 1, matchCounts: Array(REVELIO_MAX_AGENT_STEPS).fill(1),
+      requestedLimit: 100, returnedCount: 100, hasMore: 1, cursorPresent: 1, matchCounts: Array(NAMI_MAX_AGENT_STEPS).fill(1),
       requestAborted: 0, admissionClosed: 0, readDeadlineExpired: 0, totalDeadlineExpired: 0, deadlineAborted: 0 });
     expect(JSON.stringify(captured)).not.toContain('private-marker-provider-payload');
   });
 
-  it.each([21, REVELIO_MAX_AGENT_STEPS])('retains every numeric marker count for a supported %i-step turn', (expectedCount) => {
+  it.each([21, NAMI_MAX_AGENT_STEPS])('retains every numeric marker count for a supported %i-step turn', (expectedCount) => {
     const trace = new MethodLatencyTrace();
     const matchCounts = Array.from({ length: expectedCount }, (_, index) => index % 3);
     trace.bindingMarkers({ elapsedMs: 2, budgetMs: 5000, expectedCount, promiseSettled: 1,

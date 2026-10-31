@@ -1,6 +1,6 @@
 # Founder dogfood Method reset
 
-This operator command resets one explorer's Revelio Method journey to a clean
+This operator command resets one explorer's Nami Method journey to a clean
 Foundation start while preserving the same Better Auth/Google identity.
 
 This is not the pilot account-erasure runbook reserved by I3. It does not
@@ -73,7 +73,7 @@ overrides the explicit shell value. Inspect the resulting target carefully:
 
 ```sh
 NODE_ENV=development \
-REVELIO_ENV_FILE='/absolute/path/to/project/.env' \
+NAMI_ENV_FILE='/absolute/path/to/project/.env' \
 npm run method:reset -- \
   --environment=development \
   --email=founder@example.com \
@@ -81,7 +81,7 @@ npm run method:reset -- \
 ```
 
 Production never silently loads the default `.env`. Supply production values
-through the approved secret-loading path or an explicit `REVELIO_ENV_FILE`.
+through the approved secret-loading path or an explicit `NAMI_ENV_FILE`.
 
 Before continuing, verify `Mode: DRY RUN`, environment, immutable auth user ID,
 canonical database, both sanitized transports, Method row inventory, provider
@@ -92,7 +92,7 @@ five minutes and is valid only while the inspected Method snapshot is unchanged.
 
 ```sh
 NODE_ENV=development \
-REVELIO_ENV_FILE='/absolute/path/to/project/.env' \
+NAMI_ENV_FILE='/absolute/path/to/project/.env' \
 npm run method:reset -- \
   --environment=development \
   --email=founder@example.com \
@@ -115,7 +115,7 @@ state with raw SQL.
 
 | Exit | Meaning | Action |
 | --- | --- | --- |
-| `0` | Dry run succeeded, or execution verified complete | After execution, reload Revelio and confirm the preserved account opens at Foundation. |
+| `0` | Dry run succeeded, or execution verified complete | After execution, reload Nami and confirm the preserved account opens at Foundation. |
 | `1` | A safety check, strict lease guard, database operation, auth invariant, or residual-row verification failed | Stop and take a new dry run after resolving the stated cause. |
 | `2` | Local Method content was removed but provider reconciliation remains durably pending | Resolve the provider/configuration problem, then take a fresh dry run and use its new token. |
 
