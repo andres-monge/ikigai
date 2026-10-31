@@ -1,0 +1,226 @@
+{
+  "skill": "ce-doc-review",
+  "mode": "non-interactive",
+  "completed": true,
+  "review_round": 2,
+  "document_path": "docs/plans/2026-10-31-1518-chore-nami-verification-kit-plan.md",
+  "previous_review_receipt": "docs/evidence/2026-10-31-nami-verification-kit-plan-review.json",
+  "previous_sha256": "e7978d26c512dc7ff0dd01566ea7ec2ece87fd114ba94ddadf29797391fcc8cd",
+  "reviewed_sha256": "6662e9ca9a6f9cd7e452f78a6e79a712821729373618e525ee12f2ae183cc93e",
+  "final_sha256": "6662e9ca9a6f9cd7e452f78a6e79a712821729373618e525ee12f2ae183cc93e",
+  "amendment_authority": "Founder explicitly requires plan update first; deliberate real requests for implementation verification, retain runaway/significant-accidental-spend safeguards without arbitrary tight caps/new hard spending approval gates; coordinator reviews before ce-work.",
+  "amended_sections": [
+    "Product Key Decisions",
+    "R5/R6/R8 and added stable R9",
+    "Current grounding",
+    "KTD6 and added stable KTD7",
+    "U1–U4",
+    "Verification Contract",
+    "Definition of Done"
+  ],
+  "amendment_summary": [
+    "Planning remains inspection/design; implementation live integration deliberately uses actual network/provider/model/QA requests.",
+    "Explicit paid legacy/full journey is permitted after target/account/data/provider checks; default discovery/build/harness remains protected.",
+    "Observe purpose/progress/available usage; retain first failure and diagnose before retry; stop/notify runaway/nonprogress/anomalous or unexpected cost without new caps/thresholds/quota tooling.",
+    "Keep live auth/streaming/persistence/reload coverage pending until actually performed; fixtures/503 do not substitute.",
+    "Separate production deployment/config/domain/access/write-scope authorization; preserve QA ownership/history, founder-record exclusion, privacy and optional safe1Password.",
+    "Coordinator timing clarifications integrated for cold-entry proof, config listing vs safe occupied-port preflight, and QA exclusion in existing selected cohort reports."
+  ],
+  "coverage": {
+    "rerun_local": [
+      "coherence",
+      "feasibility",
+      "scope-guardian",
+      "adversarial"
+    ],
+    "carried_unchanged": [
+      "design-lens",
+      "security-lens",
+      "prior security-lens-claude"
+    ],
+    "cross_model_owed_this_round": [
+      "adversarial",
+      "whole-doc"
+    ],
+    "peer_outcome": "folded",
+    "failed": []
+  },
+  "local_results": [
+    {
+      "reviewer": "coherence",
+      "findings": [],
+      "residual_risks": [],
+      "deferred_questions": []
+    },
+    {
+      "reviewer": "feasibility",
+      "findings": [],
+      "residual_risks": [],
+      "deferred_questions": []
+    },
+    {
+      "reviewer": "scope-guardian",
+      "findings": [],
+      "residual_risks": [],
+      "deferred_questions": []
+    },
+    {
+      "reviewer": "adversarial",
+      "findings": [],
+      "residual_risks": [],
+      "deferred_questions": []
+    }
+  ],
+  "cross_model_results": [
+    {
+      "reviewer": "adversarial-claude",
+      "cross_model_route": "claude",
+      "cross_model_target": "claude",
+      "cross_model_harness": "claude",
+      "serving_family": "claude",
+      "independence_verified": true,
+      "model_requested": "claude-opus-5-5",
+      "model_actual": "claude-opus-5-5",
+      "effort_requested": "low",
+      "findings": [
+        {
+          "title": "Production-DB QA writes accumulate without containment",
+          "severity": "P2",
+          "section": "KTD4 — Prefer controlled final-origin QA before invitations",
+          "why_it_matters": "The deployed lane (S3–S5) does real writes to the shared production database using the one QA account. Every release and every relevant change adds more additive mutations, and reset is forbidden. The plan assumes the account's checkpoint will keep supporting a meaningful saved turn and continuation. Over repeated releases the QA history drifts, and S4 can stop finding a legitimate next choice. Nothing in the plan covers what happens then, except that cleanup must not remove QA history. The plan should name an accepted limit: when the checkpoint can no longer support S3/S4, add another dedicated QA account rather than resetting the existing one.",
+          "finding_type": "omission",
+          "autofix_class": "gated_auto",
+          "suggested_fix": "In Assumptions, state that when the existing QA checkpoint can no longer support S3/S4 additively, the agent stops and requests a further dedicated QA account instead of resetting or skipping rows.",
+          "confidence": 50,
+          "evidence": [
+            "Public final-origin QA writes to a shared production database.",
+            "Do not reset it to manufacture a convenient journey."
+          ]
+        },
+        {
+          "title": "Cost-anomaly stop has no reference baseline",
+          "severity": "P2",
+          "section": "KTD7 — Select a purpose, then observe progress and usage",
+          "why_it_matters": "Agents must stop on 'anomalous/unexpected cost', but the plan sets no expected per-scenario usage reference. This is not a cap, just a reference point. Without one, a cold agent can't tell normal deliberate spend from an anomaly. R9's spend protection then depends on each agent's own judgment and can fail silently. If the scenario matrix records the typical observed token/step usage per live row, agents get a reference point without adding a hard threshold.",
+          "finding_type": "omission",
+          "autofix_class": "gated_auto",
+          "suggested_fix": "In U2, have the scenario matrix record each live row's observed typical step/token usage from its first passing run as a non-binding reference for 'unexpected cost'.",
+          "confidence": 50,
+          "evidence": [
+            "stop/notify on nonprogressing repetition, runaway behavior or anomalous/unexpected cost",
+            "without arbitrary tight request caps or a new hard spending approval threshold"
+          ]
+        }
+      ],
+      "residual_risks": [
+        "The production Google OAuth flow for the QA account may require interactive 2FA on each new session, so S2 cannot run without the founder present at every release."
+      ],
+      "deferred_questions": []
+    },
+    {
+      "reviewer": "whole-doc-claude",
+      "cross_model_route": "claude",
+      "cross_model_target": "claude",
+      "cross_model_harness": "claude",
+      "serving_family": "claude",
+      "independence_verified": true,
+      "model_requested": "claude-opus-5-5",
+      "model_actual": "claude-opus-5-5",
+      "effort_requested": "low",
+      "findings": [
+        {
+          "title": "U3 test scenarios contradict on opt-in for discovery",
+          "severity": "P2",
+          "section": "U3 — Bound and correct the legacy browser entrypoint",
+          "why_it_matters": "Implementers can't tell whether configuration discovery (e.g. `playwright test --list`) has to fail without the opt-in. KTD6 (explicit legacy browser run) requires the opt-in check to happen before server startup. But the second scenario only lists the suite when the opt-in is given. And the Verification section says to use 'safe configuration discovery' with no mention of the opt-in. If the opt-in guard lives in the config file, listing without it could also throw, which would break the safe discovery used elsewhere. The plan should say whether listing without the opt-in is allowed.",
+          "finding_type": "omission",
+          "autofix_class": "gated_auto",
+          "suggested_fix": "State that the opt-in guard runs at webServer/test startup, not at config load. Listing without the opt-in prints the missing-opt-in explanation and runs nothing.",
+          "confidence": 50,
+          "evidence": [
+            "Invoking without legacy opt-in fails clearly before starting a server/browser/provider request",
+            "With explicit opt-in, configuration discovery lists only the labelled legacy journey"
+          ]
+        },
+        {
+          "title": "U1 cold-entry test depends on U2's later output",
+          "severity": "P2",
+          "section": "U1 — Publish the discoverable verification entrypoint",
+          "why_it_matters": "U1's main test can't run until U2 has written the scenario matrix, yet U2 is listed as depending on U1. As written, U1 can't be confirmed done when it lands, and the Definition of Done item for U1 can't be checked on its own. Either move the cold-entry proof into U2's or U4's verification, or say clearly that U1's completion is confirmed after U2.",
+          "finding_type": "error",
+          "autofix_class": "gated_auto",
+          "suggested_fix": "Move the six-change cold-entry scenario into U4's guide proof, and limit U1 verification to link/source review.",
+          "confidence": 75,
+          "evidence": [
+            "After U2 supplies the integrated matrix, a fresh read-only agent given only the repo entrypoint and six representative change descriptions finds the guide",
+            "**Dependencies:** U1."
+          ]
+        }
+      ],
+      "residual_risks": [
+        "Final-origin QA writes go to the shared production database, and the only protection is QA account ownership. If S5's interruption timing goes wrong, it could leave partial state in the founder-facing production data."
+      ],
+      "deferred_questions": [
+        "Which local auth/data bootstrap counts as safe enough for the auth-enabled local Method integration lane in U4?"
+      ]
+    }
+  ],
+  "resolved_claims": [
+    {
+      "claim": "Production-DB QA writes accumulate without containment",
+      "source": "adversarial-claude",
+      "disposition": "dismissed",
+      "reason": "Re-raises earlier speculative checkpoint exhaustion. Existing repeating Method supports continuation, and plan explicitly stops and presents an alternative if checkpoint inadequate. No actual exhausted checkpoint or founder-record write path is shown. Human approved additive QA and no reset; no new account lifecycle mechanism required."
+    },
+    {
+      "claim": "Cost-anomaly stop has no reference baseline",
+      "source": "adversarial-claude",
+      "disposition": "dismissed",
+      "reason": "KTD7 defines selected purpose/scope, progress and available usage observations, alongside existing runtime limits and diagnosis-before-retry. No established typical monetary baseline is available, and one passing run cannot establish typical cost. Recording a new per-row baseline would add calibration work without a demonstrated missing safeguard. Existing observations/receipts remain available as context without a new threshold/gate/tool."
+    },
+    {
+      "claim": "U3 test scenarios contradict on opt-in for discovery",
+      "source": "whole-doc-claude",
+      "disposition": "dismissed",
+      "reason": "KTD6 and U3 explicitly require opt-in before startup, default invocation fails before any paid action, and listing with explicit opt-in is a separate safe discovery test. Verification cites those scenarios; it never promises listing without opt-in. Suggested no-opt-in listing is an alternative mechanism rather than a demonstrated contradiction."
+    },
+    {
+      "claim": "U1 cold-entry test depends on U2's later output",
+      "source": "whole-doc-claude",
+      "disposition": "dismissed",
+      "reason": "Coordinator specifically directed integrated-matrix timing; amended scenario explicitly says After U2 supplies the integrated matrix. U4 then proves the combined kit after U1–U3. The review itself offers this timing clarification as a valid remedy, which is already present. No instruction claims premature final acceptance of U1."
+    },
+    {
+      "claim": "Google security barriers can remain founder-dependent",
+      "source": "adversarial-claude residual",
+      "disposition": "already-addressed",
+      "reason": "R6/Access retain encountered security steps as human work; no unattended sign-in promise."
+    },
+    {
+      "claim": "S5 partial production state could affect founder-facing data",
+      "source": "whole-doc-claude residual",
+      "disposition": "dismissed",
+      "reason": "Dedicated QA ownership, no founder records, canonical atomic/cancellation checks and saved-state truth remain active. No cross-account or founder-data contamination path is demonstrated. Intentional interrupted QA state is an explicit test outcome requiring reconciliation, not a new permission to modify founder data."
+    },
+    {
+      "claim": "Which local auth/data bootstrap is safe enough?",
+      "source": "whole-doc-claude question",
+      "disposition": "execution-prerequisite",
+      "reason": "Existing guide target/disposable-local-data, designated QA ownership, credential and auth boundaries govern bootstrap. Actual session/runtime availability is deliberately inspected during execution; unavailable prerequisites leave the lane pending. No new product decision or authorization needed at planning stage."
+    }
+  ],
+  "counts": {
+    "fixes_applied": 0,
+    "proposed_fixes_count": 0,
+    "decisions_count": 0,
+    "fyi_count": 0
+  },
+  "confidence": {
+    "level": "High for implementation scope",
+    "basis": "Narrow founder-directed amendment, source-confirmed existing runtime step/usage limits and review with no retained gaps; target access and actual live proof remain execution prerequisites."
+  },
+  "implementation_authorized_here": false,
+  "live_application_verification_performed": false,
+  "remaining_product_decisions": [],
+  "unified_amendment_diff": "--- before-live-testing-amendment\n+++ docs/plans/2026-10-31-1518-chore-nami-verification-kit-plan.md\n@@ -37,6 +37,7 @@\n \n - **Agents own mechanical verification.** (session-settled: user-directed — chosen over founder-operated regression runs: founder time is reserved for judgment, release authorization and encountered security steps.) Governs R1, R6.\n - **Keep the MVP release scope bounded.** (session-settled: user-directed — chosen over additional launch prerequisites: outreach preparation and additional whole-account erasure operations wait for their actual triggers; manual spoken-navigation verification is removed.) Governs R7.\n+- **Deliberate live testing is required.** (session-settled: user-directed — chosen over treating all paid requests as accidental execution: real integrations need real requests; safeguards target runaway behavior and significant accidental spend.) Governs R5, R9.\n - **Reuse existing tools.** (session-settled: user-approved — chosen over adopting pstack or building a control framework: this MVP needs repeatable evidence with little maintenance.) Governs R2, R8.\n \n ### Requirements\n@@ -50,13 +51,17 @@\n #### Release truth and access\n \n - R4. Bind every result to the code/configuration/target actually checked, with explicit failure, partial, blocked, historical and not-run outcomes.\n-- R5. The final-release lane proves public entry, real Google callback/returning session, a meaningful streamed Method response and saved change, Chat/Map/reload agreement, repeating continuation and cancellation/recovery.\n-- R6. Use only designated QA identity/data and sanctioned credential/access mechanisms; do not promise unattended login where biometrics, Google barriers or 2FA intervene.\n+- R5. The final-release lane proves public entry, real Google callback/returning session, a meaningful streamed Method response and saved change, Chat/Map/reload agreement, repeating continuation and cancellation/recovery through actual requests; fixtures and mocks prove components, not live end-to-end integration.\n+- R6. Use only a separate designated QA account, owned safe actions/data and sanctioned credential/access mechanisms; do not access founder records, reset QA history or promise unattended login where security steps intervene.\n \n #### Preserved scope\n \n - R7. Honor the founder's 2026-10-31 amendment while retaining security, ownership, cancellation, private-output, semantic accessibility and existing deletion regression coverage.\n-- R8. Keep this kit small: no paid/cloud matrix, new auth provider, permanent staging requirement, daily automation, feature catalogue, global plugin rewrite or general browser-control wrapper.\n+- R8. Keep this kit small: no unplanned paid matrix, cloud testing platform, new auth provider, permanent staging requirement, daily automation, feature catalogue, global plugin rewrite or general browser-control wrapper.\n+\n+#### Deliberate live verification\n+\n+- R9. Implementation verification deliberately sends real network/provider/model/QA requests where needed for the selected scenario; safeguards retain existing runtime limits and prevent runaway loops, blind retries, lack of progress and significant accidental spend without arbitrary tight request caps or a new hard spending approval threshold.\n \n ### Success Criteria\n \n@@ -84,6 +89,7 @@\n - `tests/journey.spec.ts` starts at `/legacy`, spends real model calls and writes legacy state; `playwright.config.ts` still uses 5001. `tests/explore.spec.ts`, named in the revamp plan, does not exist. Current Method coverage lives in `client/src/pages/explore.test.tsx`, component, agent-route, history, reducer and storage suites.\n - `shared/app-origin.ts` fixes development auth to `http://localhost:5173`; approved `127.0.0.1` browser access does not imply interchangeable callbacks. `NAMI_BUILD_VERSION` is diagnostic metadata, not an HTTP build identity endpoint.\n - `scripts/early-access.ts` and `server/reporting/` already handle private exports, canonical/provider history and partial-history failure. Provider history is not the canonical state oracle.\n+- `server/ai/agent.ts` already stops through `stepCountIs(NAMI_MAX_AGENT_STEPS)` and reports token usage with an explicit `usageReported` distinction. `scripts/eval-nami-method.mjs` has its existing scenario step guard and retry policy. Retain these limits; available token counts are not a promise of exact monetary cost.\n \n ### Key Technical Decisions\n \n@@ -92,7 +98,9 @@\n - KTD3. **Separate tool responsibilities.** (session-settled: user-approved — chosen over a new test platform: bundled `@Browser` handles approved local origins, agent-browser handles actual deployed rendered UI, and Vercel CLI handles artifact/status/log facts.) Read installed skill/help during execution preflight; availability is not composed-workflow proof. Implements R2/R5/R6.\n - KTD4. **Prefer controlled final-origin QA before invitations.** Use the intended `https://heynami.vercel.app` origin, subject to read-only confirmation and later approval, with a dedicated QA account and existing canonical history. This avoids making permanent staging infrastructure a prerequisite. If the approved final-origin route cannot safely authenticate or confine writes, stop and present the smallest auth-enabled stable-preview alternative with its exact callback/configuration changes for approval. No auth-disabled fixture result substitutes for R5.\n - KTD5. **Require three observations for a saved-action pass.** Match the visible action/result, authoritative persisted receipt/revision/entity and reloaded Chat/Map. Capture disagreements as defects even when one layer succeeds. Implements R4–R5; follow `diagnose-purpose-path-revision-save-anomalies.md`.\n-- KTD6. **Make the legacy browser run explicit.** Correct its configuration to 5173, label it as paid `/legacy` coverage, and require an explicit legacy-run opt-in before server startup. Refuse silent reuse of an unknown server. The default command must explain the missing opt-in rather than pass with all tests skipped. This implements R3/R6 without constructing a new E2E suite.\n+- KTD6. **Make the legacy browser run explicit.** Correct its configuration to 5173, label it as paid `/legacy` coverage, and require an explicit legacy-run opt-in before server startup. Refuse silent reuse of an unknown server. The default command must explain the missing opt-in rather than pass with all tests skipped. The explicit opt-in protects default discovery/build/harness use from unexpected paid execution; it permits deliberate paid legacy/full-journey verification once its target, account, data and provider scope are checked. This implements R3/R6/R9 without constructing a new E2E suite.\n+\n+- KTD7. **Select a purpose, then observe progress and usage.** (session-settled: user-directed — chosen over blanket live-request restrictions or a new quota system: allow intentional test cost while catching runaway or unexpectedly expensive execution.) Before a live scenario, record its purpose and target/account/data/provider scope. Track scenario progress and available request/token/usage/cost information without claiming unavailable cost precision. Preserve the first failure, diagnose before a purposeful retry, and stop/notify on nonprogressing repetition, runaway behavior or anomalous/unexpected cost; never repeat a test merely until one run passes. Reaching the selected outcome may require multiple deliberate calls. Implements R5/R6/R9 using existing guards and evidence, not new budget tooling or per-call consent.\n \n ### Assumptions and execution-time prerequisites\n \n@@ -174,11 +182,11 @@\n \n **Files:** `AGENTS.md`; new `docs/runbooks/nami-verification.md`.\n \n-**Approach:** Write the five-section guide, with exact existing command entrypoints, Node 24/disposable-DB requirements and local 5173/lab 5174 boundaries. Include the access/bootstrap, first-failure, evidence and cleanup contracts above. Link the scenario matrix and existing packaging, rename and reporting references rather than copying their recipes. State that `ce-work`/`ce-debug` select project checks through this entry; `ce-test-browser` supports local affected-UI coverage but its pipeline OAuth skip is not release proof. `ce-dogfood` is optional manual diff-scoped local QA with small fixes/commits; do not replay the entire integration diff. `ce-polish` is founder-directed UX refinement, not an automatic gate; no voice/riffrec installation for verification. Project ports override generic free-port fallbacks.\n+**Approach:** Write the five-section guide, with exact existing command entrypoints, Node 24/disposable-DB requirements and local 5173/lab 5174 boundaries. Include the access/bootstrap, deliberate live-verification (R9/KTD7), first-failure, evidence and cleanup contracts above. State that planning inspects/designs, while implementation proof deliberately exercises real integrations within the selected scope; discovery/build safety is not a blanket ban on real requests. Link the scenario matrix and existing packaging, rename and reporting references rather than copying their recipes. State that `ce-work`/`ce-debug` select project checks through this entry; `ce-test-browser` supports local affected-UI coverage but its pipeline OAuth skip is not release proof. `ce-dogfood` is optional manual diff-scoped local QA with small fixes/commits; do not replay the entire integration diff. `ce-polish` is founder-directed UX refinement, not an automatic gate; no voice/riffrec installation for verification. Project ports override generic free-port fallbacks.\n \n **Test scenarios:**\n \n-- A fresh read-only agent given only the repo entrypoint and six representative change descriptions finds the guide and selects the matrix's checks without chat context.\n+- After U2 supplies the integrated matrix, a fresh read-only agent given only the repo entrypoint and six representative change descriptions finds the guide and selects its checks without chat context.\n - A docs-only change selects link/fact review; it does not launch paid model calls or a full release matrix.\n - A request to use generic CE local QA keeps deployed Google authentication and persisted-state proof explicitly outstanding where required.\n \n@@ -188,13 +196,13 @@\n \n **Goal:** Establish one truthful current coverage and evidence contract.\n \n-**Requirements:** R3–R7; KTD4–KTD5.\n+**Requirements:** R3–R7/R9; KTD4–KTD5/KTD7.\n \n **Dependencies:** U1.\n \n **Files:** New `docs/runbooks/nami-verification-scenarios.md`; `docs/plans/2026-08-14-claude-feat-revelio-revamp-plan.md`; `docs/runbooks/nami-rename-release.md`; `docs/runbooks/vercel-function-packaging.md`. Amend `docs/plans/2026-08-29-1133-feat-revelio-method-plan.md` only where its currently normative U10 text contradicts the release amendment, using an explicit scoped amendment with stable IDs.\n \n-**Approach:** Implement the two matrices below. Add a compact active/deferred requirement-to-check roll-up using the Method/revamp IDs and repeating-learning authority, with exact current test/evidence paths and fresh-rerun triggers. Distinguish inherited accepted U7 evidence, fresh deterministic release checks and the small new deployed lane. Replace nonexistent `tests/explore.spec.ts`/generic E2E claims with actual coverage. Reconcile conflicting live U10 wording, including erasure-completeness operational prerequisites, without deleting security/deletion regression checks or changing historical dated receipts. Keep fixture packaging instructions explicitly startup-only and label their fixture deploy recipe so it cannot be mistaken for the auth-enabled release recipe.\n+**Approach:** Implement the two matrices below. Add a compact active/deferred requirement-to-check roll-up using the Method/revamp IDs and repeating-learning authority, with exact current test/evidence paths and fresh-rerun triggers. Distinguish inherited accepted U7 evidence, fresh deterministic release checks and the small new deployed lane. Replace nonexistent `tests/explore.spec.ts`/generic E2E claims with actual coverage. Reconcile conflicting live U10 wording, including erasure-completeness operational prerequisites, without deleting security/deletion regression checks or changing historical dated receipts. Keep fixture packaging instructions explicitly startup-only and label their fixture deploy recipe so it cannot be mistaken for the auth-enabled release recipe. Keep live integration rows pending until actually exercised. When cohort reports supply release evidence, confirm the designated QA account is excluded by the existing selected cohort configuration; add no exclusion tool.\n \n **Test scenarios:**\n \n@@ -208,35 +216,37 @@\n \n **Goal:** Prevent default E2E invocation from misrepresenting current Method coverage or accidentally spending/writing.\n \n-**Requirements:** R2–R3/R6; KTD6.\n+**Requirements:** R2–R3/R6/R9; KTD6–KTD7.\n \n **Dependencies:** U1–U2.\n \n **Files:** `playwright.config.ts`; `tests/journey.spec.ts`; the guide's legacy invocation section. Change `package.json` only if an explicit legacy script label is needed for discoverability.\n \n-**Approach:** Keep the existing legacy assertions, rename misleading suite/documentation labels, use 5173 for both baseURL/readiness and refuse silent existing-server reuse. Require an explicit legacy opt-in before launching. Document that opt-in does not authorize a live production database: the operator must prove the chosen disposable local data boundary and explicitly authorized provider credentials before this optional paid run. Do not import real `.env` secrets for default discovery or add current Method assertions to this old suite. The active release matrix uses existing deterministic legacy regressions plus a focused rendered `/legacy` smoke; full paid questionnaire replay is selected only for changes touching that behavior.\n+**Approach:** Keep the existing legacy assertions, rename misleading suite/documentation labels, use 5173 for both baseURL/readiness and refuse silent existing-server reuse. Require an explicit legacy opt-in before launching. Document that opt-in does not authorize a live production database: the operator must prove the chosen disposable local data boundary and explicitly authorized provider credentials before this optional paid run. Do not import real `.env` secrets for default discovery or add current Method assertions to this old suite. The active release matrix uses existing deterministic legacy regressions plus a focused rendered `/legacy` smoke. Deliberate paid questionnaire/full-journey replay is permitted when expressly selected for relevant regression or integration proof under R9/KTD7; default discovery and configuration checks do not silently launch it.\n \n **Test scenarios:**\n \n - Invoking without legacy opt-in fails clearly before starting a server/browser/provider request; it cannot report a green skipped suite.\n-- With explicit opt-in, configuration discovery lists only the labelled legacy journey at 5173 and does not run it. An occupied 5173 yields a target/port conflict rather than reuse or a free-port fallback.\n+- With explicit opt-in, configuration discovery lists only the labelled legacy journey and inspects its 5173 binding without executing it.\n+- A distinct runtime startup preflight against a known safe occupied 5173 refuses server reuse before tests/provider calls; do not disturb the existing listener or use a free-port fallback. Listing alone does not prove this refusal.\n+- Express selection of a paid legacy/full journey, after its safe target/account/data/provider scope checks, permits real requests and records useful progress/available usage rather than treating intentional cost as accidental execution.\n - Review of the resulting gate shows no unsupported claim of Google auth or Method Chat/Map coverage.\n \n-**Verification:** Inspect/config-list the guarded entrypoint using safe fixture settings, with no paid legacy run required for this configuration-only change. No new broad browser suite or new framework tests.\n+**Verification:** Use safe configuration discovery and the separate startup-conflict preflight for this configuration change. Those checks need no paid journey; when a live journey is selected, its real requests are expected verification under R9/KTD7. No new broad browser suite or new framework tests.\n \n ### U4. Prove the kit and prepare the final-release receipt\n \n **Goal:** Show that the new instructions work and that failures cannot turn into false release passes.\n \n-**Requirements:** R1–R8; KTD1–KTD6.\n+**Requirements:** R1–R9; KTD1–KTD7.\n \n **Dependencies:** U1–U3.\n \n **Files:** New sanitized `docs/evidence/2026-10-31-nami-verification-kit.md` or execution-date equivalent; private raw evidence in existing ignored namespace. Product fixes, if discovered, require the normal focused regression in the existing relevant test file.\n \n-**Execution note:** Prove the written instructions once, preserve first failure, then fix the failing layer. This planning request authorizes none of these execution runs.\n-\n-**Approach:** After implementation is authorized, have a cold agent follow the guide. Prove local Launch/Doctor/public Drive/Evidence/Cleanup on 5173 and confirm proof survives cleanup. Check the negative cases below with existing deterministic fixtures and synthetic receipt examples, not by corrupting QA data or revoking real access. Prepare a concrete final-target/configuration/write-scope/recovery preflight for founder deployment authorization. After that approval and access bootstrap, drive the deployed release rows serially in the designated profile/account. Record all pending remote rows if approval/access has not arrived; kit-local completion must not be described as a final release pass.\n+**Execution note:** Prove the written instructions, preserve first failure, then fix the failing layer under KTD7. Planning and this amendment remain inspection/design; ce-work and its execution requests start only after coordinator approval. Once authorized, selected live tests deliberately send real requests, including paid requests where needed. Production deployment, remote configuration/domain/access-permission changes and production write scope retain their separate explicit authorization.\n+\n+**Approach:** After implementation is authorized, have a cold agent follow the guide. Prove local Launch/Doctor/public Drive/Evidence/Cleanup on 5173 and confirm proof survives cleanup. Selected auth-enabled local Method integration must use actual provider/model requests and verify streamed output, owned persisted state and reload; fixtures alone cannot pass that claim. If safe local auth/data prerequisites are unavailable, record that lane pending and identify the smallest required bootstrap. Check the negative cases below with existing deterministic fixtures and synthetic receipt examples, not by corrupting QA data or revoking real access. Prepare a concrete final-target/configuration/write-scope/recovery preflight for founder deployment authorization. After that approval and access bootstrap, drive the deployed release rows serially in the designated profile/account. Record all pending remote rows if approval/access has not arrived; kit-local completion must not be described as a final release pass.\n \n **Test scenarios:**\n \n@@ -245,6 +255,7 @@\n - Partial provider history keeps its partial status and diagnostic, even when canonical map retrieval succeeds; select narrower evidence only when the row's claim needs no missing history.\n - A saved canonical revision with failed UI narration records saved-success plus delivery-failure; an attractive UI with no matching persisted revision fails. Unknown refetch truth cannot be called cancelled/unsaved.\n - A controlled local failure still leaves first-failure evidence after cleanup; unrelated existing 5173 process and QA history survive.\n+- A selected live scenario makes purposeful real requests and records progress/available usage. Nonprogressing repeated failures or anomalous/unexpected cost stop with evidence and notification; multiple progressing calls do not fail an arbitrary request-count gate. Exercise the reporting rule through synthetic receipt/source review, not by intentionally incurring runaway cost.\n - On the later authorized deployed run, one real saved action and repeating continuation agree through Chat/Map/reload, with cancellation/recovery and no duplicate write. Synthetic cancellation race coverage remains attached where safe live interruption cannot prove every timing branch.\n \n **Verification:** The final evidence report separates guide proof, deterministic results, artifact checks and actual remote rows, and lists only real remaining access/authorization blockers. No failing row is silently removed.\n@@ -262,10 +273,12 @@\n | UI/routes/theme/public content | Existing focused React tests; rendered affected local path on desktop/mobile/light-dark as relevant; keyboard/focus/status/tree/contrast/responsive inspection for affected controls; build for shipped assets/origin. |\n | State/history/persistence/cancellation | Relevant reducer/tool/route/history/UI suites; guarded disposable storage tests for storage/schema changes; real action + canonical state + reload in affected flow. |\n | Auth/origin/cookies/signup | Existing auth/origin/ownership/protocol regressions; exact-origin build/artifact checks; real callback and returning-session on intended remote origin before release. |\n-| Prompt/model/tools/modules | Existing Method loader/evaluation/contract tests and focused fake-model scenarios; bounded relevant live evaluation when authorized; preserve first failures, active tool/module versions and state-write truth. No arbitrary new model-call cap. |\n+| Prompt/model/tools/modules | Existing Method loader/evaluation/contract tests and focused fake-model scenarios; purpose-selected real provider/model evaluation under R9/KTD7, alongside component fixtures; preserve first failures, available usage, active tool/module versions and state-write truth. |\n | Packaging/runtime/dependencies/deployment | Node 24 check/build and both relevant Vercel artifact targets; real function import, five skills, whole-output privacy/origin checks; deployed UI/runtime smoke after authorized upload. |\n | Docs-only | Link, identifier, source-fact and gate-coherence review plus cold-entry checks when instructions change; no automatic paid/full release replay. |\n | Final candidate | `npm run check`, guarded `npm run test:all` on disposable PostgreSQL, origin-scoped `npm run build`, `verify:vercel-preview` and `verify:vercel-production`; active requirement roll-up and deployed rows below. |\n+\n+For live local or deployed integration, select actual requests under R9/KTD7. A fixture/mock pass or auth-disabled503 startup leaves live coverage pending. Deliberate paid legacy/full-journey requests are permitted after scope checks; they are distinct from accidental discovery/build execution.\n \n Exact executable recipes belong in the implemented guide and owning existing runbooks. Do not invent `release:validate` or a lint command. Preserve existing runaway guards. Node 22 on an agent host is insufficient for the application's Node 24 validation.\n \n@@ -292,8 +305,9 @@\n \n - U1: `AGENTS.md` leads a fresh agent to the guide and correct change-specific checks.\n - U2: Active/deferred requirement coverage and current U10 gates agree with founder steering, actual files and scoped evidence.\n-- U3: The legacy entrypoint uses5173, announces its limited paid purpose and cannot run accidentally or reuse an unknown server.\n-- U4 local kit proof: The written local lane and cleanup work, negative cases preserve truthful outcomes, and the sanitized receipt points to surviving private evidence.\n+- U3: The legacy entrypoint uses 5173, blocks unexpected paid discovery/startup and unknown server reuse, and permits an expressly selected live legacy/full journey after scope checks.\n+- U4 local kit proof: The written local lane and cleanup work, negative cases preserve truthful outcomes, and the sanitized receipt points to surviving private evidence. Any claimed auth-enabled local Method integration includes real provider/model requests and streaming/persistence/reload proof; otherwise that coverage remains pending.\n+- R9 proof: The guide and receipts distinguish intentional test cost from accidental execution, record progress/available usage and first failures, and explain runaway/nonprogress/unexpected-cost stop/notify behavior without new arbitrary caps, spending thresholds or budget tooling.\n - U4 final-release proof: S1–S6 complete on the separately authorized intended target with exact artifact/configuration linkage. Until then state “kit locally proven; deployed release verification pending,” naming outstanding rows/access, rather than “release ready.”\n - Existing security, ownership, cancellation, privacy/output handling, semantic accessibility and deletion regression coverage remain active. Removed/deferred checks are never marked passed.\n - No abandoned helper/framework/config experiments remain. No unexpected WIP, QA history or personal profile was discarded; no PR/push/deployment/configuration mutation occurred without its separate authorization.\n"
+}

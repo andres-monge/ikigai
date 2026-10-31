@@ -1,0 +1,345 @@
+{
+  "skill": "ce-doc-review",
+  "mode": "non-interactive",
+  "completed": true,
+  "document_path": "docs/plans/2026-10-31-1518-chore-nami-verification-kit-plan.md",
+  "reviewed_sha256": "4b214a0cd0f8a3ae3a56b7d9ccb6686125209e70dd476f4c2a767c04898fe554",
+  "final_sha256": "e7978d26c512dc7ff0dd01566ea7ec2ece87fd114ba94ddadf29797391fcc8cd",
+  "permission_to_edit": "Apply corrections to implementation and verification sections needed for established Product Contract; preserve contract, constraints and settled decisions.",
+  "coverage": {
+    "local": [
+      "coherence",
+      "feasibility",
+      "scope-guardian",
+      "design-lens",
+      "security-lens",
+      "adversarial"
+    ],
+    "limited_independent": [
+      "feasibility: U1–U3 deliverability/verification"
+    ],
+    "failed": [],
+    "packs": {
+      "roots": [],
+      "warnings": [],
+      "errors": []
+    },
+    "cross_model_owed": [
+      "security-lens",
+      "adversarial",
+      "whole-doc"
+    ],
+    "peer_outcome": "folded"
+  },
+  "counts": {
+    "fixes_applied": 1,
+    "proposed_fixes_count": 0,
+    "decisions_count": 0,
+    "fyi_count": 0
+  },
+  "confidence": {
+    "document": "/Users/andresm/.codex/worktrees/c615/ikigai/docs/plans/2026-10-31-1518-chore-nami-verification-kit-plan.md",
+    "sha256": "4b214a0cd0f8a3ae3a56b7d9ccb6686125209e70dd476f4c2a767c04898fe554",
+    "depth": "Standard",
+    "high_risk": [
+      "auth/access",
+      "privacy",
+      "external tools",
+      "deployment evidence"
+    ],
+    "scoring_required": "external research shaped access constraints",
+    "section_scores": {
+      "Requirements": 0,
+      "Sources": 0,
+      "Key Technical Decisions": 1,
+      "Implementation Units": 1,
+      "System-Wide Impact": 0,
+      "Risks and Dependencies": 1,
+      "Open Questions": 0,
+      "High-Level Technical Design": 0
+    },
+    "threshold": 2,
+    "selected_sections": [],
+    "confidence": "High for implementation scope; actual remote access remains unverified execution prerequisite",
+    "result": "Confidence check passed — no sections need strengthening"
+  },
+  "local_results": [
+    {
+      "reviewer": "coherence",
+      "findings": [],
+      "residual_risks": [],
+      "deferred_questions": []
+    },
+    {
+      "reviewer": "feasibility",
+      "findings": [
+        {
+          "title": "Preserve reporting's enforced private output root",
+          "severity": "P2",
+          "section": "Planning Contract — Release evidence and recovery",
+          "why_it_matters": "Reporting CLI confines exports and registered artifact inventory to .context/early-access; the guide would prescribe the wrong namespace.",
+          "finding_type": "error",
+          "autofix_class": "gated_auto",
+          "suggested_fix": "Keep ordinary QA evidence under .context/revelio; retain reporting exports, rosters and manifests under the existing .context/early-access root and relative-output/registration behavior.",
+          "confidence": 100,
+          "evidence": [
+            "Use existing ignored `.context/revelio/` for raw QA logs, transcripts, screenshots and exports; protect persistent profiles as credentials.",
+            "server/reporting/private-output.ts defines PRIVATE_OUTPUT_DIRECTORY=.context/early-access; scripts/early-access.ts uses those helpers."
+          ]
+        }
+      ],
+      "residual_risks": [],
+      "deferred_questions": []
+    },
+    {
+      "reviewer": "scope-guardian",
+      "findings": [],
+      "residual_risks": [],
+      "deferred_questions": []
+    },
+    {
+      "reviewer": "design-lens",
+      "findings": [],
+      "residual_risks": [],
+      "deferred_questions": []
+    },
+    {
+      "reviewer": "security-lens",
+      "findings": [],
+      "residual_risks": [],
+      "deferred_questions": []
+    },
+    {
+      "reviewer": "adversarial",
+      "findings": [],
+      "residual_risks": [],
+      "deferred_questions": []
+    },
+    {
+      "reviewer": "feasibility-limited-independent",
+      "scope": "U1–U3 deliverability and verification",
+      "findings": [],
+      "residual_risks": [],
+      "deferred_questions": []
+    }
+  ],
+  "cross_model_results": [
+    {
+      "reviewer": "security-lens-claude",
+      "cross_model_route": "claude",
+      "cross_model_target": "claude",
+      "cross_model_harness": "claude",
+      "serving_family": "claude",
+      "independence_verified": true,
+      "model_requested": "claude-opus-5-5",
+      "model_actual": "claude-opus-5-5",
+      "effort_requested": "low",
+      "findings": [
+        {
+          "title": "QA account email committed into plan and future sanitized evidence",
+          "severity": "P3",
+          "section": "Assumptions and execution-time prerequisites",
+          "why_it_matters": "The plan names the real QA Google account in a committed doc, and sanitized receipts under docs/evidence/ must record 'QA identity'. The sanitization rules never say whether that identity is redacted. That makes the account an easy phishing or credential-stuffing target for anyone who can read the repo. This matters most because it is the one account allowed to write to the shared production database. Recording an opaque QA label instead of the address keeps attribution and removes the exposure.",
+          "finding_type": "omission",
+          "autofix_class": "gated_auto",
+          "suggested_fix": "In 'Release evidence and recovery', state that committed sanitized summaries record the QA identity as the profile label (e.g. `nami-release-qa`) rather than the account email; replace the literal email in the plan with that label.",
+          "confidence": 50,
+          "evidence": [
+            "The named QA account `konfidenz.clothing@gmail.com` has useful history",
+            "Commit only sanitized summaries under `docs/evidence/`.",
+            "QA identity, relevant module/provider/model versions"
+          ]
+        },
+        {
+          "title": "Production QA writes lack an abuse/cost bound on live model calls",
+          "severity": "P3",
+          "section": "U4 - Prove the kit and prepare the final-release receipt",
+          "why_it_matters": "The deployed lane runs real model calls and writes to the production database, and the plan explicitly declines to set a model-call cap. A looping or retrying agent could rack up unbounded provider spend. It could also produce many additive writes to the shared database before a person notices. The plan does rely on serial driving and preserving existing guards, which partly mitigates this.",
+          "finding_type": "omission",
+          "autofix_class": "manual",
+          "confidence": 50,
+          "evidence": [
+            "No arbitrary new model-call cap.",
+            "Public final-origin QA writes to a shared production database."
+          ]
+        }
+      ],
+      "residual_risks": [
+        "The persistent `nami-release-qa` browser profile holds a live production session; the plan stores it outside Git with private permissions but defines no expiry or revocation step at cleanup, so a leaked profile stays usable until the Google session ends."
+      ],
+      "deferred_questions": [
+        "Should Cleanup log the QA profile out, or revoke its session, after the final deployed run?"
+      ]
+    },
+    {
+      "reviewer": "adversarial-claude",
+      "cross_model_route": "claude",
+      "cross_model_target": "claude",
+      "cross_model_harness": "claude",
+      "serving_family": "claude",
+      "independence_verified": true,
+      "model_requested": "claude-opus-5-5",
+      "model_actual": "claude-opus-5-5",
+      "effort_requested": "low",
+      "findings": [
+        {
+          "title": "Production QA writes to shared DB lack cleanup or isolation",
+          "severity": "P2",
+          "section": "KTD4 — Prefer controlled final-origin QA before invitations",
+          "why_it_matters": "S3–S5 make real additive writes to the production database from the QA account, and every later release repeats them. The plan never says how this synthetic QA history is kept out of the early-access reports, exports or Method evaluations that read canonical history. Without that boundary, release QA could quietly contaminate participant-facing reporting. Adding an explicit exclusion or marking rule for the QA account makes the shared-database choice safe to repeat.",
+          "finding_type": "omission",
+          "autofix_class": "gated_auto",
+          "suggested_fix": "In Release evidence, state that the designated QA account is excluded from early-access reporting/exports (or confirm via existing scripts/early-access.ts filtering) and record this check in U2's matrix.",
+          "confidence": 50,
+          "evidence": [
+            "Public final-origin QA writes to a shared production database.",
+            "choose the smallest additive mutation supported by its actual checkpoint"
+          ]
+        },
+        {
+          "title": "Single QA account checkpoint may exhaust across releases",
+          "severity": "P2",
+          "section": "Final deployed release scenarios — S4 Repeating continuation",
+          "why_it_matters": "Each release moves the one QA account forward, but nothing may reset it. Eventually the account could reach a state with no legitimate next Guide/Interpret/Design choice. At that point S3/S4 can only stop as blocked, so every later release is blocked. The kit's goal of verifying later changes depends on the checkpoint never running out, and the plan does not say what happens when it does.",
+          "finding_type": "omission",
+          "autofix_class": "manual",
+          "suggested_fix": null,
+          "confidence": 50,
+          "evidence": [
+            "Do not reset it to manufacture a convenient journey.",
+            "A mismatch or insufficient checkpoint stops writes and produces a concrete alternative"
+          ]
+        }
+      ],
+      "residual_risks": [
+        "Google consent/2FA barriers may make S2 founder-dependent on every release, which works against the premise that agents own verification."
+      ],
+      "deferred_questions": [
+        "What should happen when the QA account's checkpoint can no longer support an additive S3/S4 action: a second QA account, an approved reset, or something else?"
+      ]
+    },
+    {
+      "reviewer": "whole-doc-claude",
+      "cross_model_route": "claude",
+      "cross_model_target": "claude",
+      "cross_model_harness": "claude",
+      "serving_family": "claude",
+      "independence_verified": true,
+      "model_requested": "claude-opus-5-5",
+      "model_actual": "claude-opus-5-5",
+      "effort_requested": "low",
+      "findings": [
+        {
+          "title": "U3 opt-in failure conflicts with config-list verification",
+          "severity": "P2",
+          "section": "U3 - Bound and correct the legacy browser entrypoint",
+          "why_it_matters": "KTD6 (legacy run explicit) says invoking without opt-in must fail before server startup, but U3 also verifies with opt-in that config discovery lists the journey without running it at 5173 and that an occupied 5173 yields a conflict. Playwright webServer startup happens at run time, not at --list time. So implementers can't make the listing step show the port-conflict behavior. The plan should say which command proves which behavior.",
+          "finding_type": "error",
+          "autofix_class": "gated_auto",
+          "suggested_fix": "In U3 Test scenarios, say that --list with opt-in proves labeling and baseURL only. The occupied-5173 refusal is proven by a guarded opt-in invocation that fails at webServer preflight before any test or provider call runs.",
+          "confidence": 50,
+          "evidence": [
+            "With explicit opt-in, configuration discovery lists only the labelled legacy journey at5173 and does not run it. An occupied5173 yields a target/port conflict rather than reuse or a free-port fallback."
+          ]
+        },
+        {
+          "title": "U1 depends on scenario matrix created later in U2",
+          "severity": "P2",
+          "section": "U1 - Publish the discoverable verification entrypoint",
+          "why_it_matters": "U1's test has a cold agent choose checks from the scenario matrix, but that matrix file is only created in U2, which depends on U1. Run in order, U1's verification can't pass, or it will be done against a stub and give a false pass.",
+          "finding_type": "error",
+          "autofix_class": "gated_auto",
+          "suggested_fix": "Move U1's cold-entry matrix-selection scenario into U2 Verification (or U4). Keep U1 limited to proving discovery of the guide from AGENTS.md.",
+          "confidence": 75,
+          "evidence": [
+            "A fresh read-only agent given only the repo entrypoint and six representative change descriptions finds the guide and selects the matrix's checks without chat context.",
+            "Files:** New `docs/runbooks/nami-verification-scenarios.md`"
+          ]
+        }
+      ],
+      "residual_risks": [
+        "Final-origin QA writes to the shared production database. Containment relies only on QA account ownership and additive actions."
+      ],
+      "deferred_questions": [
+        "Which prebuilt artifact counts as 'known verified' for recovery, given that none exists before the first S6 pass?"
+      ]
+    }
+  ],
+  "resolved_claims": [
+    {
+      "claim": "Preserve reporting's enforced private output root",
+      "source": "feasibility-local",
+      "disposition": "applied",
+      "reason": "Source independently confirms PRIVATE_OUTPUT_DIRECTORY and relative-path registration in server/reporting/private-output.ts and scripts/early-access.ts. Existing reuse/privacy decision would fail if the guide moved exports. Authorized planning correction at confidence100, supported by local reviewer.",
+      "edit": "Use existing ignored `.context/revelio/` for ordinary raw QA logs, transcripts and screenshots; protect persistent profiles as credentials. Reporting exports, rosters and manifests remain under the enforced `.context/early-access/` root. Use the existing reporting command's relative output argument and preserve artifact registration. Commit only sanitized summaries under `docs/evidence/`."
+    },
+    {
+      "claim": "QA account email committed into plan and future sanitized evidence",
+      "source": "security-lens-claude",
+      "disposition": "dismissed",
+      "reason": "The designated non-founder QA identity is intentionally already recorded in existing rename/public-entry evidence. Sanitized summaries and no credentials are already required. No demonstrated additional consequence or need to remove the exact authorized identity from this private planning context; sanitization remains required for execution receipts."
+    },
+    {
+      "claim": "Production QA writes lack an abuse/cost bound on live model calls",
+      "source": "security-lens-claude",
+      "disposition": "dismissed",
+      "reason": "Settled direction explicitly rejects arbitrary new caps; existing runaway guards, serial scoped driving, first-failure diagnosis and no blind retries already apply. No evidence those guards fail here; adding a new gate would reopen founder scope."
+    },
+    {
+      "claim": "Production QA writes to shared DB lack cleanup or isolation",
+      "source": "adversarial-claude",
+      "disposition": "dismissed",
+      "reason": "scripts/early-access.ts explicitly parses an operator-selected cohort roster and resolves a participant, rather than indiscriminately exporting all accounts. QA-owned additive data is intentional and preserved. Blanket QA deletion/exclusion tooling is outside scope; no demonstrated report contamination path introduced by plan."
+    },
+    {
+      "claim": "Single QA account checkpoint may exhaust across releases",
+      "source": "adversarial-claude",
+      "disposition": "dismissed",
+      "reason": "Active MVP supports repeated projects and revisable paths without terminal commitment; no finite exhaustion state shown. Plan already requires read-only checkpoint inspection and blocks with a concrete alternative if insufficient. A future hypothetical reset/second-account decision is not current essential input."
+    },
+    {
+      "claim": "U3 opt-in failure conflicts with config-list verification",
+      "source": "whole-doc-claude",
+      "disposition": "dismissed",
+      "reason": "The two clauses name separate checks, not a claim that listing detects an occupied port. Default no-opt-in refusal, explicit discovery, and refusal of silent server reuse are independently specified. Existing config semantics provide runtime conflict; execution may verify startup refusal without a paid journey. Limited independent local feasibility review found no contradiction."
+    },
+    {
+      "claim": "U1 depends on scenario matrix created later in U2",
+      "source": "whole-doc-claude",
+      "disposition": "dismissed",
+      "reason": "U1 establishes the entrypoint and U2 supplies its linked matrix; U4 depends on all three construction units and explicitly proves cold-entry selection against the integrated kit. Creation dependencies do not require premature final acceptance of a linked artifact. No false-pass instruction exists; independent local feasibility check did not find a deliverability defect."
+    },
+    {
+      "claim": "Persistent QA profile lacks automatic revocation at cleanup",
+      "source": "security-lens-claude residual/question",
+      "disposition": "dismissed",
+      "reason": "Persistent dedicated QA session is an agreed mechanism for reducing repeated manual sign-in. Private profile storage, exact identity validation and access bootstrap already govern its use. Automatically logging out after every run would defeat that decision; no leak evidence justifies adding revocation tooling."
+    },
+    {
+      "claim": "Google security barriers can remain founder-dependent",
+      "source": "adversarial-claude residual",
+      "disposition": "already-addressed",
+      "reason": "R6 and Access explicitly retain actually encountered security/2FA as human work and do not promise unattended sign-in."
+    },
+    {
+      "claim": "Shared production QA relies on account/additive containment",
+      "source": "whole-doc-claude residual",
+      "disposition": "already-addressed",
+      "reason": "This is the explicit data boundary chosen in KTD4/R6/Risks, not a missing safeguard. Mismatch or insufficient scope stops writes; no separate DB assumption."
+    },
+    {
+      "claim": "Which artifact is known verified before the first release?",
+      "source": "whole-doc-claude question",
+      "disposition": "already-addressed",
+      "reason": "Recovery paragraph explicitly says if none exists, report recovery needs a newly verified candidate. Old broken production is never presumed a rollback artifact."
+    }
+  ],
+  "scope_preservation": "No product code, application tests, browser runs, vault operations, deployment or remote configuration change occurred. Coordinator amendment preserved.",
+  "remaining_decisions": [],
+  "execution_prerequisites": [
+    "Later implementation authority",
+    "Specific founder deployment/configuration authorization before remote mutation",
+    "Actual target/access/bootstrap and named QA secret references if required"
+  ],
+  "raw_review_directory": "/tmp/nami-verification-doc-review-20261031"
+}
