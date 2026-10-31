@@ -1,0 +1,308 @@
+{
+  "status": "complete",
+  "verdict": "Ready with fixes",
+  "scope": {
+    "base": "HEAD",
+    "branch": "codex/revelio-revamp-integration",
+    "head_sha": "542a6c6240a016081807c77db44c1095740a9e9c",
+    "pr_url": null,
+    "files_changed": 95
+  },
+  "intent": "Rename the current product and agent identity from Revelio to Nami on the local integration branch while preserving user data and Method behavior. Make BETTER_AUTH_URL the one explicit production origin for auth, guarded Method requests, and build-time share URLs. Restore the compass icons and update maintained guidance.",
+  "intent_confidence": "explicit",
+  "reviewers": [
+    "correctness",
+    "project-standards",
+    "testing",
+    "maintainability",
+    "agent-native",
+    "learnings-researcher",
+    "security",
+    "api-contract",
+    "reliability",
+    "adversarial-claude"
+  ],
+  "findings": [
+    {
+      "#": 1,
+      "autofix_class": "gated_auto",
+      "confidence": 100,
+      "evidence": [
+        "shared/app-origin.ts:32 --     : parseAppOrigin(value);",
+        "shared/app-origin.ts:26 -- return origin === LOCAL_APP_ORIGIN ? origin : undefined;",
+        "server/app.ts:156-157 -- const audioTranscriptionMetadataGuard = createAudioTranscriptionMetadataGuard(configuredMethodOrigin(env.BETTER_AUTH_URL, { nodeEnv: env.NODE_ENV, vercel: process.env.VERCEL }));",
+        "server/app.ts:167-175 -- Global body parsers and API logger run after that early guard."
+      ],
+      "file": "shared/app-origin.ts",
+      "first_evidence": "shared/app-origin.ts:32 --     : parseAppOrigin(value);",
+      "independent_reviewers": [
+        "correctness"
+      ],
+      "line": 32,
+      "owner": "downstream-resolver",
+      "pre_existing": false,
+      "requires_verification": true,
+      "reviewers": [
+        "correctness"
+      ],
+      "severity": "P2",
+      "suggested_fix": "Return configuredAppOrigin(value, environment) for development and production; allow parseAppOrigin(value) only when nodeEnv is test, or have tests inject their exact origin at the router boundary.",
+      "title": "Local Method guard accepts an unapproved origin",
+      "why_it_matters": "A local development process configured with a nonlocal BETTER_AUTH_URL will accept that origin for Method POST metadata even though Better Auth rejects the same configuration. For audio requests, this lets a request pass the early metadata guard and reach body parsing before authentication, defeating the plan's single approved local-origin boundary. Restrict configured development origins to localhost:5173 while retaining the explicit test injection seam.",
+      "protected_subject": "authorization-authentication",
+      "validation_status": "confirmed",
+      "validation_reason": "With a nonlocal development BETTER_AUTH_URL such as https://example.test and a matching Origin, shared/app-origin.ts:32 returns that origin for both server/app.ts:157 and agent.ts:626 while auth.ts:61-71 rejects it; the early audio guard at app.ts:156-165 therefore admits a request to parsers/logging despite the single approved local-origin rule, though occurrence in a real dev setup was not measured."
+    },
+    {
+      "#": 2,
+      "autofix_class": "gated_auto",
+      "confidence": 100,
+      "evidence": [
+        "vite.config.ts:9 -- const origin = parseAppOrigin(configured || (process.env.VERCEL === '1' ? '' : LOCAL_APP_ORIGIN));",
+        "vite.config.ts:10 -- if (!origin || (process.env.VERCEL === '1' && !origin.startsWith('https://'))) {",
+        "Read-only config import with NODE_ENV=production BETTER_AUTH_URL= VERCEL= succeeded; the nami-public-origin transform returned http://localhost:5173.",
+        "Read-only config import with NODE_ENV=production BETTER_AUTH_URL=https://localhost VERCEL=1 succeeded and returned https://localhost; configuredAppOrigin with the same environment returned undefined.",
+        "docs/plans/2026-10-31-refactor-rename-revelio-to-nami-plan.md KTD1: Production and Vercel preview must require a valid explicit origin; the approved localhost:5173 expectation applies only to positively identified local development/test.",
+        "shared/app-origin.ts:23 -- return url.protocol === 'https:' && url.hostname !== 'localhost' && url.hostname !== '127.0.0.1'",
+        "scripts/check-vercel-function.mjs:82 -- if (!expectedOrigin || !/^https:\\/\\/[^/?#]+$/.test(expectedOrigin)) {",
+        "Read-only reproduction evaluated the actual shared helper and both build predicates for https://localhost: buildAccepts=true, packageCheckAccepts=true, runtimeOrigin=null.",
+        "docs/plans/2026-10-31-refactor-rename-revelio-to-nami-plan.md KTD1 requires deriving OG/Twitter URLs from the same validated configured origin as auth.",
+        "server/auth.ts:83 -- const baseURL = configuredAppOrigin(runtimeEnv.BETTER_AUTH_URL, {"
+      ],
+      "file": "vite.config.ts",
+      "first_evidence": "vite.config.ts:9 -- const origin = parseAppOrigin(configured || (process.env.VERCEL === '1' ? '' : LOCAL_APP_ORIGIN));",
+      "independent_reviewers": [
+        "api-contract",
+        "reliability",
+        "maintainability"
+      ],
+      "line": 9,
+      "owner": "downstream-resolver",
+      "pre_existing": false,
+      "requires_verification": true,
+      "reviewers": [
+        "api-contract",
+        "reliability",
+        "maintainability"
+      ],
+      "severity": "P2",
+      "suggested_fix": "Use configuredAppOrigin for Vite and the package checker with the same environment policy as runtime auth; allow the localhost fallback only in identified local development/test, and test missing production origin plus HTTPS localhost on Vercel.",
+      "title": "Build share URLs can disagree with runtime auth origin",
+      "why_it_matters": "A production client build without BETTER_AUTH_URL succeeds and writes localhost share URLs when VERCEL is unset, despite the explicit production-origin contract. Even on Vercel, https://localhost passes this build check while configuredAppOrigin rejects the same value at runtime, allowing a successful build whose auth is unavailable. Reusing the runtime validator makes build acceptance and server acceptance agree and limits the local fallback to identified development/test runs.",
+      "protected_subject": "authorization-authentication",
+      "validation_status": "confirmed",
+      "validation_reason": "For a production build with BETTER_AUTH_URL empty and VERCEL unset, vite.config.ts:9 falls back to localhost; with VERCEL=1 and BETTER_AUTH_URL=https://localhost, line 10 accepts the value, yet shared/app-origin.ts:21-24 rejects it for runtime auth, so both reachable configurations can produce a successful build with wrong share URLs or unavailable auth; deployment incidence was not measured."
+    }
+  ],
+  "actionable_findings": [
+    {
+      "#": 1,
+      "autofix_class": "gated_auto",
+      "confidence": 100,
+      "evidence": [
+        "shared/app-origin.ts:32 --     : parseAppOrigin(value);",
+        "shared/app-origin.ts:26 -- return origin === LOCAL_APP_ORIGIN ? origin : undefined;",
+        "server/app.ts:156-157 -- const audioTranscriptionMetadataGuard = createAudioTranscriptionMetadataGuard(configuredMethodOrigin(env.BETTER_AUTH_URL, { nodeEnv: env.NODE_ENV, vercel: process.env.VERCEL }));",
+        "server/app.ts:167-175 -- Global body parsers and API logger run after that early guard."
+      ],
+      "file": "shared/app-origin.ts",
+      "first_evidence": "shared/app-origin.ts:32 --     : parseAppOrigin(value);",
+      "independent_reviewers": [
+        "correctness"
+      ],
+      "line": 32,
+      "owner": "downstream-resolver",
+      "pre_existing": false,
+      "requires_verification": true,
+      "reviewers": [
+        "correctness"
+      ],
+      "severity": "P2",
+      "suggested_fix": "Return configuredAppOrigin(value, environment) for development and production; allow parseAppOrigin(value) only when nodeEnv is test, or have tests inject their exact origin at the router boundary.",
+      "title": "Local Method guard accepts an unapproved origin",
+      "why_it_matters": "A local development process configured with a nonlocal BETTER_AUTH_URL will accept that origin for Method POST metadata even though Better Auth rejects the same configuration. For audio requests, this lets a request pass the early metadata guard and reach body parsing before authentication, defeating the plan's single approved local-origin boundary. Restrict configured development origins to localhost:5173 while retaining the explicit test injection seam.",
+      "protected_subject": "authorization-authentication",
+      "validation_status": "confirmed",
+      "validation_reason": "With a nonlocal development BETTER_AUTH_URL such as https://example.test and a matching Origin, shared/app-origin.ts:32 returns that origin for both server/app.ts:157 and agent.ts:626 while auth.ts:61-71 rejects it; the early audio guard at app.ts:156-165 therefore admits a request to parsers/logging despite the single approved local-origin rule, though occurrence in a real dev setup was not measured."
+    },
+    {
+      "#": 2,
+      "autofix_class": "gated_auto",
+      "confidence": 100,
+      "evidence": [
+        "vite.config.ts:9 -- const origin = parseAppOrigin(configured || (process.env.VERCEL === '1' ? '' : LOCAL_APP_ORIGIN));",
+        "vite.config.ts:10 -- if (!origin || (process.env.VERCEL === '1' && !origin.startsWith('https://'))) {",
+        "Read-only config import with NODE_ENV=production BETTER_AUTH_URL= VERCEL= succeeded; the nami-public-origin transform returned http://localhost:5173.",
+        "Read-only config import with NODE_ENV=production BETTER_AUTH_URL=https://localhost VERCEL=1 succeeded and returned https://localhost; configuredAppOrigin with the same environment returned undefined.",
+        "docs/plans/2026-10-31-refactor-rename-revelio-to-nami-plan.md KTD1: Production and Vercel preview must require a valid explicit origin; the approved localhost:5173 expectation applies only to positively identified local development/test.",
+        "shared/app-origin.ts:23 -- return url.protocol === 'https:' && url.hostname !== 'localhost' && url.hostname !== '127.0.0.1'",
+        "scripts/check-vercel-function.mjs:82 -- if (!expectedOrigin || !/^https:\\/\\/[^/?#]+$/.test(expectedOrigin)) {",
+        "Read-only reproduction evaluated the actual shared helper and both build predicates for https://localhost: buildAccepts=true, packageCheckAccepts=true, runtimeOrigin=null.",
+        "docs/plans/2026-10-31-refactor-rename-revelio-to-nami-plan.md KTD1 requires deriving OG/Twitter URLs from the same validated configured origin as auth.",
+        "server/auth.ts:83 -- const baseURL = configuredAppOrigin(runtimeEnv.BETTER_AUTH_URL, {"
+      ],
+      "file": "vite.config.ts",
+      "first_evidence": "vite.config.ts:9 -- const origin = parseAppOrigin(configured || (process.env.VERCEL === '1' ? '' : LOCAL_APP_ORIGIN));",
+      "independent_reviewers": [
+        "api-contract",
+        "reliability",
+        "maintainability"
+      ],
+      "line": 9,
+      "owner": "downstream-resolver",
+      "pre_existing": false,
+      "requires_verification": true,
+      "reviewers": [
+        "api-contract",
+        "reliability",
+        "maintainability"
+      ],
+      "severity": "P2",
+      "suggested_fix": "Use configuredAppOrigin for Vite and the package checker with the same environment policy as runtime auth; allow the localhost fallback only in identified local development/test, and test missing production origin plus HTTPS localhost on Vercel.",
+      "title": "Build share URLs can disagree with runtime auth origin",
+      "why_it_matters": "A production client build without BETTER_AUTH_URL succeeds and writes localhost share URLs when VERCEL is unset, despite the explicit production-origin contract. Even on Vercel, https://localhost passes this build check while configuredAppOrigin rejects the same value at runtime, allowing a successful build whose auth is unavailable. Reusing the runtime validator makes build acceptance and server acceptance agree and limits the local fallback to identified development/test runs.",
+      "protected_subject": "authorization-authentication",
+      "validation_status": "confirmed",
+      "validation_reason": "For a production build with BETTER_AUTH_URL empty and VERCEL unset, vite.config.ts:9 falls back to localhost; with VERCEL=1 and BETTER_AUTH_URL=https://localhost, line 10 accepts the value, yet shared/app-origin.ts:21-24 rejects it for runtime auth, so both reachable configurations can produce a successful build with wrong share URLs or unavailable auth; deployment incidence was not measured."
+    }
+  ],
+  "triage_groups": [],
+  "pre_existing_findings": [],
+  "requirements_completeness": {
+    "source": "explicit",
+    "items": [
+      {
+        "id": "R1",
+        "status": "partially addressed",
+        "note": "Name and configurable origin implemented; build-origin acceptance differs from runtime (finding #2)."
+      },
+      {
+        "id": "R2",
+        "status": "met",
+        "note": "Current product, agent, package, symbols and maintained guidance use Nami, with historical and durable values retained."
+      },
+      {
+        "id": "R3",
+        "status": "met",
+        "note": "Compass SVG, ICO and Apple touch icon restored; other visual identity unchanged."
+      },
+      {
+        "id": "R4",
+        "status": "partially addressed",
+        "note": "Method behavior remains intact in tests; development Method origin guard differs from auth policy (finding #1)."
+      },
+      {
+        "id": "R5",
+        "status": "met",
+        "note": "Excluded redesign, production cutover and deployment are outside this diff."
+      },
+      {
+        "id": "U1",
+        "status": "met",
+        "note": "Legacy identity inventory and compatible readers are documented."
+      },
+      {
+        "id": "U2",
+        "status": "partially addressed",
+        "note": "Explicit origin and auth work exists; findings #1 and #2 require fixes."
+      },
+      {
+        "id": "U3",
+        "status": "met",
+        "note": "Current code and presentation rename, including protocol tests, are present."
+      },
+      {
+        "id": "U4",
+        "status": "met",
+        "note": "Compass assets and living guidance are updated."
+      },
+      {
+        "id": "U5",
+        "status": "partially addressed",
+        "note": "Local checks and this review are recorded; fixes and scoped commits follow this report. Authenticated browser QA was unavailable and is recorded as a release check."
+      }
+    ]
+  },
+  "learnings": [
+    {
+      "type": "known_pattern",
+      "title": "Match verification claims to their surface",
+      "citation": "docs/solutions/workflow-issues/find-and-choose-revelio-testing-setups.md",
+      "note": "Synthetic Method and disposable storage checks do not prove Google login or authenticated browser presentation."
+    },
+    {
+      "type": "known_pattern",
+      "title": "Preserve atomic Purpose Path revision evidence",
+      "citation": "docs/solutions/workflow-issues/diagnose-purpose-path-revision-save-anomalies.md",
+      "note": "The synthetic reducer result does not prove persisted or visible paths; this renamed doc retains one stale script reference."
+    }
+  ],
+  "agent_native_gaps": [],
+  "deployment_notes": [],
+  "residual_risks": [
+    "Build-time and runtime BETTER_AUTH_URL are read at different times; after an environment change without a rebuild, share URLs may be stale. The local package check does not prove deployed runtime configuration."
+  ],
+  "testing_gaps": [
+    "server/routes/agent.test.ts:testApp always injects methodRequestOrigin, bypassing the newly changed BETTER_AUTH_URL/environment branch in createAgentRouter. Add an integration case without that override, with VERCEL=1 and misleading NODE_ENV=development, proving missing/malformed/localhost configuration rejects Method POSTs before auth/provider work and an explicit HTTPS configured origin accepts only its exact matching Origin. The shared helper and lazy-auth tests do not prove the router or app-level audio guard actually wires the deployed environment into that policy.",
+    "No combined app-level audio and router integration test asserts both reject a disallowed production origin and the superseded request header."
+  ],
+  "coverage": {
+    "depth": "full",
+    "scope": "Local integration worktree versus HEAD; 95 changed files, no excluded untracked files.",
+    "reviewer_reasons": {
+      "correctness": "always-on",
+      "project-standards": "root AGENTS.md and CLAUDE.md govern changed files",
+      "testing": "changed tests and runtime origin behavior",
+      "maintainability": "335 executable non-test changed lines and shared origin abstraction",
+      "agent-native": "agent prompt and skill definitions change",
+      "learnings-researcher": "plausible Method verification solution matches",
+      "security": "auth, origin, IP, protected request guard",
+      "api-contract": "custom Method request header and public origin contract",
+      "reliability": "build and auth failure behavior"
+    },
+    "notes": [
+      "Instruction-file fallback: root AGENTS.md and CLAUDE.md govern all changed paths; no CODING_STANDARDS.md exists.",
+      "No PR or prior review comments; previous-comments lens was not applicable.",
+      "Authenticated QA browser paths were unavailable at this review point; local signed-out login and Vercel package checks were documented in the release checklist."
+    ],
+    "validation": {
+      "batch": "one batch; verdicts landed inside the bound",
+      "confirmed": 2,
+      "rejected": 0,
+      "unresolved": 0,
+      "malformed": 0,
+      "failed": 0,
+      "shortcut_skipped": 0,
+      "protected_subject_reclassification": 0
+    },
+    "suppressed_by_confidence": {},
+    "mode_aware_demotions": 0,
+    "first_evidence_backfilled": 0,
+    "missing_first_evidence_demotions": 0,
+    "failed_reviewers": [],
+    "compound_packs": {
+      "roots": [],
+      "warnings": [],
+      "errors": []
+    },
+    "cross_model": {
+      "route": "claude",
+      "model_requested": "claude-opus-5-5",
+      "model_actual": "claude-opus-5-5",
+      "effort_requested": "low",
+      "effort_actual": "unverified",
+      "receipt_supported": true,
+      "independence_verified": true
+    },
+    "requirements_notes": [
+      "U5 scoped commit is a post-review step for the caller.",
+      "No unrequested behavior rule beyond the planned origin policy was found."
+    ]
+  },
+  "peer": {
+    "outcome": "folded",
+    "coverage": "Independent cross-model adversarial pass requested Claude Opus 5.5 at low effort via the Claude route. Receipt confirms claude-opus-5-5 served and serving-family independence; actual effort is unverified. It reported no findings and three residual cautions."
+  },
+  "artifact_path": "/tmp/compound-engineering-501/ce-code-review/20261031-092804-183b8507",
+  "run_id": "20261031-092804-183b8507"
+}
