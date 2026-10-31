@@ -1,0 +1,209 @@
+{
+  "status": "complete",
+  "mode": "non-interactive",
+  "document": "docs/runbooks/nami-rename-release.md",
+  "documentType": "unified-plan",
+  "documentSha256": "4e67c3db1c2cd19c0b1d774a728b47ffdf4f2c3ada663ac6db0b9731909090a5",
+  "editAuthority": "Corrections to the draft implementation and verification needed to satisfy established R1-R8, preserving founder scope; no runtime implementation or production mutation.",
+  "fixes_applied": 0,
+  "proposed_fixes_count": 0,
+  "decisions_count": 0,
+  "fyi_count": 0,
+  "confidence": {
+    "depth": "Standard",
+    "risk": [
+      "authentication",
+      "persistent schema",
+      "external deployment",
+      "private production data"
+    ],
+    "externalResearchShapedPlan": true,
+    "sectionScores": {
+      "Requirements": 0,
+      "Sources": 0,
+      "KeyTechnicalDecisions": 1,
+      "ImplementationUnits": 1,
+      "SystemWideImpact": 1,
+      "RisksAndDependencies": 1,
+      "OpenQuestions": 1,
+      "HighLevelDesign": 0
+    },
+    "threshold": 2,
+    "outcome": "No sections require further strengthening; existing read-only metadata/behavior trace and official guidance ground choices."
+  },
+  "coverage": {
+    "localReviewers": [
+      "coherence",
+      "feasibility",
+      "scope-guardian",
+      "security-lens",
+      "adversarial",
+      "design-lens",
+      "feasibility-limited-independent"
+    ],
+    "failedReviewers": [],
+    "packRoots": [],
+    "crossModel": {
+      "route": "claude",
+      "requestedModel": "claude-opus-5-5",
+      "actualModel": "claude-opus-5-5",
+      "requestedEffort": "low",
+      "actualEffort": "unverified",
+      "independenceVerified": true,
+      "lenses": [
+        "adversarial",
+        "security-lens",
+        "whole-doc"
+      ],
+      "processScopedPublicNpmRegistry": true
+    },
+    "peerOutcome": "folded"
+  },
+  "originalPeerClaims": [
+    {
+      "reviewer": "adversarial-claude",
+      "claim": {
+        "title": "Backup assumes writers drained before Vercel gate exists",
+        "severity": "P2",
+        "section": "U1 \u2014 Preserve and prepare the existing production database",
+        "why_it_matters": "The dump and baseline counts assume no legacy writers are running. The plan stops anonymous traffic only through the All Deployments gate, and U2 step 1 is where that gate gets enabled. If U1 runs before U2 step 1, the old public deployment keeps writing to legacy tables, so the counts and fingerprints never settle. Continuity checks would then fail for no real reason, or they would hide a real loss. The plan should say outright that U2 step 1 (enable the gate) runs before U1 steps 2\u20134.",
+        "finding_type": "omission",
+        "autofix_class": "gated_auto",
+        "suggested_fix": "In U1 Dependencies and the step order, state that U2 step 1 (enable All Deployments protection and verify anonymous denial) must complete before U1 step 2 snapshot and counts.",
+        "confidence": 75,
+        "evidence": [
+          "Obtain baseline legacy row counts, privacy-preserving aggregate content fingerprints and sequence positions privately while writers are gated/drained.",
+          "Enable Vercel Authentication **All Deployments** through the existing project controls"
+        ]
+      },
+      "disposition": "dismissed",
+      "reason": "Dismissed: U1 dependencies explicitly require effective KTD3 perimeter before production writes; U2 requires U1 only before auth-enabled promotion, leaving its gate step available first. The rollout diagram also places the gate/backup before schema. Neither the normal nor fresh limited local feasibility reviewer found contradictory execution instructions. Competent dependency ordering already supplies the proposed result."
+    },
+    {
+      "reviewer": "adversarial-claude",
+      "claim": {
+        "title": "Gate doesn't stop already-running functions or cron/server writers",
+        "severity": "P3",
+        "section": "KTD6 \u2014 Prefer access containment and forward repair",
+        "why_it_matters": "The plan already admits that flags don't stop functions that are already running. But during the schema transaction it relies on the platform gate to drain writers. Any scheduled jobs or non-HTTP writers would get past the gate and could hit the lock timeout over and over. The plan never asks anyone to check for crons or background writers.",
+        "finding_type": "omission",
+        "autofix_class": "gated_auto",
+        "suggested_fix": "Add to U1 step 1 a check of Vercel cron configuration and active DB connections (pg_stat_activity) on the production branch before taking locks.",
+        "confidence": 50,
+        "evidence": [
+          "Flags stop Method/signup but not anonymous legacy provider routes or already-running functions."
+        ]
+      },
+      "disposition": "dismissed",
+      "reason": "Dismissed: U1 already requires drained writers, bounded locks/timeouts and diagnosis instead of retries; U4 explicitly accounts for in-flight functions. Checked artifact config has crons: [] and source has no identified independent scheduled writer. Additional monitoring procedure lacks a current unsupported consequence."
+    },
+    {
+      "reviewer": "security-lens-claude",
+      "claim": {
+        "title": "Signup window allows any gated user to create accounts",
+        "severity": "P2",
+        "section": "U3 \u2014 Bootstrap fresh QA through real Google",
+        "why_it_matters": "During the signup-on stage, anyone in the Vercel platform access set can create an app account via Google. The plan only audits for unexpected identities afterward. B2 asks that the access set be 'acceptable' but never defines acceptable. Fixing it as owner + QA operator only and recording the member list before signup turns that audit into a check against a known baseline.",
+        "finding_type": "omission",
+        "autofix_class": "gated_auto",
+        "suggested_fix": "In B2/U3 step 2, require recording the exact Vercel team/access member list before signup-on and limit it to owner and QA operator; any other member stops bootstrap.",
+        "confidence": 50,
+        "evidence": [
+          "verify the permitted access set is acceptable during signup",
+          "Privately audit newly created auth identities within the controlled window"
+        ]
+      },
+      "disposition": "dismissed",
+      "reason": "Dismissed: B2/U2 require verifying the permitted access set before opening signup and block bootstrap if restriction fails; U3 audits the controlled window. Forcing an owner-plus-operator membership rule would add an unrequested narrower access policy without evidence the existing required assessment fails."
+    },
+    {
+      "reviewer": "security-lens-claude",
+      "claim": {
+        "title": "Private dump storage and retention undefined",
+        "severity": "P2",
+        "section": "U1 \u2014 Preserve and prepare the existing production database",
+        "why_it_matters": "The full production dump contains legacy user records. The plan says 'owner-private storage' and 'outside deployment output' but never says where it lives, whether it is encrypted, or when it is deleted. An implementer could leave it in the repo-adjacent `.context/` tree on a laptop for as long as it happens to stay there. Naming an encrypted location and a deletion trigger stops the copy from leaking or outliving its recovery purpose.",
+        "finding_type": "omission",
+        "autofix_class": "gated_auto",
+        "suggested_fix": "Specify that the dump is stored in an encrypted owner-only location outside the repo working tree, with deletion after coordinator acceptance plus a stated retention period recorded in the receipt.",
+        "confidence": 50,
+        "evidence": [
+          "take a consistent custom-format dump of the production database over the direct connection into owner-private storage",
+          "Preserve private proofs/backup"
+        ]
+      },
+      "disposition": "dismissed",
+      "reason": "Dismissed: U1 already requires owner-private storage, no exposed payloads, hash/archive checks and exclusion from deployment. No evidence that a further storage system or arbitrary retention period is necessary for the requested proportionate one-time recovery snapshot; do not add operational scope from a preference."
+    },
+    {
+      "reviewer": "whole-doc-claude",
+      "claim": {
+        "title": "Gate dependency ordering contradicts between U1 and U2",
+        "severity": "P2",
+        "section": "U1 \u2014 Preserve and prepare the existing production database / U2 \u2014 Establish gated auth configuration",
+        "why_it_matters": "U1 says it needs the KTD3 perimeter (the All Deployments gate) in place before production writes. That gate is only set up in U2 step 1, yet U2 lists U1 as complete before auth-enabled promotion. An implementer running the units in their stated order would either write schema with no gate or not know they must run U2 step 1 first. Stating that U2 step 1 runs before U1 removes the circular reading.",
+        "finding_type": "error",
+        "autofix_class": "gated_auto",
+        "suggested_fix": "In U1 Dependencies, state explicitly that U2 step 1 (enable and verify the All Deployments gate) runs before U1 begins. Note in the Execution profile that the units are ordered U2.1 \u2192 U1 \u2192 U2.2\u20135 \u2192 U3 \u2192 U4.",
+        "confidence": 75,
+        "evidence": [
+          "**Dependencies:** coordinator approval and effective KTD3 perimeter before production writes.",
+          "Enable Vercel Authentication **All Deployments** through the existing project controls",
+          "U1 complete before auth-enabled promotion"
+        ]
+      },
+      "disposition": "dismissed",
+      "reason": "Merged for judgment with the gate-order claim above; the stated dependencies and diagram already prohibit ungated writes. No changed outcome from an additional cross-reference, so no retained correction."
+    },
+    {
+      "reviewer": "whole-doc-claude",
+      "claim": {
+        "title": "Verification Contract links resolve to wrong paths",
+        "severity": "P3",
+        "section": "Verification Contract",
+        "why_it_matters": "The scenario matrix, verification guide and packaging links are relative to the plan's folder. Elsewhere the document places these files under docs/runbooks/, so the links will probably not resolve. That leaves the reader unable to reach the document that controls check selection.",
+        "finding_type": "error",
+        "autofix_class": "gated_auto",
+        "suggested_fix": "Point the links at the docs/runbooks/ paths named in U2 and U4, using the correct relative prefix.",
+        "confidence": 50,
+        "evidence": [
+          "The [scenario matrix](nami-verification-scenarios.md) owns check selection",
+          "`docs/runbooks/nami-verification-scenarios.md`"
+        ]
+      },
+      "disposition": "dismissed",
+      "reason": "Rejected factually: artifact is docs/runbooks/nami-rename-release.md; the three sibling Markdown links resolve on disk and were checked. Peer guessed a plans-directory location."
+    }
+  ],
+  "residualConcernDisposition": {
+    "gatePermissionAndQaAccess": "Already explicit B2 blocking prerequisite; separate Vercel owner platform identity from exact QA app Google identity. No new finding.",
+    "legacyAccessAfterPilotOpening": "Pilot opening is outside approval; plan keeps all URLs gated and flags legacy boundary explicitly.",
+    "sixHourRestoreWindow": "Independent compatible pg_dump is required before writes; history recheck and UTC point also required. No invented maximum gap."
+  },
+  "launchBlockers": [
+    {
+      "id": "B1",
+      "blocker": "Selected production Google Web client/project and exact origin/callback registration unverified behind console sign-in",
+      "recovery": "Owner Google Cloud login/2FA and selected existing client identification; targeted exact secret reference only if needed, no vault enumeration/new scopes."
+    },
+    {
+      "id": "B2",
+      "blocker": "Existing project All Deployments gate unconfigured and legitimate QA browser access not proven",
+      "recovery": "Subsequent approval enables existing Vercel Authentication scope, checks access set/anonymous denial at alias and immutable URLs, establishes owner platform access in QA browser before signup."
+    },
+    {
+      "id": "B3",
+      "blocker": "Installed PostgreSQL clients14/15 cannot dump PostgreSQL17.11; no private backup yet",
+      "recovery": "Subsequent approval obtains compatible client only, takes private direct-connection snapshot and verifies archive/hash before schema writes."
+    }
+  ],
+  "planningBoundary": {
+    "productionChanges": false,
+    "productionModelCalls": false,
+    "qaWrites": false,
+    "testsOrBuildsDuringPlanning": false,
+    "neonLoginCompletedByFounder": true,
+    "readonlyCatalogAnalyticsAuditPassed": true
+  },
+  "singleApprovalBundle": "See Single Approval Bundle in reviewed runbook. Existing infrastructure only; gated QA release first; no public signup/opening/outreach, automatic restore, new quotas or development data copy."
+}
