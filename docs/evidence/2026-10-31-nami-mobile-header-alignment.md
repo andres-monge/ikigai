@@ -1,0 +1,11 @@
+# Nami mobile workspace header alignment — 2026-10-31
+
+Added the existing Tailwind `ml-auto` utility to the signed-in header controls group in `client/src/pages/explore.tsx`. When the group wraps below the brand, its automatic left margin consumes the remaining row space and aligns it with the right inset. Desktop spacing, wrapping, control sizes and themes are retained. No layout abstraction or new CSS rule was needed.
+
+At 359px before the fix, the group occupied x16–243.39, leaving99.61px before the desired right inset x343. Afterward it occupies x115.61–343. IAB checks at 320/359/390/640/1280px, each in light and dark themes, found exact right-inset alignment, no horizontal overflow and all three controls at least 44px tall. Inspected mobile and desktop screenshots. Actual theme toggles, same-tab Our Vision navigation/return and the Explore sign-out callback worked.
+
+Verification used the actual Explore/OurVision components and application CSS on an owned, loopback-only Vite layout fixture at approved `http://localhost:5173`. It supplied an empty fictional map/history and the designated QA email; it loaded no auth/database/provider credentials and rejected other API calls. This is rendered layout/control proof, not a new real-auth or deployed pass. No founder session/history or model/message request was used.
+
+Existing focused Explore tests passed: 3 tests for navigation, theme preservation and sign-out behavior (60 unrelated tests skipped). Node24 TypeScript check passed. No new class-string test was added for this reversible styling correction; actual rendered geometry/screenshots provide the relevant proof. No production rebuild or deployment was performed; the old prebuilt artifact does not contain this fix.
+
+Private proof: `.context/revelio/mobile-header-20261031/`, including `before-359-light.jpg`, `after-359-light.jpg`, `after-359-dark.jpg`, desktop/light/dark screenshots, `layout-measurements.json`, focused-test/type logs and the local fixture source. Browser viewport/theme were restored; only the owned fixture tooling/tab is cleaned up after verification. Production remains the publicly open, signup-enabled deployment recorded in the public-opening receipt.

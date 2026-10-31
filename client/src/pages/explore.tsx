@@ -1021,7 +1021,7 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
             <h1 className="font-display text-xl font-black leading-none tracking-tight sm:text-2xl">Nami</h1>
             <p className="mt-1 truncate font-display text-[0.65rem] font-bold uppercase tracking-[0.12em] text-stone-600 sm:text-xs">Figure out what to work on next</p>
           </div>
-          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+          <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
             <OurVisionLink />
             <span className="hidden text-xs text-stone-600 sm:inline">{userEmail}</span>
             <ThemeToggle />
