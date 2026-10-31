@@ -1,0 +1,31 @@
+{
+  "reviewer": "security-lens-claude",
+  "cross_model_route": "claude",
+  "cross_model_target": "claude",
+  "cross_model_harness": "claude",
+  "serving_family": "claude",
+  "independence_verified": true,
+  "model_requested": "claude-opus-5-5",
+  "model_actual": "claude-opus-5-5",
+  "effort_requested": "low",
+  "findings": [
+    {
+      "title": "Login redirect/return target not constrained against open redirect",
+      "severity": "P3",
+      "section": "U2 — Publish the optional essay and retain navigation",
+      "why_it_matters": "The plan adds new public navigation paths into and out of the auth flow (landing → Our Vision → return to root). Its return link is hard-coded to `/`, which is safe. But nothing says the restyled login must not accept a caller-supplied post-login destination. Stating that the return link and post-sign-in destination stay fixed internal paths keeps the existing callback URLs (KTD1) from quietly becoming an open redirect during the restyle.",
+      "finding_type": "omission",
+      "autofix_class": "gated_auto",
+      "suggested_fix": "In U2 Approach step 2, add: the return-to-Nami link and any post-sign-in destination are fixed internal paths; no query-parameter-driven redirect target is introduced.",
+      "confidence": 50,
+      "evidence": [
+        "Its return link targets `/`, letting the existing route/session behavior choose the destination.",
+        "keep `/` session-gated with the existing redirect, pending-session presentation, sign-out behavior and callback URLs"
+      ]
+    }
+  ],
+  "residual_risks": [
+    "The public essay is rendered with react-markdown from authored content, and the plan forbids raw HTML. Links inside the essay should still get safe attributes if they point to external sites; the plan only specifies safe attributes for the workspace's Our Vision link."
+  ],
+  "deferred_questions": []
+}

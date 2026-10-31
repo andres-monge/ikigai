@@ -1,0 +1,46 @@
+{
+  "document": "docs/plans/2026-10-31-1300-feat-nami-public-entry-plan.md",
+  "sha256": "7a089f99ca67a711add2491935836417ef6d2ce446bb2c446e7e78552c91a264",
+  "coverage": [
+    "coherence",
+    "feasibility",
+    "design",
+    "scope",
+    "security",
+    "security-lens-claude",
+    "whole-doc-claude"
+  ],
+  "fixes_applied": 0,
+  "proposed_fixes_count": 0,
+  "decisions_count": 0,
+  "fyi_count": 0,
+  "peer_outcome": "folded",
+  "dispositions": [
+    {
+      "source": "security-lens-claude",
+      "claim": "Constrain redirect targets explicitly",
+      "disposition": "dismissed",
+      "reason": "KTD1 already preserves callback URLs and U1 preserves the login handler. U2 fixes the return link to /. No caller-provided redirect target is proposed; additional repetition has no demonstrated consequence."
+    },
+    {
+      "source": "security-lens-claude",
+      "claim": "External essay links need safe attributes",
+      "disposition": "dismissed",
+      "reason": "The captured intended essay contains no links or URLs. The only new-tab navigation is covered by KTD2 safe link attributes. No current exploit path was established."
+    },
+    {
+      "source": "whole-doc-claude",
+      "claim": "Captured source file includes surrounding private notes",
+      "disposition": "dismissed",
+      "reason": "Read docs/evidence/nami-public-entry/vision-essay-source.md: the capture already consists only of the essay, from its title through final paragraph. Its README explicitly documents this extraction. U2 copying that file cannot publish the excluded original notes."
+    },
+    {
+      "source": "whole-doc-claude",
+      "claim": "BETTER_AUTH_URL may not drive origin substitution",
+      "disposition": "dismissed",
+      "reason": "vite.config.ts lines 7\u201310 read BETTER_AUTH_URL and validate it as origin; the nami-public-origin plugin substitutes that origin. The build gate uses the actual owning variable."
+    }
+  ],
+  "actual_edits": [],
+  "confidence_check": "Existing local route/theme/markdown/static-asset patterns verified; no unresolved implementation prerequisite or section requiring deepening."
+}

@@ -1,0 +1,32 @@
+{
+  "reviewer": "whole-doc-claude",
+  "cross_model_route": "claude",
+  "cross_model_target": "claude",
+  "cross_model_harness": "claude",
+  "serving_family": "claude",
+  "independence_verified": true,
+  "model_requested": "claude-opus-5-5",
+  "model_actual": "claude-opus-5-5",
+  "effort_requested": "low",
+  "findings": [
+    {
+      "title": "Essay copy step conflicts with excluding source notes",
+      "severity": "P2",
+      "section": "U2 - Publish the optional essay and retain navigation in the app",
+      "why_it_matters": "An implementer who follows U2 step 1 literally could copy the entire captured file into `client/src/content/our-vision.md`. That would publish the surrounding source notes, which R8 (the essay-preservation rule) says must never be published. U2 test scenario 2 compares the rendered article with \"the captured essay\" and does not say the notes are left out first. That test could then pass while the notes are published, or fail on a correct implementation. The Risks section already says the notes must be excluded, so U2's step and test should say the same thing.",
+      "finding_type": "error",
+      "autofix_class": "gated_auto",
+      "suggested_fix": "Change U2 step 1 to: \"Copy only the essay body from `docs/evidence/nami-public-entry/vision-essay-source.md` (excluding all surrounding source notes) into the authored client content…\". Change test scenario 2 to compare against the essay body only, with the notes removed and the agreed Revelio→Nami replacement applied. Add an assertion that no source-note text appears in the rendered article.",
+      "confidence": 75,
+      "evidence": [
+        "Copy only `docs/evidence/nami-public-entry/vision-essay-source.md` into the authored client content, replacing its product reference per R8",
+        "surrounding source notes must never be published",
+        "Compare the normalized article text against the captured essay with only the agreed product-name replacement"
+      ]
+    }
+  ],
+  "residual_risks": [
+    "The build gate sets only BETTER_AUTH_URL, while KTD4 relies on `__NAMI_APP_ORIGIN__` substitution. If the origin is derived from a different variable, U3 test scenario 2 (the built-HTML origin check) could fail or check the wrong origin."
+  ],
+  "deferred_questions": []
+}
