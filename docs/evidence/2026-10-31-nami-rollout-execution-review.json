@@ -1,0 +1,80 @@
+{
+  "status": "complete",
+  "verdict": "Ready to merge",
+  "scope": {
+    "base": "0b9689c89643aa7f8bb3f5b1eb98918b2ed3d0b3",
+    "branch": "codex/revelio-revamp-integration",
+    "head_sha": "0b9689c89643aa7f8bb3f5b1eb98918b2ed3d0b3",
+    "pr_url": null,
+    "files_changed": 1
+  },
+  "intent": "Record owner-resolved existing OAuth credentials and actual gated production QA outcomes, preserving the initial failure and precise Stop/completion limitations. No runtime change or public opening.",
+  "intent_confidence": "explicit",
+  "reviewers": [
+    "correctness"
+  ],
+  "findings": [],
+  "actionable_findings": [],
+  "triage_groups": [],
+  "pre_existing_findings": [],
+  "requirements_completeness": {
+    "plan": "docs/runbooks/nami-rename-release.md",
+    "plan_source": "explicit",
+    "requirements_checked": [
+      "R1",
+      "R2",
+      "R3",
+      "R4",
+      "R5",
+      "R6",
+      "R7",
+      "R8"
+    ],
+    "units_checked": [
+      "U1",
+      "U2",
+      "U3",
+      "U4"
+    ],
+    "unaddressed": [],
+    "intentional_remaining": "Coordinator acceptance remains explicitly pending; no pilot opening or claim of final acceptance."
+  },
+  "learnings": [],
+  "agent_native_gaps": [],
+  "deployment_notes": [],
+  "residual_risks": [
+    "Live Stop coincided with server completion; no provider cancellation claim.",
+    "Runtime buildVersion unknown; artifact and immutable deployment binding provides linkage."
+  ],
+  "testing_gaps": [],
+  "coverage": {
+    "depth": "lite",
+    "criteria": [
+      "AGENTS.md",
+      "CLAUDE.md (references AGENTS.md)"
+    ],
+    "instruction_file_fallback": true,
+    "compound_packs": {
+      "roots": [],
+      "warnings": [],
+      "errors": []
+    },
+    "review_policy": {
+      "sources": [],
+      "removed": 0,
+      "regraded": 0,
+      "not_applied": []
+    },
+    "not_assessed": [
+      "independent reviewer agents",
+      "learnings",
+      "agent-native gaps",
+      "deployment notes"
+    ],
+    "validation": "Reviewed complete tracked documentation diff against retained QA canonical, auth, deployment, gate, usage and legacy receipts; no product code changes or new tests required.",
+    "scope_reason": "Evidence-only prose; no executable/auth/config/public-contract behavior changed."
+  },
+  "reviewed_file_sha256": "cad72920569898af968f62f3d0157be2e5cfc73a33007edba171cd06b69a92c9",
+  "artifact_path": "/tmp/compound-engineering-501/ce-code-review/20261031-182700-fbc998c9",
+  "run_id": "20261031-182700-fbc998c9"
+}
