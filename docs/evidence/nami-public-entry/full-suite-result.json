@@ -1,0 +1,23 @@
+{
+  "status": "passed",
+  "runtime": {
+    "node": "24.19.0",
+    "postgresql": "14.18 Homebrew"
+  },
+  "command": "PATH=<Node24-bin>:$PATH U4_STORAGE_TEST_DATABASE=1 U4_STORAGE_TEST_DATABASE_URL=postgresql://postgres@127.0.0.1:53835/ikigai_u4_test_admin_nami_entry_1793449192 node scripts/test-all.mjs --run",
+  "test_files_passed": 74,
+  "tests_passed": 1124,
+  "tests_skipped": 1,
+  "exit_code": 0,
+  "duration_seconds": 64.62,
+  "isolated_cluster": "/tmp/nami-entry-pg-wZXusl",
+  "test_log": "/tmp/nami-entry-pg-wZXusl/tests.log",
+  "teardown": {
+    "pg_ctl_status": "not running",
+    "fixture_tcp_listener": "absent",
+    "temporary_cluster_data": "removed after shutdown"
+  },
+  "source_edits": [],
+  "git_writes": [],
+  "credentials_used": "none; fixture-only local trust auth and scrubbed launcher environment"
+}

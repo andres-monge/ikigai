@@ -1,0 +1,14 @@
+postgres (PostgreSQL) 14.18 (Homebrew)
+v24.19.0
+Admin fixture: ikigai_u4_test_admin_nami_entry_1793449192 at 127.0.0.1:53835; isolated cluster /tmp/nami-entry-pg-wZXusl
+Full suite exit: 0
+ ✓ client/src/components/explore/prepare-attachment.test.ts (3 tests) 3ms
+ ✓ client/src/components/explore/activity-indicator.test.tsx (1 test) 3ms
+
+ Test Files  74 passed (74)
+      Tests  1124 passed | 1 skipped (1125)
+   Start at  13:19:56
+   Duration  64.62s (transform 1.35s, setup 0ms, collect 4.16s, tests 59.53s, environment 198ms, prepare 90ms)
+
+PostgreSQL own runtime stopped; pg_ctl reports not running.
+No TCP listener remains on fixture port 53835.

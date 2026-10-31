@@ -1,0 +1,80 @@
+{
+  "branch": "codex/revelio-revamp-integration",
+  "completed_at": "2026-10-31T12:30:22.715995+00:00",
+  "cost": {
+    "host": "codex",
+    "scope": {
+      "changed_lines": 291,
+      "deleted_band": "none",
+      "depth": "full",
+      "exec_nontest_lines": 117,
+      "size_band": "small",
+      "unclassified_lines": "html14,md69"
+    },
+    "stages": [
+      {
+        "elapsed_seconds": 0.102,
+        "ended_at": "2026-10-31T12:19:39.539910+00:00",
+        "facts": {
+          "changed_lines": 291,
+          "deleted_band": "none",
+          "depth": "full",
+          "exec_nontest_lines": 117,
+          "size_band": "small",
+          "unclassified_lines": "html14,md69"
+        },
+        "stage": "scope",
+        "started_at": "2026-10-31T12:19:39.437489+00:00"
+      },
+      {
+        "elapsed_seconds": 10.496,
+        "ended_at": "2026-10-31T12:19:50.035921+00:00",
+        "reviewers": 4,
+        "stage": "select",
+        "started_at": "2026-10-31T12:19:39.539910+00:00"
+      },
+      {
+        "elapsed_seconds": 478.157,
+        "ended_at": "2026-10-31T12:27:48.193276+00:00",
+        "stage": "dispatch",
+        "started_at": "2026-10-31T12:19:50.035921+00:00"
+      },
+      {
+        "elapsed_seconds": 373.817,
+        "ended_at": "2026-10-31T12:26:04.132112+00:00",
+        "stage": "peer",
+        "started_at": "2026-10-31T12:19:50.315606+00:00"
+      },
+      {
+        "candidates": 0,
+        "elapsed_seconds": 22.218,
+        "ended_at": "2026-10-31T12:27:25.506716+00:00",
+        "stage": "merge",
+        "started_at": "2026-10-31T12:27:03.288438+00:00"
+      },
+      {
+        "elapsed_seconds": 0.093,
+        "ended_at": "2026-10-31T12:27:48.375132+00:00",
+        "stage": "validate",
+        "started_at": "2026-10-31T12:27:48.282169+00:00"
+      },
+      {
+        "elapsed_seconds": 75.453,
+        "ended_at": "2026-10-31T12:30:22.810049+00:00",
+        "stage": "report",
+        "started_at": "2026-10-31T12:29:07.356607+00:00"
+      }
+    ],
+    "status": "complete",
+    "totals": {
+      "artifact_bytes": 103380,
+      "candidates": 0,
+      "elapsed_seconds": 960.336,
+      "reviewers": 4
+    },
+    "truncated_events": 0
+  },
+  "head_sha": "6344551c21df45c19b2ac44a1f5c2be7f6bb1198",
+  "run_id": "nami-entry-20261031",
+  "verdict": "Ready to merge"
+}

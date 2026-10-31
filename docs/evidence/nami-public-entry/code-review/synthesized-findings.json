@@ -1,0 +1,46 @@
+{
+  "findings": [],
+  "first_evidence_backfilled": 0,
+  "malformed_findings": 0,
+  "malformed_returns": 0,
+  "pre_existing_findings": [],
+  "residual_risks": [],
+  "status": "complete",
+  "suppressed_by_confidence": {},
+  "suppressed_findings": [],
+  "testing_gaps": [],
+  "primary_findings": [],
+  "actionable_findings": [],
+  "triage_groups": [],
+  "mode_aware_demotions": 0,
+  "peer_outcome": "folded",
+  "coverage_notes": [
+    "Untracked QA screenshots excluded from code diff.",
+    "Desktop/mobile light and dark browser QA completed; final same-tab return check underway.",
+    "Full guarded suite: 74 files passed, 1124 tests passed, 1 skipped; focused suite after same-tab correction: 102 passed. Typecheck and final production build passed.",
+    "No base REVIEW.md found.",
+    "Cross-model pass: Claude Opus 5.5 completed; low effort requested, actual effort unverified. Peer reviewed the initial navigation snapshot; local reviewers covered the final founder-directed same-tab correction.",
+    "All four local reviewers and the cross-model peer returned no primary findings. No findings require independent validation.",
+    "No quote-gate demotions, detail-hydration drops, settlement conflicts, policy regradings, or soft-bucket demotions occurred."
+  ],
+  "advisory_admission_decisions": [
+    {
+      "reviewer": "adversarial-claude",
+      "claim": "Navigating from pending Google sign-in loses transient state",
+      "decision": "omitted",
+      "reason": "Describes native page navigation already settled by founder; no app data loss or concrete defect established."
+    },
+    {
+      "reviewer": "adversarial-claude",
+      "claim": "Sub-16px inputs may auto-zoom on iOS",
+      "decision": "omitted",
+      "reason": "Speculative uninspected inputs; accessible zoom restoration establishes no material defect."
+    },
+    {
+      "reviewer": "adversarial-claude",
+      "claim": "No component test renders dark class",
+      "decision": "omitted",
+      "reason": "Completed light/dark desktop/mobile browser QA, including vision-mobile-dark.png inspected during synthesis, covers readability. No consequential uncovered scenario established."
+    }
+  ]
+}

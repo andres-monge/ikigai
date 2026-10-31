@@ -1,0 +1,21 @@
+{
+  "reviewer": "adversarial-claude",
+  "cross_model_route": "claude",
+  "cross_model_target": "claude",
+  "cross_model_harness": "claude",
+  "serving_family": "claude",
+  "independence_verified": true,
+  "model_requested": "claude-opus-5-5",
+  "model_actual": "claude-opus-5-5",
+  "effort_requested": "low",
+  "effort_actual": "unverified",
+  "receipt_supported": true,
+  "findings": [],
+  "residual_risks": [
+    "Because of the router order in client/src/App.tsx, `/our-vision` matches before the session-gated routes, so the essay never resolves identity. The 'Return to Nami' link (`href=\"/\"`) and the header home link both do a full page load to `/`, which goes back through the existing root session handling. No redirect input is added. Clicking 'Our Vision' on `/login` also does a full navigation. Any in-progress Google sign-in state in that tab is lost, but the user can retry and no app data is affected.",
+    "Removing `maximum-scale=1` from the viewport tag lets users zoom on mobile. The Explore composer textarea uses `text-[1.0625rem]` (17px), so iOS should not auto-zoom when it gets focus. Any input elsewhere with a font size under 16px would now auto-zoom on iOS. I did not check every input."
+  ],
+  "testing_gaps": [
+    "No test renders OurVision or PublicHeader with the `.dark` class. Dark-theme readability depends on the `.dark .bg-white` and `.dark .text-stone-700` overrides in client/src/index.css working together with `prose-invert` on the article."
+  ]
+}
