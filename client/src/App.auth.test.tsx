@@ -41,6 +41,20 @@ describe('canonical auth and legacy route split', () => {
     window.sessionStorage.clear();
   });
 
+  it('opens the public essay without resolving identity or requesting private app data', () => {
+    window.history.replaceState({}, '', '/our-vision');
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    try {
+      render(<App />);
+      expect(screen.getByRole('heading', { name: 'How To Figure Out What To Work On', level: 1 })).toBeTruthy();
+      expect(screen.getByRole('link', { name: 'Return to Nami' }).getAttribute('href')).toBe('/');
+      expect(useSession).not.toHaveBeenCalled();
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
   it('does not flash a signed-out surface while the root session is loading', () => {
     window.history.replaceState({}, '', '/');
     useSession.mockReturnValue({ data: null, isPending: true });

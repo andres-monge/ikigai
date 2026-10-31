@@ -147,6 +147,8 @@ flowchart TB
 
 **Step 4 — public thesis and outreach**
 
+**2026-10-31 optional reading amendment:** The founder approved publishing the existing “How To Figure Out What To Work On” essay as a public Our Vision page before early access, linked from the landing and signed-in app headers. This is optional background reading, using only the authorized essay section and the Nami name. The later pilot-informed public one-pager and outreach remain separately sequenced below; `docs/thesis.md` remains Method authority. The bounded public-entry work is defined in `docs/plans/2026-10-31-1300-feat-nami-public-entry-plan.md`.
+
 - R14. The current thesis is matured with pilot evidence into a public one-pager without changing its Method authority implicitly.
 - R15. Outreach to A4 begins only after a working prototype and at least one pilot story exist; the public thesis is the outreach vehicle.
 

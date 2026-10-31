@@ -14,6 +14,7 @@ import { Home } from '@/pages/home';
 import { Results } from '@/pages/results';
 import { ActionPlan } from '@/pages/action-plan';
 import { Login } from '@/pages/login';
+import { OurVision } from '@/pages/our-vision';
 import { Explore } from '@/pages/explore';
 import { NotFound } from '@/pages/not-found';
 import { useSessionStorage } from '@/hooks/use-session-storage';
@@ -204,6 +205,7 @@ function App() {
   useTheme();
   return (
     <Switch>
+      <Route path="/our-vision" component={OurVision} />
       <Route path="/login" component={LoginEntry} />
       <Route path="/legacy" component={LegacyApp} />
       <Route path="/results" component={LegacyApp} />

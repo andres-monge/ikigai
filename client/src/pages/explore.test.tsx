@@ -228,6 +228,22 @@ describe('Explore U6 conversation-first workspace', () => {
     vi.unstubAllGlobals();
   });
 
+  it('keeps a same-tab Our Vision page link available across both workspace views', async () => {
+    render(<Explore {...props()} />);
+    const textbox = await screen.findByRole('textbox', { name: 'Message Nami' });
+    fireEvent.change(textbox, { target: { value: 'Keep this draft in the app' } });
+    const assertLink = () => {
+      const link = screen.getByRole('link', { name: 'Our Vision', exact: true });
+      expect(link.getAttribute('href')).toBe('/our-vision');
+      expect(link.getAttribute('target')).toBeNull();
+    };
+    assertLink();
+    fireEvent.click(screen.getByRole('tab', { name: 'Your Map' }));
+    assertLink();
+    fireEvent.click(screen.getByRole('tab', { name: 'Chat' }));
+    expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('Keep this draft in the app');
+  });
+
   it('changes theme without changing the draft, selected panel, map or submitting a request', async () => {
     const map = suggestedPathsMap();
     vi.mocked(fetch).mockImplementation(async (input) => String(input).includes('/history')

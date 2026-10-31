@@ -21,6 +21,7 @@ import { ActivityIndicator } from '@/components/explore/activity-indicator';
 import { createClientLatencyTrace, type ClientLatencyTrace } from './explore-latency';
 
 import { ThemeToggle } from '@/components/theme-toggle';
+import { OurVisionLink } from '@/components/our-vision-link';
 import { AttachmentDraft } from '@/components/explore/attachment-draft';
 import { prepareAttachment, type DraftAttachment } from '@/components/explore/prepare-attachment';
 import { ATTACHMENT_TYPES, MAX_ATTACHMENT_BYTES, formatAttachmentMessage, validateAttachmentRequest } from '@shared/chat-attachments';
@@ -1015,12 +1016,13 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
   return (
     <main className="explore-workspace flex h-[100dvh] flex-col overflow-hidden bg-ikigai-beige text-stone-900">
       <header className="shrink-0 border-b-2 border-black bg-white px-4 py-3 sm:px-6">
-        <div className="mx-auto flex max-w-[112rem] items-center justify-between gap-2 sm:gap-4">
+        <div className="mx-auto flex max-w-[112rem] flex-wrap items-center justify-between gap-2 sm:flex-nowrap sm:gap-4">
           <div className="min-w-0">
             <h1 className="font-display text-xl font-black leading-none tracking-tight sm:text-2xl">Nami</h1>
             <p className="mt-1 truncate font-display text-[0.65rem] font-bold uppercase tracking-[0.12em] text-stone-600 sm:text-xs">Figure out what to work on next</p>
           </div>
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+            <OurVisionLink />
             <span className="hidden text-xs text-stone-600 sm:inline">{userEmail}</span>
             <ThemeToggle />
             <button type="button" onClick={handleSignOut} disabled={isSigningOut} className="min-h-11 border-2 border-black bg-white px-3 font-display text-xs font-black shadow-[2px_2px_0_rgba(0,0,0,0.65)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black disabled:opacity-50">

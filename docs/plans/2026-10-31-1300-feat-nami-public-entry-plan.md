@@ -101,12 +101,14 @@ This is one public-entry work unit. Anonymous agent sessions, extra auth provide
 
 ## Planning Contract
 
-Product Contract unchanged in meaning; R1–R12, F1–F3 and AE1–AE5 retain their IDs. Problem Frame and authority reconciliation clarify the existing request without expanding it.
+Product Contract unchanged in meaning; the founder's 2026-10-31 clarification replaces the inferred new-tab mechanism with same-tab page navigation.
+
+R1–R12, F1–F3 and AE1–AE5 retain their IDs. Problem Frame and authority reconciliation clarify the existing request without expanding it.
 
 ### Key Technical Decisions
 
 - KTD1. **Keep the established route split.** Restyle `/login`; keep `/` session-gated with the existing redirect, pending-session presentation, sign-out behavior and callback URLs. This avoids changing the working identity lifecycle while satisfying R1–R5 and R11.
-- KTD2. **Public reading route at `/our-vision`.** Register it outside the authenticated root, render a checked-in copy of the intended essay through the installed `react-markdown` dependency, and give it a public header with a return-to-Nami link. Use a native anchor opening a new tab from the signed-in workspace so navigation does not unmount its draft or active stream; retain a clear accessible new-tab indication. Governs implementation of R6–R8 and R12. Source: `client/src/pages/explore.tsx` aborts controllers on unmount.
+- KTD2. **Public reading route at `/our-vision`.** Register it outside the authenticated root, render a checked-in copy of the intended essay through the installed `react-markdown` dependency, and give it a public header with a return-to-Nami link. Use a native same-tab anchor from the signed-in workspace. The founder clarified that simultaneous pages are unnecessary; normal workspace unmount cancellation is intended and no extra draft persistence or stream keepalive is introduced. Governs implementation of R6–R8 and R12. Source: `client/src/pages/explore.tsx` aborts controllers on unmount.
 - KTD3. **Share small presentation elements, preserve workspace ownership.** Add a public header and a reusable Our Vision link; use the existing `ThemeToggle`, DM Sans/Manrope typography, theme tokens and compass SVG geometry. The workspace keeps its current Chat/Your Map and account controls; add the navigation link without a wider header refactor. Governs R1, R7 and R12.
 - KTD4. **Use the approved raster directly.** Copy the selected image to `client/public/assets/og-image.png`, preserving the approved composition and text rather than regenerating it. Update the title to “Nami — Figure out what to work on next.” and descriptions to R2's subtitle in `client/index.html`. Keep the existing `__NAMI_APP_ORIGIN__` substitution and OG/Twitter asset path, which `scripts/check-vercel-function.mjs` already verifies. Governs R9–R10.
 
@@ -120,7 +122,7 @@ flowchart TD
   Landing --> Google[Existing Google flow]
   Google --> App
   Landing --> Vision[Public Our Vision page]
-  App -->|new tab| Vision
+  App -->|same tab| Vision
   Vision -->|Return to Nami| Root
 ```
 
@@ -176,7 +178,7 @@ External research is unnecessary for this bounded presentation change: the routi
 
 ### U2. Publish the optional essay and retain navigation in the app
 
-**Goal:** Make the founder's essay accessible to visitors and explorers without interrupting their workspace.
+**Goal:** Make the founder's essay accessible to visitors and explorers as a separate page with normal return navigation.
 
 **Requirements:** R6–R8, R12; F3; AE3.
 
@@ -196,10 +198,10 @@ External research is unnecessary for this bounded presentation change: the routi
 
 1. Covers AE3. Directly render `/our-vision` signed out and verify the essay loads without calling `useSession` or workspace/history APIs.
 2. Compare the normalized article text against the captured essay with only the agreed product-name replacement; verify the title, final paragraph, headings, emphasis and lists render.
-3. Covers AE3. Confirm the Our Vision link remains in the actual workspace header across Chat and Your Map and opens the public route in a new tab with safe link attributes.
+3. Covers AE3. Confirm the Our Vision link remains in the actual workspace header across Chat and Your Map and opens the public route as normal same-tab page navigation.
 4. Verify the return-to-Nami link resolves through the existing root routing; keep legacy route isolation and existing active-session redirect coverage passing.
 
-**Verification:** Read the full essay at mobile and desktop widths in both themes; inspect link focus and header wrapping. From a designated QA workspace, verify opening the essay leaves the original tab and draft intact without sending a model turn. Direct refresh on the public route must resolve through the existing SPA fallback.
+**Verification:** Read the full essay at mobile and desktop widths in both themes; inspect link focus and header wrapping. From a designated QA workspace, verify opening the essay replaces the app page and returning to Nami restores the existing saved workspace without sending a model turn. Direct refresh on the public route must resolve through the existing SPA fallback.
 
 ### U3. Install the approved share image and matching metadata
 
@@ -241,7 +243,7 @@ No `release:validate` command exists in the inspected package scripts. No live m
 ## Definition of Done
 
 - U1–U3 satisfy AE1–AE5 with the approved copy and composition preserved.
-- Our Vision is public, uses only the intended essay, and remains accessible from both workspace views without interrupting the original tab.
+- Our Vision is public, uses only the intended essay, and remains accessible from both workspace views with normal same-tab navigation and return to the saved workspace.
 - Required verification results and material limitations are recorded, with no claim of live production health from local evidence.
 - The active revamp plan contains the narrow essay-publication amendment, and Method authority remains intact.
 - Temporary scaffolding, dead approaches and unused assets from implementation are removed; approved evidence remains available.
