@@ -10,7 +10,7 @@ afterEach(cleanup);
 
 it('publishes only the authorized essay with the current product name', () => {
   const source = readFileSync('docs/evidence/nami-public-entry/vision-essay-source.md', 'utf8');
-  expect(publishedEssay).toBe(source.replace('with Revelio.', 'with Nami.'));
+  expect(publishedEssay).toBe(source.replace('with Revelio.', 'with Nami.').replace(/[ \t]+$/gm, ''));
   render(<OurVision />);
   expect(screen.getByRole('heading', { name: 'How To Figure Out What To Work On', level: 1 })).toBeTruthy();
   for (const name of ['The problem', 'Why I want to tackle the problem', 'What I learned', 'The solution']) {

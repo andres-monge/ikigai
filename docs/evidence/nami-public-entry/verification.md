@@ -34,3 +34,5 @@ Bundled Computer Use on approved `http://localhost:5173`; existing development s
 This is local verification, not production health evidence. No deployment, push, PR, merge, domain change or auth configuration change occurred. Google consent was deliberately unchanged; the founder had already verified regular-browser logout/login worked smoothly. No new OAuth round trip was performed in this QA pass. Whole-output Vercel packaging/release gates remain required before separately authorized deployment; server packaging was unchanged here.
 
 Peer review preceded the final founder-directed same-tab adjustment; local review and focused tests covered that adjustment. Its note about dark component-test coverage was addressed with actual light/dark browser inspection. Zoom is now allowed; exhaustive iOS focus behavior was not assessed.
+
+Final post-review formatting check removed five trailing-space artifacts copied from the essay source. The content equality test permits trailing-space cleanup in addition to the authorized product-name replacement; the source snapshot remains untouched. Essay test passed again and base-to-HEAD whitespace check passed after cleanup.

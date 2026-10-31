@@ -25,7 +25,7 @@ I followed my curiosity and worked on an eclectic mix of side projects, from lea
 
 I had always been the music guy in my friend group, but making a living from that sounded as plausible as being a magician. I started a music blog and noticed I really enjoyed doing it, even when I came home tired from work. Eventually, I managed to make the unlikely jump from investment banking to music curation and landed my dream job.
 
-But in 2024 I began to see that AI was going to make my job irrelevant, and I found myself going through the process of figuring out what to work on once again. At least I knew how to navigate it this time round. 
+But in 2024 I began to see that AI was going to make my job irrelevant, and I found myself going through the process of figuring out what to work on once again. At least I knew how to navigate it this time round.
 
 Although it was discovering ChatGPT that made me see my job wouldn't last long, it was also a "holy shit" moment. I started building stuff for myself, then building AI tools for teams I knew at work. One project led to another and I used that experience to have an Applied AI role created for me inside my company.
 
@@ -35,13 +35,13 @@ When you do things, the unknowns of a possible path reveal themselves:
 
 How deep is your interest? Does it energize you? Are you willing to put in the effort? Do you like doing it every day, or only the idea of being the person who does it? What are the people in the field like?
 
-Only then will you have enough information to decide whether you'd like to continue exploring a path or try a different one. 
+Only then will you have enough information to decide whether you'd like to continue exploring a path or try a different one.
 
 This is why the two most common forms of career advice are wrong:
 
 1) Traditional career guidance focuses on where your experience and skills might be valued, without taking fulfilment and fit into account. It also ignores that you can just develop new skills, and that the job that you could end up doing might not exist yet.
-   
-2) Follow your passion assumes you already know what your passion is, which in most cases is not true. And it assumes you can get the answer with some soul searching without actually doing the thing. If you dream about quitting your office job to be a movie director, you should try making a short film first. 
+
+2) Follow your passion assumes you already know what your passion is, which in most cases is not true. And it assumes you can get the answer with some soul searching without actually doing the thing. If you dream about quitting your office job to be a movie director, you should try making a short film first.
 
 The highest chance of success comes from following your curiosity to work on your own projects, pay attention to what gives you energy, and use what you learn to choose the next one. The point of a project is not necessarily to succeed, it's to learn if it's something you'd want to pursue.
 
@@ -58,7 +58,7 @@ Courses are expensive, do not scale, and can start you on your journey but not g
 A personalized guide to walk you through every step of the way that doesn't cost a fortune.
 - Guiding self-reflection
 - Suggesting possible paths to explore
-- Designing personalized projects to work on for any given path 
+- Designing personalized projects to work on for any given path
 - Translating results into high quality self-knowledge
 - Finding peers in the area of interest
 - Deciding when to stop exploring and commit
