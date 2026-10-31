@@ -21,6 +21,17 @@ describe('Google login entry', () => {
     window.history.replaceState({}, '', '/login');
   });
 
+  it('introduces the exploration and offers optional vision reading before Google sign-in', () => {
+    render(<Login />);
+
+    expect(screen.getByRole('heading', { name: 'Figure out what to work on next.' })).toBeTruthy();
+    expect(screen.getByText('Explore possible paths, try small projects, and learn what actually fulfills you.')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Our Vision' }).getAttribute('href')).toBe('/our-vision');
+    expect(screen.getByRole('link', { name: 'Nami home' }).getAttribute('href')).toBe('/');
+    expect(screen.getByRole('button', { name: /continue with google/i })).toBeTruthy();
+    expect(signInSocial).not.toHaveBeenCalled();
+  });
+
   it('keeps pending Google sign-in exclusive and allows an explicit retry after a settled handoff stays on page', async () => {
     let settle!: (value: unknown) => void;
     signInSocial.mockImplementationOnce(() => new Promise((resolve) => { settle = resolve; }))

@@ -1,5 +1,7 @@
 import { useState } from 'react';
+import { SiGoogle } from 'react-icons/si';
 import { authClient } from '@/lib/auth-client';
+import { PublicHeader } from '@/components/public-header';
 
 const GENERIC_ERROR = 'Google sign-in could not be completed. Please try again.';
 const SIGNUPS_PAUSED =
@@ -40,35 +42,36 @@ export function Login() {
   }
 
   return (
-    <main className="min-h-screen bg-ikigai-beige px-6 py-16 text-slate-900">
-      <section className="mx-auto flex min-h-[70vh] max-w-lg flex-col justify-center">
-        <p className="mb-3 text-sm font-semibold uppercase tracking-[0.18em] text-ikigai-blue">
-          Nami
-        </p>
-        <h1 className="text-4xl font-semibold tracking-tight">Figure out what to work on next.</h1>
-        <p className="mt-5 text-lg leading-8 text-slate-600">
-          Sign in to keep your exploration and return to it across sessions.
-        </p>
-
-        {errorMessage ? (
-          <p role="alert" className="mt-6 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-            {errorMessage}
+    <div className="flex min-h-dvh flex-col bg-ikigai-beige text-stone-900">
+      <PublicHeader />
+      <main className="flex flex-1 items-center justify-center px-6 py-16 sm:py-24">
+        <section className="mx-auto flex w-full max-w-3xl flex-col items-center text-center">
+          <h1 className="max-w-[44rem] text-balance font-display text-4xl font-black leading-[1.12] tracking-tight sm:text-6xl lg:text-[4rem]">Figure out what to work on next.</h1>
+          <p className="mt-8 max-w-[39rem] text-balance text-lg leading-relaxed text-stone-600 sm:mt-10 sm:text-2xl">
+            Explore possible paths, try small projects, and learn what actually fulfills you.
           </p>
-        ) : null}
 
-        <button
-          type="button"
-          onClick={handleGoogleSignIn}
-          disabled={isSigningIn}
-          className="mt-8 inline-flex min-h-12 items-center justify-center rounded-md bg-slate-900 px-5 py-3 font-medium text-white transition hover:bg-slate-700 disabled:cursor-wait disabled:opacity-60"
-        >
-          {isSigningIn ? 'Opening Google…' : 'Continue with Google'}
-        </button>
+          {errorMessage ? (
+            <p role="alert" className="mt-6 w-full max-w-lg border-2 border-red-800 bg-red-50 p-3 text-sm text-red-800">
+              {errorMessage}
+            </p>
+          ) : null}
 
-        <p className="mt-4 text-sm text-slate-500">
-          Nami requests only your basic Google identity: name, email, and profile image.
-        </p>
-      </section>
-    </main>
+          <button
+            type="button"
+            onClick={handleGoogleSignIn}
+            disabled={isSigningIn}
+            className="mt-10 inline-flex min-h-14 w-full max-w-[22rem] items-center justify-center gap-4 border-2 border-black bg-ikigai-teal px-5 py-4 font-display text-lg font-black text-black shadow-[4px_4px_0_rgba(0,0,0,0.85)] transition-[transform,box-shadow] hover:-translate-y-0.5 active:translate-x-1 active:translate-y-1 active:shadow-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-black disabled:cursor-wait disabled:opacity-60 sm:mt-12"
+          >
+            <SiGoogle aria-hidden="true" className="h-5 w-5 shrink-0" />
+            {isSigningIn ? 'Opening Google…' : 'Continue with Google'}
+          </button>
+
+          <p className="mt-7 max-w-lg text-sm leading-6 text-stone-600 sm:mt-8">
+            Sign in to save your progress and pick up where you left off.
+          </p>
+        </section>
+      </main>
+    </div>
   );
 }
