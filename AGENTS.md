@@ -14,3 +14,7 @@ Nami was named Revelio before October 2026. Dated historical documents retain th
 - Main Nami app: HTTP `localhost:5173` or `127.0.0.1:5173`.
 - Complementary sites, including the prompt experiment lab: HTTP `localhost:5174` or `127.0.0.1:5174`.
 - Use these standard ports. Before browser or computer use, confirm the local origin and port are approved by the enterprise allowlist. If access is blocked, stop and report it; never work around the restriction. This local-origin rule does not prohibit authorized external browsing.
+
+## Verification
+
+Before implementing or debugging a change, read [Nami verification](docs/runbooks/nami-verification.md) and select the relevant checks from its scenario matrix. Use the guide for target/session preflight, deliberate live tests, persisted-state proof, first-failure diagnosis and evidence cleanup. Update it when routes, auth, deployment, tool access or contracts change. A local or fixture pass does not establish deployed release readiness.

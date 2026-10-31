@@ -2,7 +2,7 @@
  * @file journey.spec.ts
  * 
  * @description
- * End-to-end test for the core user journey through the Nami application.
+ * Opt-in paid legacy questionnaire journey; not Method Chat/Map coverage.
  * This test validates the complete flow from questionnaire submission through
  * results display to action plan generation, using the new streamObject implementation.
  * 
@@ -42,7 +42,7 @@ const TEST_RESPONSES = {
   }
 };
 
-test.describe('Core User Journey', () => {
+test.describe('Paid legacy questionnaire journey', () => {
   // Real AI streaming + polling requires generous timeout
   test.setTimeout(120000);
 
@@ -74,7 +74,7 @@ test.describe('Core User Journey', () => {
       await expect(page.locator('[data-testid="questionnaire-submit"]')).toBeVisible({ timeout: 10000 });
       
       // Take screenshot of initial state
-      await page.screenshot({ path: 'test-screenshots/01-home-page.png', fullPage: true });
+      await page.screenshot({ path: '.context/revelio/legacy-e2e/screenshots/01-home-page.png', fullPage: true });
     });
 
     await test.step('Fill out questionnaire', async () => {
@@ -95,7 +95,7 @@ test.describe('Core User Journey', () => {
       await page.fill('#economic\\.q2', TEST_RESPONSES.economic.q2);
       
       // Take screenshot of filled questionnaire
-      await page.screenshot({ path: 'test-screenshots/02-questionnaire-filled.png', fullPage: true });
+      await page.screenshot({ path: '.context/revelio/legacy-e2e/screenshots/02-questionnaire-filled.png', fullPage: true });
     });
 
     await test.step('Submit questionnaire and navigate to results', async () => {
@@ -129,7 +129,7 @@ test.describe('Core User Journey', () => {
       }).toPass({ timeout: 10000 });
 
       // Take screenshot of core drivers
-      await page.screenshot({ path: 'test-screenshots/03-core-drivers.png', fullPage: true });
+      await page.screenshot({ path: '.context/revelio/legacy-e2e/screenshots/03-core-drivers.png', fullPage: true });
     });
 
     await test.step('Validate Purpose Paths are populated', async () => {
@@ -160,7 +160,7 @@ test.describe('Core User Journey', () => {
       }
 
       // Take screenshot of purpose paths
-      await page.screenshot({ path: 'test-screenshots/04-purpose-paths.png', fullPage: true });
+      await page.screenshot({ path: '.context/revelio/legacy-e2e/screenshots/04-purpose-paths.png', fullPage: true });
     });
 
     // ========================================================================
@@ -220,7 +220,7 @@ test.describe('Core User Journey', () => {
       }).toPass({ timeout: 10000 });
 
       // Take screenshot of action plan
-      await page.screenshot({ path: 'test-screenshots/05-action-plan.png', fullPage: true });
+      await page.screenshot({ path: '.context/revelio/legacy-e2e/screenshots/05-action-plan.png', fullPage: true });
     });
 
     await test.step('Validate Action Plan UI controls', async () => {
@@ -232,7 +232,7 @@ test.describe('Core User Journey', () => {
       await expect(backButton).toBeVisible({ timeout: 10000 });
 
       // Take final screenshot
-      await page.screenshot({ path: 'test-screenshots/06-complete-journey.png', fullPage: true });
+      await page.screenshot({ path: '.context/revelio/legacy-e2e/screenshots/06-complete-journey.png', fullPage: true });
     });
 
     // ========================================================================

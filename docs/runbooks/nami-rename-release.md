@@ -1,5 +1,7 @@
 # Nami rename release checklist
 
+Current check selection and target-bound evidence: [Verify Nami](nami-verification.md) and [scenario matrix](nami-verification-scenarios.md). Local/fixture results never substitute for actual auth-enabled integration.
+
 The local integration branch contains the product rename. This checklist records what has been verified and what a separately authorized production release still needs. Do not infer live domain or auth health from a local build.
 
 ## Local integration evidence (2026-10-31)

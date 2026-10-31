@@ -17,6 +17,12 @@ amended: 2026-09-05
 
 > **MVP scope amendment (2026-10-13):** The coordinator-approved [repeating-learning plan](2026-10-13-1220-feat-repeating-learning-mvp-plan.md) reconciles current delivery in place. Method F1–F3 and AE1–AE9/AE13–AE14 are active; Method F4–F5, AE10–AE12, R34–R40, the former Method KTD9 peer prerequisite and U9 are deferred references. Five modules are active: Foundation, Paths, Design, Guide and Interpret. Focus commitment remains within the repeating loop. Preserve every ID, landed history and historical record; deferred specifications never become deployment or resume gates. U7 founder acceptance remains pending as a human release/incorporation gate. The coordinator’s current brief authorizes isolated U8 operational implementation now; it does not claim attended U7 or actual-app acceptance has passed. This prose amendment authorizes no paid runs, live-account turns, deployment or account actions. Historical dates and full-tail choices below are retained as history, not renewed delivery deadlines. See [deferred features](../method/deferred-features.md).
 
+## Release-verification amendment — 2026-10-31
+
+The active revamp plan's 2026-10-31 founder amendment supersedes conflicting release prerequisites below. Founder U7 acceptance was accepted 2026-10-30, not reopened here. Invitation/contact/review notice preparation waits for participant outreach; additional whole-account erasure tooling/runbook/operational dry run waits for a deletion request. Neither blocks MVP release. Existing security, deletion, privacy and cancellation regression coverage remains active. The manual screenreader/spoken-navigation release requirement is removed, not passed; semantic, keyboard/focus, status/live-region, tree, contrast and responsive checks remain.
+
+[Verify Nami](../runbooks/nami-verification.md) and its [active-ID/scenario matrix](../runbooks/nami-verification-scenarios.md) govern current verification selection. The paid legacy Playwright journey is not Method/auth proof; use actual scoped UI actions, canonical state and reload, plus existing deterministic suites. Deliberate real provider/model testing is required where needed, with purpose/progress/available usage and existing runaway guards; no new arbitrary tight call/spending cap. This amendment preserves all IDs and dated historical evidence and does not authorize deployment or remote configuration changes.
+
 ## Goal Capsule
 
 - **Objective:** Give career explorers a personalized, repeatable way to turn reflection into firsthand evidence, use that evidence to choose what to explore next, and continue learning after a provisional choice to focus on a path. Formal career-entry workflows remain longer-term ambitions.
@@ -734,15 +740,15 @@ The active revamp plan's platform preparation and identity work remain prerequis
 
 - **Goal:** Make the reconciled active plan's launch gate prove first and repeated learning loops, continued learning after focus commitment, path/Foundation changes, preserved pause/resume and historical-state compatibility, resumption, and legacy isolation.
 - **Requirements:** Active R1–R33/R41–R48; F1–F3; AE1–AE9/AE13–AE14, with deferred IDs explicitly classified.
-- **Dependencies:** U7, U8 and preserved auth, workspace, I3 and release safeguards. U9 is not an MVP prerequisite.
-- **Files:** `tests/explore.spec.ts` (new); `tests/journey.spec.ts`; `scripts/eval-revelio-method.mjs`; `package.json`; `vercel.json`.
+- **Dependencies:** U7, U8 and preserved auth/workspace/release safeguards. I3 preparation is deferred to the triggers in the 2026-10-31 amendment; U9 is not an MVP prerequisite.
+- **Files:** `client/src/pages/explore.test.tsx`; current browser tooling; `tests/journey.spec.ts` (opt-in legacy); `scripts/eval-nami-method.mjs`; `package.json`; `vercel.json`.
 - **Approach:**
   1. Keep deterministic reducer, storage, route, and UI tests as the invariant gate; run live transcripts as a separate behavioral gate.
   2. Exercise the full first loop from adaptive Foundation through project reflection and both Next Move branches.
   3. Exercise focus commitment without peers followed by guidance, reflection and three more-project options; change paths, reconsider Foundation, pause/reload and recover historical deferred states.
   4. Re-run interruption, compaction, reload, responsive workspace, build packaging, auth, and `/legacy` regression checks from the active plan.
   5. Run the pre-pilot data-integrity gate before enabling Method writers: baseline migration, zero-invalid-record audit, transaction fault injection, repair handling, writer-disable rollback, and cross-store erasure retry.
-- **Execution note:** Use deterministic provider fixtures for Playwright state transitions; reserve live-model runs for the golden transcript gate so end-to-end tests remain repeatable.
+- **Execution note:** Use existing deterministic fixtures for invariants and precise races; actual local/deployed integration deliberately uses real provider/model requests under the current guide. Do not treat fixtures as live end-to-end proof.
 - **Patterns to follow:** `tests/journey.spec.ts`, `playwright.config.ts`, and the active revamp U10 launch contract.
 - **Test scenarios:**
   - A new explorer completes Foundation, replaces one path, selects another, accepts the single first project, records unfinished-project learning, and chooses explore-further from three options.
@@ -753,7 +759,7 @@ The active revamp plan's platform preparation and identity work remain prerequis
   - Production-mode build loads the five active `SKILL.md` bundles and the agent starts with provider switches disabled or enabled as configured by the active plan.
   - A deepest-state North Star revision marks the full downstream closure for review, preserves evidence, disables later tools, and resumes at the earliest invalid basis.
   - Provider failure immediately after a committed operation yields one revision and one history record; retry recovers from canonical state with a stopped prior turn.
-- **Verification:** All Verification Contract gates pass, including the attended manual screen-reader release check; the founder reviews both golden journeys, and the reconciled active plan's production smoke succeeds.
+- **Verification:** All Verification Contract gates pass, including retained accessibility checks under the 2026-10-31 amendment; the founder reviews both golden journeys, and the reconciled active plan's production smoke succeeds.
 
 ---
 
@@ -767,11 +773,11 @@ Current 2026-10-13 execution uses synthetic offline verification only. Historica
 | Deterministic unit and integration tests | `npm test` | U2–U8, U10 | Reducer, selector, module loader and registry, storage, briefing, semantic tool-call fixtures, exact target/order/receipt guards, history turn anchoring, safe Markdown/citations, agent, route, and component scenarios pass; hard invariants do not depend on a live model. |
 | Method golden transcripts | `npm run eval:method` | U3, U7, U8 | Three bounded Sol samples per changed core behavior record provider/model/module versions; hard rules pass every run and at least two meet the qualitative rubric without retries. The amendment matrix covers multilingual assent, bare ordinal selection, ambiguity forms, destructive impact acknowledgment, and concise path presentation. |
 | Provider capability | Focused deterministic agent and history tests; at most one unretried Sol smoke only if a changed boundary cannot be covered | G1, U5 | Native contextual search, result-gated narration, same-turn state refresh, bounded citation history, safe compaction, and exact receipt reconciliation remain intact without isolated research, source handles, a classifier, or a fallback matrix. |
-| Browser journey | `npm run test:e2e` | U10 | First and repeated learning-loop, focus/path/Foundation changes, historical compatibility, responsive workspace, auth, and legacy journeys pass. |
+| Browser journey | [Current scenario matrix](../runbooks/nami-verification-scenarios.md); selected legacy paid E2E separately | U10 | First and repeated learning-loop, focus/path/Foundation changes, historical compatibility, responsive workspace, auth, and legacy journeys pass. |
 | Production build | `npm run build` | U3, U6, U10 | Client/server bundles build and every currently registered Method bundle loads in production mode—three at U3 and five active modules at U8/U10. |
 | Data integrity | Reviewed Drizzle SQL plus disposable-branch integrity drill | U4, U10 | Fresh schema and any real predecessor fixture pass; zero invalid or orphaned records, exact-once fault injection, repair-required behavior, writer-disable rollback, and erasure failure/retry are proven before pilot writes. |
 | Purpose Paths presentation | Founder-selected prototype contract plus rendered Chat/Map evidence | U6 | One shared five-band component renders in both placements; Chat alone exposes current Start actions; actual container width selects aligned three-column subgrid or equal stack. |
-| Workspace UX and accessibility | U6 component assertions, accessibility-tree inspection, rendered keyboard/focus/status/width checks; U10 manual screen-reader check and e2e | U6, U10 | Exact attachment/action counts, read-only Map, restricted Markdown/citations, delayed Saving, silent success, one persistent error visual, cancellation truth, unseen Chat dot, focus, draft preservation, and responsive equality match Revamp R22-R24. |
+| Workspace UX and accessibility | U6 component assertions, accessibility-tree inspection, rendered keyboard/focus/status/width checks; current real browser proof; no manual screenreader release gate | U6, U10 | Exact attachment/action counts, read-only Map, restricted Markdown/citations, delayed Saving, silent success, one persistent error visual, cancellation truth, unseen Chat dot, focus, draft preservation, and responsive equality match Revamp R22-R24. |
 | Authority coherence | Role-based `ce-doc-review` | U1 | Thesis, Method Product Contract, and active revamp plan contain no conflicting live instruction. |
 | 2026-09-05 amendment stop | Focused U5-U7 checks, `npm run check`, `npm test`, `npm run eval:method`, `npm run build`, rendered comparison widths, and attended founder U7 gate | U5-U7 | Revamp R22-R26 and AE12-AE17 pass; Isolated U8 implementation is authorized; founder U7 acceptance remains pending before release/incorporation. The diff adds no database migration, route, operation family, classifier, generic attachment/status framework, or broad internal rename. |
 
@@ -796,7 +802,7 @@ Live transcripts assess decisions and state writes rather than general phrasing,
 - Every persisted map passes the full-document validator, every logical operation has at most one matching history record, and the pre-pilot integrity audit reports zero unsupported documents, dangling references, invalid cardinalities, duplicate active records, or duplicate operation identities.
 - The fresh-schema or real predecessor migration, writer-disable rollback or roll-forward repair, and cross-store erasure failure-and-retry drills pass before pilot accounts receive Method write access.
 - `/` serves the authenticated Method experience and `/legacy` retains its existing anonymous behavior, schemas, prompts, provider, and journey.
-- `npm run check`, `npm test`, `npm run eval:method`, `npm run test:e2e`, and `npm run build` pass on the final state under the Verification Contract thresholds.
+- `npm run check`, guarded `npm run test:all -- --run`, selected relevant live evaluation, the current scenario matrix's real browser proof, and `npm run build` pass on the final candidate. Paid legacy E2E is selected separately, never substituted for Method coverage.
 - Cleanup is complete: no generic Method upsert bypass, dual acting surface, broad internal `why` rename, phrase/alias authorization layer, classifier, generic attachment/status framework, recovery operation family, new route or migration, runtime-generated visualization path, orphaned transition, or dead prototype code remains in the diff.
 
 
@@ -811,4 +817,4 @@ Local commits `bb5984c`, `09976fa`, `63b85e9` and `ed7a945` reconcile authority,
 
 Final Node24 checks pass: typecheck; 53 test files with 843 passed and two production-only skips; build plus 18 production module checks; offline preflight with zero provider calls. U6 verifies three-project continuation, reload checkpoints, historical review recovery, compaction and complete Method-data erasure/performance evidence. Actual local formal review is complete (`20261013-135731-c178e631`); all three validated findings are corrected and regression-tested. See the evidence receipt for scope and remaining human gates.
 
-Local implementation completion is separate from release completion. Attended U7 and actual-app founder dogfood, authenticated Method browser/mobile checks, manual screen-reader verification, separately authorized paid-model evaluation, I3 real-account/BetterAuth identity-erasure runbook, incorporation and deployment remain pending. Synthetic Method-data erasure does not delete or prove deletion of BetterAuth accounts. Existing approved main 5173/lab 5174 serving processes and unrelated integration WIP remain untouched.
+Local implementation completion is separate from release completion. Founder U7 is accepted; fresh authenticated Method/browser/mobile and final-candidate checks remain separate. Manual screenreader verification is removed, and additional I3 whole-account operational erasure preparation is deferred. Selected deliberate paid-model verification follows the current guide; incorporation/deployment remain separately authorized. Synthetic Method-data erasure does not delete or prove deletion of BetterAuth accounts. Existing approved main 5173/lab 5174 serving processes and unrelated integration WIP remain untouched.

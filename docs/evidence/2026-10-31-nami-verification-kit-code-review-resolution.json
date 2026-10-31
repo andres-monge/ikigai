@@ -1,0 +1,43 @@
+{
+  "review_run_id": "20261031-155542-5a01d230",
+  "review_receipt": "docs/evidence/2026-10-31-nami-verification-kit-code-review.json",
+  "finding": 1,
+  "disposition": "applied-inline-and-verified",
+  "cause": "npm run dev forced development mode and selected Neon WebSockets for the new required ordinary local PostgreSQL target.",
+  "fix": "playwright.config.ts launches node --import tsx server/index.ts with NODE_ENV=test, explicit existing U4 flags and validated URL; serves the built client; guide documents exact-origin build prerequisite. Product db.ts/runtime behavior unchanged.",
+  "before": {
+    "reviewFinding": 1,
+    "reproducedBeforeFix": true,
+    "query": "SELECT1 on owned disposable PostgreSQL",
+    "NODE_ENV": "development",
+    "errorClass": "ErrorEvent",
+    "rootCause": "npm run dev forces development; db.ts native pg branch requires NODE_ENV=test and U4 flag",
+    "providerCalls": 0
+  },
+  "after": {
+    "configurationCommand": "node --import tsx server/index.ts",
+    "NODE_ENV": "test",
+    "disposableDatabase": true,
+    "builtLegacyPage": 200,
+    "databaseBackedSessionLookup": 404,
+    "providerCalls": 0,
+    "methodEnabled": "false",
+    "authDatabaseBlank": true,
+    "passed": true
+  },
+  "verification": [
+    "Node24 npm run check passed after fix",
+    "Actual config-driven server with migrated local PostgreSQL: GET /legacy200 and database-backed missing-session404",
+    "Provider/model calls0 for this smoke",
+    "Owned app/fixture PostgreSQL stopped; ports5173/65432 clear; first failure retained"
+  ],
+  "remaining_actionable_findings": [],
+  "ready_for_local_commit": true,
+  "deployed_release_verified": false,
+  "files": {
+    "playwright.config.ts": "0f754b595a01a69ffee7e41d121c322e465da4bf4bca01782ed8a6eabe8b62ca",
+    "tests/journey.spec.ts": "07ca456db84975ab98ea731df3bc45a72527ed01d27ee3c1623ada66f2004daf",
+    "docs/runbooks/nami-verification.md": "b6504382e4b6f2a172845026bdb2b000fc08710e8b9e6db95e5671846fb7e21e",
+    "docs/runbooks/nami-verification-scenarios.md": "0a213676d029ae81c0df53107c008f137450c6088e3e5898b371115d5b6a3e68"
+  }
+}
