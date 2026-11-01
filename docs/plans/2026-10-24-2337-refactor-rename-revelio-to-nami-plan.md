@@ -1,0 +1,89 @@
+---
+title: "refactor: Rename Revelio to Nami"
+date: 2026-10-24
+type: refactor
+artifact_contract: ce-unified-plan/v1
+product_contract_source: ce-plan-bootstrap
+execution: code
+---
+
+# refactor: Rename Revelio to Nami
+
+## Goal Capsule
+
+- **Objective:** The product is called Nami everywhere a user, the agent or a maintainer meets its name, and production moves to a new free `*.vercel.app` domain.
+- **Why:** The method moved from "reveal what you already know" to "navigate a blurry map toward where you want to be". The agent prompt already forbids revealing a calling or hidden identity (`server/ai/method/base-instructions.ts:15`); only the name lagged behind.
+- **Authority:** The revamp plan `docs/plans/2026-08-14-claude-feat-revelio-revamp-plan.md` remains the revamp authority; this plan changes names only, not Method behavior.
+- **Timing:** Start only after U7 dogfooding (`codex/revelio-revamp-integration`) merges to `main`. Measured on 2026-10-24: 21 of the 42 non-doc files that contain "Revelio" are also changed on that branch (82 commits ahead of `main`), including `server/auth.ts`, `server/routes/agent.ts`, `client/src/pages/explore.tsx` and the base prompt. `codex/chat-attachments-mvp` overlaps on the same 21 files. Close or merge stale worktrees before starting.
+- **Stop conditions:** Local changes verified and committed on `main`. No PR (solo project). Vercel, Google Cloud console and domain steps are listed for the founder; do not perform them.
+
+---
+
+## Key Decisions
+
+- **Name: Nami** (session-settled: user-directed — chosen over Navi because Navii, heynavii.ai, is a voice-first AI career coach in the same space; no career product named Nami was found).
+- **New production domain: `heynami.vercel.app`** (session-settled: user-directed — free `*.vercel.app`, no purchase before traction). It returned `DEPLOYMENT_NOT_FOUND` on 2026-10-24; availability is only confirmed by claiming it in Vercel. Fallbacks that were also free: `meetnami`, `trynami`, `nami-app`. Taken: `nami`, `namiapp`, `nami-me`, `nami-map`.
+- **Domain lives in one setting** (session-settled: user-approved) so a later move to a custom domain is a config change: buy, add in Vercel, add Google redirect URI, change `BETTER_AUTH_URL`, redirect old domain.
+- **Full rename of internal identifiers** (session-settled: user-directed — chosen over leaving legacy names).
+- **Icon only: restore the compass** (session-settled: user-directed — palette, fonts and layout unchanged). The favicon was a compass until `9c7f529` (2026-04-12) replaced it with the sunrise for the "Revela" rebrand; the in-app header never changed and still renders lucide `Compass` (`client/src/components/header.tsx`), so the favicon will match the app again.
+- **Dated docs stay as written** (session-settled: user-approved). Living docs and persona agents are renamed; `AGENTS.md` notes the former name.
+- **Project identity:** rename `package.json` `name` to `nami` only; the `ikigai` folder and GitHub repo stay (session-settled: user-approved).
+
+---
+
+## Verified facts this plan relies on
+
+- No browser storage key contains the name; the only key is `session`. `revelio-draft` is a DOM id. No user data is lost.
+- `REVELIO_AGENT_MODEL`, `REVELIO_AGENT_PROVIDER`, `REVELIO_COMPACT_THRESHOLD` are code constants (`server/ai/agent.ts:27-29`), not env vars. Only `REVELIO_METHOD_MODEL` and `REVELIO_METHOD_TIMEOUT_MS` are env vars, read only by the eval script.
+- Production auth URL is hardcoded as a fallback (`server/auth.ts:13,79`). Better Auth trusts exactly `[baseURL]`; the Method POST guard accepts exactly the `BETTER_AUTH_URL` origin (`server/routes/agent.ts:418`). Session cookies are host-bound, so the domain move logs everyone out once; Google sign-in makes re-entry one click.
+- `client/index.html` hardcodes `https://revelio-me.vercel.app` in `og:url`, `og:image`, `twitter:url`, `twitter:image`.
+- The agent self-identifies in one line (`base-instructions.ts:11`); the prompt version is reported by `agent.ts:224` and the eval script.
+- `x-revelio-request` is set by the client (`explore.tsx:36`) and checked by the server (`routes/agent.ts:126`); both must change in the same deploy.
+
+---
+
+## Implementation Units
+
+### U1. Single source for the production origin
+- Remove `PRODUCTION_AUTH_URL`; require `BETTER_AUTH_URL` in production (fail closed, matching existing `AuthConfigurationError` style). Keep the local default.
+- Make `index.html` share tags derive from the app origin at build time (Vite env, e.g. `%VITE_APP_ORIGIN%`) or use the deployed origin; no hardcoded domain remains in source.
+- Tests: update `server/auth.test.ts` expectations; add a case that production without `BETTER_AUTH_URL` is a configuration error.
+
+### U2. User-facing copy
+- `client/index.html` title and meta, `client/src/lib/i18n.ts` (`header.title`, EN and ES), `explore.tsx` (welcome, errors, labels, placeholder), `login.tsx`, `safe-message.tsx`, `method-map.tsx`, `interaction-ownership.ts`, both PDF footers ("Generated by Nami"), `server/auth.ts` `appName`.
+- Check Spanish copy reads naturally with "Nami" (gender agreement in error strings).
+- Tests: `App.auth.test.tsx`, `explore.test.tsx` accessible names.
+
+### U3. Agent identity
+- `base-instructions.ts:11` → "You are Nami, …"; bump `BASE_INSTRUCTIONS_VERSION` to `1.0.1`.
+- `server/ai/briefing.ts` heading, `history.ts` metadata `product: 'nami-method'`.
+- Run `npm run eval:method` before and after; results must not regress.
+
+### U4. Internal identifiers
+- Headers: `x-revelio-request` → `x-nami-request`, `x-revelio-client-ip` → `x-nami-client-ip` (client, server, tests, CORS allow-headers in one commit).
+- Types/constants: `RevelioAuth` → `NamiAuth`, `RevelioUIDataTypes` → `NamiUIDataTypes`, `REVELIO_AGENT_*`/`REVELIO_COMPACT_THRESHOLD` → `NAMI_*`.
+- Eval: `scripts/eval-revelio-method.mjs` → `eval-nami-method.mjs`, env vars `NAMI_METHOD_MODEL`, `NAMI_METHOD_TIMEOUT_MS`; update `package.json` script and set `name` to `nami`.
+- Comments/headers in `server/db.ts`, `env.ts`, `utils/*`, `scripts/*`, `tests/journey.spec.ts`; test fixtures (`revelio.test`, `revelio-me-git-feature.vercel.app`, DB names in test URLs).
+- `.env.example` heading and production URL comment.
+
+### U5. Icon
+- Restore `client/public/favicon.svg` from `d7bf4ab` (lucide compass, stroke and needle `#4DB6AC`); regenerate `favicon.ico` (16/32/48) and `apple-touch-icon.png` (180×180) from it rather than reusing the January binaries, so all three match.
+- `assets/og-image.png` (2026-01-03) contains no product name but still shows the ikigai Venn diagram and "Find your thing. Then pick a side quest" — it predates the Method. Replacing it is out of this plan's icon-only scope; flag it to the founder as a separate decision.
+
+### U6. Docs and agents
+- Rename in `AGENTS.md`, `docs/thesis.md`, the active revamp plan's prose (keep its filename; it is referenced by path), and `.claude/agents/persona-*.md`.
+- Add to `AGENTS.md`: "Nami was named Revelio before 2026-10; dated docs keep the old name."
+
+### Verification
+- `git grep -i revelio -- ':!docs/research' ':!docs/brainstorms' ':!docs/prototypes' ':!docs/evidence' ':!docs/explainers'` returns only the `AGENTS.md` note and dated plan filenames.
+- Typecheck, unit tests, journey test; local app on `localhost:5173` shows Nami in header, login, chat and PDFs; Method POST works with the new header.
+
+---
+
+## Founder steps (manual, outside the repo)
+
+1. ~~Claim `heynami.vercel.app`~~ Done 2026-10-30: it is the project's only production domain. `revelio-me.vercel.app` was re-aliased to the same production deployment on 2026-10-30 (`vercel alias set`), so both domains serve it until step 4's redirect. Note: production's API has crashed since the 2026-09-03 deploy (extensionless ESM imports in `shared/career-map`); that fix is handled on the U7 branch and must land before cutover can be verified.
+2. Google Cloud console: add `https://heynami.vercel.app/api/auth/callback/google` as an authorized redirect URI, keep the old one until cutover; update the OAuth consent screen app name to Nami.
+3. Vercel env: set `BETTER_AUTH_URL` to the new origin (and `VITE_APP_ORIGIN` if U1 uses it); rename `REVELIO_METHOD_*` in local `.env`.
+4. Deploy; add a redirect from `revelio-me.vercel.app` to the new origin; sign in again once.
+5. After a week, remove the old Google redirect URI.

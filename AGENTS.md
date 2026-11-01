@@ -9,6 +9,10 @@ Nami was named Revelio before October 2026. Dated historical documents retain th
 - Other dated research, brainstorms, and plans are historical unless explicitly named.
 - For founder dogfood or Method reset work, read `docs/dogfood/README.md` and the relevant run record before acting. These records are evidence, not Method or implementation authority.
 
+## Git workflow
+
+- This is a solo project. Do not create pull requests unless explicitly requested.
+
 ## Local development ports and browser access
 
 - Main Nami app: HTTP `localhost:5173` or `127.0.0.1:5173`.
