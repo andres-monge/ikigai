@@ -8,7 +8,7 @@ Local reconciliation is complete. Push and managed worktree archiving await coor
 - Original local main: `8cf9135045167e72ce9fe7a09df516d01e4fea71`.
 - Merge: `2002877404485bec039d0a924549a77b4e00ae7d`, with those two parents in that order. Local main was fast-forwarded to the merge; this evidence-only follow-up is shared by main and integration afterward.
 - Refreshed origin/main: `0d71b9a62ab8768acdfdec736b3aa381892326cf`; no remote push occurred.
-- All application/runtime/configuration files match both accepted integration and deployed runtime source `60afe53778cd3b3edbdf2cee577bf9028e381338`. Checks used an empty Git diff excluding only `AGENTS.md`, `docs/**`, and `youtube-transcripts/**`.
+- Before the separately authorized safeguard below, all application/runtime/configuration files match both accepted integration and deployed runtime source `60afe53778cd3b3edbdf2cee577bf9028e381338`. Checks used an empty Git diff excluding only `AGENTS.md`, `docs/**`, and `youtube-transcripts/**`.
 - Preserve the historical release binding: public `https://heynami.vercel.app` still points to `dpl_4PcQMSfrM1eNaokQuTqXajTGXS9A`; its recorded audited artifact SHA is `70093bd0ab3720314799e0a2b930f9cc7d629e612f8124c4d85125f17339b3dc`. The merged commit has not been deployed. Existing release receipts are unchanged.
 
 ## Preservation and conflict disposition
@@ -46,9 +46,9 @@ Private logs: `.context/consolidation/typecheck.log`, `full-suite.log`, `product
 
 Inspected project API, immutable deployment and exact public-domain alias on November 1. Project `prj_sVqqIBKF1Q2lViOpvlUlFGmkvMT6` remains linked to GitHub `andres-monge/ikigai`, production branch `main`, framework Vite, Node24, default build command, output `public`, and no ignored-build command. Protection remains `all_except_custom_domains`. The production deployment is READY, source CLI; the exact public alias still maps to the recorded deployment. No settings were changed.
 
-Current `vercel.json` has no `git.deploymentEnabled` exclusion. [Vercel's official Git configuration](https://vercel.com/docs/project-configuration/git-configuration) documents the default as true and `git.deploymentEnabled: false` as disabling all automatic Git deployments. A bare main push is therefore eligible to trigger an unchecked source deployment and is not approved.
+At the pre-safeguard inspection, `vercel.json` had no `git.deploymentEnabled` exclusion. [Vercel's official Git configuration](https://vercel.com/docs/project-configuration/git-configuration) documents the default as true and `git.deploymentEnabled: false` as disabling all automatic Git deployments. A bare main push is therefore eligible to trigger an unchecked source deployment and is not approved.
 
-Proposed coordinator-reviewed safeguard: add `"git": { "deploymentEnabled": false }` to `vercel.json` on the exact history to be pushed, preserving its existing functions and rewrites. This is a proposed source configuration change, not yet applied; no remote project-setting change is needed for this route. Alternatively, separately approve disconnecting the linked Git repository in Vercel before any push. Do not mistake `gitProviderOptions.createDeployments` (Git-provider deployment reporting) for this deployment gate.
+Initial proposed safeguard (prepared locally after coordinator acceptance; see the follow-up below): add `"git": { "deploymentEnabled": false }` to `vercel.json` on the exact history to be pushed, preserving its existing functions and rewrites. At that initial inspection it had not been applied; no remote project-setting change is needed for this route. Alternatively, separately approve disconnecting the linked Git repository in Vercel before any push. Do not mistake `gitProviderOptions.createDeployments` (Git-provider deployment reporting) for this deployment gate.
 
 After review/authorization, verify the chosen gate, refresh origin/main to ensure the push is a fast-forward, and push only explicit reviewed refs (main is sufficient to back up the full merged history). Do not push all branches, backup refs, stash, private bundles, `.context`, `.vercel` or environment files. Verify GitHub's resulting SHA and re-read the public-domain alias/deployment identity afterward. Keep future releases on the checked prebuilt path; this consolidation does not authorize a release or protection change.
 
@@ -71,3 +71,46 @@ All listed original tips have recovery refs and verified bundle coverage. Use ma
 | purpose-paths-checkpoint-debug | Integrated ancestor; clean with local node_modules. Recommend archive after review/dependency disposition. |
 
 Other local branches without worktrees — `analytics`, `cleanup`, `feat/speech-to-text`, `fix/e2e-test-reliability`, `vercel-migration` — are integrated ancestors. Retain their refs for now; no branch deletion is necessary. No unique-needed application patch was found. The only needed additional main content was the retained instruction/historical documents.
+
+
+## Coordinator-reviewed local push preparation
+
+The coordinator accepted consolidation `794c4d85a420290d2e2058488bd4c2f1a6e0cfb6` after independently checking the merge and unchanged runtime. The coordinator then authorized preparing the smallest Git safeguard, local scoped commit and matching local refs, with another stop before push, deployment, remote setting changes or archive.
+
+The only configuration change is three lines added to `vercel.json`:
+
+```json
+"git": {
+  "deploymentEnabled": false
+}
+```
+
+Existing schema declaration, function duration and rewrites are preserved exactly. This disables automatic Git deployments for all branches according to [Vercel's current Git configuration docs](https://vercel.com/docs/project-configuration/git-configuration#turning-off-all-automatic-deployments). It does not deploy the source or change the running production deployment. Do not push a different/older branch whose configuration lacks the safeguard.
+
+**Lightweight checks: Pass.** Downloaded [the official live configuration schema](https://openapi.vercel.sh/vercel.json) on November 1; schema SHA256 `7a8bbf15e5fc35062f7f247dc4b707e40896bbc62b806a921833c90d71fcbca8`. Its `properties.git.properties.deploymentEnabled.oneOf` allows a boolean or a branch-to-boolean object. Strict JSON parsing succeeded, Ajv validated the new Git object against the downloaded official `git` subschema, a direct assertion confirmed boolean false, and deep comparison proved all pre-existing configuration properties unchanged. `git diff --check` passed. Schema snapshot: ignored `.context/consolidation/vercel-schema-2026-11-01.json`. This is subschema validation plus complete preservation checking, not a fresh full application/build test. No repeat full suite, browser or model tests were needed for this configuration-only addition.
+
+The exact candidate is the local commit containing this follow-up and the safeguard; both `main` and `codex/revelio-revamp-integration` point to it after a clean fast-forward. The final immutable SHA, parent, config blob and explicit push command are recorded after commit in private `.context/consolidation/push-candidate.json` and returned to the coordinator for approval. No push is authorized by this receipt. Local bundle/refs/WIP backups remain; no worktree has been archived.
+
+After approval of that **exact SHA**, run from the primary checkout, substituting only the coordinator-approved SHA for the placeholder:
+
+```sh
+set -e
+git fetch origin main
+test -z "$(git status --porcelain)"
+test "$(git rev-parse main)" = '<approved-exact-candidate-sha>'
+git merge-base --is-ancestor origin/main main
+git push origin refs/heads/main:refs/heads/main
+```
+
+Stop on any failed guard or changed remote history; do not force push or merge new remote changes without review. Reconfirm the effective local safeguard before the push. Afterward, compare `git ls-remote origin refs/heads/main` with the approved candidate, verify the public alias still maps to `dpl_4PcQMSfrM1eNaokQuTqXajTGXS9A`, and inspect for unexpected Git-triggered deployments. Do not push all refs, stash or backup refs.
+
+### Future releases remain explicit checked-prebuilt releases
+
+A Git push backs up source only. For any future release, obtain separate release authorization for the exact source, origin, live runtime configuration and target. Follow `docs/runbooks/nami-verification.md`, its scenario matrix and `docs/runbooks/vercel-function-packaging.md`; preserve source/artifact/configuration binding and truthful historical receipts.
+
+1. Confirm the linked project and chosen clean source SHA. Preserve any earlier ignored artifact before replacing it. Use Node24 and the existing authenticated CLI; keep pulled private metadata/environment under ignored `.vercel/`.
+2. After release authorization, refresh build settings with `vercel pull --yes --environment=production`; build the selected source locally using `BETTER_AUTH_URL=https://heynami.vercel.app npm run verify:vercel-production`. Establish the actual authorized runtime environment separately: pulled `[SENSITIVE]` placeholders are not live-auth/provider proof.
+3. Immediately before the separately authorized upload, repeat `BETTER_AUTH_URL=https://heynami.vercel.app node scripts/check-vercel-function.mjs` against that exact output. Record the selected source, configuration and artifact linkage. Upload only the checked output using `vercel deploy --prebuilt --prod --yes` under the approved existing production environment. Never use a plain source/Git deployment to bypass preparation/audit.
+4. Apply the guide's actual deployed auth/Method/public-entry checks as relevant to that release and record the immutable deployment and resulting aliases. Fixture503 is only local startup proof. Do not change protection, signup/agent switches, domains, schema or credentials unless separately authorized.
+
+No commands in this future-release sequence were executed as part of the safeguard preparation. The earlier locally checked package has not been uploaded and is not asserted to be an artifact of this new Git tip.
