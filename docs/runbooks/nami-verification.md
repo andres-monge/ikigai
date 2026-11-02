@@ -40,6 +40,10 @@ The founder retired `/legacy` on 2026-11-02. `/legacy`, `/results` and `/action-
 
 Use `server/app.legacy-retirement.test.ts`, app privacy/auth and `client/src/App.auth.test.tsx` for deterministic retirement proof. The old `npm run test:e2e` configuration now fails before starting a server/browser/provider, even with its former opt-in; no paid legacy journey is a current gate. Retained direct-module/storage fixtures prove compatibility only, not public availability. Use an approved signed-out local browser for the redirects; do not exercise real legacy records. Deployment approval must include fresh retired-route JSON/no-store checks on the exact candidate, and current Method/auth proof at the approved scope.
 
+### Signed-in feedback
+
+Feedback uses its own authenticated, bounded `/api/feedback` route before global parsers and its own reviewed database table. See [feedback operations](nami-feedback.md) for admission, saved-versus-notified truth, private operator review/retry and the separately authorized real-email activation scenario. A fake email transport or fictional rendered fixture is local proof only.
+
 ## Doctor
 
 Before driving, and after an unexpected result, establish these facts:
