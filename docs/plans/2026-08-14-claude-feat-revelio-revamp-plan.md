@@ -3,7 +3,7 @@ title: Revelio Revamp (Claude) - Plan
 type: feat
 date: 2026-08-14
 deepened: 2026-08-29
-amended: 2026-10-31
+amended: 2026-11-02
 topic: revelio-revamp
 artifact_contract: ce-unified-plan/v1
 artifact_readiness: implementation-ready
@@ -16,6 +16,17 @@ execution: code
 # Revelio Revamp (Claude) - Plan
 
 > **MVP scope amendment (2026-10-13):** The coordinator-approved [repeating-learning plan](2026-10-13-1220-feat-repeating-learning-mvp-plan.md) reconciles current delivery in place. Method F1–F3 and AE1–AE9/AE13–AE14 are active; Method F4–F5, AE10–AE12, R34–R40, the former Method KTD9 peer prerequisite and U9 are deferred references. Five modules are active: Foundation, Paths, Design, Guide and Interpret. Focus commitment remains within the repeating loop. Preserve every ID, landed history and historical record; deferred specifications never become deployment or resume gates. At this amendment, U7 founder acceptance was pending as a human release/incorporation gate and isolated U8 implementation was authorized without claiming that acceptance. The U7 human gate is now accepted on 2026-10-30, as recorded below. This prose amendment authorizes no paid runs, live-account turns, deployment or account actions. Historical dates and full-tail choices below are retained as history, not renewed delivery deadlines. See [deferred features](../method/deferred-features.md).
+
+## Legacy retirement amendment — 2026-11-02 (founder-directed)
+
+The founder approved retiring the obsolete experience: “no one needs the old legacy experience.” This supersedes every conflicting requirement below to preserve anonymous `/legacy`, its APIs/provider behavior, or its paid browser-journey gate. Historical receipts and dated checkpoints keep their original meaning.
+
+- `/legacy`, `/results` and `/action-plan` return to the current login/entry. The questionnaire, generated results and action-plan workflow is no longer offered.
+- Retire the public assessment, questionnaire/save, analyze/stream, action-plan/stream, session read/start-over, legacy transcription and legacy analytics API namespaces before body parsing or storage/provider work, for every HTTP method and matching mount alias. Known retired APIs return stable JSON 410, not SPA HTML.
+- Preserve all existing legacy records/tables, schema, provider conversations, auth accounts and credentials. This is route retirement, not data deletion or migration. Unmounted modules and their compatibility fixtures may remain.
+- API/error logging records safe metadata only; no bearer-bearing request paths, response/transcript/answer prefixes or raw AI error payloads. Keep protected Method/auth/audio behavior, public signup, current access policy, operator reporting and existing Method safeguards unchanged.
+- Verification now proves retirement and zero legacy work, retained data, safe logs and unaffected authenticated Method behavior. Paid legacy E2E is disabled even with its former opt-in. Current check selection is in the verification runbook/matrix.
+- This decision authorizes implementation/local verification and review of the scoped remediation. Deployment, push/merge, remote settings, schema and credential changes remain separately gated. Dependency upgrades are outside this batch.
 
 ## Release-scope amendment — 2026-10-31 (founder-directed)
 

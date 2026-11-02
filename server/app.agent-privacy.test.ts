@@ -59,7 +59,7 @@ describe('protected Method logger boundary', () => {
     expect(normalizeMethodRequestPath('/api/agentish/workspace')).toBeUndefined();
   });
 
-  it('never captures protected response bodies while preserving the legacy logger behavior', async () => {
+  it('keeps all API response bodies out of logs and leaves Method to its own logger', async () => {
     const writeLog = vi.fn();
     const app = express();
     app.use(createApiRequestLogger(writeLog));
@@ -77,7 +77,8 @@ describe('protected Method logger boundary', () => {
     const legacyResponse = await (await request(app)).get('/api/legacy-probe');
     expect(legacyResponse.status).toBe(200);
     expect(writeLog).toHaveBeenCalledOnce();
-    expect(writeLog.mock.calls[0]?.[0]).toContain('visible-prefix');
+    expect(writeLog.mock.calls[0]?.[0]).toContain('api_request');
+    expect(writeLog.mock.calls[0]?.[0]).not.toContain('visible-prefix');
     expect(JSON.stringify(writeLog.mock.calls)).not.toMatch(/PRIVATE_HISTORY|PRIVATE_BRIEFING|PRIVATE_PROVIDER/);
   });
 
@@ -115,6 +116,21 @@ describe('protected Method logger boundary', () => {
 });
 
 describe('protected Method parser error boundary', () => {
+  it('keeps non-Method parser payloads and URL tokens out of errors and metadata logs', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const response = await (await request(createApp()))
+      .post('/api/PRIVATE_PATH_SENTINEL?token=PRIVATE_TOKEN_SENTINEL')
+      .set('Content-Type', 'application/json')
+      .send('{"answer":"PRIVATE_BODY_SENTINEL');
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ error: 'Request failed' });
+    expect(error).toHaveBeenCalledWith('API request failed', {
+      requestId: response.headers['x-request-id'], errorClass: 'SyntaxError',
+    });
+    expect(JSON.stringify([response.body, log.mock.calls, error.mock.calls])).not.toContain('PRIVATE_');
+  });
+
   const cases = [
     {
       label: 'malformed JSON request',

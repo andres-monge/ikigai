@@ -1,29 +1,12 @@
-/**
- * Top-level route ownership for the authenticated product and the preserved
- * anonymous questionnaire. Auth state is resolved only on `/` and `/login`;
- * legacy routes do not call Better Auth.
- */
-
-import { useEffect, useRef, useState } from 'react';
-import { Route, Switch, useLocation } from 'wouter';
-import { Analytics } from '@vercel/analytics/react';
-import { TooltipProvider } from '@/components/ui/tooltip';
-import { Toaster } from '@/components/ui/toaster';
-import { Header } from '@/components/header';
-import { Home } from '@/pages/home';
-import { Results } from '@/pages/results';
-import { ActionPlan } from '@/pages/action-plan';
+import { useEffect, useState } from 'react';
+import { Redirect, Route, Switch, useLocation } from 'wouter';
 import { Login } from '@/pages/login';
 import { OurVision } from '@/pages/our-vision';
 import { Explore } from '@/pages/explore';
 import { NotFound } from '@/pages/not-found';
-import { useSessionStorage } from '@/hooks/use-session-storage';
-import { useAnalytics } from '@/hooks/use-analytics';
 import { authClient } from '@/lib/auth-client';
 import { useTheme } from '@/lib/theme';
 import { replaceDocument } from '@/lib/browser-navigation';
-import type { Language } from '@/lib/i18n';
-import type { FullAssessment } from '@/types/assessment';
 
 function SessionLoading() {
   return (
@@ -115,101 +98,15 @@ function LoginEntry() {
   return <Login />;
 }
 
-function createLegacySessionId() {
-  return Math.random().toString(36).slice(2) + Date.now().toString(36);
-}
-
-function LegacyApp() {
-  const [language, setLanguage] = useSessionStorage<Language>('language', 'en');
-  const [sessionId, setSessionId] = useSessionStorage<string>('sessionId', '');
-  const [, setSession] = useSessionStorage<FullAssessment | null>('session', null);
-  const [location, navigate] = useLocation();
-  const { trackEvent } = useAnalytics();
-  const hasTrackedVisit = useRef(false);
-
-  useEffect(() => {
-    if (!sessionId) {
-      setSessionId(createLegacySessionId());
-    }
-  }, [sessionId, setSessionId]);
-
-  useEffect(() => {
-    if (!hasTrackedVisit.current && sessionId) {
-      trackEvent('visit');
-      hasTrackedVisit.current = true;
-    }
-  }, [sessionId, trackEvent]);
-
-  const handleNavigateHome = () => {
-    navigate('/legacy');
-  };
-
-  const handleStartOver = async () => {
-    const fromPage = location === '/action-plan' ? 'action-plan' : 'results';
-
-    try {
-      await fetch('/api/session/start-over', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId, fromPage }),
-        credentials: 'include',
-      });
-    } catch (error) {
-      console.error('Failed to notify server of start over:', error);
-    }
-
-    setSession(null);
-    setSessionId(createLegacySessionId());
-    navigate('/legacy');
-  };
-
-  return (
-    <TooltipProvider>
-      <Header
-        language={language}
-        onLanguageChange={setLanguage}
-        onNavigateHome={handleNavigateHome}
-      />
-      <main className="mx-auto max-w-7xl bg-ikigai-beige">
-        <Switch>
-          <Route path="/legacy">
-            {() => <Home language={language} sessionId={sessionId} />}
-          </Route>
-          <Route path="/results">
-            {() => (
-              <Results
-                language={language}
-                sessionId={sessionId}
-                onStartOver={handleStartOver}
-              />
-            )}
-          </Route>
-          <Route path="/action-plan">
-            {() => (
-              <ActionPlan
-                language={language}
-                sessionId={sessionId}
-                onStartOver={handleStartOver}
-              />
-            )}
-          </Route>
-        </Switch>
-      </main>
-      <Toaster />
-      <Analytics />
-    </TooltipProvider>
-  );
-}
-
 function App() {
   useTheme();
   return (
     <Switch>
       <Route path="/our-vision" component={OurVision} />
       <Route path="/login" component={LoginEntry} />
-      <Route path="/legacy" component={LegacyApp} />
-      <Route path="/results" component={LegacyApp} />
-      <Route path="/action-plan" component={LegacyApp} />
+      <Route path="/legacy">{() => <Redirect to="/login" replace />}</Route>
+      <Route path="/results">{() => <Redirect to="/login" replace />}</Route>
+      <Route path="/action-plan">{() => <Redirect to="/login" replace />}</Route>
       <Route path="/" component={AuthenticatedRoot} />
       <Route component={NotFound} />
     </Switch>

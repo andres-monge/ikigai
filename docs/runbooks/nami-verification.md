@@ -1,6 +1,6 @@
 # Verify Nami
 
-Start here before changing, debugging or releasing Nami. Choose checks in [the scenario matrix](nami-verification-scenarios.md). Current code/tests define behavior; the active revamp plan's 2026-10-31 release amendment governs current gates. Dated receipts establish only their recorded target and scope.
+Start here before changing, debugging or releasing Nami. Choose checks in [the scenario matrix](nami-verification-scenarios.md). Current code/tests define behavior; the active revamp plan's 2026-11-02 legacy retirement and 2026-10-31 release amendments govern current gates. Dated receipts establish only their recorded target and scope.
 
 ## Launch
 
@@ -34,20 +34,11 @@ For the final candidate, use that same guarded launcher without file filters. `q
 
 `BETTER_AUTH_URL=<approved-exact-https-origin> npm run build` checks the origin-bound client/server build. A production build without an explicit origin must fail. There is no lint or `release:validate` script. `npm run test:method` is deterministic; `npm run eval:method` deliberately calls providers and needs a selected purpose and checked environment.
 
-### Optional paid legacy journey
+### Retired legacy boundaries
 
-`npm run test:e2e` is the **old anonymous `/legacy` questionnaire → results → action-plan** journey. It is not Google auth or Method Chat/Map coverage. Default invocation fails before starting a browser/server/provider. To inspect it safely:
+The founder retired `/legacy` on 2026-11-02. `/legacy`, `/results` and `/action-plan` return to `/login`; the old anonymous questionnaire/generation experience is unavailable. Stored legacy records/tables remain intact. `/api/analyze`, `/api/action-plan`, `/api/questionnaire`, `/api/session`, `/api/transcribe` and `/api/analytics` (including their old subroutes and matching method/mount aliases) must return JSON 410 before body parsing, storage, auth or provider work. Protected `/api/agent/audio/transcribe` remains active.
 
-```sh
-NAMI_LEGACY_E2E=1 U4_STORAGE_TEST_DATABASE=1 \
-  U4_STORAGE_TEST_DATABASE_URL=postgresql://fixture:fixture@127.0.0.1:1/ikigai_u4_test_admin_listing \
-  GEMINI_API_KEY=fixture-not-a-credential GEMINI_REASONING_MODEL=fixture-model \
-  npm run test:e2e -- --list
-```
-
-Listing does not start the server or prove port-conflict handling. To verify conflict refusal, with 5173 already occupied by a **known safe owned listener**, use the same fixture-only environment without `--list`. Playwright must fail before tests/provider calls; preserve the listener. Never start this probe with 5173 free and an unusable fixture URL. An unknown existing listener blocks this check until its ownership is resolved.
-
-A deliberately selected full journey is permitted. First identify its purpose, disposable local database/schema, test data and explicitly chosen Gemini credentials/model. Build the client first with `BETTER_AUTH_URL=<approved-exact-https-origin> npm run build`: this harness runs the existing `NODE_ENV=test` native PostgreSQL path and serves the built client, rather than starting Vite. Initialize the legacy schema only on that owned database using the existing migrations; pass its URL through `U4_STORAGE_TEST_DATABASE_URL` and the explicit disposable flag. Set `NAMI_LEGACY_E2E=1`, the actual `GEMINI_API_KEY` and `GEMINI_REASONING_MODEL` in the process environment through the sanctioned private source, then invoke `npm run test:e2e`. Keep 5173 free for the harness's own server. It refuses server reuse, runs serially with no automatic retries, disables Method/auth and nonselected provider paths, and writes artifacts under ignored `.context/revelio/legacy-e2e/`. Opt-in never authorizes a production DB. Preserve an existing artifact directory before a new run. Do not type secrets into command arguments or logs.
+Use `server/app.legacy-retirement.test.ts`, app privacy/auth and `client/src/App.auth.test.tsx` for deterministic retirement proof. The old `npm run test:e2e` configuration now fails before starting a server/browser/provider, even with its former opt-in; no paid legacy journey is a current gate. Retained direct-module/storage fixtures prove compatibility only, not public availability. Use an approved signed-out local browser for the redirects; do not exercise real legacy records. Deployment approval must include fresh retired-route JSON/no-store checks on the exact candidate, and current Method/auth proof at the approved scope.
 
 ## Doctor
 

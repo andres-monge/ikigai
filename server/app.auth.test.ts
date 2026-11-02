@@ -28,7 +28,7 @@ vi.mock('better-auth/node', () => ({
 
 vi.mock('./routes.js', () => ({
   registerRoutes: (app: import('express').Express) => {
-    app.get('/api/legacy-probe', (_request, response) => {
+    app.get('/api/public-probe', (_request, response) => {
       response.json({ anonymous: true });
     });
     app.post('/api/parsed-body-probe', (incoming, response) => {
@@ -96,7 +96,7 @@ describe('Express auth integration', () => {
     expect(mocks.nodeHandler).not.toHaveBeenCalled();
   });
 
-  it('fails auth closed without taking down anonymous legacy APIs', async () => {
+  it('fails auth closed without taking down unrelated public handlers', async () => {
     mocks.getAuth.mockImplementation(() => {
       throw new mocks.AuthConfigurationError();
     });
@@ -104,7 +104,7 @@ describe('Express auth integration', () => {
     const app = createApp();
     const [authResponse, legacyResponse] = await Promise.all([
       (await request(app)).get('/api/auth/get-session'),
-      (await request(app)).get('/api/legacy-probe'),
+      (await request(app)).get('/api/public-probe'),
     ]);
 
     expect(authResponse.status).toBe(503);

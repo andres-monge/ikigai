@@ -176,25 +176,20 @@ describe('canonical auth and legacy route split', () => {
     expect(screen.queryByText(/provider secret/i)).toBeNull();
   });
 
-  it('keeps /legacy anonymous and does not resolve an auth session', () => {
-    window.history.replaceState({}, '', '/legacy');
-
-    render(<App />);
-
-    expect(screen.getByText('Legacy questionnaire')).toBeTruthy();
-    expect(screen.getByText('Legacy header')).toBeTruthy();
-    expect(useSession).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    ['/results', 'Legacy results'],
-    ['/action-plan', 'Legacy action plan'],
-  ])('preserves the anonymous legacy route %s', (path, expected) => {
+  it.each(['/legacy', '/results', '/action-plan'])('returns retired page %s to login without legacy work', async (path) => {
     window.history.replaceState({}, '', path);
-
-    render(<App />);
-
-    expect(screen.getByText(expected)).toBeTruthy();
-    expect(useSession).not.toHaveBeenCalled();
+    window.sessionStorage.setItem('sessionId', 'retained-local-legacy-id');
+    useSession.mockReturnValue({ data: null, isPending: false });
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    try {
+      render(<App />);
+      await waitFor(() => expect(window.location.pathname).toBe('/login'));
+      expect(screen.getByText('Google login')).toBeTruthy();
+      expect(screen.queryByText(/Legacy questionnaire|Legacy results|Legacy action plan/)).toBeNull();
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(window.sessionStorage.getItem('sessionId')).toBe('retained-local-legacy-id');
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 });

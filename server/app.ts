@@ -26,6 +26,7 @@ import fs from 'fs';
 import { randomUUID } from 'node:crypto';
 import { toNodeHandler } from 'better-auth/node';
 import { registerRoutes } from './routes.js';
+import { retiredLegacyRouter } from './routes/retired-legacy.js';
 import {
   AuthConfigurationError,
   getAuth,
@@ -85,28 +86,15 @@ export function createApiRequestLogger(
     const start = Date.now();
     const requestPath = req.path;
 
-    // The protected Method namespace owns a metadata-only logger. Its
-    // responses can contain private map/history content or streamed assistant
-    // text, so the legacy response-prefix logger must never observe it.
     if (normalizeMethodRequestPath(requestPath) !== undefined) return next();
 
-    if (!requestPath.startsWith('/api')) return next();
+    if (!/^\/api(?:\/|$)/iu.test(requestPath)) return next();
 
-    let capturedJsonResponse: Record<string, unknown> | undefined;
-    const originalResJson = res.json.bind(res);
-    res.json = function (bodyJson: Record<string, unknown>) {
-      capturedJsonResponse = bodyJson;
-      return originalResJson(bodyJson);
-    } as Response['json'];
-
+    const requestId = randomUUID();
+    res.setHeader('x-request-id', requestId);
     res.on('finish', () => {
       const duration = Date.now() - start;
-      let logLine = `${req.method} ${requestPath} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse && Object.keys(capturedJsonResponse).length > 0) {
-        const responseLog = JSON.stringify(capturedJsonResponse);
-        logLine += ` :: ${responseLog.length > 120 ? `${responseLog.slice(0, 119)}…` : responseLog}`;
-      }
-      writeLog(logLine);
+      writeLog(`api_request ${requestId} ${res.statusCode} in ${duration}ms`);
     });
 
     next();
@@ -150,6 +138,9 @@ export function createApp(): Express {
     }
   });
 
+  app.use(createApiRequestLogger());
+  app.use('/api', retiredLegacyRouter);
+
   // Reject invalid paid audio requests before any global body parser or API
   // logger can read or observe their payload. The router repeats this pure
   // metadata guard so direct mounts retain the same boundary in tests/tools.
@@ -170,9 +161,6 @@ export function createApp(): Express {
     smallJsonParser(req, res, next);
   });
   app.use(express.urlencoded({ extended: false }));
-
-  // Custom logging middleware for API requests
-  app.use(createApiRequestLogger());
 
   // ========= API Routes =========
   registerRoutes(app);
@@ -205,7 +193,9 @@ export function createApp(): Express {
         errorClass: protectedErrorName,
       });
     } else {
-      console.error("Unhandled Error:", err);
+      const requestId = res.getHeader('x-request-id') ?? randomUUID();
+      res.setHeader('x-request-id', requestId);
+      console.error('API request failed', { requestId, errorClass: protectedErrorName });
     }
 
     // Safely extract status code with type guards
@@ -220,9 +210,7 @@ export function createApp(): Express {
     const message = isProtectedMethodRoute
       ? status === 413 && normalizeMethodRequestPath(req.path) === '/' ? 'Message too large. Remove or replace a file, or send separately (3 MB total per message).' : 'Agent request failed'
       :
-      err && typeof err === "object" && "message" in err && typeof err.message === "string"
-        ? err.message
-        : "Internal Server Error";
+      'Request failed';
 
     res.status(status).json({
       error: message,

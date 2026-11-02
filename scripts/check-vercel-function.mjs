@@ -112,6 +112,17 @@ try {
   await new Promise((resolve) => server.once('listening', resolve));
   const response = await fetch('http://127.0.0.1:' + server.address().port + '/api/agent/workspace');
   if (response.status !== 503) throw new Error('Expected signed-out auth-unavailable boundary, got HTTP ' + response.status);
+  for (const route of ['/analyze/stream', '/action-plan/stream', '/questionnaire/save', '/session/fixture-retired', '/session/start-over', '/transcribe', '/analytics/event']) {
+    for (const method of ['GET', 'POST']) {
+      const retired = await fetch('http://127.0.0.1:' + server.address().port + '/api' + route, {
+        method,
+        ...(method === 'POST' ? { headers: { 'Content-Type': 'application/json' }, body: '{"fixture":' } : {}),
+      });
+      if (retired.status !== 410 || (await retired.json()).code !== 'LEGACY_RETIRED') {
+        throw new Error('Packaged legacy retirement boundary failed');
+      }
+    }
+  }
   console.log('Function imported; five canonical skills loaded; signed-out API returned 503');
 } finally {
   await new Promise((resolve) => server.close(resolve));
@@ -135,7 +146,7 @@ try {
   if (result.status !== 0) {
     throw new Error(`Isolated Node function probe failed: ${result.stderr.trim() || result.stdout.trim() || result.error?.message}`);
   }
-  console.log('Isolated Node 24 function imported; five canonical skills loaded; signed-out API returned 503');
+  console.log('Isolated Node 24 function imported; five canonical skills loaded; signed-out API returned 503; retired APIs returned JSON 410 before parsing');
   console.log('Entire deployment output contains only expected paths and no embedded environment secrets');
 } finally {
   await rm(isolated, { recursive: true, force: true });
