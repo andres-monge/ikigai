@@ -1,9 +1,10 @@
-import { cp, mkdtemp, readFile, readdir, rm, stat } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { parse } from 'dotenv';
 import { configuredAppOrigin } from '../shared/app-origin.ts';
+import { checkedMappings, runtimeRoots } from './vercel-file-path-map.mjs';
 
 if (process.versions.node.split('.')[0] !== '24') {
   throw new Error('Vercel function verification requires Node 24');
@@ -12,9 +13,7 @@ if (process.versions.node.split('.')[0] !== '24') {
 const output = path.resolve('.vercel/output');
 const artifact = path.join(output, 'functions/api/index.func');
 const allowedOutputRoots = new Set(['builds.json', 'config.json', 'diagnostics', 'functions', 'static']);
-const allowedTopLevel = new Set([
-  '.vc-config.json', 'api', 'dist', 'node_modules', 'package.json', 'public', 'server', 'shared',
-]);
+const allowedTopLevel = new Set(['.vc-config.json', ...runtimeRoots]);
 const expectedSkills = [
   'create-purpose-paths', 'design-path-project', 'form-foundation',
   'guide-path-project', 'interpret-path-project',
@@ -56,6 +55,15 @@ async function assertSafePackage(root) {
     }
   }
 
+  async function checkSecrets(itemPath) {
+    if (!secretValues.length) return;
+    const data = await readFile(itemPath);
+    if (secretValues.some((value) => data.includes(value))) {
+      throw new Error('Deployment contains an environment secret value');
+    }
+  }
+
+  let functionMappings = [];
   async function scan(directory) {
     for (const entry of await readdir(directory, { withFileTypes: true })) {
       const itemPath = path.join(directory, entry.name);
@@ -69,10 +77,12 @@ async function assertSafePackage(root) {
         throw new Error(`Deployment contains symlink: ${relative}`);
       } else if (/^\.env(?:\.|$)|\.(?:pem|key)$/.test(entry.name)) {
         throw new Error(`Deployment contains private file: ${relative}`);
-      } else if (secretValues.length) {
-        const data = await readFile(itemPath);
-        if (secretValues.some((value) => data.includes(value))) {
-          throw new Error(`Deployment contains an environment secret value: ${relative}`);
+      } else {
+        await checkSecrets(itemPath);
+        if (entry.name === '.vc-config.json') {
+          const mappings = await checkedMappings(JSON.parse(await readFile(itemPath, 'utf8')), process.cwd());
+          for (const mapping of mappings) await checkSecrets(mapping.sourcePath);
+          if (directory === root) functionMappings = mappings;
         }
       }
     }
@@ -96,6 +106,7 @@ async function assertSafePackage(root) {
       throw new Error(`Deployment share metadata does not match BETTER_AUTH_URL: ${name}`);
     }
   }
+  return functionMappings;
 }
 
 const probe = `
@@ -131,8 +142,13 @@ try {
 
 const isolated = await mkdtemp(path.join(tmpdir(), 'nami-vercel-function-'));
 try {
-  await assertSafePackage(artifact);
+  const mappings = await assertSafePackage(artifact);
   await cp(artifact, isolated, { recursive: true });
+  for (const { destination, sourcePath } of mappings) {
+    const target = path.join(isolated, destination);
+    await mkdir(path.dirname(target), { recursive: true });
+    await cp(sourcePath, target);
+  }
   const result = spawnSync(process.execPath, ['--input-type=module', '-e', probe], {
     cwd: isolated,
     encoding: 'utf8',
