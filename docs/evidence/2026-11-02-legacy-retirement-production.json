@@ -1,0 +1,532 @@
+{
+  "observedAt": "2026-11-02T10:25:54.767700+01:00",
+  "timezone": "Europe/Madrid",
+  "status": "Pass for bounded retirement release",
+  "sourceCommit": "4464570156be7a52bddb14556391e5cc80896f55",
+  "retirementCommit": "0a8d64d1fbf9e3b418396e4ce36e30c0f676ec84",
+  "uploadHeadEvidenceOnly": "32dcfe27815df327e432f5832a22f258e58f1e9b",
+  "artifactSha256": "1df5f1d6379b3566cf67813a8ad7fe6ef5b32c51e7e982d704371ff621fdc730",
+  "fileCount": 2675,
+  "filePathMapEntries": 0,
+  "prepromotion": {
+    "stage": "dpl_CHZNBNyNwZL5J65P5GtvTUbwkmNk",
+    "stageReady": true,
+    "previousPublic": "dpl_4PcQMSfrM1eNaokQuTqXajTGXS9A",
+    "artifactUnchanged": true,
+    "protectionUnchanged": true,
+    "envMetadataUnchanged": true,
+    "humanLegacyRenderAcceptedByCoordinator": true
+  },
+  "promotedPublicBinding": {
+    "publicOrigin": "https://heynami.vercel.app",
+    "deploymentId": "dpl_CHZNBNyNwZL5J65P5GtvTUbwkmNk",
+    "url": "ikigai-9t699q2ri-andres-projects-61b43c52.vercel.app",
+    "readyState": "READY",
+    "target": "production",
+    "projectId": "prj_sVqqIBKF1Q2lViOpvlUlFGmkvMT6",
+    "protection": {
+      "deploymentType": "all_except_custom_domains"
+    },
+    "envMetadataUnchanged": true,
+    "protectionUnchanged": true
+  },
+  "stageHttp": {
+    "deploymentId": "dpl_CHZNBNyNwZL5J65P5GtvTUbwkmNk",
+    "results": [
+      {
+        "route": "/api/analyze/stream",
+        "method": "GET",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/analyze/stream",
+        "method": "OPTIONS",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/analyze/stream",
+        "method": "POST",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/action-plan/stream",
+        "method": "GET",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/action-plan/stream",
+        "method": "OPTIONS",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/action-plan/stream",
+        "method": "POST",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/questionnaire/save",
+        "method": "GET",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/questionnaire/save",
+        "method": "OPTIONS",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/questionnaire/save",
+        "method": "POST",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/session/retirement-fixture-20261102",
+        "method": "GET",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/session/retirement-fixture-20261102",
+        "method": "OPTIONS",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/session/retirement-fixture-20261102",
+        "method": "POST",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/transcribe",
+        "method": "GET",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/transcribe",
+        "method": "OPTIONS",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/transcribe",
+        "method": "POST",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/analytics/event",
+        "method": "GET",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/analytics/event",
+        "method": "OPTIONS",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/analytics/event",
+        "method": "POST",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      }
+    ]
+  },
+  "stagePrivateHttp": {
+    "deploymentId": "dpl_CHZNBNyNwZL5J65P5GtvTUbwkmNk",
+    "results": [
+      {
+        "route": "/api/agent/workspace",
+        "status": 401,
+        "contentType": "application/json; charset=utf-8",
+        "requestId": "0b440c0a-72c2-4e02-a2b5-c7cdddaee406",
+        "pass": true
+      },
+      {
+        "route": "/api/agent/history",
+        "status": 401,
+        "contentType": "application/json; charset=utf-8",
+        "requestId": "b2eb5286-0bb9-494b-b74f-27947c9475d4",
+        "pass": true
+      },
+      {
+        "route": "/api/auth/get-session",
+        "status": 200,
+        "contentType": "application/json",
+        "sessionIsNull": true,
+        "pass": true
+      },
+      {
+        "route": "/api/analyze?fixture=NAMI_FICTIONAL_LOG_SENTINEL_20261102",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "requestId": "849c5a43-7b90-4d5b-9d2a-9de00719c7d3",
+        "pass": true
+      }
+    ]
+  },
+  "publicHttp": {
+    "origin": "https://heynami.vercel.app",
+    "deploymentId": "dpl_CHZNBNyNwZL5J65P5GtvTUbwkmNk",
+    "results": [
+      {
+        "route": "/api/analyze/stream",
+        "method": "GET",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/analyze/stream",
+        "method": "OPTIONS",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/analyze/stream",
+        "method": "POST",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/action-plan/stream",
+        "method": "GET",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/action-plan/stream",
+        "method": "OPTIONS",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/action-plan/stream",
+        "method": "POST",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/questionnaire/save",
+        "method": "GET",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/questionnaire/save",
+        "method": "OPTIONS",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/questionnaire/save",
+        "method": "POST",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/session/retirement-fixture-20261102",
+        "method": "GET",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/session/retirement-fixture-20261102",
+        "method": "OPTIONS",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/session/retirement-fixture-20261102",
+        "method": "POST",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/transcribe",
+        "method": "GET",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/transcribe",
+        "method": "OPTIONS",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/transcribe",
+        "method": "POST",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/analytics/event",
+        "method": "GET",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/analytics/event",
+        "method": "OPTIONS",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/analytics/event",
+        "method": "POST",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/agent/workspace",
+        "method": "GET",
+        "status": 401,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "pass": true
+      },
+      {
+        "route": "/api/agent/history",
+        "method": "GET",
+        "status": 401,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "pass": true
+      },
+      {
+        "route": "/api/auth/get-session",
+        "method": "GET",
+        "status": 200,
+        "contentType": "application/json",
+        "cacheControl": "no-store",
+        "sessionIsNull": true,
+        "pass": true
+      }
+    ]
+  },
+  "publicRendered": {
+    "tool": "agent-browser CLI0.37.1",
+    "origin": "https://heynami.vercel.app",
+    "deploymentId": "dpl_CHZNBNyNwZL5J65P5GtvTUbwkmNk",
+    "session": "isolated signed-out named session",
+    "results": [
+      {
+        "entry": "/legacy",
+        "finalUrl": "https://heynami.vercel.app/login",
+        "googleSignInRendered": true,
+        "currentNamiHeadingRendered": true,
+        "pass": true
+      },
+      {
+        "entry": "/results",
+        "finalUrl": "https://heynami.vercel.app/login",
+        "googleSignInRendered": true,
+        "currentNamiHeadingRendered": true,
+        "pass": true
+      },
+      {
+        "entry": "/action-plan",
+        "finalUrl": "https://heynami.vercel.app/login",
+        "googleSignInRendered": true,
+        "currentNamiHeadingRendered": true,
+        "pass": true
+      }
+    ],
+    "screenshot": ".context/revelio/legacy-retirement-release-20261102/public-legacy-login.png"
+  },
+  "knownHostProtection": [
+    {
+      "host": "ikigai-j1qbs0jrg-andres-projects-61b43c52.vercel.app",
+      "path": "/api/agent/workspace",
+      "status": 302,
+      "redirectHost": "vercel.com"
+    },
+    {
+      "host": "ikigai-kemp6pu21-andres-projects-61b43c52.vercel.app",
+      "path": "/api/agent/workspace",
+      "status": 302,
+      "redirectHost": "vercel.com"
+    },
+    {
+      "host": "ikigai-9t699q2ri-andres-projects-61b43c52.vercel.app",
+      "path": "/api/agent/workspace",
+      "status": 302,
+      "redirectHost": "vercel.com"
+    }
+  ],
+  "humanStagedProof": {
+    "source": "Coordinator chat01a0eeef-40aa-7671-acce-820547bdb71f relayed founder screenshot and explicit acceptance on2026-11-02",
+    "entry": "/legacy",
+    "finalUrl": "https://ikigai-9t699q2ri-andres-projects-61b43c52.vercel.app/login",
+    "observations": "Nami heading/subtitle, Google CTA, Vision link, theme control",
+    "proofType": "human-rendered; not independently viewed by this release agent",
+    "acceptedScope": "Only /legacy redirect/render; API checks independent"
+  },
+  "runtimeLogProbe": {
+    "deploymentId": "dpl_CHZNBNyNwZL5J65P5GtvTUbwkmNk",
+    "requestId": "849c5a43-7b90-4d5b-9d2a-9de00719c7d3",
+    "query": "only own fictional sentinel request app ID",
+    "cliExit": 2,
+    "records": 0,
+    "metadataLines": 0,
+    "sentinelFoundInReturnedRecords": false,
+    "rawRecordsPersisted": false,
+    "limit": "Only the correlated returned log set; not a complete platform log audit"
+  },
+  "qaReturningSession": {
+    "status": "Inherited/blocked; no fresh authenticated checkpoint comparison",
+    "approvedCliProfileEstablished": false,
+    "visibleChromeProfileIsCliProfile": false,
+    "profileDiscovery": "No Chrome profiles found",
+    "newOAuthOrProviderActions": false,
+    "coordinatorAcceptedUnchangedAuthCoverage": true
+  },
+  "workflowCorrection": {
+    "localRendering": "bundled Browser Use on approved local origins only",
+    "externalRendering": "agent-browser CLI only",
+    "firstActualFailure": "OIDC TRUSTED_SOURCES_ENVIRONMENT_MISMATCH development\u2192production",
+    "laterWrongTool": "external CUA origin rejection; not an agent-browser policy failure",
+    "futureAutomationPrerequisite": "Authorized exact caller\u2192target Trusted Sources mapping or actually available approved CLI profile with legitimate platform-owner session, plus permitted origin",
+    "accessPolicyChangesMade": false,
+    "docReview": "Fresh narrow read-only cold-entry consistency check;2 wording fixes applied",
+    "docFiles": [
+      "docs/runbooks/nami-verification.md",
+      "docs/runbooks/nami-verification-scenarios.md"
+    ]
+  },
+  "limits": [
+    "No fresh authenticated QA/reload/checkpoint proof; historical coverage explicitly accepted for unchanged auth/Method",
+    "Runtime log corroboration incomplete: query exited2, zero records, cause unestablished",
+    "Lower auth rate-limit advisory and blocked full dependency inventory unchanged",
+    "No broad historical-host scan or old-log harvest"
+  ],
+  "actions": {
+    "promoted": true,
+    "publicVerified": true,
+    "providerOrModelOrAudio": false,
+    "messagesOrDataOrSchemaOrCredentialChanges": false,
+    "gitPushOrMainMerge": false,
+    "coordinatorStateTouched": false
+  },
+  "cleanup": "Owned stage/public agent-browser sessions closed; offered user tab left intact",
+  "privateEvidence": ".context/revelio/legacy-retirement-release-20261102"
+}

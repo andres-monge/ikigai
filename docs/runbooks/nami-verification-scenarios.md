@@ -21,6 +21,8 @@ No existing Method Playwright file is assumed: `tests/explore.spec.ts` does not 
 
 These rows add a compact actual deployed integration proof to deterministic and accepted historical coverage. They remain pending until performed on a specifically approved target/configuration/write scope. Use the designated QA account; preserve its history and choose the smallest additive action from its real checkpoint. Do not restart Foundation just to replay accepted founder coverage.
 
+Route browser work through the guide's tool boundary: approved local origins use bundled Browser Use; external rendering uses agent-browser CLI. Human-rendered proof needs explicit acceptance and exact deployment/URL attribution; it never substitutes for HTTP410/no-store checks. For a bounded change that leaves auth/Method unchanged, explicit coordinator acceptance may retain dated auth/QA coverage while fresh target/boundary checks run. Record unavailable returning-session proof as inherited/blocked, never a fresh pass; new failure evidence reopens the relevant gate.
+
 | Scenario | Action → observable proof | Refresh when |
 |---|---|---|
 | Public entry | Signed-out landing, direct `/our-vision` load/refresh and same-tab return; Google entry; exact approved share image/absolute tags; mobile light/dark and relevant keyboard/semantic layout checks. | Routes/assets/theme/origin changes; final release. |
