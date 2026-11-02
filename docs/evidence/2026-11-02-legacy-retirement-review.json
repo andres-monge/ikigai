@@ -1,0 +1,150 @@
+{
+  "status": "complete",
+  "verdict": "Ready to merge",
+  "verdict_reason": "No actionable defects survived synthesis in the bounded retirement change. This static review does not establish deployed release readiness; candidate deployed routing checks remain required before that claim.",
+  "scope": {
+    "base": "206dcbf69a52f8d5213ba178c242d4a61d26bfa3",
+    "branch": "codex/retire-anonymous-legacy",
+    "head_sha": "206dcbf69a52f8d5213ba178c242d4a61d26bfa3",
+    "pr_url": null,
+    "files_changed": 15
+  },
+  "intent": "Retire the obsolete public legacy questionnaire experience and anonymous assessment/session/generation/transcription/analytics APIs before request-body parsing or provider/storage work. Preserve all stored records, schema, auth and protected Method including audio, and make API/AI diagnostics metadata-only. Verify redirects, stable gone API responses, no private log content, and candidate packaging; no deployment or dependency upgrade in this batch.",
+  "intent_confidence": "explicit",
+  "reviewers": [
+    "correctness",
+    "project-standards",
+    "testing",
+    "maintainability",
+    "learnings",
+    "security",
+    "api-contract",
+    "reliability",
+    "learnings-researcher",
+    "adversarial-claude"
+  ],
+  "findings": [],
+  "actionable_findings": [],
+  "triage_groups": [],
+  "pre_existing_findings": [],
+  "requirements_completeness": null,
+  "learnings": [
+    {
+      "type": "known_pattern",
+      "title": "Verification surfaces prove different things",
+      "citation": "docs/solutions/workflow-issues/find-and-choose-revelio-testing-setups.md",
+      "note": "Local, fixture and packaged-function checks establish their own bounded behavior; deployed readiness requires separate integration evidence. Historical anonymous journeys are superseded by the authorized retirement."
+    },
+    {
+      "type": "known_pattern",
+      "title": "Bounded privacy-safe diagnostics",
+      "citation": "docs/solutions/workflow-issues/diagnose-purpose-path-revision-save-anomalies.md",
+      "note": "Request IDs and bounded error-class metadata preserve diagnostic evidence without conversation payloads; attribute failures only to directly established causes."
+    }
+  ],
+  "agent_native_gaps": [],
+  "deployment_notes": [],
+  "residual_risks": [
+    "Candidate deployment routing has not been verified by this static review. The direct packaged Express probe does not exercise Vercel platform rewrites; run the documented deployed retirement checks before claiming release readiness."
+  ],
+  "testing_gaps": [],
+  "coverage": {
+    "depth": "full",
+    "notes": [
+      "Full depth selected by hard_block_full; 358 executable non-test changed lines.",
+      "Project criteria fallback: AGENTS.md; CLAUDE.md only includes it. No applicable CODING_STANDARDS.md or base REVIEW.md found.",
+      "Two untracked audit report/receipt files excluded; only 15 staged/tracked changes reviewed. Ignored secret/private context excluded.",
+      "No formal plan selected by invocation or unambiguous branch-name discovery. The bounded Nov2 retirement prompt and changed amendment were checked as intent, not whole historical revamp completeness.",
+      "Caller reports guarded1142passed1skipped, Node24 typecheck/build, local desktop/mobile redirects and production/preview artifact checks. Review itself is static/read-only and does not establish deployed readiness.",
+      "Cross-model adversarial review ran on claude; requested claude-opus-5-5 at low effort; cross_model_route=claude, receipt_supported=true, model_actual=claude-opus-5-5, effort_actual=unverified, independence_verified=true. Its artifact was folded once; no separate local adversarial reviewer ran.",
+      "Confidence suppression: 1 finding at anchor 50; none at anchor 25. first_evidence_backfilled: 0; quote-gate demotions from 75/100: 0. Malformed findings: 0; malformed returns: 0; mode-aware demotions: 0.",
+      "Settlement suppression was not evaluated because no formal plan was selected.",
+      "Validator shortcut-skipped: 0. No primary or actionable findings survived synthesis; validator batch is empty.",
+      "Route reachability was inspected statically through server/index.ts and api/index.ts to createApp/registerRoutes and retained router references using text search; dynamic/external mounts were not exercised. No tests, provider calls or deployed probes were run in this read-only review.",
+      "The packaged function probe calls Express directly and does not exercise Vercel platform rewrites. Candidate deployed retirement checks remain release verification, as specified by the runbook."
+    ],
+    "reviewer_selection": [
+      {
+        "reviewer": "correctness",
+        "tier": "session",
+        "reason": "always-on"
+      },
+      {
+        "reviewer": "project-standards",
+        "tier": "mid",
+        "reason": "AGENTS/CLAUDE fallback criteria apply"
+      },
+      {
+        "reviewer": "testing",
+        "tier": "mid",
+        "reason": "changed HTTP/privacy/redirect tests and packaging harness"
+      },
+      {
+        "reviewer": "maintainability",
+        "tier": "mid",
+        "reason": "358 executable non-test changed lines; removing legacy coupling"
+      },
+      {
+        "reviewer": "learnings",
+        "tier": "mid",
+        "reason": "relevant tracked verification/privacy workflow learnings"
+      },
+      {
+        "reviewer": "security",
+        "tier": "session",
+        "reason": "public paid/data endpoint admission and sensitive logging"
+      },
+      {
+        "reviewer": "api-contract",
+        "tier": "mid",
+        "reason": "intended public route retirement/status/error contract"
+      },
+      {
+        "reviewer": "reliability",
+        "tier": "mid",
+        "reason": "early refusal and error handling/packaging fidelity"
+      }
+    ],
+    "suppressed_by_confidence": {
+      "50": 1,
+      "25": 0
+    },
+    "first_evidence_backfilled": 0,
+    "quote_gate_demotions": 0,
+    "malformed_findings": 0,
+    "malformed_returns": 0,
+    "mode_aware_demotions": 0,
+    "validator": {
+      "outcome": "empty-batch",
+      "reason": "Empty primary set after merge; no validator launched.",
+      "confirmed": 0,
+      "rejected": 0,
+      "unresolved": 0,
+      "malformed": 0,
+      "failed": 0,
+      "shortcut_skipped": 0,
+      "selected": 0,
+      "launched": false
+    },
+    "failed_reviewers": [],
+    "protected_subject_reclassifications": 0,
+    "validation_degraded_p0_p1": 0,
+    "review_policy": {
+      "sources": [],
+      "removed": 0,
+      "regraded": 0,
+      "not_applied": []
+    },
+    "compound_packs": {
+      "roots": [],
+      "warnings": [],
+      "errors": []
+    }
+  },
+  "peer": {
+    "outcome": "folded",
+    "coverage": "Cross-model adversarial review ran on claude; requested claude-opus-5-5 at low effort; cross_model_route=claude, receipt_supported=true, model_actual=claude-opus-5-5, effort_actual=unverified, independence_verified=true. Its artifact was folded once; no separate local adversarial reviewer ran."
+  },
+  "artifact_path": "/tmp/compound-engineering-501/ce-code-review/20261102-092452-edd896fb",
+  "run_id": "20261102-092452-edd896fb"
+}

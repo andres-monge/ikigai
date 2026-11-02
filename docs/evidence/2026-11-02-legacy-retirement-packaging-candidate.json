@@ -1,0 +1,63 @@
+{
+  "time": "2026-11-02T09:10:46.466458+00:00",
+  "sourceCommit": "4464570156be7a52bddb14556391e5cc80896f55",
+  "applicationRetirementCommit": "0a8d64d1fbf9e3b418396e4ce36e30c0f676ec84",
+  "branch": "codex/retire-anonymous-legacy",
+  "reviewedPatchSha256": "c9687c65d008feb200088c3665671e3e9f38d6d455d6858a5e53230819fd9b2b",
+  "origin": "https://heynami.vercel.app",
+  "projectId": "prj_sVqqIBKF1Q2lViOpvlUlFGmkvMT6",
+  "target": "production",
+  "node": "24.19.0",
+  "vercelCli": "65.2.0",
+  "fileCount": 2675,
+  "artifactSha256": "1df5f1d6379b3566cf67813a8ad7fe6ef5b32c51e7e982d704371ff621fdc730",
+  "digestAlgorithm": "SHA-256 of UTF-8 sorted relative-path manifest; each line sha256(file bytes) + two spaces + relative path + newline",
+  "manifest": ".context/revelio/legacy-retirement-release-20261102/final-production-manifest.sha256",
+  "archive": ".context/revelio/legacy-retirement-release-20261102/production-output-4464570.tgz",
+  "archiveSha256": "0943ae8ec6c1bca0eb5172c1d365d7d65e80a9604923ee8946a74f7a0c0ec32a",
+  "filePathMapEntries": 0,
+  "buildAfterSourceCommit": true,
+  "deployed": false,
+  "checks": {
+    "metadataRegression": "Pass: preparation red before fix; old artifact rejected by new checker; review finding red before correction;23 focused tests green",
+    "typecheck": "Pass: Node24 tsc",
+    "actualProductionPackage": "Pass: actual Node24 import, five canonical Method skills, fixture auth-unavailable503, retired GET/malformedPOST JSON410",
+    "privacy": "Pass: whole output and mapping metadata; selected configured secret values; mapped-only fictional sentinel rejection without echo",
+    "repeatPackageCheck": "Pass: repeated Node24 checker on final artifact",
+    "manifestRecheck": "Pass: all2675 file hashes unchanged after repeat check",
+    "fullSuite": "Inherited from retirement commit:1142passed,1expected optional production-smoke skip; not repeated for packaging-only change",
+    "deployedBoundaryAndRendering": "Not run: revised candidate not uploaded",
+    "qaSessionAndCheckpoint": "Not run: founder offered visible Chrome QA profile; identity/session not inspected",
+    "runtimeSentinel": "Not run"
+  },
+  "review": {
+    "fullRun": "20261102-095639-bc447bd8",
+    "peerModelActual": "claude-opus-5-5",
+    "peerEffortRequested": "low",
+    "peerEffortActual": "unverified",
+    "independenceVerified": true,
+    "confirmedFindings": 1,
+    "resolvedFindings": 1,
+    "newActionableFindings": 0,
+    "testingGapsResolved": true,
+    "fullReceipt": "docs/evidence/2026-11-02-legacy-retirement-packaging-review.json",
+    "resolutionReceipt": "docs/evidence/2026-11-02-legacy-retirement-packaging-review-resolution.json"
+  },
+  "remoteState": {
+    "publicDeployment": "dpl_4PcQMSfrM1eNaokQuTqXajTGXS9A",
+    "failedStage": "dpl_GsXTcU4HGx9LA8RbCkSQDm1WTGUi",
+    "protection": "all_except_custom_domains",
+    "configurationMetadataUnchanged": true,
+    "signupEnabled": true,
+    "agentEnabled": true,
+    "promotionRun": false,
+    "newUploadRun": false
+  },
+  "limitations": [
+    "Local fixture checks do not prove deployed auth, provider or routing behavior.",
+    "The original failed candidate remains archived; no private file inclusion or ignore-policy removal was used.",
+    "Current ignore/source policy is bounded to this layout; future changes require explicit verifier updates.",
+    "Original public legacy exposure persists until a revised candidate is deployed and verified."
+  ],
+  "privateEvidence": ".context/revelio/legacy-retirement-release-20261102"
+}

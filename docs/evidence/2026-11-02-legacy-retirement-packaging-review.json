@@ -1,0 +1,200 @@
+{
+  "status": "complete",
+  "verdict": "Ready with fixes",
+  "verdict_reason": "Fix #1 so mapped-source admission matches the existing uploader ignore policy. The P2 mismatch is confirmed in code; occurrence in generated mappings was not measured. This receipt does not establish deployed readiness.",
+  "scope": {
+    "base": "0a8d64d1fbf9e3b418396e4ce36e30c0f676ec84",
+    "branch": "codex/retire-anonymous-legacy",
+    "head_sha": "0a8d64d1fbf9e3b418396e4ce36e30c0f676ec84",
+    "pr_url": null,
+    "files_changed": 5
+  },
+  "intent": "Repair prebuilt Vercel filePathMap references left pointing to excluded private skill files. Prune only forbidden roots, validate repository-relative regular-file source mappings, scan mapped bytes and materialize them for isolated import. Preserve runtime/auth/schema/env/ignore behavior; this review covers exactly five staged packaging files, not the prior retirement branch.",
+  "intent_confidence": "explicit",
+  "reviewers": [
+    "correctness",
+    "project-standards",
+    "testing",
+    "maintainability",
+    "security",
+    "reliability",
+    "learnings",
+    "adversarial-claude"
+  ],
+  "findings": [
+    {
+      "#": 1,
+      "autofix_class": "gated_auto",
+      "confidence": 75,
+      "evidence": [
+        "scripts/vercel-file-path-map.mjs:23 --       !runtimeRoots.has(value.split('/')[0]) || (source && value.split('/')[0] === 'dist')) {",
+        ".vercelignore:6 excludes **/*.test.ts; validation also confirmed existing nested directory exclusions.",
+        "Read-only fictional probes accepted server/ai/agent.test.ts and server/app.auth.test.ts as mapping sources.",
+        "scripts/check-vercel-function.mjs:147-150 materializes accepted mapped sources into the isolated bundle.",
+        "Vercel 65.2.0 deploy/index.js:19 validateBuildOutput rejects ignored logical/resolved sources outside dependency exceptions; chunk-DGG3YML4.js:14 skips ignored sources when collecting mapped upload references."
+      ],
+      "file": "scripts/vercel-file-path-map.mjs",
+      "first_evidence": "scripts/vercel-file-path-map.mjs:23 --       !runtimeRoots.has(value.split('/')[0]) || (source && value.split('/')[0] === 'dist')) {",
+      "independent_reviewers": [
+        "correctness",
+        "reliability"
+      ],
+      "line": 23,
+      "owner": "downstream-resolver",
+      "pre_existing": false,
+      "requires_verification": true,
+      "reviewers": [
+        "correctness",
+        "reliability"
+      ],
+      "severity": "P2",
+      "suggested_fix": "Apply the existing .vercelignore policy to mapped sources before filesystem validation and materialization, preserving uploader dependency/output exceptions. Add fictional regression fixtures for **/*.test.ts and nested ignored directories; keep the existing ignore rules unchanged.",
+      "title": "Reject mapped sources excluded by the existing upload policy",
+      "why_it_matters": "An existing regular source under server, shared or api can pass this guard even when the current .vercelignore excludes it, such as **/*.test.ts or nested dist/, tests/, docs or scripts paths. The checker then copies that source into its isolated bundle, while Vercel 65.2.0 rejects or omits the ignored mapping source outside dependency exceptions. This can make local verification pass for a prebuilt package that upload rejects. Incidence in generated mappings was not measured; the reported current mapping set is empty.",
+      "validation_status": "confirmed",
+      "validation_reason": "A mapping to an existing regular server/shared/api source matching **/*.test.ts or a nested dist/, tests/, docs, or scripts rule passes the newly added scripts/vercel-file-path-map.mjs:18-50 checks and is materialized by scripts/check-vercel-function.mjs:147-150, whereas Vercel 65.2.0 deploy/index.js:19 validateBuildOutput rejects ignored logical/resolved sources outside dependency exceptions and chunk-DGG3YML4.js:14 omits them from mapped upload references; this confirms a local-check/deployment contract mismatch rather than demonstrated deployed ENOENT, and occurrence in generated mappings was not measured (the reported current mapping set is empty)."
+    }
+  ],
+  "actionable_findings": [
+    {
+      "#": 1,
+      "autofix_class": "gated_auto",
+      "confidence": 75,
+      "evidence": [
+        "scripts/vercel-file-path-map.mjs:23 --       !runtimeRoots.has(value.split('/')[0]) || (source && value.split('/')[0] === 'dist')) {",
+        ".vercelignore:6 excludes **/*.test.ts; validation also confirmed existing nested directory exclusions.",
+        "Read-only fictional probes accepted server/ai/agent.test.ts and server/app.auth.test.ts as mapping sources.",
+        "scripts/check-vercel-function.mjs:147-150 materializes accepted mapped sources into the isolated bundle.",
+        "Vercel 65.2.0 deploy/index.js:19 validateBuildOutput rejects ignored logical/resolved sources outside dependency exceptions; chunk-DGG3YML4.js:14 skips ignored sources when collecting mapped upload references."
+      ],
+      "file": "scripts/vercel-file-path-map.mjs",
+      "first_evidence": "scripts/vercel-file-path-map.mjs:23 --       !runtimeRoots.has(value.split('/')[0]) || (source && value.split('/')[0] === 'dist')) {",
+      "independent_reviewers": [
+        "correctness",
+        "reliability"
+      ],
+      "line": 23,
+      "owner": "downstream-resolver",
+      "pre_existing": false,
+      "requires_verification": true,
+      "reviewers": [
+        "correctness",
+        "reliability"
+      ],
+      "severity": "P2",
+      "suggested_fix": "Apply the existing .vercelignore policy to mapped sources before filesystem validation and materialization, preserving uploader dependency/output exceptions. Add fictional regression fixtures for **/*.test.ts and nested ignored directories; keep the existing ignore rules unchanged.",
+      "title": "Reject mapped sources excluded by the existing upload policy",
+      "why_it_matters": "An existing regular source under server, shared or api can pass this guard even when the current .vercelignore excludes it, such as **/*.test.ts or nested dist/, tests/, docs or scripts paths. The checker then copies that source into its isolated bundle, while Vercel 65.2.0 rejects or omits the ignored mapping source outside dependency exceptions. This can make local verification pass for a prebuilt package that upload rejects. Incidence in generated mappings was not measured; the reported current mapping set is empty.",
+      "validation_status": "confirmed",
+      "validation_reason": "A mapping to an existing regular server/shared/api source matching **/*.test.ts or a nested dist/, tests/, docs, or scripts rule passes the newly added scripts/vercel-file-path-map.mjs:18-50 checks and is materialized by scripts/check-vercel-function.mjs:147-150, whereas Vercel 65.2.0 deploy/index.js:19 validateBuildOutput rejects ignored logical/resolved sources outside dependency exceptions and chunk-DGG3YML4.js:14 omits them from mapped upload references; this confirms a local-check/deployment contract mismatch rather than demonstrated deployed ENOENT, and occurrence in generated mappings was not measured (the reported current mapping set is empty)."
+    }
+  ],
+  "triage_groups": [],
+  "pre_existing_findings": [],
+  "requirements_completeness": null,
+  "learnings": [
+    {
+      "type": "known_pattern",
+      "title": "Local verification and deployed readiness remain separate",
+      "citation": "docs/solutions/workflow-issues/find-and-choose-revelio-testing-setups.md",
+      "note": "Fictional mappings prove path-policy behavior and isolated imports prove locally materialized startup. Neither establishes remote upload resolution, live configuration or deployed routing. The changed runbook preserves this boundary."
+    }
+  ],
+  "agent_native_gaps": [],
+  "deployment_notes": [],
+  "residual_risks": [],
+  "testing_gaps": [
+    "Add fictional full-checker fixtures for (a) a mapped source containing a configured sentinel secret absent from the physical output, rejected without echoing it, and (b) a mapped runtime file absent from the physical bundle, whose materialization is necessary for the isolated import probe to succeed. Current helper/preparation tests and the reported empty-mapping production check do not exercise these changed paths."
+  ],
+  "coverage": {
+    "depth": "full",
+    "notes": [
+      "Full review explicitly requested: 95 executable non-test changed lines and 207 total changed lines; small size band, no hard-block class.",
+      "Exactly five staged files reviewed. No unstaged diff existed at dispatch; all listed untracked reports and private ignored content were excluded.",
+      "Project criteria used AGENTS.md and CLAUDE.md. No applicable CODING_STANDARDS.md or base REVIEW.md was found; absent CE configuration left docs_root at docs.",
+      "The bounded packaging repair prompt supplied intent. No whole-revamp or prior-retirement completeness claim was assessed; settlement suppression was not evaluated because no formal plan was selected.",
+      "The caller reports 20 fictional tests, Node 24 typecheck, and fresh production build/prepare/check passed, including five skills, fixture HTTP 503, retired HTTP 410, full output/mapping scans and selected-secret scanning. The actual mapping set was empty. These checks were not executed by this static review.",
+      "Candidate upload and deployed routing still require separate verification; deployed readiness is not established.",
+      "Cross-model adversarial review ran on claude; requested claude-opus-5-5 at low effort; cross_model_route=claude, receipt_supported=true, model_actual=claude-opus-5-5, effort_actual=unverified, independence_verified=true. Its artifact was folded once; no local adversarial reviewer ran.",
+      "Two local P2 reports merged into #1. Same-model agreement did not increase confidence. The single validator batch returned within its collection bound and confirmed #1; no validation shortcut was used.",
+      "Finding #1 is an internal packaging/upload-policy mismatch, not an asserted secret exposure or public API defect; no protected subject applies. Generated-mapping incidence was not measured.",
+      "Two findings were suppressed at confidence 50; none at 25. Two first-evidence fields were backfilled; no quote-gate or mode-aware demotions occurred. Final malformed findings and reviewer returns: zero. One malformed internal synthetic return was corrected and rerun.",
+      "The mapped-source test gaps remain report-only. Review and validation used static inspection and read-only fictional policy probes; no tests, builds, uploads, deployments or provider calls were run."
+    ],
+    "reviewer_selection": [
+      {
+        "reviewer": "correctness",
+        "tier": "session",
+        "reason": "always-on"
+      },
+      {
+        "reviewer": "project-standards",
+        "tier": "mid",
+        "reason": "AGENTS/CLAUDE fallback criteria"
+      },
+      {
+        "reviewer": "testing",
+        "tier": "mid",
+        "reason": "new fictional mapping tests and verifier harness"
+      },
+      {
+        "reviewer": "maintainability",
+        "tier": "mid",
+        "reason": "shared mapping abstraction and coupling"
+      },
+      {
+        "reviewer": "security",
+        "tier": "session",
+        "reason": "private-source and secret upload boundary"
+      },
+      {
+        "reviewer": "reliability",
+        "tier": "mid",
+        "reason": "fail-closed validation and materialized import fidelity"
+      },
+      {
+        "reviewer": "learnings",
+        "tier": "mid",
+        "reason": "tracked verification-surfaces workflow learning"
+      }
+    ],
+    "suppressed_by_confidence": {
+      "50": 2,
+      "25": 0
+    },
+    "first_evidence_backfilled": 2,
+    "quote_gate_demotions": 0,
+    "mode_aware_demotions": 0,
+    "malformed_findings": 0,
+    "malformed_returns": 0,
+    "validator": {
+      "outcome": "verdicts",
+      "confirmed": 1,
+      "rejected": 0,
+      "unresolved": 0,
+      "malformed": 0,
+      "failed": 0,
+      "shortcut_skipped": 0,
+      "bound_exceeded": false
+    },
+    "protected_subject_reclassifications": 0,
+    "failed_reviewers": [],
+    "review_policy": {
+      "sources": [],
+      "removed": 0,
+      "regraded": 0,
+      "not_applied": []
+    },
+    "compound_packs": {
+      "roots": [],
+      "warnings": [],
+      "errors": []
+    }
+  },
+  "peer": {
+    "outcome": "folded",
+    "coverage": "Cross-model adversarial review ran on claude; requested claude-opus-5-5 at low effort; cross_model_route=claude, receipt_supported=true, model_actual=claude-opus-5-5, effort_actual=unverified, independence_verified=true. Its artifact was folded once; no local adversarial reviewer ran."
+  },
+  "artifact_path": "/tmp/compound-engineering-501/ce-code-review/20261102-095639-bc447bd8",
+  "run_id": "20261102-095639-bc447bd8"
+}

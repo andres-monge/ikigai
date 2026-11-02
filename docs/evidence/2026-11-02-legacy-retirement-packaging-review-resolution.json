@@ -1,0 +1,67 @@
+{
+  "status": "complete",
+  "review_type": "focused-post-fix-verification",
+  "original_review": "/tmp/compound-engineering-501/ce-code-review/20261102-095639-bc447bd8/review.json",
+  "original_review_sha256": "7c936b966169802b40716cbf0a3ac1770edaa19cdf6f6fd1e6f61a8d5023f747",
+  "run_id": "20261102-095639-bc447bd8",
+  "source_patch_identity": {
+    "base": "0a8d64d1fbf9e3b418396e4ce36e30c0f676ec84",
+    "head_sha": "0a8d64d1fbf9e3b418396e4ce36e30c0f676ec84",
+    "scope": "same five working files: staged original plus unstaged fix",
+    "files": [
+      "scripts/prepare-vercel-output.mjs",
+      "scripts/check-vercel-function.mjs",
+      "scripts/vercel-file-path-map.mjs",
+      "scripts/vercel-file-path-map.test.mjs",
+      "docs/runbooks/vercel-function-packaging.md"
+    ],
+    "git_diff_base_sha256": "c9687c65d008feb200088c3665671e3e9f38d6d455d6858a5e53230819fd9b2b",
+    "unstaged_delta_sha256": "e61f6777c84ca56b8d9055e89fe10f53215035fd173ae56e7ac1adfc8998dfc2",
+    "file_sha256": {
+      "scripts/prepare-vercel-output.mjs": "815f0305a596717f54b5dcd3b5825eb7e46b722ee926335603625b1497d2c771",
+      "scripts/check-vercel-function.mjs": "dce014abeef7ce03172a971cd309a6307d20032c50cafdee51259dcb2902e269",
+      "scripts/vercel-file-path-map.mjs": "f8f02b133bd74a18a785222546a3f278f4cf022d2f39940dd6d042fbe4a40392",
+      "scripts/vercel-file-path-map.test.mjs": "377b48deb58e3443afa3c4e8c64ca3a7c765fe86b7b3d979119c11961d880d9c",
+      "docs/runbooks/vercel-function-packaging.md": "2be48db4c6b20ffa724cacd593b8ee31e85d9bdd095f45f2ebe112d6839983d1"
+    },
+    "snapshot": "/tmp/compound-engineering-501/ce-code-review/20261102-095639-bc447bd8/post-fix-scoped.diff",
+    "delta_snapshot": "/tmp/compound-engineering-501/ce-code-review/20261102-095639-bc447bd8/post-fix-delta.diff"
+  },
+  "finding_resolutions": [
+    {
+      "#": 1,
+      "status": "resolved",
+      "reason": "Non-node_modules sources now reject *.test.ts and nested forbidden/dist/tests segments before source existence checks or materialization. Existing regular fictional sources establish rejection with the exact policy error; node_modules/fixture/docs/fixture.js is accepted. All-root private/secret segment checks remain outside the exception."
+    }
+  ],
+  "testing_gap_resolutions": [
+    {
+      "gap": "mapped-only runtime materialization",
+      "status": "resolved",
+      "evidence": "Full-checker fixture has api/index.js importing server/runtime.js, which exists only in repository source. Actual checker subprocess succeeds through isolated import after hydration."
+    },
+    {
+      "gap": "mapped-only secret rejection without echo",
+      "status": "resolved",
+      "evidence": "Actual checker subprocess rejects fictional sentinel present only in repository mapped source and configured fixture env; output asserts expected secret error and absence of sentinel."
+    }
+  ],
+  "verification": {
+    "executed_by_reviewer": true,
+    "runtime": "Node24.19.0",
+    "command": "/Users/andresm/.nvm/versions/node/v24.19.0/bin/node --test scripts/vercel-file-path-map.test.mjs",
+    "tests_passed": 23,
+    "tests_failed": 0,
+    "tests_skipped": 0,
+    "red_before_fix": "Caller-reported Missing expected rejection; not independently rerun against original implementation."
+  },
+  "platform_semantics": [
+    "Installed Vercel65.2.0 validateBuildOutput checks logical/resolved source ignore matches outside dependency exceptions; hydrateFilesMap resolves source values from repository root. The current fix covers existing .vercelignore exclusions for admitted roots and retains the node_modules exception.",
+    "This is a deliberately restricted current-layout policy, not a general .vercelignore evaluator. Future ignore rules, additional source roots or dependency layout changes require explicit policy updates.",
+    "Fixtures establish local checker behavior only; no actual candidate output/private records were inspected and no upload or deployed routing was verified."
+  ],
+  "new_actionable_findings": [],
+  "original_receipt_preserved": true,
+  "completed_at": "2026-11-02T09:09:28.796230+00:00",
+  "artifact_path": "/tmp/compound-engineering-501/ce-code-review/20261102-095639-bc447bd8/post-fix-resolution.json"
+}
