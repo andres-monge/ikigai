@@ -1,0 +1,268 @@
+{
+  "date": "2026-11-02",
+  "timeUtc": "2026-11-02T09:19:06.837305+00:00",
+  "status": "READY stage; promotion blocked on rendered access",
+  "sourceCommit": "4464570156be7a52bddb14556391e5cc80896f55",
+  "uploadHeadEvidenceOnly": "32dcfe27815df327e432f5832a22f258e58f1e9b",
+  "artifactSha256": "1df5f1d6379b3566cf67813a8ad7fe6ef5b32c51e7e982d704371ff621fdc730",
+  "files": 2675,
+  "filePathMapEntries": 0,
+  "stage": {
+    "id": "dpl_CHZNBNyNwZL5J65P5GtvTUbwkmNk",
+    "url": "ikigai-9t699q2ri-andres-projects-61b43c52.vercel.app",
+    "readyState": "READY",
+    "target": "production",
+    "createdAt": 1793610809188
+  },
+  "retirementHttp": {
+    "deploymentId": "dpl_CHZNBNyNwZL5J65P5GtvTUbwkmNk",
+    "results": [
+      {
+        "route": "/api/analyze/stream",
+        "method": "GET",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/analyze/stream",
+        "method": "OPTIONS",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/analyze/stream",
+        "method": "POST",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/action-plan/stream",
+        "method": "GET",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/action-plan/stream",
+        "method": "OPTIONS",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/action-plan/stream",
+        "method": "POST",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/questionnaire/save",
+        "method": "GET",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/questionnaire/save",
+        "method": "OPTIONS",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/questionnaire/save",
+        "method": "POST",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/session/retirement-fixture-20261102",
+        "method": "GET",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/session/retirement-fixture-20261102",
+        "method": "OPTIONS",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/session/retirement-fixture-20261102",
+        "method": "POST",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/transcribe",
+        "method": "GET",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/transcribe",
+        "method": "OPTIONS",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/transcribe",
+        "method": "POST",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/analytics/event",
+        "method": "GET",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/analytics/event",
+        "method": "OPTIONS",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      },
+      {
+        "route": "/api/analytics/event",
+        "method": "POST",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "code": "LEGACY_RETIRED",
+        "pass": true
+      }
+    ]
+  },
+  "privateHttp": {
+    "deploymentId": "dpl_CHZNBNyNwZL5J65P5GtvTUbwkmNk",
+    "results": [
+      {
+        "route": "/api/agent/workspace",
+        "status": 401,
+        "contentType": "application/json; charset=utf-8",
+        "requestId": "0b440c0a-72c2-4e02-a2b5-c7cdddaee406",
+        "pass": true
+      },
+      {
+        "route": "/api/agent/history",
+        "status": 401,
+        "contentType": "application/json; charset=utf-8",
+        "requestId": "b2eb5286-0bb9-494b-b74f-27947c9475d4",
+        "pass": true
+      },
+      {
+        "route": "/api/auth/get-session",
+        "status": 200,
+        "contentType": "application/json",
+        "sessionIsNull": true,
+        "pass": true
+      },
+      {
+        "route": "/api/analyze?fixture=NAMI_FICTIONAL_LOG_SENTINEL_20261102",
+        "status": 410,
+        "contentType": "application/json; charset=utf-8",
+        "requestId": "849c5a43-7b90-4d5b-9d2a-9de00719c7d3",
+        "pass": true
+      }
+    ]
+  },
+  "oidcAccess": {
+    "deploymentId": "dpl_CHZNBNyNwZL5J65P5GtvTUbwkmNk",
+    "status": 403,
+    "contentType": "text/plain; charset=utf-8",
+    "vercelError": "TRUSTED_SOURCES_ENVIRONMENT_MISMATCH",
+    "redirectHost": null,
+    "trustedSourcesEnvironmentMismatch": true,
+    "applicationUnauthorized": false
+  },
+  "remoteState": {
+    "public": {
+      "id": "dpl_4PcQMSfrM1eNaokQuTqXajTGXS9A",
+      "url": "ikigai-j1qbs0jrg-andres-projects-61b43c52.vercel.app",
+      "readyState": "READY"
+    },
+    "stage": {
+      "id": "dpl_CHZNBNyNwZL5J65P5GtvTUbwkmNk",
+      "url": "ikigai-9t699q2ri-andres-projects-61b43c52.vercel.app",
+      "readyState": "READY",
+      "target": "production",
+      "name": "ikigai"
+    },
+    "protectionUnchanged": true,
+    "envMetadataUnchanged": true,
+    "projectId": "prj_sVqqIBKF1Q2lViOpvlUlFGmkvMT6"
+  },
+  "browserPolicy": {
+    "tool": "CUA Chrome extension",
+    "surface": "offered QA single New tab only",
+    "attempt": "normal navigation to exact staged /legacy",
+    "result": "admin-enforced origin policy rejected network-egress authority",
+    "origin": "https://ikigai-9t699q2ri-andres-projects-61b43c52.vercel.app",
+    "qaIdentityVerified": false,
+    "platformSessionVerified": false,
+    "browserWorkaroundAttempted": false
+  },
+  "promotionRun": false,
+  "publicRetirementVerification": "Not run; old public deployment remains",
+  "qaReturningCheckpoint": "Not run; access blocked, no data writes",
+  "runtimeSentinel": "Partial: fictional sentinel request410; runtime log collection not run",
+  "knownHistoricalHosts": "Inherited from same-day first-failure receipt; no expanded scan",
+  "remainingAuditItems": [
+    "Lower Better Auth rate-limit advisory unchanged",
+    "Complete dependency inventory remains blocked as recorded in original audit"
+  ],
+  "cleanup": {
+    "ownedAgentBrowserClosed": true,
+    "offeredUserTabLeftIntact": true,
+    "coordinatorOwnedStateUntouched": true
+  },
+  "privateEvidence": ".context/revelio/legacy-retirement-release-20261102"
+}
