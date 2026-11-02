@@ -163,7 +163,9 @@ for (const secret of [false, true]) {
         ${secret ? `// ${sentinel}` : ''}
         export default { listen(...args) { return createServer((request, response) => {
           response.setHeader('Content-Type', 'application/json');
-          response.statusCode = request.url === '/api/agent/workspace' ? 503 : 410;
+          response.statusCode = request.url === '/api/feedback'
+            ? (request.headers['x-nami-request'] === '1' ? 503 : 403)
+            : request.url === '/api/agent/workspace' ? 503 : 410;
           response.end(JSON.stringify({ code: 'LEGACY_RETIRED' }));
         }).listen(...args); } };
       `);

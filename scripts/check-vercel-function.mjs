@@ -40,12 +40,13 @@ async function assertSafePackage(root) {
   }
 
   const secretValues = [];
+  if (process.env.RESEND_API_KEY?.length >= 8) secretValues.push(Buffer.from(process.env.RESEND_API_KEY));
   for (const target of ['preview', 'production']) {
     try {
       const envFile = parse(await readFile(path.resolve(`.vercel/.env.${target}.local`)));
       for (const key of [
         'DATABASE_URL', 'BETTER_AUTH_DATABASE_URL', 'BETTER_AUTH_SECRET', 'GOOGLE_CLIENT_SECRET',
-        'GEMINI_API_KEY', 'GROQ_API_KEY', 'OPENAI_API_KEY', 'YOUTUBE_API_KEY',
+        'GEMINI_API_KEY', 'GROQ_API_KEY', 'OPENAI_API_KEY', 'YOUTUBE_API_KEY', 'RESEND_API_KEY',
         'VERCEL_OIDC_TOKEN',
       ]) {
         if (envFile[key]?.length >= 8) secretValues.push(Buffer.from(envFile[key]));
@@ -123,6 +124,16 @@ try {
   await new Promise((resolve) => server.once('listening', resolve));
   const response = await fetch('http://127.0.0.1:' + server.address().port + '/api/agent/workspace');
   if (response.status !== 503) throw new Error('Expected signed-out auth-unavailable boundary, got HTTP ' + response.status);
+  const feedbackUrl = 'http://127.0.0.1:' + server.address().port + '/api/feedback';
+  const feedbackDenied = await fetch(feedbackUrl, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"fixture":',
+  });
+  if (feedbackDenied.status !== 403) throw new Error('Packaged feedback metadata admission failed');
+  const feedbackSignedOut = await fetch(feedbackUrl, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Origin: new URL(process.env.BETTER_AUTH_URL).origin, 'x-nami-request': '1' },
+    body: JSON.stringify({ submissionId: '00000000-0000-4000-8000-000000000001', text: 'Fictional package probe', page: 'chat' }),
+  });
+  if (feedbackSignedOut.status !== 503) throw new Error('Packaged feedback signed-out boundary failed');
   for (const route of ['/analyze/stream', '/action-plan/stream', '/questionnaire/save', '/session/fixture-retired', '/session/start-over', '/transcribe', '/analytics/event']) {
     for (const method of ['GET', 'POST']) {
       const retired = await fetch('http://127.0.0.1:' + server.address().port + '/api' + route, {
@@ -157,12 +168,13 @@ try {
       NODE_ENV: 'production', VERCEL: '1', AGENT_ENABLED: 'false', AUTH_SIGNUPS_ENABLED: 'false',
       DATABASE_URL: 'postgresql://fixture:fixture@127.0.0.1:1/fixture',
       GEMINI_API_KEY: 'fixture-key-not-a-credential', GEMINI_REASONING_MODEL: 'fixture-model',
+      BETTER_AUTH_URL: process.env.BETTER_AUTH_URL, RESEND_API_KEY: '', FEEDBACK_FROM_EMAIL: '',
     },
   });
   if (result.status !== 0) {
     throw new Error(`Isolated Node function probe failed: ${result.stderr.trim() || result.stdout.trim() || result.error?.message}`);
   }
-  console.log('Isolated Node 24 function imported; five canonical skills loaded; signed-out API returned 503; retired APIs returned JSON 410 before parsing');
+  console.log('Isolated Node 24 function imported; five canonical skills loaded; signed-out API returned 503; feedback admission/auth boundaries passed; retired APIs returned JSON 410 before parsing');
   console.log('Entire deployment output contains only expected paths and no embedded environment secrets');
 } finally {
   await rm(isolated, { recursive: true, force: true });
