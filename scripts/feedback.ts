@@ -53,7 +53,6 @@ export async function runFeedback(args: string[], deps: {
 }
 
 async function main() {
-  // Runtime secrets come from an owner-approved process environment, never CLI args.
   const { Pool } = await import('pg');
   const { drizzle } = await import('drizzle-orm/node-postgres');
   const schema = await import('../shared/schema.js');

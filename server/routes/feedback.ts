@@ -2,10 +2,11 @@ import express, { Router, type RequestHandler } from 'express';
 import { feedbackInputSchema, safeReplyEmail, type FeedbackResponse } from '../../shared/feedback.js';
 import { configuredMethodOrigin } from '../../shared/app-origin.js';
 import { requireAuth, getProtectedIdentity } from '../auth-middleware.js';
+import { methodBuildVersion } from './agent-logging.js';
 import { notifyFeedback } from '../feedback/delivery.js';
 import { env } from '../env.js';
 import { db } from '../db.js';
-import { FeedbackAdmissionError, FeedbackStorage, notificationStatus, type FeedbackRecord } from '../feedback/storage.js';
+import { FeedbackAdmissionError, FeedbackStorage, type FeedbackRecord } from '../feedback/storage.js';
 
 export function createFeedbackRouter(options: {
   requireAuth?: RequestHandler;
@@ -30,10 +31,9 @@ export function createFeedbackRouter(options: {
     const identity = getProtectedIdentity(res);
     if (!parsed.success || !safeReplyEmail.safeParse(identity.email).success) { res.status(400).json({ error: 'Invalid feedback' }); return; }
     try {
-      const rawVersion = process.env.NAMI_BUILD_VERSION;
-      const buildVersion = rawVersion && /^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/.test(rawVersion) ? rawVersion : 'unknown';
+      const buildVersion = methodBuildVersion(process.env.NAMI_BUILD_VERSION);
       const row = await storage.save({ ...parsed.data, userId: identity.userId, replyEmail: identity.email, buildVersion });
-      let notification = notificationStatus(row);
+      let notification: FeedbackResponse['notification'] = 'uncertain';
       try { notification = await notify(row); } catch { notification = 'uncertain'; }
       res.json({ id: row.id, saved: true, notification } satisfies FeedbackResponse);
     } catch (error) {

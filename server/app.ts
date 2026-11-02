@@ -156,7 +156,6 @@ export function createApp(): Express {
     audioTranscriptionMetadataGuard(req, res, next);
   });
 
-  // Feedback owns its admission and bounded parser before global body parsing.
   app.use('/api/feedback', createFeedbackRouter());
 
   const smallJsonParser = express.json();
