@@ -155,6 +155,19 @@ async function createAnalyticsPredecessor(
 }
 
 describe('reviewed U4 migration chain', () => {
+  it('adds feedback to an actual 0001 database while retaining legacy rows and ledger', async () => {
+    const harness = await provisionStorageTestDatabase('feedback_upgrade', { applyMigrations: false });
+    try {
+      await harness.applyReviewedMigration(0);
+      await harness.applyReviewedMigration(1);
+      await harness.pool.query("insert into assessment_sessions(session_id, language) values ('feedback-upgrade-preserve', 'en')");
+      await harness.applyReviewedMigrationChain();
+      await assertReviewedLedger(harness);
+      expect((await harness.pool.query("select to_regclass('public.user_feedback') as name")).rows[0].name).toBe('user_feedback');
+      expect((await harness.pool.query("select count(*)::int as count from assessment_sessions where session_id='feedback-upgrade-preserve'")).rows[0].count).toBe(1);
+    } finally { await harness.dispose(); }
+  });
+
   it('provisions a fresh migration-backed database with the complete audited shape', async () => {
     const harness = { pool: storageTestPool, database: storageTestDatabase };
     await assertReviewedLedger(harness);

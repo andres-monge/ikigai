@@ -403,3 +403,28 @@ export type PurposePath = SelectPurposePath;
 export type AssessmentSession = SelectAssessmentSession;
 export type InsertAssessmentSession = z.infer<typeof insertAssessmentSessionSchema>;
 export type InsertPurposePath = z.infer<typeof insertPurposePathSchema>;
+
+/** Text submitted deliberately by explorers; never part of Method context. */
+export const userFeedback = pgTable('user_feedback', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  submissionId: text('submission_id').notNull(),
+  replyEmail: text('reply_email').notNull(),
+  text: text('text').notNull(),
+  page: text('page').$type<'chat' | 'map'>().notNull(),
+  buildVersion: text('build_version').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  notification: text('notification').$type<'pending' | 'unavailable' | 'sending' | 'accepted' | 'failed' | 'uncertain'>().notNull().default('pending'),
+  envelope: jsonb('envelope').$type<{ from: string; to: string; reply_to: string; subject: string; text: string }>(),
+  firstAttemptAt: timestamp('first_attempt_at', { withTimezone: true }),
+  leaseToken: text('lease_token'),
+  leaseUntil: timestamp('lease_until', { withTimezone: true }),
+  attempts: integer('attempts').notNull().default(0),
+  providerId: text('provider_id'),
+}, table => ({
+  submission: uniqueIndex('user_feedback_owner_submission').on(table.userId, table.submissionId),
+  recent: index('user_feedback_owner_time').on(table.userId, table.createdAt),
+  pageValid: check('user_feedback_page_valid', sql`${table.page} IN ('chat','map')`),
+  textValid: check('user_feedback_text_valid', sql`char_length(${table.text}) BETWEEN 1 AND 4000`),
+  notificationValid: check('user_feedback_notification_valid', sql`${table.notification} IN ('pending','unavailable','sending','accepted','failed','uncertain')`),
+}));

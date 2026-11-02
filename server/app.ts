@@ -26,6 +26,7 @@ import fs from 'fs';
 import { randomUUID } from 'node:crypto';
 import { toNodeHandler } from 'better-auth/node';
 import { registerRoutes } from './routes.js';
+import { createFeedbackRouter } from './routes/feedback.js';
 import { retiredLegacyRouter } from './routes/retired-legacy.js';
 import {
   AuthConfigurationError,
@@ -154,6 +155,9 @@ export function createApp(): Express {
     }
     audioTranscriptionMetadataGuard(req, res, next);
   });
+
+  // Feedback owns its admission and bounded parser before global body parsing.
+  app.use('/api/feedback', createFeedbackRouter());
 
   const smallJsonParser = express.json();
   app.use((req, res, next) => {
