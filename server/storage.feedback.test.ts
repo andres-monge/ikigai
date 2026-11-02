@@ -30,3 +30,29 @@ describe('durable feedback admission', () => {
     expect(await store.save(reports[savedIndex])).toMatchObject({ submissionId: reports[savedIndex].submissionId });
   });
 });
+
+describe('durable notification claims', () => {
+  const envelope = { from: 'feedback@example.test', to: 'andresmongeliano@gmail.com', reply_to: 'fictional@example.test', subject: 'Nami feedback', text: 'immutable body' };
+  it('allows one claim, freezes the first envelope and refuses accepted resends', async () => {
+    const row = await store.save(input());
+    const claims = await Promise.all([store.claim(row.id, envelope), store.claim(row.id, envelope)]);
+    expect(claims.filter(Boolean)).toHaveLength(1);
+    const claim = claims.find(Boolean)!;
+    expect(await store.settle(row.id, 'wrong-token', 'accepted', 'fake')).toBe(false);
+    await store.settle(row.id, claim.token, 'failed');
+    const retry = await store.claim(row.id, { ...envelope, from: 'changed@example.test' });
+    expect(retry?.row.envelope).toEqual(envelope);
+    await store.settle(row.id, retry!.token, 'accepted', 'provider-id');
+    expect(await store.claim(row.id, envelope)).toBeUndefined();
+  });
+  it('recovers expired claims within the deduplication window but requires review later', async () => {
+    const row = await store.save(input());
+    const claim = await store.claim(row.id, envelope);
+    const later = new FeedbackStorage(database, () => new Date(now.getTime() + 31000));
+    const recovered = await later.claim(row.id, { ...envelope, text: 'new body ignored' });
+    expect(recovered?.row.envelope).toEqual(envelope);
+    expect(await store.settle(row.id, claim!.token, 'accepted', 'late-response')).toBe(false);
+    const tooLate = new FeedbackStorage(database, () => new Date(now.getTime() + 24 * 3600000));
+    expect(await tooLate.claim(row.id, envelope)).toBeUndefined();
+  });
+});

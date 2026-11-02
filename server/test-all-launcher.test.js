@@ -34,6 +34,7 @@ describe('full-suite process boundary', () => {
     const env = createTestEnvironment({
       ...authorized, PATH: '/runtime/bin', HOME: '/test-home', TMPDIR: '/test-temp',
       DATABASE_URL: 'application-secret', BETTER_AUTH_DATABASE_URL: 'auth-secret',
+      RESEND_API_KEY: 'provider-secret', FEEDBACK_FROM_EMAIL: 'private@example.test',
       OPENAI_API_KEY: 'provider-secret', GEMINI_API_KEY: 'provider-secret',
       GOOGLE_CLIENT_SECRET: 'oauth-secret', NODE_OPTIONS: '--require unsafe-preload',
       DOTENV_CONFIG_PATH: '/private/env', ARBITRARY_SECRET: 'private',
@@ -44,6 +45,8 @@ describe('full-suite process boundary', () => {
       DATABASE_URL: designatedUrl, OPENAI_API_KEY: '', BETTER_AUTH_DATABASE_URL: '',
       GOOGLE_CLIENT_SECRET: '', AGENT_ENABLED: 'false', AUTH_SIGNUPS_ENABLED: 'false',
     });
+    expect(env.RESEND_API_KEY).toBe('');
+    expect(env.FEEDBACK_FROM_EMAIL).toBe('');
     expect(env.GEMINI_API_KEY).toBe('test-key-not-a-credential');
     expect(env).not.toHaveProperty('NODE_OPTIONS');
     expect(env).not.toHaveProperty('DOTENV_CONFIG_PATH');

@@ -2,6 +2,7 @@ import express, { Router, type RequestHandler } from 'express';
 import { feedbackInputSchema, safeReplyEmail, type FeedbackResponse } from '../../shared/feedback.js';
 import { configuredMethodOrigin } from '../../shared/app-origin.js';
 import { requireAuth, getProtectedIdentity } from '../auth-middleware.js';
+import { notifyFeedback } from '../feedback/delivery.js';
 import { env } from '../env.js';
 import { db } from '../db.js';
 import { FeedbackAdmissionError, FeedbackStorage, notificationStatus, type FeedbackRecord } from '../feedback/storage.js';
@@ -14,6 +15,7 @@ export function createFeedbackRouter(options: {
 } = {}) {
   const router = Router();
   const storage = options.storage ?? new FeedbackStorage(db);
+  const notify = options.notify ?? ((row: FeedbackRecord) => notifyFeedback(row, new FeedbackStorage(db), { apiKey: env.RESEND_API_KEY, from: env.FEEDBACK_FROM_EMAIL }));
   const origin = options.origin ?? configuredMethodOrigin(env.BETTER_AUTH_URL, { nodeEnv: env.NODE_ENV, vercel: process.env.VERCEL });
   router.use((_req, res, next) => { res.setHeader('cache-control', 'no-store'); next(); });
   router.all('/', (req, res, next) => {
@@ -32,9 +34,7 @@ export function createFeedbackRouter(options: {
       const buildVersion = rawVersion && /^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/.test(rawVersion) ? rawVersion : 'unknown';
       const row = await storage.save({ ...parsed.data, userId: identity.userId, replyEmail: identity.email, buildVersion });
       let notification = notificationStatus(row);
-      if (options.notify) {
-        try { notification = await options.notify(row); } catch { notification = 'uncertain'; }
-      } else notification = 'unavailable';
+      try { notification = await notify(row); } catch { notification = 'uncertain'; }
       res.json({ id: row.id, saved: true, notification } satisfies FeedbackResponse);
     } catch (error) {
       const status = error instanceof FeedbackAdmissionError ? error.status : 503;

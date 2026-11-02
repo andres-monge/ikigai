@@ -35,6 +35,8 @@ export function createTestEnvironment(source) {
     BETTER_AUTH_URL: '',
     AGENT_ENABLED: 'false',
     AUTH_SIGNUPS_ENABLED: 'false',
+    RESEND_API_KEY: '',
+    FEEDBACK_FROM_EMAIL: '',
   };
 }
 

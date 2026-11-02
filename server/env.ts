@@ -99,6 +99,10 @@ const envSchema = z.object({
     // leaves new-account creation disabled while existing sign-in remains on.
     .transform((value) => value === 'true'),
 
+  // Optional feedback notification; durable feedback works without email.
+  RESEND_API_KEY: z.string().default(''),
+  FEEDBACK_FROM_EMAIL: z.string().default(''),
+
   // Optional Environment Metadata
   NODE_ENV: z
     .enum(['development', 'production', 'test'])
