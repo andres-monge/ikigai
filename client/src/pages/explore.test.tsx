@@ -228,6 +228,36 @@ describe('Explore U6 conversation-first workspace', () => {
     vi.unstubAllGlobals();
   });
 
+  it('saves feedback from Map without changing Chat draft, selected view or canonical state', async () => {
+    const originalFetch = vi.mocked(fetch).getMockImplementation()!;
+    const feedbackRequests: unknown[] = [];
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      if (String(input) === '/api/feedback') {
+        feedbackRequests.push(JSON.parse(String(init?.body)));
+        return jsonResponse({ id: crypto.randomUUID(), saved: true, notification: 'unavailable' });
+      }
+      return originalFetch(input, init);
+    });
+    render(<Explore {...props()} />);
+    const composer = await screen.findByRole('textbox', { name: 'Message Nami' });
+    fireEvent.change(composer, { target: { value: 'Keep my unsent thought' } });
+    fireEvent.change(await screen.findByLabelText('Attach files'), { target: { files: [new File(['%PDF-fictional'], 'feedback-preserved.pdf', { type: 'application/pdf' })] } });
+    await screen.findByRole('button', { name: 'Remove feedback-preserved.pdf' });
+    fireEvent.click(screen.getByRole('tab', { name: 'Your Map' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send feedback' }));
+    fireEvent.change(screen.getByLabelText('Your feedback'), { target: { value: 'A fictional Map suggestion' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send', exact: true }));
+    await screen.findByText('Feedback saved. Thank you.');
+    fireEvent.click(screen.getByRole('button', { name: 'Close', exact: true }));
+    expect(screen.getByRole('tab', { name: 'Your Map' }).getAttribute('aria-selected')).toBe('true');
+    fireEvent.click(screen.getByRole('tab', { name: 'Chat' }));
+    expect((screen.getByRole('textbox', { name: 'Message Nami' }) as HTMLTextAreaElement).value).toBe('Keep my unsent thought');
+    expect(screen.getByRole('button', { name: 'Remove feedback-preserved.pdf' })).toBeTruthy();
+    expect(feedbackRequests).toEqual([{ submissionId: expect.any(String), page: 'map', text: 'A fictional Map suggestion' }]);
+    const writes = vi.mocked(fetch).mock.calls.filter(([, init]) => init?.method === 'POST');
+    expect(writes).toHaveLength(1);
+  });
+
   it('keeps a same-tab Our Vision page link available across both workspace views', async () => {
     render(<Explore {...props()} />);
     const textbox = await screen.findByRole('textbox', { name: 'Message Nami' });

@@ -16,6 +16,7 @@ import {
 import { SafeMessage } from '@/components/explore/safe-message';
 import { MethodMap } from '@/components/explore/method-map';
 import { PurposePathCard } from '@/components/explore/purpose-path-card';
+import { FeedbackDialog } from '@/components/explore/feedback-dialog';
 import { ChatProjectBrief } from '@/components/explore/project-brief';
 import { ActivityIndicator } from '@/components/explore/activity-indicator';
 import { createClientLatencyTrace, type ClientLatencyTrace } from './explore-latency';
@@ -1034,7 +1035,7 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
       {signOutError ? <p role="alert" className="mx-auto w-full max-w-[112rem] shrink-0 px-4 pt-3 text-sm font-bold text-red-800">{signOutError}</p> : null}
 
       <div className="shrink-0 border-b-2 border-black bg-white">
-        <div className="mx-auto max-w-[112rem] sm:px-6 sm:py-3">
+        <div className="mx-auto flex max-w-[112rem] flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <div role="tablist" aria-label="Workspace views" className="grid grid-cols-2 sm:inline-grid sm:grid-cols-[auto_auto] sm:border-2 sm:border-black sm:shadow-[3px_3px_0_rgba(0,0,0,0.65)]">
             {(['chat', 'map'] as const).map((panel) => (
               <button
@@ -1063,6 +1064,7 @@ export function Explore({ userEmail, isSigningOut, signOutError, onSignOut }: Ex
               </button>
             ))}
           </div>
+          <FeedbackDialog page={activePanel} />
         </div>
       </div>
 
