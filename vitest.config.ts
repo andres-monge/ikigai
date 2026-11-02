@@ -4,7 +4,7 @@ import path from 'path';
 
 const storageDatabaseTests = [
   '**/server/storage.test.ts',
-  '**/server/storage.feedback.test.ts',
+  '**/server/storage.feedback*.test.ts',
   '**/server/storage.career-map.test.ts',
   '**/server/storage.migration.test.ts',
   '**/server/storage.performance.test.ts',

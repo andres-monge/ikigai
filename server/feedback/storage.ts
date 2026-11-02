@@ -61,14 +61,17 @@ export class FeedbackStorage {
   }
 
   async settle(id: string, token: string, notification: 'accepted' | 'failed' | 'uncertain', providerId: string | null = null) {
-    const rows = await this.database.update(userFeedback).set({ notification, providerId, leaseToken: null, leaseUntil: null }).where(and(eq(userFeedback.id, id), eq(userFeedback.leaseToken, token))).returning({ id: userFeedback.id });
+    const rows = await this.database.update(userFeedback).set({
+      notification, providerId, leaseToken: null,
+      ...(notification === 'accepted' ? { leaseUntil: null } : {}),
+    }).where(and(eq(userFeedback.id, id), eq(userFeedback.leaseToken, token))).returning({ id: userFeedback.id });
     return rows.length === 1;
   }
 
   async reconcile(id: string, providerId: string) {
     return this.database.transaction(async tx => {
       const [row] = await tx.select().from(userFeedback).where(eq(userFeedback.id, id)).for('update');
-      if (!row || (row.leaseUntil && row.leaseUntil > this.now())) throw new FeedbackAdmissionError(409);
+      if (!row || (row.leaseToken && row.leaseUntil && row.leaseUntil > this.now())) throw new FeedbackAdmissionError(409);
       await tx.update(userFeedback).set({ notification: 'accepted', providerId, leaseToken: null, leaseUntil: null }).where(eq(userFeedback.id, id));
     });
   }

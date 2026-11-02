@@ -40,7 +40,7 @@ describe('durable notification claims', () => {
     const claim = claims.find(Boolean)!;
     expect(await store.settle(row.id, 'wrong-token', 'accepted', 'fake')).toBe(false);
     await store.settle(row.id, claim.token, 'failed');
-    const retry = await store.claim(row.id, { ...envelope, from: 'changed@example.test' });
+    const retry = await new FeedbackStorage(database, () => new Date(now.getTime() + 31000)).claim(row.id, { ...envelope, from: 'changed@example.test' });
     expect(retry?.row.envelope).toEqual(envelope);
     await store.settle(row.id, retry!.token, 'accepted', 'provider-id');
     expect(await store.claim(row.id, envelope)).toBeUndefined();
