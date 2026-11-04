@@ -1,0 +1,13 @@
+# Main reconciliation — 2026-11-04
+
+This is Git delivery reconciliation, not a deployment. The accepted feedback/auth combined tree at `9fca157` is joined with the security release branch at `3655c71` without rewriting either history. The conflict-free merge is `fdee130110782b65272f295aea7408b6b020fd58`, with parents `9fca157171d420213865449e2e40497ef9b44423` and `3655c7161f15a55443b51d83929374374e44806e`.
+
+Every tracked file outside `docs/` is byte-identical to `9fca157`, including application code, manifests, lockfile, migrations, scripts and tests. Duplicate cherry-picks did not reapply changes or remove feedback. Added differences are the security release evidence and headless runbook instruction; the signed-in feedback section and operations guide remain intact. The non-doc Git tree fingerprint is `f4c0e98ae4353cb725310033ccb4ed7aa5c6c39d7f4414da42dd1604228d85a5`.
+
+Node 24 typecheck passed. Nine local Markdown link targets passed, and the merge tree matches its premerge preview. Existing combined-tree test evidence remains inherited: 1,184 passes/one expected skip before the bounded expiry-test correction, followed by its focused seven-test/typecheck/package checks. No full suite, build, browser, provider or production-write replay was warranted for identical runtime bytes.
+
+Original main `b8c2973`, combined branch `9fca157` and security branch `3655c71` are retained as ancestors/source refs. The primary checkout's three unowned pilot/research edits remain unstaged with matching byte hashes; no stash, reset, discard or branch deletion was used. A verified complete premerge Git bundle and private exact-ref/hash receipts are retained under `.context/revelio/git-reconciliation-20261104/` in the primary checkout.
+
+Remote `origin/main` was refreshed and remained `4e42971b42dfda5cce82eab7dbc8262bb696e176`, an ancestor of the local candidate. The proposed publication is a normal fast-forward **`git push origin main:main`**, with no force, PR or deployment. Push waits for coordinator review of the exact candidate; no post-push receipt commit is planned.
+
+`vercel.json` retains `git.deploymentEnabled: false`. Read-only Vercel inspection still binds the GitHub project/repository and `main` production branch correctly; the public alias remains `dpl_DwwB53jRiUk6PV6EWzzcPYoGf5aR`. Its [accepted production release](2026-11-04-auth-security-production.md) runs **auth-only source `958f59e`**, with manifest `0ef455cdc5310bcbf9aafe9af8594306dec274d9073357efb991b3f1bdcceb66` and documentation Git label `4ed36a4`. **The reconciled main contains feedback; that combined tree is not deployed.** No feedback/email/domain/configuration/schema activation or other production action occurred during this reconciliation.

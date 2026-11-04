@@ -1,0 +1,39 @@
+{
+  "date": "2026-11-04",
+  "operation": "Local history-preserving reconciliation; pending coordinator review before push",
+  "merge": "fdee130110782b65272f295aea7408b6b020fd58",
+  "mergeParents": [
+    "9fca157171d420213865449e2e40497ef9b44423",
+    "3655c7161f15a55443b51d83929374374e44806e"
+  ],
+  "originalMain": "b8c2973d70f98c3b677aaf552838a4a10eda95a1",
+  "refreshedOriginMain": "4e42971b42dfda5cce82eab7dbc8262bb696e176",
+  "conflicts": false,
+  "runtimeManifestLockScriptsMigrationsTestsIdenticalTo": "9fca157171d420213865449e2e40497ef9b44423",
+  "nonDocsTreeFingerprintSha256": "f4c0e98ae4353cb725310033ccb4ed7aa5c6c39d7f4414da42dd1604228d85a5",
+  "feedbackPreserved": true,
+  "headlessAndFeedbackGuidePreserved": true,
+  "verification": {
+    "node": "24.19.0",
+    "typecheck": "passed",
+    "localMarkdownLinks": 9,
+    "brokenLocalLinks": 0,
+    "mergeTreeMatchesPreview": true,
+    "fullSuiteRepeated": false,
+    "reason": "Identical reviewed combined runtime; only docs differ"
+  },
+  "unownedEditsPreserved": true,
+  "unownedContentIncludedInCommit": false,
+  "premergeBundleVerified": true,
+  "gitDeploymentEnabled": false,
+  "proposedPush": "git push origin main:main",
+  "forcePush": false,
+  "pushed": false,
+  "liveDeployment": "dpl_DwwB53jRiUk6PV6EWzzcPYoGf5aR",
+  "liveRuntimeSource": "958f59e752cf6438bb89aed5d106569081a3aca3",
+  "livePrebuiltManifestSha256": "0ef455cdc5310bcbf9aafe9af8594306dec274d9073357efb991b3f1bdcceb66",
+  "liveFeedbackIncluded": false,
+  "reconciledMainDeployed": false,
+  "remoteConfigSchemaOrEmailChanges": false,
+  "privateEvidenceRoot": ".context/revelio/git-reconciliation-20261104/ in primary checkout"
+}
