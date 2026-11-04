@@ -1,0 +1,154 @@
+{
+  "date": "2026-11-04",
+  "branch": "codex/auth-dependency-followup",
+  "base": "b8c2973d70f98c3b677aaf552838a4a10eda95a1",
+  "implementationSource": "b4700f63903fdf199460607cadd3729f433e25b3",
+  "commits": [
+    "2c3899e",
+    "1652692",
+    "b4700f6"
+  ],
+  "versions": {
+    "better-auth": "1.7.16",
+    "@better-auth/core": "1.7.16",
+    "express": "4.22.3",
+    "body-parser_root": "1.20.9",
+    "pg": "8.16.3",
+    "drizzle-orm": "0.39.1"
+  },
+  "audit": {
+    "before": {
+      "low": 3,
+      "moderate": 18,
+      "high": 27,
+      "critical": 7,
+      "total": 55
+    },
+    "after": {
+      "low": 1,
+      "moderate": 17,
+      "high": 27,
+      "critical": 6,
+      "total": 51
+    },
+    "unit": "affected-package records; not reachable exploits",
+    "lockEntries": 1038,
+    "publisherAdvisoriesSupplemented": 12
+  },
+  "verification": {
+    "node": "24.19.0",
+    "focusedPassed": 63,
+    "fullSuite": {
+      "filesPassed": 86,
+      "testsPassed": 1184,
+      "testsSkipped": 1,
+      "skipReason": "optional production-loader smoke",
+      "sourceCommit": "1652692456193d114a583c9cc018963972dc69d5"
+    },
+    "typecheck": "passed",
+    "originBuild": "passed",
+    "productionPackage": "passed",
+    "previewPackage": "passed",
+    "restoredProductionPackage": "passed",
+    "finalTestOnlyCorrection": {
+      "sourceCommit": "b4700f63903fdf199460607cadd3729f433e25b3",
+      "standaloneExpiryPassed": 1,
+      "focusedAuthCompressionPassed": 7,
+      "typecheck": "passed",
+      "red": "Missing-row precondition expected1 received0 before independent setup",
+      "fullSuiteRepeated": false
+    }
+  },
+  "productionArtifact": {
+    "sourceCommit": "b4700f63903fdf199460607cadd3729f433e25b3",
+    "target": "production",
+    "origin": "https://heynami.vercel.app",
+    "fileCount": 2702,
+    "manifestSha256": "38d839139d1e9bd9453c4833f149c12a61863a2538630fb604be1abc8a4d8bdf",
+    "archiveSha256": "596c47592a111f60d93a30f5daeb4ab7ff5a628bd78f7cf8069b6749a571a53a",
+    "filePathMapCounts": [
+      0
+    ],
+    "deployed": false,
+    "warning": "Includes unreleased feedback base; local packaging proof only"
+  },
+  "previewArtifact": {
+    "sourceCommit": "b4700f63903fdf199460607cadd3729f433e25b3",
+    "target": "preview",
+    "fileCount": 2702,
+    "manifestSha256": "4c02bc87be90b616da2929ca4a2a4284a2a390c583bd29a150fdd99d013f141a",
+    "deployed": false
+  },
+  "deployment": {
+    "performed": false,
+    "observedProductionId": "dpl_CHZNBNyNwZL5J65P5GtvTUbwkmNk",
+    "observedProductionSource": "4464570",
+    "releaseGates": [
+      "Unreleased feedback migration/email base requires explicit release composition",
+      "Read-only duplicate auth provider/account check on intended deployment target",
+      "Real Google login/callback and session QA",
+      "Sender/domain activation remains separate founder decision"
+    ]
+  },
+  "compatibility": {
+    "coreSchemaMigrationAdded": false,
+    "productionAuthConfigChanged": false,
+    "oldStoredSessionAndSignedCookie": "local fixture compatible; revocation immediate",
+    "oldInFlightOAuthState": "deliberately rejected; restart login",
+    "freshOAuthState": "signed-cookie-bound, consumed once; replay rejected",
+    "realProviderQA": false
+  },
+  "limitations": [
+    "51 remaining advisory package records require condition-specific follow-up",
+    "Unselected Better Auth Drizzle adapter retains pre-existing overridden peer compatibility debt",
+    "Nested unmounted MCP body-parser2.3.0 remains",
+    "No all-clear or deployed-release-readiness claim"
+  ],
+  "privateEvidenceRoot": ".context/revelio/auth-dependency-followup-20261104/implementation",
+  "review": {
+    "skillVersion": "3.35.1",
+    "reviewedSource": "1652692456193d114a583c9cc018963972dc69d5",
+    "localLenses": 8,
+    "peerModel": "claude-opus-5-5",
+    "requestedEffort": "low",
+    "actualEffort": "unverified",
+    "independenceVerified": true,
+    "confirmedFindings": 1,
+    "resolvedFindings": 1,
+    "resolutionCommit": "b4700f63903fdf199460607cadd3729f433e25b3",
+    "simplify": "no edits; proof tests preserved",
+    "privateRun": "final-review/review.json",
+    "limits": [
+      "Successful real Google callback/account-token/session writes unrun",
+      "First-use and expired-window concurrent rate admission untested",
+      "Simultaneous OAuth-state callbacks untested",
+      "External peer received only five-file public projection"
+    ]
+  },
+  "cleanup": {
+    "ownedCluster": "/Users/andresm/Documents/Cursor Projects/ikigai/.context/revelio/auth-dependency-followup-20261104/implementation/pgdata",
+    "ownedPort": 55440,
+    "ownedPid": 72065,
+    "remainingChildDatabaseCount": 0,
+    "stopped": true,
+    "listenerGone": true,
+    "ownedPgdataRemoved": true,
+    "unownedPort55439": "not touched",
+    "firstFailureAndProofLogs": "retained",
+    "browserSessionsStarted": 0,
+    "productionActions": 0
+  },
+  "originalProductionArtifact": {
+    "sourceCommit": "1652692456193d114a583c9cc018963972dc69d5",
+    "target": "production",
+    "origin": "https://heynami.vercel.app",
+    "fileCount": 2702,
+    "manifestSha256": "7368a942ec13b0d38e18694c88f95bc35a980df329614593cefcb1f881f343aa",
+    "archiveSha256": "095960c031bc908f4b63bc94ba440bc48da0e13631522c40f6517014ade8d966",
+    "filePathMapCounts": [
+      0
+    ],
+    "deployed": false,
+    "warning": "Contains the unreleased feedback base; local packaging proof only, not deployment approval"
+  }
+}

@@ -1,0 +1,457 @@
+{
+  "date": "2026-11-04",
+  "publisherRelease": "https://better-auth.com/blog/security-release-2026-11-03",
+  "sourceConfig": "server/auth.ts buildAuthOptions; no auth config changes",
+  "advisories": [
+    {
+      "id": "GHSA-2f9c-7xj7-gh55",
+      "title": "better-auth: Email OTP attempt limit can be raced and codes are loosely bound to addresses",
+      "severity": "medium",
+      "url": "https://github.com/better-auth/better-auth/security/advisories/GHSA-2f9c-7xj7-gh55",
+      "vulnerabilities": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "better-auth"
+          },
+          "vulnerable_version_range": ">= 1.3.7, < 1.7.16",
+          "patched_versions": "1.7.16",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "better-auth"
+          },
+          "vulnerable_version_range": ">= 1.8.0-beta.0, < 1.8.0-beta.5",
+          "patched_versions": "1.8.0-beta.5",
+          "vulnerable_functions": []
+        }
+      ],
+      "component": "Email OTP",
+      "namiApplicability": "Email OTP plugin is not configured.",
+      "preparedVersion": "1.7.16",
+      "newReachableTakeoverEstablished": false
+    },
+    {
+      "id": "GHSA-48c2-w96j-mv3m",
+      "title": "@better-auth/kysely-adapter: MySQL serial IDs can return another request's record",
+      "severity": "medium",
+      "url": "https://github.com/better-auth/better-auth/security/advisories/GHSA-48c2-w96j-mv3m",
+      "vulnerabilities": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "@better-auth/kysely-adapter"
+          },
+          "vulnerable_version_range": ">= 1.5.0-beta.9, < 1.7.16",
+          "patched_versions": "1.7.16",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "@better-auth/kysely-adapter"
+          },
+          "vulnerable_version_range": ">= 1.8.0-beta.0, < 1.8.0-beta.5",
+          "patched_versions": "1.8.0-beta.5",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "@better-auth/drizzle-adapter"
+          },
+          "vulnerable_version_range": ">= 1.5.0-beta.9, < 1.7.16",
+          "patched_versions": "1.7.16",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "@better-auth/drizzle-adapter"
+          },
+          "vulnerable_version_range": ">= 1.8.0-beta.0, < 1.8.0-beta.5",
+          "patched_versions": "1.8.0-beta.5",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "better-auth"
+          },
+          "vulnerable_version_range": "< 1.7.16",
+          "patched_versions": "1.7.16",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "better-auth"
+          },
+          "vulnerable_version_range": ">= 1.8.0-beta.0, < 1.8.0-beta.5",
+          "patched_versions": "1.8.0-beta.5",
+          "vulnerable_functions": []
+        }
+      ],
+      "component": "MySQL serial identities",
+      "namiApplicability": "Native PostgreSQL; no MySQL/MariaDB or serial-ID option.",
+      "preparedVersion": "1.7.16",
+      "newReachableTakeoverEstablished": false
+    },
+    {
+      "id": "GHSA-4wq4-2ppv-q3hg",
+      "title": "@better-auth/expo: Authorization proxy can sign values it did not issue",
+      "severity": "critical",
+      "url": "https://github.com/better-auth/better-auth/security/advisories/GHSA-4wq4-2ppv-q3hg",
+      "vulnerabilities": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "@better-auth/expo"
+          },
+          "vulnerable_version_range": ">= 1.4.0-beta.6, < 1.7.16",
+          "patched_versions": "1.7.16",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "@better-auth/expo"
+          },
+          "vulnerable_version_range": ">= 1.8.0-beta.0, < 1.8.0-beta.5",
+          "patched_versions": "1.8.0-beta.5",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "better-auth"
+          },
+          "vulnerable_version_range": "< 1.7.16",
+          "patched_versions": "1.7.16",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "better-auth"
+          },
+          "vulnerable_version_range": ">= 1.8.0-beta.0, < 1.8.0-beta.5",
+          "patched_versions": "1.8.0-beta.5",
+          "vulnerable_functions": []
+        }
+      ],
+      "component": "Expo authorization proxy",
+      "namiApplicability": "Expo package/plugin is absent.",
+      "preparedVersion": "1.7.16",
+      "newReachableTakeoverEstablished": false
+    },
+    {
+      "id": "GHSA-9hm7-xhfp-cx58",
+      "title": "better-auth: OAuth sign-in can treat an unverified provider email as verified",
+      "severity": "medium",
+      "url": "https://github.com/better-auth/better-auth/security/advisories/GHSA-9hm7-xhfp-cx58",
+      "vulnerabilities": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "better-auth"
+          },
+          "vulnerable_version_range": ">= 0.4.9, < 1.7.16",
+          "patched_versions": "1.7.16",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "better-auth"
+          },
+          "vulnerable_version_range": ">= 1.8.0-beta.0, < 1.8.0-beta.5",
+          "patched_versions": "1.8.0-beta.5",
+          "vulnerable_functions": []
+        }
+      ],
+      "component": "OAuth email claims",
+      "namiApplicability": "Google-only built-in provider; no genericOAuth/Zoom/custom mapping, direct ID-token sign-in disabled and linking disabled. No affected provider path established.",
+      "preparedVersion": "1.7.16",
+      "newReachableTakeoverEstablished": false
+    },
+    {
+      "id": "GHSA-9p5w-h4pr-fcrc",
+      "title": "@better-auth/electron: Desktop sign-in can return the server secret and skip two-factor",
+      "severity": "high",
+      "url": "https://github.com/better-auth/better-auth/security/advisories/GHSA-9p5w-h4pr-fcrc",
+      "vulnerabilities": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "@better-auth/electron"
+          },
+          "vulnerable_version_range": ">= 1.5.0-beta.12, < 1.7.16",
+          "patched_versions": "1.7.16",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "@better-auth/electron"
+          },
+          "vulnerable_version_range": ">= 1.8.0-beta.0, < 1.8.0-beta.5",
+          "patched_versions": "1.8.0-beta.5",
+          "vulnerable_functions": []
+        }
+      ],
+      "component": "Electron sign-in",
+      "namiApplicability": "Electron package/plugin is absent.",
+      "preparedVersion": "1.7.16",
+      "newReachableTakeoverEstablished": false
+    },
+    {
+      "id": "GHSA-c85h-5mrr-mgx4",
+      "title": "better-auth: Organization admins can invite an owner with a padded role name",
+      "severity": "medium",
+      "url": "https://github.com/better-auth/better-auth/security/advisories/GHSA-c85h-5mrr-mgx4",
+      "vulnerabilities": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "better-auth"
+          },
+          "vulnerable_version_range": ">= 1.5.5, < 1.7.16",
+          "patched_versions": "1.7.16",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "better-auth"
+          },
+          "vulnerable_version_range": ">= 1.8.0-beta.0, < 1.8.0-beta.5",
+          "patched_versions": "1.8.0-beta.5",
+          "vulnerable_functions": []
+        }
+      ],
+      "component": "Organization invites",
+      "namiApplicability": "Organization plugin is not configured.",
+      "preparedVersion": "1.7.16",
+      "newReachableTakeoverEstablished": false
+    },
+    {
+      "id": "GHSA-fvxx-76fc-893x",
+      "title": "better-auth: Revoked sessions can stay valid with secondary storage or the cookie cache",
+      "severity": "medium",
+      "url": "https://github.com/better-auth/better-auth/security/advisories/GHSA-fvxx-76fc-893x",
+      "vulnerabilities": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "better-auth"
+          },
+          "vulnerable_version_range": ">= 0.8.1-beta.5, < 1.7.16",
+          "patched_versions": "1.7.16",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "better-auth"
+          },
+          "vulnerable_version_range": ">= 1.8.0-beta.0, < 1.8.0-beta.5",
+          "patched_versions": "1.8.0-beta.5",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "@better-auth/passkey"
+          },
+          "vulnerable_version_range": ">= 1.6.25, < 1.7.16",
+          "patched_versions": "1.7.16",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "@better-auth/passkey"
+          },
+          "vulnerable_version_range": ">= 1.8.0-beta.0, < 1.8.0-beta.5",
+          "patched_versions": "1.8.0-beta.5",
+          "vulnerable_functions": []
+        }
+      ],
+      "component": "Revocation/cache",
+      "namiApplicability": "No secondaryStorage or session.cookieCache; related passkey/device/two-factor plugins are absent.",
+      "preparedVersion": "1.7.16",
+      "newReachableTakeoverEstablished": false
+    },
+    {
+      "id": "GHSA-g95c-wqvr-8c3j",
+      "title": "better-auth: Admin roles with user:update can change another user's phone number",
+      "severity": "medium",
+      "url": "https://github.com/better-auth/better-auth/security/advisories/GHSA-g95c-wqvr-8c3j",
+      "vulnerabilities": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "better-auth"
+          },
+          "vulnerable_version_range": "< 1.7.16",
+          "patched_versions": "1.7.16",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "better-auth"
+          },
+          "vulnerable_version_range": ">= 1.8.0-beta.0, < 1.8.0-beta.5",
+          "patched_versions": "1.8.0-beta.5",
+          "vulnerable_functions": []
+        }
+      ],
+      "component": "Admin phone update",
+      "namiApplicability": "Admin and phone-number plugins are not configured.",
+      "preparedVersion": "1.7.16",
+      "newReachableTakeoverEstablished": false
+    },
+    {
+      "id": "GHSA-gv75-j3v8-3crm",
+      "title": "@better-auth/passkey: Passkey verification does not enforce origin or user verification",
+      "severity": "low",
+      "url": "https://github.com/better-auth/better-auth/security/advisories/GHSA-gv75-j3v8-3crm",
+      "vulnerabilities": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "@better-auth/passkey"
+          },
+          "vulnerable_version_range": ">= 1.4.0-beta.16, < 1.7.16",
+          "patched_versions": "1.7.16",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "@better-auth/passkey"
+          },
+          "vulnerable_version_range": ">= 1.8.0-beta.0, < 1.8.0-beta.5",
+          "patched_versions": "1.8.0-beta.5",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "better-auth"
+          },
+          "vulnerable_version_range": ">= 1.2.0-beta.18, < 1.4.0",
+          "patched_versions": "1.4.0",
+          "vulnerable_functions": []
+        }
+      ],
+      "component": "Passkey verification",
+      "namiApplicability": "Passkey package/plugin absent; bundled older affected better-auth range also excludes1.6.29.",
+      "preparedVersion": "1.7.16",
+      "newReachableTakeoverEstablished": false
+    },
+    {
+      "id": "GHSA-hwq2-v29r-p69r",
+      "title": "better-auth: Email-change links stay valid after the address changes hands",
+      "severity": "medium",
+      "url": "https://github.com/better-auth/better-auth/security/advisories/GHSA-hwq2-v29r-p69r",
+      "vulnerabilities": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "better-auth"
+          },
+          "vulnerable_version_range": ">= 1.4.0, < 1.7.16",
+          "patched_versions": "1.7.16",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "better-auth"
+          },
+          "vulnerable_version_range": ">= 1.8.0-beta.0, < 1.8.0-beta.5",
+          "patched_versions": "1.8.0-beta.5",
+          "vulnerable_functions": []
+        }
+      ],
+      "component": "Email-change links",
+      "namiApplicability": "No user.changeEmail enablement or sendVerificationEmail callback.",
+      "preparedVersion": "1.7.16",
+      "newReachableTakeoverEstablished": false
+    },
+    {
+      "id": "GHSA-q747-mqgr-4gh7",
+      "title": "better-auth: Phone numbers can be claimed before they are verified",
+      "severity": "high",
+      "url": "https://github.com/better-auth/better-auth/security/advisories/GHSA-q747-mqgr-4gh7",
+      "vulnerabilities": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "better-auth"
+          },
+          "vulnerable_version_range": ">= 0.4.12-beta.7, < 1.7.16",
+          "patched_versions": "1.7.16",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "better-auth"
+          },
+          "vulnerable_version_range": ">= 1.8.0-beta.0, < 1.8.0-beta.5",
+          "patched_versions": "1.8.0-beta.5",
+          "vulnerable_functions": []
+        }
+      ],
+      "component": "Phone ownership",
+      "namiApplicability": "Phone-number plugin is not configured.",
+      "preparedVersion": "1.7.16",
+      "newReachableTakeoverEstablished": false
+    },
+    {
+      "id": "GHSA-x8j7-xh58-rv6x",
+      "title": "@better-auth/stripe: Billing actions can target another customer's Stripe account",
+      "severity": "medium",
+      "url": "https://github.com/better-auth/better-auth/security/advisories/GHSA-x8j7-xh58-rv6x",
+      "vulnerabilities": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "@better-auth/stripe"
+          },
+          "vulnerable_version_range": ">= 1.2.0-beta.18, < 1.7.16",
+          "patched_versions": "1.7.16",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "@better-auth/stripe"
+          },
+          "vulnerable_version_range": ">= 1.8.0-beta.0, < 1.8.0-beta.5",
+          "patched_versions": "1.8.0-beta.5",
+          "vulnerable_functions": []
+        }
+      ],
+      "component": "Stripe customer targeting",
+      "namiApplicability": "Stripe package/plugin is absent.",
+      "preparedVersion": "1.7.16",
+      "newReachableTakeoverEstablished": false
+    }
+  ],
+  "previousKnownApplicable": {
+    "id": "GHSA-44jh-23m7-hpcf",
+    "source": "https://github.com/advisories/GHSA-44jh-23m7-hpcf",
+    "severity": "low",
+    "before": "Native PostgreSQL Kysely1.6.29/database rate-limit; confirmed with actual contention fixture",
+    "after": "Aligned1.7.16, exactly4of12 remaining requests admitted in max5 window",
+    "schemaChange": false
+  },
+  "wafMitigationVerified": false
+}

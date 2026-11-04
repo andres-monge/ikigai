@@ -1,0 +1,2422 @@
+{
+  "date": "2026-11-04",
+  "source": "Explicit https://registry.npmjs.org audit, isolated generic-root manifest, empty user/global config, scrubbed env, all resolved sources guarded public",
+  "before": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 3,
+      "moderate": 18,
+      "high": 27,
+      "critical": 7,
+      "total": 55
+    },
+    "dependencies": {
+      "prod": 671,
+      "dev": 185,
+      "optional": 178,
+      "peer": 40,
+      "peerOptional": 0,
+      "total": 1038
+    }
+  },
+  "after": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 1,
+      "moderate": 17,
+      "high": 27,
+      "critical": 6,
+      "total": 51
+    },
+    "dependencies": {
+      "prod": 672,
+      "dev": 185,
+      "optional": 178,
+      "peer": 39,
+      "peerOptional": 0,
+      "total": 1038
+    }
+  },
+  "scope": "Complete lock graph registry snapshot plus twelve publisher advisories; feed coverage is not universal vulnerability completeness",
+  "registryLag": "Before feed did not enumerate the twelve Nov3 advisories; separately fetched official publisher advisories supplement it",
+  "packages": [
+    {
+      "package": "@babel/core",
+      "beforeSeverity": "low",
+      "afterSeverity": "low",
+      "directDependency": false,
+      "beforeNodes": [
+        {
+          "path": "node_modules/@babel/core",
+          "version": "7.26.0",
+          "lockDev": true
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/@babel/core",
+          "version": "7.26.0",
+          "lockDev": true
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "build-test",
+      "reachability": "Build/test capability; no production dev/UI server is registered. Lock prod/dev labels alone do not establish runtime reachability. Tooling exposure still needs a separately scoped update.",
+      "advisories": [
+        {
+          "title": "@babel/core: Arbitrary File Read via sourceMappingURL Comment",
+          "url": "https://github.com/advisories/GHSA-4x5r-pxfx-6jf8",
+          "severity": "low",
+          "range": "<=7.29.0"
+        }
+      ]
+    },
+    {
+      "package": "@babel/helpers",
+      "beforeSeverity": "moderate",
+      "afterSeverity": "moderate",
+      "directDependency": false,
+      "beforeNodes": [
+        {
+          "path": "node_modules/@babel/helpers",
+          "version": "7.26.0",
+          "lockDev": true
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/@babel/helpers",
+          "version": "7.26.0",
+          "lockDev": true
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "build-test",
+      "reachability": "Build/test capability; no production dev/UI server is registered. Lock prod/dev labels alone do not establish runtime reachability. Tooling exposure still needs a separately scoped update.",
+      "advisories": [
+        {
+          "title": "Babel has inefficient RegExp complexity in generated code with .replace when transpiling named capturing groups",
+          "url": "https://github.com/advisories/GHSA-968p-4wvh-cqc8",
+          "severity": "moderate",
+          "range": "<7.26.10"
+        }
+      ]
+    },
+    {
+      "package": "@better-auth/drizzle-adapter",
+      "beforeSeverity": "low",
+      "afterSeverity": "high",
+      "directDependency": false,
+      "beforeNodes": [
+        {
+          "path": "node_modules/@better-auth/drizzle-adapter",
+          "version": "1.6.29",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/@better-auth/drizzle-adapter",
+          "version": "1.7.16",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "active-auth",
+      "reachability": "Native pg auth is used. The rate-limit counter is fixed locally. Drizzle adapter is unselected; its pre-existing overridden ORM peer remains compatibility debt, not supported for auth use.",
+      "advisories": [
+        {
+          "inheritedFrom": "drizzle-orm"
+        }
+      ]
+    },
+    {
+      "package": "@better-auth/kysely-adapter",
+      "beforeSeverity": "low",
+      "afterSeverity": null,
+      "directDependency": false,
+      "beforeNodes": [
+        {
+          "path": "node_modules/@better-auth/kysely-adapter",
+          "version": "1.6.29",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [],
+      "registryRecordAfter": "absent; not a universal security claim",
+      "practicalGroup": "active-auth",
+      "reachability": "Native pg auth is used. The rate-limit counter is fixed locally. Drizzle adapter is unselected; its pre-existing overridden ORM peer remains compatibility debt, not supported for auth use.",
+      "advisories": [
+        {
+          "title": "@better-auth/drizzle-adapter: Concurrent requests can exceed rate limits on PostgreSQL",
+          "url": "https://github.com/advisories/GHSA-44jh-23m7-hpcf",
+          "severity": "low",
+          "range": ">=1.6.17 <1.7.0"
+        }
+      ]
+    },
+    {
+      "package": "@esbuild-kit/core-utils",
+      "beforeSeverity": "moderate",
+      "afterSeverity": "moderate",
+      "directDependency": false,
+      "beforeNodes": [
+        {
+          "path": "node_modules/@esbuild-kit/core-utils",
+          "version": "3.3.2",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/@esbuild-kit/core-utils",
+          "version": "3.3.2",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "build-test",
+      "reachability": "Build/test capability; no production dev/UI server is registered. Lock prod/dev labels alone do not establish runtime reachability. Tooling exposure still needs a separately scoped update.",
+      "advisories": [
+        {
+          "inheritedFrom": "esbuild"
+        }
+      ]
+    },
+    {
+      "package": "@esbuild-kit/esm-loader",
+      "beforeSeverity": "moderate",
+      "afterSeverity": "moderate",
+      "directDependency": false,
+      "beforeNodes": [
+        {
+          "path": "node_modules/@esbuild-kit/esm-loader",
+          "version": "2.6.5",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/@esbuild-kit/esm-loader",
+          "version": "2.6.5",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "build-test",
+      "reachability": "Build/test capability; no production dev/UI server is registered. Lock prod/dev labels alone do not establish runtime reachability. Tooling exposure still needs a separately scoped update.",
+      "advisories": [
+        {
+          "inheritedFrom": "@esbuild-kit/core-utils"
+        }
+      ]
+    },
+    {
+      "package": "@google/genai",
+      "beforeSeverity": "high",
+      "afterSeverity": "high",
+      "directDependency": true,
+      "beforeNodes": [
+        {
+          "path": "node_modules/@google/genai",
+          "version": "1.0.0",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/@google/genai",
+          "version": "1.0.0",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "unused-google-sdk",
+      "reachability": "No @google/genai or Node form-data import exists in server/client/api/shared. Retained direct SDK/transitive graph; no active affected client/multipart path identified.",
+      "advisories": [
+        {
+          "inheritedFrom": "zod"
+        }
+      ]
+    },
+    {
+      "package": "@hono/node-server",
+      "beforeSeverity": "moderate",
+      "afterSeverity": "moderate",
+      "directDependency": false,
+      "beforeNodes": [
+        {
+          "path": "node_modules/@hono/node-server",
+          "version": "2.1.1",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/@hono/node-server",
+          "version": "2.1.1",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "not-mounted-mcp",
+      "reachability": "Installed AI/MCP peer graph; no MCP server/client registration found in application source. A vulnerable nested server package is not the active Express API.",
+      "advisories": [
+        {
+          "title": "@hono/node-server: `serveStatic` decodes the request path a second time, leading to bypass of middleware on static paths",
+          "url": "https://github.com/advisories/GHSA-rmxm-3fg6-px4f",
+          "severity": "moderate",
+          "range": ">=1.19.10 <2.1.3"
+        }
+      ]
+    },
+    {
+      "package": "@modelcontextprotocol/sdk",
+      "beforeSeverity": "high",
+      "afterSeverity": "high",
+      "directDependency": false,
+      "beforeNodes": [
+        {
+          "path": "node_modules/@modelcontextprotocol/sdk",
+          "version": "1.30.0",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/@modelcontextprotocol/sdk",
+          "version": "1.30.0",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "not-mounted-mcp",
+      "reachability": "Installed AI/MCP peer graph; no MCP server/client registration found in application source. A vulnerable nested server package is not the active Express API.",
+      "advisories": [
+        {
+          "title": "MCP TypeScript SDK: OAuth client could send credentials to an authorization server chosen by the MCP server",
+          "url": "https://github.com/advisories/GHSA-6qxp-vccf-f47h",
+          "severity": "high",
+          "range": ">=1.12.0 <1.31.0"
+        },
+        {
+          "title": "MCP TypeScript SDK: Experimental tasks were not tied to the session that created them",
+          "url": "https://github.com/advisories/GHSA-22jm-h49p-29qw",
+          "severity": "high",
+          "range": ">=1.24.0 <1.32.0"
+        },
+        {
+          "title": "MCP TypeScript SDK: One HTTP request within the default size limit could exhaust server memory during validation",
+          "url": "https://github.com/advisories/GHSA-46jr-4wx8-v453",
+          "severity": "high",
+          "range": ">=1.3.0 <1.32.0"
+        },
+        {
+          "title": "MCP TypeScript SDK: Server bearer authentication accepted tokens issued for another service",
+          "url": "https://github.com/advisories/GHSA-rvq5-wwqv-78pq",
+          "severity": "moderate",
+          "range": ">=1.6.0 <1.32.0"
+        },
+        {
+          "title": "MCP TypeScript SDK: HTTP server transports and handlers did not limit request body size or JSON-RPC batch length",
+          "url": "https://github.com/advisories/GHSA-f897-62hf-6gxq",
+          "severity": "high",
+          "range": ">=1.10.0 <1.30.1"
+        },
+        {
+          "title": "MCP TypeScript client SDK: HTTP client transports and OAuth requests followed cross-origin redirects and re-sent custom headers and request bodies",
+          "url": "https://github.com/advisories/GHSA-6prh-2h8m-c8cw",
+          "severity": "moderate",
+          "range": "<1.32.0"
+        }
+      ]
+    },
+    {
+      "package": "@playwright/test",
+      "beforeSeverity": "high",
+      "afterSeverity": "high",
+      "directDependency": true,
+      "beforeNodes": [
+        {
+          "path": "node_modules/@playwright/test",
+          "version": "1.54.2",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/@playwright/test",
+          "version": "1.54.2",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "build-test",
+      "reachability": "Build/test capability; no production dev/UI server is registered. Lock prod/dev labels alone do not establish runtime reachability. Tooling exposure still needs a separately scoped update.",
+      "advisories": [
+        {
+          "inheritedFrom": "playwright"
+        }
+      ]
+    },
+    {
+      "package": "@tailwindcss/typography",
+      "beforeSeverity": "moderate",
+      "afterSeverity": "moderate",
+      "directDependency": true,
+      "beforeNodes": [
+        {
+          "path": "node_modules/@tailwindcss/typography",
+          "version": "0.5.15",
+          "lockDev": true
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/@tailwindcss/typography",
+          "version": "0.5.15",
+          "lockDev": true
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "build-test",
+      "reachability": "Build/test capability; no production dev/UI server is registered. Lock prod/dev labels alone do not establish runtime reachability. Tooling exposure still needs a separately scoped update.",
+      "advisories": [
+        {
+          "inheritedFrom": "postcss-selector-parser"
+        }
+      ]
+    },
+    {
+      "package": "@vitest/mocker",
+      "beforeSeverity": "moderate",
+      "afterSeverity": "moderate",
+      "directDependency": false,
+      "beforeNodes": [
+        {
+          "path": "node_modules/@vitest/mocker",
+          "version": "3.2.3",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/@vitest/mocker",
+          "version": "3.2.3",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "build-test",
+      "reachability": "Build/test capability; no production dev/UI server is registered. Lock prod/dev labels alone do not establish runtime reachability. Tooling exposure still needs a separately scoped update.",
+      "advisories": [
+        {
+          "title": "Vitest: Path Traversal / Arbitrary File Read via @vitest/mocker Redirect Mock",
+          "url": "https://github.com/advisories/GHSA-82fw-gwwq-j7x9",
+          "severity": "moderate",
+          "range": ">=2.1.0 <4.1.11"
+        },
+        {
+          "title": "Vitest: Code injection via unauthenticated manual mock registration",
+          "url": "https://github.com/advisories/GHSA-qxg6-89mg-rqv8",
+          "severity": "moderate",
+          "range": ">=2.1.0-beta.7 <4.1.12"
+        }
+      ]
+    },
+    {
+      "package": "@vitest/ui",
+      "beforeSeverity": "critical",
+      "afterSeverity": "critical",
+      "directDependency": true,
+      "beforeNodes": [
+        {
+          "path": "node_modules/@vitest/ui",
+          "version": "3.2.3",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/@vitest/ui",
+          "version": "3.2.3",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "build-test",
+      "reachability": "Critical test-worker/UI capabilities, despite manifest prod placement. No Vitest UI/manual-mock registration/worker-options endpoint is mounted in deployed app. Local test tooling still warrants separate update.",
+      "advisories": [
+        {
+          "inheritedFrom": "vitest"
+        }
+      ]
+    },
+    {
+      "package": "better-auth",
+      "beforeSeverity": "critical",
+      "afterSeverity": "high",
+      "directDependency": true,
+      "beforeNodes": [
+        {
+          "path": "node_modules/better-auth",
+          "version": "1.6.29",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/better-auth",
+          "version": "1.7.16",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "active-auth",
+      "reachability": "Native pg auth is used. The rate-limit counter is fixed locally. Drizzle adapter is unselected; its pre-existing overridden ORM peer remains compatibility debt, not supported for auth use.",
+      "advisories": [
+        {
+          "inheritedFrom": "@better-auth/drizzle-adapter"
+        },
+        {
+          "inheritedFrom": "drizzle-kit"
+        },
+        {
+          "inheritedFrom": "drizzle-orm"
+        }
+      ]
+    },
+    {
+      "package": "body-parser",
+      "beforeSeverity": "high",
+      "afterSeverity": "high",
+      "directDependency": false,
+      "beforeNodes": [
+        {
+          "path": "node_modules/@modelcontextprotocol/sdk/node_modules/body-parser",
+          "version": "2.3.0",
+          "lockDev": false
+        },
+        {
+          "path": "node_modules/body-parser",
+          "version": "1.20.3",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/@modelcontextprotocol/sdk/node_modules/body-parser",
+          "version": "2.3.0",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "active-http",
+      "reachability": "Root1.20.3\u21921.20.9 verified red/green in actual app child. Remaining2.3.0 is under unmounted MCP SDK; not a claim that every parser package was patched.",
+      "advisories": [
+        {
+          "title": "body-parser vulnerable to Denial of Service via trailing bytes after a compressed request body",
+          "url": "https://github.com/advisories/GHSA-27r3-jxmh-p828",
+          "severity": "high",
+          "range": ">=2.0.0 <2.4.0"
+        }
+      ]
+    },
+    {
+      "package": "brace-expansion",
+      "beforeSeverity": "high",
+      "afterSeverity": "high",
+      "directDependency": false,
+      "beforeNodes": [
+        {
+          "path": "node_modules/brace-expansion",
+          "version": "2.0.1",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/brace-expansion",
+          "version": "2.0.1",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "build-test",
+      "reachability": "Build/test capability; no production dev/UI server is registered. Lock prod/dev labels alone do not establish runtime reachability. Tooling exposure still needs a separately scoped update.",
+      "advisories": [
+        {
+          "title": "brace-expansion Regular Expression Denial of Service vulnerability",
+          "url": "https://github.com/advisories/GHSA-v6h2-p8h4-qcjw",
+          "severity": "low",
+          "range": ">=2.0.0 <=2.0.1"
+        },
+        {
+          "title": "brace-expansion: Zero-step sequence causes process hang and memory exhaustion",
+          "url": "https://github.com/advisories/GHSA-f886-m6hf-6m8v",
+          "severity": "moderate",
+          "range": ">=2.0.0 <2.0.3"
+        },
+        {
+          "title": "brace-expansion: DoS via exponential-time expansion of consecutive non-expanding {} groups",
+          "url": "https://github.com/advisories/GHSA-3jxr-9vmj-r5cp",
+          "severity": "high",
+          "range": ">=2.0.0 <2.1.2"
+        },
+        {
+          "title": "brace-expansion: DoS via unbounded expansion length causing an out-of-memory process crash",
+          "url": "https://github.com/advisories/GHSA-mh99-v99m-4gvg",
+          "severity": "high",
+          "range": ">=2.0.0 <2.1.3"
+        },
+        {
+          "title": "brace-expansion: DoS via unbounded intermediate arrays, bypassing the CVE-2026-14257 mitigation",
+          "url": "https://github.com/advisories/GHSA-rgw5-rvv9-x895",
+          "severity": "high",
+          "range": ">=2.0.0 <2.1.4"
+        },
+        {
+          "title": "brace-expansion: Quadratic-time expansion of the `{a},b}` rewrite causes CPU denial of service",
+          "url": "https://github.com/advisories/GHSA-q2hr-2g5m-vwhr",
+          "severity": "moderate",
+          "range": ">=2.0.0 <2.1.7"
+        },
+        {
+          "title": "brace-expansion: DoS via uncontrolled recursion on nested brace groups causing stack exhaustion",
+          "url": "https://github.com/advisories/GHSA-qhr7-859c-m2p7",
+          "severity": "high",
+          "range": ">=2.0.0 <2.1.6"
+        },
+        {
+          "title": "brace-expansion: DoS via uncontrolled recursion in parseCommaParts causing stack exhaustion",
+          "url": "https://github.com/advisories/GHSA-6j4f-fj2g-mc7p",
+          "severity": "high",
+          "range": ">=2.0.0 <2.1.5"
+        }
+      ]
+    },
+    {
+      "package": "browserslist",
+      "beforeSeverity": "high",
+      "afterSeverity": "high",
+      "directDependency": false,
+      "beforeNodes": [
+        {
+          "path": "node_modules/browserslist",
+          "version": "4.24.2",
+          "lockDev": true
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/browserslist",
+          "version": "4.24.2",
+          "lockDev": true
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "build-test",
+      "reachability": "Build/test capability; no production dev/UI server is registered. Lock prod/dev labels alone do not establish runtime reachability. Tooling exposure still needs a separately scoped update.",
+      "advisories": [
+        {
+          "title": "Browserslist: Unbounded memory growth (no cache eviction) via distinct query results, leading to eventual OOM",
+          "url": "https://github.com/advisories/GHSA-c83g-rgw3-j3cx",
+          "severity": "high",
+          "range": "<=4.28.6"
+        },
+        {
+          "title": "Browserslist: Uncaught crash / prototype write via untrusted browserslist-stats.json custom stats (normalizeStats)",
+          "url": "https://github.com/advisories/GHSA-73wf-gq98-2v4g",
+          "severity": "high",
+          "range": "<=4.28.6"
+        }
+      ]
+    },
+    {
+      "package": "dompurify",
+      "beforeSeverity": "high",
+      "afterSeverity": "high",
+      "directDependency": false,
+      "beforeNodes": [
+        {
+          "path": "node_modules/dompurify",
+          "version": "3.2.6",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/dompurify",
+          "version": "3.2.6",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "retained-pdf",
+      "reachability": "Retained PDF graph; jsPDF has no source import and legacy PDF pages are unmounted. No reachable vulnerable PDF API identified in this review.",
+      "advisories": [
+        {
+          "title": "DOMPurify contains a Cross-site Scripting vulnerability",
+          "url": "https://github.com/advisories/GHSA-v8jm-5vwx-cfxm",
+          "severity": "moderate",
+          "range": ">=3.1.3 <3.2.7"
+        },
+        {
+          "title": "DOMPurify contains a Cross-site Scripting vulnerability",
+          "url": "https://github.com/advisories/GHSA-v2wj-7wpq-c8vv",
+          "severity": "moderate",
+          "range": ">=3.1.3 <=3.3.1"
+        },
+        {
+          "title": "DOMPurify: FORBID_TAGS bypassed by function-based ADD_TAGS predicate (asymmetry with FORBID_ATTR fix)",
+          "url": "https://github.com/advisories/GHSA-h7mw-gpvr-xq4m",
+          "severity": "moderate",
+          "range": "<3.4.0"
+        },
+        {
+          "title": "DOMPurify has a SAFE_FOR_TEMPLATES bypass in RETURN_DOM mode",
+          "url": "https://github.com/advisories/GHSA-crv5-9vww-q3g8",
+          "severity": "moderate",
+          "range": ">=1.0.10 <3.4.0"
+        },
+        {
+          "title": "DOMPurify: Prototype Pollution to XSS Bypass via CUSTOM_ELEMENT_HANDLING Fallback",
+          "url": "https://github.com/advisories/GHSA-v9jr-rg53-9pgp",
+          "severity": "moderate",
+          "range": ">=3.0.1 <3.4.0"
+        },
+        {
+          "title": "DOMPurify: Cross-realm IN_PLACE sanitization leaves executable markup intact via realm-bound `instanceof` checks",
+          "url": "https://github.com/advisories/GHSA-hpcv-96wg-7vj8",
+          "severity": "moderate",
+          "range": "<=3.4.5"
+        },
+        {
+          "title": "DOMPurify: IN_PLACE mode preserves attributes of a clobbered root element, allowing XSS via attacker-controlled root DOM",
+          "url": "https://github.com/advisories/GHSA-r47g-fvhr-h676",
+          "severity": "moderate",
+          "range": "<=3.4.5"
+        },
+        {
+          "title": "DOMPurify IN_PLACE Sanitization Bypass via Attached Shadow Root Inside <template>.content",
+          "url": "https://github.com/advisories/GHSA-rp9w-3fw7-7cwq",
+          "severity": "moderate",
+          "range": "<=3.4.6"
+        },
+        {
+          "title": "DOMPurify: Permanent `ALLOWED_ATTR` pollution via `setConfig()` bypassing the hook clone-guard (incomplete fix of the 3.4.7 hook-pollution patch)",
+          "url": "https://github.com/advisories/GHSA-cmwh-pvxp-8882",
+          "severity": "moderate",
+          "range": "<=3.4.10"
+        },
+        {
+          "title": "DOMPurify: Trusted Types policy survives `clearConfig()` and can poison later `RETURN_TRUSTED_TYPE` output",
+          "url": "https://github.com/advisories/GHSA-vxr8-fq34-vvx9",
+          "severity": "low",
+          "range": "<3.4.9"
+        },
+        {
+          "title": "DOMPurify: SAFE_FOR_TEMPLATES bypass - template expressions survive sanitization inside <template> content when using DOM output modes",
+          "url": "https://github.com/advisories/GHSA-gvmj-g25r-r7wr",
+          "severity": "low",
+          "range": ">=3.0.0 <=3.4.7"
+        },
+        {
+          "title": "DOMPurify: `IN_PLACE` mode trusts attacker-controlled `nodeName` on live non-form nodes, allowing script retention and XSS via attacker-supplied DOM objects",
+          "url": "https://github.com/advisories/GHSA-x4vx-rjvf-j5p4",
+          "severity": "low",
+          "range": "<=3.4.6"
+        },
+        {
+          "title": "DOMPurify: Hook mutation of `data.allowedTags` / `data.allowedAttributes` permanently pollutes `DEFAULT_ALLOWED_TAGS` / `DEFAULT_ALLOWED_ATTR`",
+          "url": "https://github.com/advisories/GHSA-76mc-f452-cxcm",
+          "severity": "moderate",
+          "range": "<3.4.7"
+        },
+        {
+          "title": "DOMPurify's ADD_TAGS function form bypasses FORBID_TAGS due to short-circuit evaluation",
+          "url": "https://github.com/advisories/GHSA-39q2-94rc-95cp",
+          "severity": "moderate",
+          "range": "<=3.3.3"
+        },
+        {
+          "title": "DOMPurify ADD_ATTR predicate skips URI validation",
+          "url": "https://github.com/advisories/GHSA-cjmm-f4jc-qw8r",
+          "severity": "moderate",
+          "range": "<=3.3.1"
+        },
+        {
+          "title": "DOMPurify USE_PROFILES prototype pollution allows event handlers",
+          "url": "https://github.com/advisories/GHSA-cj63-jhhr-wcxv",
+          "severity": "moderate",
+          "range": "<=3.3.1"
+        },
+        {
+          "title": "DOMPurify is vulnerable to mutation-XSS via Re-Contextualization ",
+          "url": "https://github.com/advisories/GHSA-h8r8-wccr-v5f2",
+          "severity": "moderate",
+          "range": "<3.3.2"
+        },
+        {
+          "title": "DOMPurify: IN_PLACE hook removal leaves a detached subtree executable, causing XSS",
+          "url": "https://github.com/advisories/GHSA-55q2-fjhq-7xh7",
+          "severity": "moderate",
+          "range": "<=3.4.12"
+        },
+        {
+          "title": "DOMPurify: `CUSTOM_ELEMENT_HANDLING` bypasses `afterSanitizeElements` for allowed custom elements.",
+          "url": "https://github.com/advisories/GHSA-c2j3-45gr-mqc4",
+          "severity": "low",
+          "range": "<=3.4.11"
+        },
+        {
+          "title": "DOMPurify: IN_PLACE returns a force-removed rawtext root whose text carries attacker markup \u2014 pure HTML reparse executes",
+          "url": "https://github.com/advisories/GHSA-6688-9rhm-gjv2",
+          "severity": "low",
+          "range": "<=3.4.15"
+        },
+        {
+          "title": "DOMPurify IN_PLACE: hook that removes a parent or sibling leaves the detached subtree's event handlers armed (incomplete fix for GHSA-p98j-92pf-mc4p)",
+          "url": "https://github.com/advisories/GHSA-mrv2-3pqr-j5jr",
+          "severity": "high",
+          "range": "<=3.4.16"
+        },
+        {
+          "title": "DOMPurify: SMIL attributeName=href guard is skipped when PARSER_MEDIA_TYPE is application/xhtml+xml",
+          "url": "https://github.com/advisories/GHSA-c6gr-qvv4-5v3f",
+          "severity": "low",
+          "range": "<=3.4.16"
+        }
+      ]
+    },
+    {
+      "package": "drizzle-kit",
+      "beforeSeverity": "moderate",
+      "afterSeverity": "moderate",
+      "directDependency": true,
+      "beforeNodes": [
+        {
+          "path": "node_modules/drizzle-kit",
+          "version": "0.30.4",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/drizzle-kit",
+          "version": "0.30.4",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "build-test",
+      "reachability": "Build/test capability; no production dev/UI server is registered. Lock prod/dev labels alone do not establish runtime reachability. Tooling exposure still needs a separately scoped update.",
+      "advisories": [
+        {
+          "inheritedFrom": "@esbuild-kit/esm-loader"
+        },
+        {
+          "inheritedFrom": "esbuild"
+        }
+      ]
+    },
+    {
+      "package": "drizzle-orm",
+      "beforeSeverity": "high",
+      "afterSeverity": "high",
+      "directDependency": true,
+      "beforeNodes": [
+        {
+          "path": "node_modules/drizzle-orm",
+          "version": "0.39.1",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/drizzle-orm",
+          "version": "0.39.1",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "active-orm",
+      "reachability": "Application ORM is active with schema-defined identifiers. No public attacker-controlled SQL identifier construction identified; this does not close the advisory or justify a broad ORM upgrade here.",
+      "advisories": [
+        {
+          "title": "Drizzle ORM has SQL injection via improperly escaped SQL identifiers",
+          "url": "https://github.com/advisories/GHSA-gpj5-g38j-94v9",
+          "severity": "high",
+          "range": "<0.45.2"
+        }
+      ]
+    },
+    {
+      "package": "esbuild",
+      "beforeSeverity": "moderate",
+      "afterSeverity": "moderate",
+      "directDependency": false,
+      "beforeNodes": [
+        {
+          "path": "node_modules/@esbuild-kit/core-utils/node_modules/esbuild",
+          "version": "0.18.20",
+          "lockDev": false
+        },
+        {
+          "path": "node_modules/drizzle-kit/node_modules/esbuild",
+          "version": "0.19.12",
+          "lockDev": false
+        },
+        {
+          "path": "node_modules/tsx/node_modules/esbuild",
+          "version": "0.23.1",
+          "lockDev": true
+        },
+        {
+          "path": "node_modules/vite/node_modules/esbuild",
+          "version": "0.21.5",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/@esbuild-kit/core-utils/node_modules/esbuild",
+          "version": "0.18.20",
+          "lockDev": false
+        },
+        {
+          "path": "node_modules/drizzle-kit/node_modules/esbuild",
+          "version": "0.19.12",
+          "lockDev": false
+        },
+        {
+          "path": "node_modules/tsx/node_modules/esbuild",
+          "version": "0.23.1",
+          "lockDev": true
+        },
+        {
+          "path": "node_modules/vite/node_modules/esbuild",
+          "version": "0.21.5",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "build-test",
+      "reachability": "Build/test capability; no production dev/UI server is registered. Lock prod/dev labels alone do not establish runtime reachability. Tooling exposure still needs a separately scoped update.",
+      "advisories": [
+        {
+          "title": "esbuild enables any website to send any requests to the development server and read the response",
+          "url": "https://github.com/advisories/GHSA-67mh-4wv8-2f99",
+          "severity": "moderate",
+          "range": "<=0.24.2"
+        }
+      ]
+    },
+    {
+      "package": "express",
+      "beforeSeverity": "high",
+      "afterSeverity": null,
+      "directDependency": true,
+      "beforeNodes": [
+        {
+          "path": "node_modules/express",
+          "version": "4.21.2",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [],
+      "registryRecordAfter": "absent; not a universal security claim",
+      "practicalGroup": "active-http",
+      "reachability": "Root Express/parser paths are active. Inspect exact remaining nodes and conditions; root parser crash is fixed locally, nested MCP parser is not mounted.",
+      "advisories": [
+        {
+          "inheritedFrom": "body-parser"
+        },
+        {
+          "inheritedFrom": "path-to-regexp"
+        },
+        {
+          "inheritedFrom": "qs"
+        }
+      ]
+    },
+    {
+      "package": "fast-uri",
+      "beforeSeverity": "high",
+      "afterSeverity": "high",
+      "directDependency": false,
+      "beforeNodes": [
+        {
+          "path": "node_modules/fast-uri",
+          "version": "3.1.6",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/fast-uri",
+          "version": "3.1.6",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "not-mounted-mcp",
+      "reachability": "Installed AI/MCP peer graph; no MCP server/client registration found in application source. A vulnerable nested server package is not the active Express API.",
+      "advisories": [
+        {
+          "title": "fast-uri vulnerable to authority injection via an unvalidated port in serialize",
+          "url": "https://github.com/advisories/GHSA-qw65-cvwx-89v3",
+          "severity": "high",
+          "range": ">=3.0.0 <3.1.7"
+        },
+        {
+          "title": "fast-uri vulnerable to host confusion via an unclosed bracket in the URI authority",
+          "url": "https://github.com/advisories/GHSA-58mr-gqgx-xq4g",
+          "severity": "high",
+          "range": "=3.1.6"
+        },
+        {
+          "title": "fast-uri vulnerable to inconsistent host case normalization via percent-encoded octets",
+          "url": "https://github.com/advisories/GHSA-hrr3-gc8f-f4qj",
+          "severity": "moderate",
+          "range": ">=3.0.0 <3.1.8"
+        },
+        {
+          "title": "fast-uri vulnerable to URI scheme spoofing via percent-encoded scheme decoding",
+          "url": "https://github.com/advisories/GHSA-w74x-v6f9-j3xg",
+          "severity": "moderate",
+          "range": ">=3.0.0 <3.1.9"
+        },
+        {
+          "title": "fast-uri vulnerable to improper path equivalence in relative reference normalization",
+          "url": "https://github.com/advisories/GHSA-xhq7-xmqj-769h",
+          "severity": "low",
+          "range": ">=3.0.0 <3.1.9"
+        },
+        {
+          "title": "fast-uri vulnerable to host confusion via unchecked WHATWG host canonicalization",
+          "url": "https://github.com/advisories/GHSA-wjr9-j795-jxcr",
+          "severity": "moderate",
+          "range": ">=3.1.3 <3.1.9"
+        },
+        {
+          "title": "fast-uri vulnerable to scheme injection via an unescaped first-segment colon in suffix references",
+          "url": "https://github.com/advisories/GHSA-333x-w4r6-6crp",
+          "severity": "low",
+          "range": ">=3.0.0 <3.1.9"
+        }
+      ]
+    },
+    {
+      "package": "fflate",
+      "beforeSeverity": "moderate",
+      "afterSeverity": "moderate",
+      "directDependency": false,
+      "beforeNodes": [
+        {
+          "path": "node_modules/fflate",
+          "version": "0.8.2",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/fflate",
+          "version": "0.8.2",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "retained-pdf",
+      "reachability": "Retained PDF graph; jsPDF has no source import and legacy PDF pages are unmounted. No reachable vulnerable PDF API identified in this review.",
+      "advisories": [
+        {
+          "title": "fflate unzipSync can enter an infinite loop when parsing malformed ZIP64 archives",
+          "url": "https://github.com/advisories/GHSA-px8p-9vwx-vf98",
+          "severity": "moderate",
+          "range": ">=0.8.0 <0.8.3"
+        }
+      ]
+    },
+    {
+      "package": "flatted",
+      "beforeSeverity": "high",
+      "afterSeverity": "high",
+      "directDependency": false,
+      "beforeNodes": [
+        {
+          "path": "node_modules/flatted",
+          "version": "3.3.3",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/flatted",
+          "version": "3.3.3",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "build-test",
+      "reachability": "Build/test capability; no production dev/UI server is registered. Lock prod/dev labels alone do not establish runtime reachability. Tooling exposure still needs a separately scoped update.",
+      "advisories": [
+        {
+          "title": "flatted vulnerable to unbounded recursion DoS in parse() revive phase",
+          "url": "https://github.com/advisories/GHSA-25h7-pfq9-p65f",
+          "severity": "high",
+          "range": "<3.4.0"
+        },
+        {
+          "title": "Prototype Pollution via parse() in NodeJS flatted",
+          "url": "https://github.com/advisories/GHSA-rf6f-7fwh-wjgh",
+          "severity": "high",
+          "range": "<=3.4.1"
+        }
+      ]
+    },
+    {
+      "package": "form-data",
+      "beforeSeverity": "critical",
+      "afterSeverity": "critical",
+      "directDependency": false,
+      "beforeNodes": [
+        {
+          "path": "node_modules/form-data",
+          "version": "4.0.3",
+          "lockDev": true
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/form-data",
+          "version": "4.0.3",
+          "lockDev": true
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "unused-google-sdk",
+      "reachability": "No @google/genai or Node form-data import exists in server/client/api/shared. Retained direct SDK/transitive graph; no active affected client/multipart path identified.",
+      "advisories": [
+        {
+          "title": "form-data uses unsafe random function in form-data for choosing boundary",
+          "url": "https://github.com/advisories/GHSA-fjxv-7rqg-78g4",
+          "severity": "critical",
+          "range": ">=4.0.0 <4.0.4"
+        },
+        {
+          "title": "form-data: CRLF injection in form-data via unescaped multipart field names and filenames",
+          "url": "https://github.com/advisories/GHSA-hmw2-7cc7-3qxx",
+          "severity": "high",
+          "range": ">=4.0.0 <4.0.6"
+        }
+      ]
+    },
+    {
+      "package": "gaxios",
+      "beforeSeverity": "moderate",
+      "afterSeverity": "moderate",
+      "directDependency": false,
+      "beforeNodes": [
+        {
+          "path": "node_modules/gaxios",
+          "version": "6.7.1",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/gaxios",
+          "version": "6.7.1",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "unused-google-sdk",
+      "reachability": "No @google/genai or Node form-data import exists in server/client/api/shared. Retained direct SDK/transitive graph; no active affected client/multipart path identified.",
+      "advisories": [
+        {
+          "inheritedFrom": "uuid"
+        }
+      ]
+    },
+    {
+      "package": "glob",
+      "beforeSeverity": "high",
+      "afterSeverity": "high",
+      "directDependency": false,
+      "beforeNodes": [
+        {
+          "path": "node_modules/glob",
+          "version": "10.4.5",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/glob",
+          "version": "10.4.5",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "build-test",
+      "reachability": "Build/test capability; no production dev/UI server is registered. Lock prod/dev labels alone do not establish runtime reachability. Tooling exposure still needs a separately scoped update.",
+      "advisories": [
+        {
+          "title": "glob CLI: Command injection via -c/--cmd executes matches with shell:true",
+          "url": "https://github.com/advisories/GHSA-5j98-mcp5-4vw2",
+          "severity": "high",
+          "range": ">=10.2.0 <10.5.0"
+        },
+        {
+          "title": "Glob: AbortSignal cancellation bypass allows post-timeout filesystem traversal",
+          "url": "https://github.com/advisories/GHSA-3g3m-2fjr-6pw4",
+          "severity": "moderate",
+          "range": ">=9.0.0 <=14.0.1"
+        }
+      ]
+    },
+    {
+      "package": "hono",
+      "beforeSeverity": "moderate",
+      "afterSeverity": "moderate",
+      "directDependency": false,
+      "beforeNodes": [
+        {
+          "path": "node_modules/hono",
+          "version": "4.13.5",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/hono",
+          "version": "4.13.5",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "not-mounted-mcp",
+      "reachability": "Installed AI/MCP peer graph; no MCP server/client registration found in application source. A vulnerable nested server package is not the active Express API.",
+      "advisories": [
+        {
+          "title": "hono/jsx renders plain strings unescaped in boundary components, leading to XSS",
+          "url": "https://github.com/advisories/GHSA-hxh3-vqpv-xpqv",
+          "severity": "moderate",
+          "range": "<4.13.7"
+        },
+        {
+          "title": "Hono: `serveStatic` decodes the request path a second time, leading to bypass of middleware on static paths",
+          "url": "https://github.com/advisories/GHSA-5r4p-p66f-jhc7",
+          "severity": "moderate",
+          "range": ">=4.12.4 <4.13.11"
+        }
+      ]
+    },
+    {
+      "package": "ip-address",
+      "beforeSeverity": "moderate",
+      "afterSeverity": "moderate",
+      "directDependency": false,
+      "beforeNodes": [
+        {
+          "path": "node_modules/ip-address",
+          "version": "10.7.0",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/ip-address",
+          "version": "10.7.0",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "not-mounted-mcp",
+      "reachability": "Installed AI/MCP peer graph; no MCP server/client registration found in application source. A vulnerable nested server package is not the active Express API.",
+      "advisories": [
+        {
+          "title": "ip-address: isInSubnet() and isHostInSubnet() compare addresses of different families as if they shared an address space, allowing an allowlist check to admit an address outside its range",
+          "url": "https://github.com/advisories/GHSA-j6r3-76f7-8jcv",
+          "severity": "moderate",
+          "range": "<=10.7.0"
+        },
+        {
+          "title": "ip-address: Address6 builds a parse diagnostic proportional to the input with no length bound, allowing a single long string to stall or crash the process",
+          "url": "https://github.com/advisories/GHSA-h3mg-xc3c-68pw",
+          "severity": "moderate",
+          "range": "<=10.7.0"
+        },
+        {
+          "title": "ip-address: Address6 matches a zone identifier in quadratic time ahead of its length limit, allowing a single long string to stall the process",
+          "url": "https://github.com/advisories/GHSA-rxp7-6hxx-x8q5",
+          "severity": "moderate",
+          "range": "<=10.7.3"
+        }
+      ]
+    },
+    {
+      "package": "jspdf",
+      "beforeSeverity": "critical",
+      "afterSeverity": "critical",
+      "directDependency": true,
+      "beforeNodes": [
+        {
+          "path": "node_modules/jspdf",
+          "version": "3.0.1",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/jspdf",
+          "version": "3.0.1",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "retained-pdf",
+      "reachability": "Retained PDF graph; jsPDF has no source import and legacy PDF pages are unmounted. No reachable vulnerable PDF API identified in this review.",
+      "advisories": [
+        {
+          "title": "jsPDF Denial of Service (DoS)",
+          "url": "https://github.com/advisories/GHSA-8mvj-3j78-4qmw",
+          "severity": "high",
+          "range": "<=3.0.1"
+        },
+        {
+          "title": "jsPDF has Local File Inclusion/Path Traversal vulnerability",
+          "url": "https://github.com/advisories/GHSA-f8cm-6447-x5h2",
+          "severity": "critical",
+          "range": "<=3.0.4"
+        },
+        {
+          "title": "jsPDF has PDF Injection in AcroFormChoiceField that allows Arbitrary JavaScript Execution",
+          "url": "https://github.com/advisories/GHSA-pqxr-3g65-p328",
+          "severity": "high",
+          "range": "<=4.0.0"
+        },
+        {
+          "title": "jsPDF Vulnerable to Denial of Service (DoS) via Unvalidated BMP Dimensions in BMPDecoder",
+          "url": "https://github.com/advisories/GHSA-95fx-jjr5-f39c",
+          "severity": "high",
+          "range": "<=4.0.0"
+        },
+        {
+          "title": "jsPDF Vulnerable to Stored XMP Metadata Injection (Spoofing & Integrity Violation)",
+          "url": "https://github.com/advisories/GHSA-vm32-vv63-w422",
+          "severity": "moderate",
+          "range": "<=4.0.0"
+        },
+        {
+          "title": "jsPDF has Shared State Race Condition in addJS Plugin",
+          "url": "https://github.com/advisories/GHSA-cjw8-79x6-5cj4",
+          "severity": "moderate",
+          "range": "<=4.0.0"
+        },
+        {
+          "title": "jsPDF has a PDF Object Injection via Unsanitized Input in addJS Method",
+          "url": "https://github.com/advisories/GHSA-9vjf-qc39-jprp",
+          "severity": "high",
+          "range": "<4.2.0"
+        },
+        {
+          "title": "jsPDF Affected by Client-Side/Server-Side Denial of Service via Malicious GIF Dimensions",
+          "url": "https://github.com/advisories/GHSA-67pg-wm7f-q7fj",
+          "severity": "high",
+          "range": "<4.2.0"
+        },
+        {
+          "title": "jsPDF has a PDF Injection in AcroForm module allows Arbitrary JavaScript Execution (RadioButton.createOption and \"AS\" property)",
+          "url": "https://github.com/advisories/GHSA-p5xg-68wr-hm3m",
+          "severity": "high",
+          "range": "<4.2.0"
+        },
+        {
+          "title": "jsPDF has a PDF Object Injection via FreeText color",
+          "url": "https://github.com/advisories/GHSA-7x6v-j9x4-qf24",
+          "severity": "high",
+          "range": "<=4.2.0"
+        },
+        {
+          "title": "jsPDF has HTML Injection in New Window paths",
+          "url": "https://github.com/advisories/GHSA-wfv2-pwc8-crg5",
+          "severity": "critical",
+          "range": "<=4.2.0"
+        }
+      ]
+    },
+    {
+      "package": "jws",
+      "beforeSeverity": "high",
+      "afterSeverity": "high",
+      "directDependency": false,
+      "beforeNodes": [
+        {
+          "path": "node_modules/jws",
+          "version": "4.0.0",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/jws",
+          "version": "4.0.0",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "unused-google-sdk",
+      "reachability": "No @google/genai or Node form-data import exists in server/client/api/shared. Retained direct SDK/transitive graph; no active affected client/multipart path identified.",
+      "advisories": [
+        {
+          "title": "auth0/node-jws Improperly Verifies HMAC Signature",
+          "url": "https://github.com/advisories/GHSA-869p-cjfg-cm3x",
+          "severity": "high",
+          "range": "=4.0.0"
+        }
+      ]
+    },
+    {
+      "package": "lodash",
+      "beforeSeverity": "high",
+      "afterSeverity": "high",
+      "directDependency": false,
+      "beforeNodes": [
+        {
+          "path": "node_modules/lodash",
+          "version": "4.17.21",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/lodash",
+          "version": "4.17.21",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "other-transitive",
+      "reachability": "No direct application import or untrusted template-options API identified. Dangerous template imports/paths remain an unpatched transitive advisory; no universal unreachability claim.",
+      "advisories": [
+        {
+          "title": "lodash vulnerable to Code Injection via `_.template` imports key names",
+          "url": "https://github.com/advisories/GHSA-r5fr-rjxr-66jc",
+          "severity": "high",
+          "range": ">=4.0.0 <=4.17.23"
+        },
+        {
+          "title": "Lodash has Prototype Pollution Vulnerability in `_.unset`, `_.omit`, and `_.pullAt` functions",
+          "url": "https://github.com/advisories/GHSA-xxjr-mmjv-4gpg",
+          "severity": "moderate",
+          "range": ">=4.0.0 <=4.17.22"
+        }
+      ]
+    },
+    {
+      "package": "mdast-util-to-hast",
+      "beforeSeverity": "moderate",
+      "afterSeverity": "moderate",
+      "directDependency": false,
+      "beforeNodes": [
+        {
+          "path": "node_modules/mdast-util-to-hast",
+          "version": "13.2.0",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/mdast-util-to-hast",
+          "version": "13.2.0",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "active-markdown",
+      "reachability": "Markdown rendering is active; unsanitized AST/class-property conditions need a separate focused review. No exploit or sanitization bypass was attempted.",
+      "advisories": [
+        {
+          "title": "mdast-util-to-hast has unsanitized class attribute",
+          "url": "https://github.com/advisories/GHSA-4fh9-h7wg-q85m",
+          "severity": "moderate",
+          "range": ">=13.0.0 <13.2.1"
+        }
+      ]
+    },
+    {
+      "package": "minimatch",
+      "beforeSeverity": "high",
+      "afterSeverity": "high",
+      "directDependency": false,
+      "beforeNodes": [
+        {
+          "path": "node_modules/minimatch",
+          "version": "9.0.5",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/minimatch",
+          "version": "9.0.5",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "build-test",
+      "reachability": "Build/test capability; no production dev/UI server is registered. Lock prod/dev labels alone do not establish runtime reachability. Tooling exposure still needs a separately scoped update.",
+      "advisories": [
+        {
+          "title": "minimatch has a ReDoS via repeated wildcards with non-matching literal in pattern",
+          "url": "https://github.com/advisories/GHSA-3ppc-4f35-3m26",
+          "severity": "high",
+          "range": ">=9.0.0 <9.0.6"
+        },
+        {
+          "title": "minimatch has ReDoS: matchOne() combinatorial backtracking via multiple non-adjacent GLOBSTAR segments",
+          "url": "https://github.com/advisories/GHSA-7r86-cg39-jmmj",
+          "severity": "high",
+          "range": ">=9.0.0 <9.0.7"
+        },
+        {
+          "title": "minimatch ReDoS: nested *() extglobs generate catastrophically backtracking regular expressions",
+          "url": "https://github.com/advisories/GHSA-23c5-xmqv-rm74",
+          "severity": "high",
+          "range": ">=9.0.0 <9.0.7"
+        },
+        {
+          "title": "minimatch has potential denial of service via globparts amplification",
+          "url": "https://github.com/advisories/GHSA-g3hv-75wg-m249",
+          "severity": "moderate",
+          "range": "<11.0.1"
+        }
+      ]
+    },
+    {
+      "package": "nanoid",
+      "beforeSeverity": "high",
+      "afterSeverity": "high",
+      "directDependency": false,
+      "beforeNodes": [
+        {
+          "path": "node_modules/nanoid",
+          "version": "3.3.8",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/nanoid",
+          "version": "3.3.8",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "other-transitive",
+      "reachability": "No public caller-controlled generator-size path identified. Advisory depends on invalid/non-positive/custom sizes, not ordinary fixed ID generation.",
+      "advisories": [
+        {
+          "title": "nanoid: non-secure generators can loop indefinitely with negative size",
+          "url": "https://github.com/advisories/GHSA-28wg-ghj8-5hjv",
+          "severity": "high",
+          "range": "<3.3.16"
+        },
+        {
+          "title": "nanoid: custom generators can loop indefinitely when size is zero",
+          "url": "https://github.com/advisories/GHSA-2v37-7h3g-55p8",
+          "severity": "high",
+          "range": "<3.3.18"
+        },
+        {
+          "title": "nanoid: Integer Overflow or Wraparound",
+          "url": "https://github.com/advisories/GHSA-xwg4-73v4-xw9w",
+          "severity": "high",
+          "range": "<3.3.12"
+        }
+      ]
+    },
+    {
+      "package": "path-to-regexp",
+      "beforeSeverity": "high",
+      "afterSeverity": null,
+      "directDependency": false,
+      "beforeNodes": [
+        {
+          "path": "node_modules/path-to-regexp",
+          "version": "0.1.12",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [],
+      "registryRecordAfter": "absent; not a universal security claim",
+      "practicalGroup": "active-http",
+      "reachability": "Root Express/parser paths are active. Inspect exact remaining nodes and conditions; root parser crash is fixed locally, nested MCP parser is not mounted.",
+      "advisories": [
+        {
+          "title": "path-to-regexp vulnerable to Regular Expression Denial of Service via multiple route parameters",
+          "url": "https://github.com/advisories/GHSA-37ch-88jc-xwx2",
+          "severity": "high",
+          "range": "<0.1.13"
+        }
+      ]
+    },
+    {
+      "package": "picomatch",
+      "beforeSeverity": "high",
+      "afterSeverity": "high",
+      "directDependency": false,
+      "beforeNodes": [
+        {
+          "path": "node_modules/picomatch",
+          "version": "2.3.1",
+          "lockDev": false
+        },
+        {
+          "path": "node_modules/tinyglobby/node_modules/picomatch",
+          "version": "4.0.2",
+          "lockDev": false
+        },
+        {
+          "path": "node_modules/vitest/node_modules/picomatch",
+          "version": "4.0.2",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/picomatch",
+          "version": "2.3.1",
+          "lockDev": false
+        },
+        {
+          "path": "node_modules/tinyglobby/node_modules/picomatch",
+          "version": "4.0.2",
+          "lockDev": false
+        },
+        {
+          "path": "node_modules/vitest/node_modules/picomatch",
+          "version": "4.0.2",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "build-test",
+      "reachability": "Build/test capability; no production dev/UI server is registered. Lock prod/dev labels alone do not establish runtime reachability. Tooling exposure still needs a separately scoped update.",
+      "advisories": [
+        {
+          "title": "Picomatch: Method Injection in POSIX Character Classes causes incorrect Glob Matching",
+          "url": "https://github.com/advisories/GHSA-3v7f-55p6-f55p",
+          "severity": "moderate",
+          "range": "<2.3.2"
+        },
+        {
+          "title": "Picomatch: Method Injection in POSIX Character Classes causes incorrect Glob Matching",
+          "url": "https://github.com/advisories/GHSA-3v7f-55p6-f55p",
+          "severity": "moderate",
+          "range": ">=4.0.0 <4.0.4"
+        },
+        {
+          "title": "Picomatch has a ReDoS vulnerability via extglob quantifiers",
+          "url": "https://github.com/advisories/GHSA-c2c7-rcm5-vvqj",
+          "severity": "high",
+          "range": "<2.3.2"
+        },
+        {
+          "title": "Picomatch has a ReDoS vulnerability via extglob quantifiers",
+          "url": "https://github.com/advisories/GHSA-c2c7-rcm5-vvqj",
+          "severity": "high",
+          "range": ">=4.0.0 <4.0.4"
+        }
+      ]
+    },
+    {
+      "package": "playwright",
+      "beforeSeverity": "high",
+      "afterSeverity": "high",
+      "directDependency": false,
+      "beforeNodes": [
+        {
+          "path": "node_modules/playwright",
+          "version": "1.54.2",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/playwright",
+          "version": "1.54.2",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "build-test",
+      "reachability": "Build/test capability; no production dev/UI server is registered. Lock prod/dev labels alone do not establish runtime reachability. Tooling exposure still needs a separately scoped update.",
+      "advisories": [
+        {
+          "title": "Playwright downloads and installs browsers without verifying the authenticity of the SSL certificate",
+          "url": "https://github.com/advisories/GHSA-7mvr-c777-76hp",
+          "severity": "high",
+          "range": "<1.55.1"
+        }
+      ]
+    },
+    {
+      "package": "postcss",
+      "beforeSeverity": "high",
+      "afterSeverity": "high",
+      "directDependency": true,
+      "beforeNodes": [
+        {
+          "path": "node_modules/postcss",
+          "version": "8.4.47",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/postcss",
+          "version": "8.4.47",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "build-test",
+      "reachability": "Build/test capability; no production dev/UI server is registered. Lock prod/dev labels alone do not establish runtime reachability. Tooling exposure still needs a separately scoped update.",
+      "advisories": [
+        {
+          "title": "PostCSS has XSS via Unescaped </style> in its CSS Stringify Output",
+          "url": "https://github.com/advisories/GHSA-qx2v-qp2m-jg93",
+          "severity": "moderate",
+          "range": "<8.5.10"
+        },
+        {
+          "title": "PostCSS: Arbitrary file read and information disclosure via attacker-controlled sourceMappingURL in CSS comments",
+          "url": "https://github.com/advisories/GHSA-6g55-p6wh-862q",
+          "severity": "high",
+          "range": "<=8.5.11"
+        },
+        {
+          "title": "PostCSS: incomplete fix of GHSA-6g55-p6wh-862q \u2014 attacker-controlled sourceMappingURL reads arbitrary .map files when `from` is unset",
+          "url": "https://github.com/advisories/GHSA-fxqj-rqcc-2cmp",
+          "severity": "moderate",
+          "range": "<=8.5.22"
+        },
+        {
+          "title": "PostCSS: Path Traversal in Previous Source Map Auto-Loading (sourceMappingURL) leads to Arbitrary .map File Disclosure",
+          "url": "https://github.com/advisories/GHSA-r28c-9q8g-f849",
+          "severity": "high",
+          "range": "<=8.5.17"
+        }
+      ]
+    },
+    {
+      "package": "postcss-selector-parser",
+      "beforeSeverity": "moderate",
+      "afterSeverity": "moderate",
+      "directDependency": false,
+      "beforeNodes": [
+        {
+          "path": "node_modules/@tailwindcss/typography/node_modules/postcss-selector-parser",
+          "version": "6.0.10",
+          "lockDev": true
+        },
+        {
+          "path": "node_modules/postcss-selector-parser",
+          "version": "6.1.2",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/@tailwindcss/typography/node_modules/postcss-selector-parser",
+          "version": "6.0.10",
+          "lockDev": true
+        },
+        {
+          "path": "node_modules/postcss-selector-parser",
+          "version": "6.1.2",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "build-test",
+      "reachability": "Build/test capability; no production dev/UI server is registered. Lock prod/dev labels alone do not establish runtime reachability. Tooling exposure still needs a separately scoped update.",
+      "advisories": [
+        {
+          "title": "postcss-selector-parser allows denial of service through uncontrolled AST recursion",
+          "url": "https://github.com/advisories/GHSA-w9m9-85wc-3x92",
+          "severity": "low",
+          "range": ">=6.1.0 <6.1.3"
+        },
+        {
+          "title": "PostCSS: Quadratic complexity in flat selector parsing allows CPU exhaustion",
+          "url": "https://github.com/advisories/GHSA-rj75-hqrm-r3gf",
+          "severity": "moderate",
+          "range": "<6.1.5"
+        }
+      ]
+    },
+    {
+      "package": "proxy-addr",
+      "beforeSeverity": "critical",
+      "afterSeverity": "critical",
+      "directDependency": false,
+      "beforeNodes": [
+        {
+          "path": "node_modules/proxy-addr",
+          "version": "2.0.7",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/proxy-addr",
+          "version": "2.0.7",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "active-http",
+      "reachability": "Affected version remains; advisory requires IPv4-mapped/short-prefix trusted subnet. App does not enable Express trust proxy/subnet configuration and auth resolves trusted IP separately; condition absent in inspected code.",
+      "advisories": [
+        {
+          "title": "proxy-addr vulnerable to IP spoofing via IPv4-mapped IPv6 trust subnet",
+          "url": "https://github.com/advisories/GHSA-jqcg-44mw-7w3h",
+          "severity": "critical",
+          "range": ">=1.1.0 <2.0.8"
+        }
+      ]
+    },
+    {
+      "package": "qs",
+      "beforeSeverity": "moderate",
+      "afterSeverity": null,
+      "directDependency": false,
+      "beforeNodes": [
+        {
+          "path": "node_modules/@modelcontextprotocol/sdk/node_modules/qs",
+          "version": "6.16.0",
+          "lockDev": false
+        },
+        {
+          "path": "node_modules/qs",
+          "version": "6.13.0",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [],
+      "registryRecordAfter": "absent; not a universal security claim",
+      "practicalGroup": "active-http",
+      "reachability": "Root Express/parser paths are active. Inspect exact remaining nodes and conditions; root parser crash is fixed locally, nested MCP parser is not mounted.",
+      "advisories": [
+        {
+          "title": "qs's arrayLimit bypass in comma parsing allows denial of service",
+          "url": "https://github.com/advisories/GHSA-w7fw-mjwx-w883",
+          "severity": "low",
+          "range": ">=6.7.0 <=6.14.1"
+        },
+        {
+          "title": "qs's arrayLimit bypass in its bracket notation allows DoS via memory exhaustion",
+          "url": "https://github.com/advisories/GHSA-6rw7-vpxm-498p",
+          "severity": "moderate",
+          "range": "<6.14.1"
+        },
+        {
+          "title": "qs has a remotely triggerable DoS: qs.stringify crashes with TypeError on null/undefined entries in comma-format arrays when encodeValuesOnly is set",
+          "url": "https://github.com/advisories/GHSA-q8mj-m7cp-5q26",
+          "severity": "moderate",
+          "range": ">=6.11.1 <=6.15.1"
+        },
+        {
+          "title": "qs: Denial of Service via Attacker Controlled isBuffer",
+          "url": "https://github.com/advisories/GHSA-4mjr-xmp4-gh2g",
+          "severity": "moderate",
+          "range": ">=2.2.5 <6.16.0"
+        },
+        {
+          "title": "qs : qs.stringify with arrayFormat 'comma' throws an uncaught TypeError on array elements carrying a non-callable own toString (DoS)",
+          "url": "https://github.com/advisories/GHSA-6pq8-jhm2-2vcw",
+          "severity": "moderate",
+          "range": ">=6.7.0 <=6.16.0"
+        }
+      ]
+    },
+    {
+      "package": "rollup",
+      "beforeSeverity": "high",
+      "afterSeverity": "high",
+      "directDependency": false,
+      "beforeNodes": [
+        {
+          "path": "node_modules/rollup",
+          "version": "4.24.4",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/rollup",
+          "version": "4.24.4",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "build-test",
+      "reachability": "Build/test capability; no production dev/UI server is registered. Lock prod/dev labels alone do not establish runtime reachability. Tooling exposure still needs a separately scoped update.",
+      "advisories": [
+        {
+          "title": "Rollup 4 has Arbitrary File Write via Path Traversal",
+          "url": "https://github.com/advisories/GHSA-mw96-cpmx-2vgc",
+          "severity": "high",
+          "range": ">=4.0.0 <4.59.0"
+        }
+      ]
+    },
+    {
+      "package": "source-map-js",
+      "beforeSeverity": "high",
+      "afterSeverity": "high",
+      "directDependency": false,
+      "beforeNodes": [
+        {
+          "path": "node_modules/source-map-js",
+          "version": "1.2.1",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/source-map-js",
+          "version": "1.2.1",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "build-test",
+      "reachability": "Build/test capability; no production dev/UI server is registered. Lock prod/dev labels alone do not establish runtime reachability. Tooling exposure still needs a separately scoped update.",
+      "advisories": [
+        {
+          "title": "source-map-js allows event-loop denial of service through indexed source-map section offsets",
+          "url": "https://github.com/advisories/GHSA-68fv-2mgg-jv7q",
+          "severity": "high",
+          "range": ">=1.0.0 <1.2.2"
+        }
+      ]
+    },
+    {
+      "package": "tinypool",
+      "beforeSeverity": "critical",
+      "afterSeverity": "critical",
+      "directDependency": false,
+      "beforeNodes": [
+        {
+          "path": "node_modules/tinypool",
+          "version": "1.1.0",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/tinypool",
+          "version": "1.1.0",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "build-test",
+      "reachability": "Critical test-worker/UI capabilities, despite manifest prod placement. No Vitest UI/manual-mock registration/worker-options endpoint is mounted in deployed app. Local test tooling still warrants separate update.",
+      "advisories": [
+        {
+          "title": "Tinypool: Prototype Pollution gadget in worker options leads to Remote Code Execution",
+          "url": "https://github.com/advisories/GHSA-5gmw-xhrv-c9v3",
+          "severity": "critical",
+          "range": "<=2.1.0"
+        },
+        {
+          "title": "Tinypool: Prototype Pollution Gadget to RCE in run() options",
+          "url": "https://github.com/advisories/GHSA-85c8-ppgw-ccpr",
+          "severity": "critical",
+          "range": "<2.1.2"
+        }
+      ]
+    },
+    {
+      "package": "tsx",
+      "beforeSeverity": "moderate",
+      "afterSeverity": "moderate",
+      "directDependency": true,
+      "beforeNodes": [
+        {
+          "path": "node_modules/tsx",
+          "version": "4.19.2",
+          "lockDev": true
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/tsx",
+          "version": "4.19.2",
+          "lockDev": true
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "build-test",
+      "reachability": "Build/test capability; no production dev/UI server is registered. Lock prod/dev labels alone do not establish runtime reachability. Tooling exposure still needs a separately scoped update.",
+      "advisories": [
+        {
+          "inheritedFrom": "esbuild"
+        }
+      ]
+    },
+    {
+      "package": "undici",
+      "beforeSeverity": "high",
+      "afterSeverity": "high",
+      "directDependency": false,
+      "beforeNodes": [
+        {
+          "path": "node_modules/undici",
+          "version": "7.29.0",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/undici",
+          "version": "7.29.0",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "unused-google-sdk",
+      "reachability": "No @google/genai or Node form-data import exists in server/client/api/shared. Retained direct SDK/transitive graph; no active affected client/multipart path identified.",
+      "advisories": [
+        {
+          "title": "undici vulnerable to Denial of Service via unhandled error in WebSocket permessage-deflate decompression",
+          "url": "https://github.com/advisories/GHSA-3wwx-pv8p-q78v",
+          "severity": "moderate",
+          "range": ">=7.28.0 <7.29.1"
+        },
+        {
+          "title": "undici vulnerable to Denial of Service via orphaned RetryHandler response body",
+          "url": "https://github.com/advisories/GHSA-pmjh-fq2x-6v4x",
+          "severity": "moderate",
+          "range": ">=7.11.0 <7.29.1"
+        },
+        {
+          "title": "undici vulnerable to downstream response splitting via retry interceptor",
+          "url": "https://github.com/advisories/GHSA-r53p-7pc4-xj5r",
+          "severity": "low",
+          "range": ">=7.0.0 <7.29.1"
+        },
+        {
+          "title": "undici vulnerable to Denial of Service via unrequested WebSocket subprotocol",
+          "url": "https://github.com/advisories/GHSA-rfgv-xxqx-mfg5",
+          "severity": "high",
+          "range": ">=7.0.0 <7.29.1"
+        },
+        {
+          "title": "undici vulnerable to Denial of Service via unbounded decompression of compressed responses",
+          "url": "https://github.com/advisories/GHSA-3xpg-4rpp-hhhm",
+          "severity": "moderate",
+          "range": ">=7.15.0 <7.29.1"
+        },
+        {
+          "title": "undici vulnerable to cross-user cookie disclosure via Set-Cookie caching in shared caches",
+          "url": "https://github.com/advisories/GHSA-2jfj-6hjv-fm6j",
+          "severity": "moderate",
+          "range": ">=7.0.0 <7.29.1"
+        },
+        {
+          "title": "undici vulnerable to response truncation via oversized chunked responses in the dump interceptor",
+          "url": "https://github.com/advisories/GHSA-2gqq-gqf2-x968",
+          "severity": "low",
+          "range": ">=7.1.0 <7.29.1"
+        },
+        {
+          "title": "undici vulnerable to TLS certificate validation bypass via dropped connect options in BalancedPool",
+          "url": "https://github.com/advisories/GHSA-w293-vg96-wgc3",
+          "severity": "high",
+          "range": ">=7.24.1 <7.29.1"
+        },
+        {
+          "title": "undici vulnerable to caching and replay of unsafe HTTP method responses",
+          "url": "https://github.com/advisories/GHSA-8436-99hf-9mmv",
+          "severity": "low",
+          "range": ">=7.0.0 <7.29.1"
+        },
+        {
+          "title": "undici vulnerable to Denial of Service via WebSocketStream unclean close",
+          "url": "https://github.com/advisories/GHSA-rx4f-c7p8-82vq",
+          "severity": "moderate",
+          "range": ">=7.0.0 <7.29.1"
+        },
+        {
+          "title": "undici vulnerable to Denial of Service via unbounded memory in the EventSource parser",
+          "url": "https://github.com/advisories/GHSA-4qv8-2p9j-2685",
+          "severity": "moderate",
+          "range": ">=7.0.0 <7.30.1"
+        },
+        {
+          "title": "undici vulnerable to Subresource Integrity bypass via non-lowercase algorithm tokens",
+          "url": "https://github.com/advisories/GHSA-f72v-6w45-q472",
+          "severity": "moderate",
+          "range": ">=7.15.0 <7.30.1"
+        },
+        {
+          "title": "undici vulnerable to Denial of Service via unhandled error on excessive content-encodings",
+          "url": "https://github.com/advisories/GHSA-xjj6-f33q-929c",
+          "severity": "high",
+          "range": ">=7.18.0 <7.30.1"
+        },
+        {
+          "title": "undici vulnerable to cache poisoning and cross-user disclosure via cross-origin redirects",
+          "url": "https://github.com/advisories/GHSA-4w7w-5xrc-9h26",
+          "severity": "high",
+          "range": ">=7.0.0 <7.30.1"
+        },
+        {
+          "title": "undici vulnerable to TLS certificate validation bypass via dropped tls options in Agent",
+          "url": "https://github.com/advisories/GHSA-2m5v-pch6-74hx",
+          "severity": "high",
+          "range": ">=7.0.0 <7.30.1"
+        },
+        {
+          "title": "undici vulnerable to Denial of Service via TLS 1.2 certificate-changing renegotiation",
+          "url": "https://github.com/advisories/GHSA-qrxm-fqhp-jwvm",
+          "severity": "high",
+          "range": ">=7.0.0 <7.30.1"
+        },
+        {
+          "title": "undici WebSocket client vulnerable to Denial of Service via unbounded automatic PONG buffering",
+          "url": "https://github.com/advisories/GHSA-9fm3-97px-rjf6",
+          "severity": "moderate",
+          "range": ">=7.0.0 <7.30.1"
+        },
+        {
+          "title": "undici vulnerable to Denial of Service via unhandled exception in the decompress interceptor",
+          "url": "https://github.com/advisories/GHSA-55wc-3pg8-jfw6",
+          "severity": "moderate",
+          "range": ">=7.15.0 <7.30.1"
+        }
+      ]
+    },
+    {
+      "package": "uuid",
+      "beforeSeverity": "moderate",
+      "afterSeverity": "moderate",
+      "directDependency": false,
+      "beforeNodes": [
+        {
+          "path": "node_modules/uuid",
+          "version": "9.0.1",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/uuid",
+          "version": "9.0.1",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "unused-google-sdk",
+      "reachability": "No @google/genai or Node form-data import exists in server/client/api/shared. Retained direct SDK/transitive graph; no active affected client/multipart path identified.",
+      "advisories": [
+        {
+          "title": "uuid: Missing buffer bounds check in v3/v5/v6 when buf is provided",
+          "url": "https://github.com/advisories/GHSA-w5hq-g745-h8pq",
+          "severity": "moderate",
+          "range": "<11.1.1"
+        }
+      ]
+    },
+    {
+      "package": "vite",
+      "beforeSeverity": "high",
+      "afterSeverity": "high",
+      "directDependency": true,
+      "beforeNodes": [
+        {
+          "path": "node_modules/vite",
+          "version": "5.4.19",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/vite",
+          "version": "5.4.19",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "build-test",
+      "reachability": "Build/test capability; no production dev/UI server is registered. Lock prod/dev labels alone do not establish runtime reachability. Tooling exposure still needs a separately scoped update.",
+      "advisories": [
+        {
+          "title": "Vite middleware may serve files starting with the same name with the public directory",
+          "url": "https://github.com/advisories/GHSA-g4jq-h2w9-997c",
+          "severity": "low",
+          "range": "<=5.4.19"
+        },
+        {
+          "title": "Vite's `server.fs` settings were not applied to HTML files",
+          "url": "https://github.com/advisories/GHSA-jqfw-vq24-v9c3",
+          "severity": "low",
+          "range": "<=5.4.19"
+        },
+        {
+          "title": "vite allows server.fs.deny bypass via backslash on Windows",
+          "url": "https://github.com/advisories/GHSA-93m4-6634-74q7",
+          "severity": "moderate",
+          "range": ">=5.2.6 <=5.4.20"
+        },
+        {
+          "title": "Vite Vulnerable to Path Traversal in Optimized Deps `.map` Handling",
+          "url": "https://github.com/advisories/GHSA-4w7w-66w2-5vf9",
+          "severity": "moderate",
+          "range": "<=6.4.1"
+        },
+        {
+          "title": "launch-editor: NTLMv2 hash disclosure via UNC path handling on Windows",
+          "url": "https://github.com/advisories/GHSA-v6wh-96g9-6wx3",
+          "severity": "moderate",
+          "range": "<=6.4.2"
+        },
+        {
+          "title": "launch-editor: escapeCmdArgs() omits % escaping on Windows",
+          "url": "https://github.com/advisories/GHSA-698v-4r3x-3vcv",
+          "severity": "moderate",
+          "range": "<=6.4.3"
+        },
+        {
+          "title": "launch-editor: Editor CLI flag misinterpretation causing arbitrary command execution for some editors",
+          "url": "https://github.com/advisories/GHSA-r825-w8mm-5pxw",
+          "severity": "moderate",
+          "range": "<=6.4.3"
+        },
+        {
+          "title": "launch-editor: `fs.existsSync()` existence check can be bypassed on Windows",
+          "url": "https://github.com/advisories/GHSA-587h-7wmj-h5pm",
+          "severity": "high",
+          "range": "<=6.4.3"
+        },
+        {
+          "title": "Vite: Cross origin script execution through Vite custom middleware",
+          "url": "https://github.com/advisories/GHSA-9jrq-w75r-8gcw",
+          "severity": "low",
+          "range": "<=6.4.3"
+        },
+        {
+          "title": "Vite: Files outside `server.fs.allow` could be served when project paths match system paths on non-Windows machine",
+          "url": "https://github.com/advisories/GHSA-rq7h-c2jc-7f22",
+          "severity": "moderate",
+          "range": "<=6.4.3"
+        },
+        {
+          "title": "vite: `server.fs.deny` bypass on Windows alternate paths",
+          "url": "https://github.com/advisories/GHSA-fx2h-pf6j-xcff",
+          "severity": "moderate",
+          "range": "<=6.4.2"
+        },
+        {
+          "inheritedFrom": "esbuild"
+        }
+      ]
+    },
+    {
+      "package": "vitest",
+      "beforeSeverity": "critical",
+      "afterSeverity": "critical",
+      "directDependency": true,
+      "beforeNodes": [
+        {
+          "path": "node_modules/vitest",
+          "version": "3.2.3",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/vitest",
+          "version": "3.2.3",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "build-test",
+      "reachability": "Critical test-worker/UI capabilities, despite manifest prod placement. No Vitest UI/manual-mock registration/worker-options endpoint is mounted in deployed app. Local test tooling still warrants separate update.",
+      "advisories": [
+        {
+          "inheritedFrom": "@vitest/mocker"
+        },
+        {
+          "inheritedFrom": "@vitest/ui"
+        },
+        {
+          "title": "When Vitest UI server is listening, arbitrary file can be read and executed",
+          "url": "https://github.com/advisories/GHSA-5xrq-8626-4rwp",
+          "severity": "critical",
+          "range": "<3.2.6"
+        },
+        {
+          "title": "Vitest: Path Traversal / Arbitrary File Read via @vitest/mocker Redirect Mock",
+          "url": "https://github.com/advisories/GHSA-82fw-gwwq-j7x9",
+          "severity": "moderate",
+          "range": ">=2.1.0 <4.1.11"
+        },
+        {
+          "inheritedFrom": "tinypool"
+        }
+      ]
+    },
+    {
+      "package": "ws",
+      "beforeSeverity": "high",
+      "afterSeverity": "high",
+      "directDependency": true,
+      "beforeNodes": [
+        {
+          "path": "node_modules/ws",
+          "version": "8.18.0",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/ws",
+          "version": "8.18.0",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "other-transitive",
+      "reachability": "Client dependency for services/dev tooling; no production public WebSocket upgrade handler registered. Remote peer/frame-specific client issues remain separately reviewable.",
+      "advisories": [
+        {
+          "title": "ws: Uninitialized memory disclosure",
+          "url": "https://github.com/advisories/GHSA-58qx-3vcg-4xpx",
+          "severity": "moderate",
+          "range": ">=8.0.0 <8.20.1"
+        },
+        {
+          "title": "ws: Memory exhaustion DoS from tiny fragments and data chunks",
+          "url": "https://github.com/advisories/GHSA-96hv-2xvq-fx4p",
+          "severity": "high",
+          "range": ">=8.0.0 <8.21.0"
+        }
+      ]
+    },
+    {
+      "package": "yaml",
+      "beforeSeverity": "moderate",
+      "afterSeverity": "moderate",
+      "directDependency": false,
+      "beforeNodes": [
+        {
+          "path": "node_modules/yaml",
+          "version": "2.6.0",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/yaml",
+          "version": "2.6.0",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "other-transitive",
+      "reachability": "Repository Method metadata/tooling inputs, not a registered public arbitrary-YAML parser. Untrusted deeply nested YAML would still require separate handling.",
+      "advisories": [
+        {
+          "title": "yaml is vulnerable to Stack Overflow via deeply nested YAML collections",
+          "url": "https://github.com/advisories/GHSA-48c2-rrv3-qjmp",
+          "severity": "moderate",
+          "range": ">=2.0.0 <2.8.3"
+        }
+      ]
+    },
+    {
+      "package": "zod",
+      "beforeSeverity": "high",
+      "afterSeverity": "high",
+      "directDependency": true,
+      "beforeNodes": [
+        {
+          "path": "node_modules/@better-auth/core/node_modules/zod",
+          "version": "4.5.4",
+          "lockDev": false
+        },
+        {
+          "path": "node_modules/better-auth/node_modules/zod",
+          "version": "4.5.4",
+          "lockDev": false
+        },
+        {
+          "path": "node_modules/zod",
+          "version": "3.25.76",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/better-auth/node_modules/zod",
+          "version": "4.5.4",
+          "lockDev": false
+        },
+        {
+          "path": "node_modules/zod",
+          "version": "3.25.76",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "active-validation",
+      "reachability": "Application validation is active. Root Zod3 and auth-owned Zod4.5.4 still match the oversized-collection advisory; bounded inputs are not a complete proof of safety. Separate constrained review/compatible update remains.",
+      "advisories": [
+        {
+          "title": "Zod can exhaust memory while validating oversized constrained collections",
+          "url": "https://github.com/advisories/GHSA-mrhx-c7xc-m3w5",
+          "severity": "high",
+          "range": "<4.6.6"
+        }
+      ]
+    },
+    {
+      "package": "zod-validation-error",
+      "beforeSeverity": "high",
+      "afterSeverity": "high",
+      "directDependency": true,
+      "beforeNodes": [
+        {
+          "path": "node_modules/zod-validation-error",
+          "version": "3.4.0",
+          "lockDev": false
+        }
+      ],
+      "remainingNodes": [
+        {
+          "path": "node_modules/zod-validation-error",
+          "version": "3.4.0",
+          "lockDev": false
+        }
+      ],
+      "registryRecordAfter": "present",
+      "practicalGroup": "active-validation",
+      "reachability": "Application validation is active. Root Zod3 and auth-owned Zod4.5.4 still match the oversized-collection advisory; bounded inputs are not a complete proof of safety. Separate constrained review/compatible update remains.",
+      "advisories": [
+        {
+          "inheritedFrom": "zod"
+        }
+      ]
+    }
+  ]
+}
