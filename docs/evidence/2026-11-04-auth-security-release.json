@@ -1,0 +1,150 @@
+{
+  "base": "4e42971b42dfda5cce82eab7dbc8262bb696e176",
+  "source": "958f59e752cf6438bb89aed5d106569081a3aca3",
+  "sourceDiffSha256": "f9d8cb29d540515e3cc8ab255fe9bae9803ca37e1eec7ca56a0d5c4c32e68bda",
+  "files": [
+    "package-lock.json",
+    "package.json",
+    "server/app.compression.test.ts",
+    "server/auth.storage.test.ts",
+    "vitest.config.ts"
+  ],
+  "excludedFeedbackPaths": true,
+  "noRuntimeConfigSchemaOrAppSourceChange": true,
+  "originalInventorySourceCommit": "9fca157171d420213865449e2e40497ef9b44423",
+  "fullReviewSource": "1652692456193d114a583c9cc018963972dc69d5",
+  "expiryReviewResolutionSource": "b4700f63903fdf199460607cadd3729f433e25b3",
+  "runtimeTreeMatchesLiveBaselineExceptDependencyGraph": true,
+  "date": "2026-11-04",
+  "branch": "codex/auth-security-release",
+  "worktree": "/Users/andresm/.codex/worktrees/auth-security-release/ikigai",
+  "localCandidate": "Pass",
+  "deployedReadiness": "Blocked pending explicit authorization, protected-QA access preflight, auth duplicate read and fresh Google/returning session QA",
+  "productionArtifact": {
+    "target": "production",
+    "source": "958f59e752cf6438bb89aed5d106569081a3aca3",
+    "origin": "https://heynami.vercel.app",
+    "fileCount": 2690,
+    "manifestSha256": "0ef455cdc5310bcbf9aafe9af8594306dec274d9073357efb991b3f1bdcceb66",
+    "archiveSha256": "689fd89a97b55eaa2333fc77f4c5726b89c9eeec0e5dc06f72d8e999d2556928",
+    "archive": ".context/revelio/auth-security-release-20261104/auth-only-production-output-958f59e.tgz",
+    "filePathMapCounts": [
+      0
+    ],
+    "deployed": false,
+    "feedbackIncluded": false
+  },
+  "previewArtifact": {
+    "target": "preview",
+    "source": "958f59e752cf6438bb89aed5d106569081a3aca3",
+    "origin": "https://heynami.vercel.app",
+    "files": 2690,
+    "manifestSha256": "813f90f375f951117224d3bf95314699f0761f3b0f14d97c4cc1f558a8a712e4",
+    "deployed": false
+  },
+  "verification": {
+    "node": "24.19.0",
+    "npmCi": "passed; ordinary; lifecycle scripts disabled",
+    "npmLs": "passed",
+    "typecheck": "passed",
+    "originBuild": "passed",
+    "focused": {
+      "files": 10,
+      "passed": 107
+    },
+    "firstFullRun": {
+      "passed": 1148,
+      "failed": 1,
+      "skipped": 1,
+      "error": "Generated Method assets absent from clean worktree; production-mode trace fixture missing-bundle",
+      "resolution": "Existing exact-origin build; two affected trace cases pass; no source/test changes"
+    },
+    "fullSuite": {
+      "files": 78,
+      "passed": 1149,
+      "skipped": 1,
+      "skipReason": "optional production-loader smoke"
+    },
+    "previewPackage": "passed",
+    "productionPackage": "passed"
+  },
+  "review": {
+    "kind": "targeted CE3.35.1 composition review",
+    "findings": 0,
+    "sameLockAndProofTestBytes": true,
+    "sameAggregateAddedRemovedLines": true,
+    "inheritedFullReview": "1652692 with expiry resolutionb4700f6",
+    "noDuplicatePeerReason": "Explicit caller scope; identical reviewed patch; no new source logic"
+  },
+  "qaAccess": {
+    "date": "2026-11-04",
+    "renderedAccess": "Not run; local preparation only",
+    "ownerSuppliedCliProfileLocator": false,
+    "visibleChromeQaWindow": "Offered by owner; not sufficient proof of CLI profile support",
+    "googleLogin": "Not run",
+    "oidcAttempt": "Not run; no token minted",
+    "historicalIssue": "Nov2 development-to-production Trusted Sources environment mismatch; not freshly retested",
+    "requiredBeforeProtectedUpload": [
+      "Owner supplies exact approved supported private agent-browser profile locator with legitimate platform session, or explicitly accepts exact-target human-rendered proof",
+      "If OIDC is chosen, owner authorizes/confirms same-project development-to-production Trusted Sources dashboard rule; no policy changes by this task",
+      "Exact staged origin must have enterprise approval; no alias or browser-policy workaround"
+    ],
+    "requiredBeforePromotion": [
+      "Read-only duplicate(providerId,accountId) check on intended auth target",
+      "Fresh Google callback, visible designated QA identity and authorized workspace read",
+      "Logout/login and returning-session reload on exact approved origin"
+    ]
+  },
+  "cleanup": {
+    "ownedCluster": "/Users/andresm/.codex/worktrees/auth-security-release/ikigai/.context/revelio/auth-security-release-20261104/pgdata",
+    "ownedPort": 55440,
+    "ownedPid": 6273,
+    "leftoverChildDatabases": 0,
+    "stopped": true,
+    "listenerGone": true,
+    "ownedPgdataRemoved": true,
+    "unowned55439": "not touched",
+    "browserSessionsStarted": 0,
+    "providerCalls": 0,
+    "deploymentActions": 0
+  },
+  "originalCheckoutPreserved": true,
+  "pushed": false,
+  "merged": false,
+  "uploaded": false,
+  "promoted": false,
+  "remoteConfigChanged": false,
+  "runtimeConfigurationOrSchemaChanged": false,
+  "dependencyInventoryRef": "9fca157:docs/evidence/2026-11-04-dependency-inventory.json",
+  "remainingAffectedPackageRecords": 51,
+  "proposedFutureCommandOnly": "vercel deploy --prebuilt --prod --skip-domain --yes",
+  "proposedCommandExecuted": false,
+  "cherryPickMap": [
+    {
+      "source": "2c3899e8638c8077aabb79e328e3df8af00dc2e4",
+      "target": "a2f306220bf6c0fd774fe9a6a2998696f2204b51"
+    },
+    {
+      "source": "1652692456193d114a583c9cc018963972dc69d5",
+      "target": "133b940e72525efecbf574525f81538b02ebb6e8"
+    },
+    {
+      "source": "b4700f63903fdf199460607cadd3729f433e25b3",
+      "target": "958f59e752cf6438bb89aed5d106569081a3aca3"
+    }
+  ],
+  "unchangedOriginalRefs": {
+    "main": "b8c2973d70f98c3b677aaf552838a4a10eda95a1",
+    "codex/auth-dependency-followup": "9fca157171d420213865449e2e40497ef9b44423",
+    "origin/main": "4e42971b42dfda5cce82eab7dbc8262bb696e176"
+  },
+  "versions": {
+    "better-auth": "1.7.16",
+    "@better-auth/core": "1.7.16",
+    "@better-auth/kysely-adapter": "1.7.16",
+    "express": "4.22.3",
+    "body-parser": "1.20.9",
+    "pg": "8.16.3",
+    "drizzle-orm": "0.39.1"
+  }
+}
