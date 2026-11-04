@@ -1,0 +1,204 @@
+{
+  "date": "2026-11-04",
+  "status": "READY stage; manual rendering and promotion/real QA pending",
+  "stage": {
+    "id": "dpl_DwwB53jRiUk6PV6EWzzcPYoGf5aR",
+    "url": "ikigai-8xrqesa54-andres-projects-61b43c52.vercel.app",
+    "readyState": "READY",
+    "target": "production",
+    "projectId": "prj_sVqqIBKF1Q2lViOpvlUlFGmkvMT6",
+    "nodeVersion": "24.x",
+    "source": "cli",
+    "gitCommitSha": "4ed36a4831ed0735452c29d745b4cec38ffec86e",
+    "aliases": [],
+    "aliasAssigned": true,
+    "publicAliasId": "dpl_CHZNBNyNwZL5J65P5GtvTUbwkmNk",
+    "publicAliasUnchanged": true,
+    "envMetadataUnchanged": true,
+    "protectionUnchanged": true,
+    "checkedArtifactSource": "958f59e752cf6438bb89aed5d106569081a3aca3",
+    "checkedManifest": "0ef455cdc5310bcbf9aafe9af8594306dec274d9073357efb991b3f1bdcceb66",
+    "promoted": false
+  },
+  "compatibility": {
+    "date": "2026-11-04T10:34:02.510Z",
+    "scope": "Production auth catalogs plus aggregate identity-key duplicates only; no account identifiers/emails/rows exported",
+    "transactionReadOnly": "on",
+    "endpointId": "ep-spring-sun-adfk3oqc",
+    "branchId": "br-sparkling-dust-adiobqet",
+    "projectId": "wandering-mouse-00188148",
+    "databaseRoleBindingVerified": true,
+    "connectionProvenance": "Management-confirmed direct endpoint using existing production role credential; masked auth env metadata unchanged",
+    "catalogRenderingSearchPath": "public to match prior receipt",
+    "relationProjection": "pg_class.oid::regclass::text, matching prior catalog; no identifier stripping",
+    "schemaMatches": {
+      "columns": true,
+      "constraints": true,
+      "indexes": true
+    },
+    "tableCount": 5,
+    "duplicate": {
+      "duplicate_groups": 0,
+      "excess_rows": 0
+    },
+    "missing_provider_account_keys": 0,
+    "rolledBack": true
+  },
+  "catalogFirstDifference": {
+    "firstComparison": "columns/indexes match; constraints false",
+    "firstHypothesis": "search_path qualification; standardized alone still differed",
+    "actualCause": "Initial query used pg_class.relname (bare relation) while prior receipt used pg_class.oid::regclass::text (qualified relation)",
+    "structuralInspection": "Same schema, constraint names/types/definitions and referenced auth.user relation/column keys, FK actions, validation/defer flags",
+    "correctedQuery": "SET LOCAL search_path=public and same regclass projection as prior receipt; no identifier stripping",
+    "supersedingResult": "All columns/constraints/indexes match; zero duplicate/missing identity keys",
+    "dataWrites": false,
+    "DDL": false,
+    "transactions": "READ ONLY and rolled back",
+    "firstResultsRetained": [
+      "production-auth-compatibility.json",
+      "production-auth-compatibility-catalog-normalized.json",
+      "auth-constraint-difference.json",
+      "auth-constraints-structural.json"
+    ],
+    "finalReceipt": "production-auth-compatibility-final.json"
+  },
+  "http": {
+    "target": "https://ikigai-8xrqesa54-andres-projects-61b43c52.vercel.app",
+    "scope": "Safe signed-out GETs only; existing CLI automation access reused without creation; no raw headers/cookies/tokens persisted",
+    "results": [
+      {
+        "path": "/api/analyze",
+        "status": 410,
+        "expectedStatus": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "requestId": "cdg1::iad1::bzxxf-1793788792631-42be5ac8e713",
+        "cliExit": 0,
+        "jsonObject": true
+      },
+      {
+        "path": "/api/action-plan",
+        "status": 410,
+        "expectedStatus": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "requestId": "cdg1::iad1::rxm8p-1793788794405-eea4808e4583",
+        "cliExit": 0,
+        "jsonObject": true
+      },
+      {
+        "path": "/api/questionnaire",
+        "status": 410,
+        "expectedStatus": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "requestId": "cdg1::iad1::szh7m-1793788795900-35e0c1124412",
+        "cliExit": 0,
+        "jsonObject": true
+      },
+      {
+        "path": "/api/session",
+        "status": 410,
+        "expectedStatus": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "requestId": "cdg1::iad1::jtc72-1793788797382-99f1b3814d72",
+        "cliExit": 0,
+        "jsonObject": true
+      },
+      {
+        "path": "/api/transcribe",
+        "status": 410,
+        "expectedStatus": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "requestId": "cdg1::iad1::stc4m-1793788798594-92f1d95b690c",
+        "cliExit": 0,
+        "jsonObject": true
+      },
+      {
+        "path": "/api/analytics",
+        "status": 410,
+        "expectedStatus": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "requestId": "cdg1::iad1::stc4m-1793788799942-374dbc44d5c0",
+        "cliExit": 0,
+        "jsonObject": true
+      },
+      {
+        "path": "/api/agent/workspace",
+        "status": 401,
+        "expectedStatus": 401,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "requestId": "cdg1::iad1::mqr7q-1793788801184-a2f218d5bf35",
+        "cliExit": 0,
+        "jsonObject": true
+      },
+      {
+        "path": "/api/auth/get-session",
+        "status": 200,
+        "expectedStatus": 200,
+        "contentType": "application/json",
+        "cacheControl": "no-store",
+        "requestId": "cdg1::iad1::gq5mn-1793788802536-9d0e10d40753",
+        "cliExit": 0,
+        "signedOutSessionNull": true
+      },
+      {
+        "path": "/login",
+        "status": 200,
+        "expectedStatus": 200,
+        "contentType": "text/html; charset=utf-8",
+        "cacheControl": "public, max-age=0, must-revalidate",
+        "requestId": "cdg1::pwgql-1793788803790-b5092297560e",
+        "cliExit": 0,
+        "namiHtml": true
+      }
+    ]
+  },
+  "selectedHostProtection": [
+    {
+      "target": "https://ikigai-9t699q2ri-andres-projects-61b43c52.vercel.app/login",
+      "status": 302,
+      "locationOrigin": "https://vercel.com",
+      "locationPath": "/sso-api",
+      "bodyCaptured": false
+    },
+    {
+      "target": "https://ikigai-8xrqesa54-andres-projects-61b43c52.vercel.app/login",
+      "status": 302,
+      "locationOrigin": "https://vercel.com",
+      "locationPath": "/sso-api",
+      "bodyCaptured": false
+    }
+  ],
+  "browser": {
+    "focusCause": "Owned initial explicit --headed session",
+    "corrected": "Owned session closed; explicit --headed false and AGENT_BROWSER_HEADED=false; own Chrome headless flag independently observed",
+    "headlessProfile": "/Users/andresm/.local/share/nami-release-qa-20261104",
+    "userChromeInspected": false,
+    "externalCuaOrCdp": false,
+    "protectedRender": "Actual Vercel login challenge; accepted manual route pending"
+  },
+  "qaMetadataBaselineCaptured": true,
+  "qaMetadataPayloadExported": false,
+  "manualStep": "Open exact stage /login in authorized platform-owner browser; confirm current Nami login, no generated-domain Google",
+  "promotion": {
+    "performed": false,
+    "authorizedConditionalOnStageRendering": true,
+    "postPromotionGates": [
+      "fresh designated QA Google callback",
+      "visible QA identity and authorized workspace read",
+      "reload and logout/login/returning session",
+      "QA-only Method metadata unchanged"
+    ]
+  },
+  "protectionOrCredentialConfigChanged": false,
+  "productionSchemaOrDataMutation": false,
+  "modelAudioOrMessageRequest": false,
+  "existingAutomationAccessReusedWithoutCreation": true,
+  "inventoryRemainingPackageRecords": 51,
+  "privateEvidenceRoot": ".context/revelio/auth-security-delivery-20261104"
+}

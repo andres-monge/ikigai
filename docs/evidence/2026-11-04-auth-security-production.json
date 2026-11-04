@@ -1,0 +1,180 @@
+{
+  "date": "2026-11-04",
+  "status": "Promoted and verified at authorized scope",
+  "promotion": {
+    "date": "2026-11-04T10:52:07.817Z",
+    "publicOrigin": "https://heynami.vercel.app",
+    "deploymentId": "dpl_DwwB53jRiUk6PV6EWzzcPYoGf5aR",
+    "exactDeploymentId": true,
+    "readyState": "READY",
+    "projectId": "prj_sVqqIBKF1Q2lViOpvlUlFGmkvMT6",
+    "nodeVersion": "24.x",
+    "gitLabel": "4ed36a4831ed0735452c29d745b4cec38ffec86e",
+    "runtimeSource": "958f59e752cf6438bb89aed5d106569081a3aca3",
+    "manifestSha256": "0ef455cdc5310bcbf9aafe9af8594306dec274d9073357efb991b3f1bdcceb66",
+    "environmentMetadataUnchanged": true,
+    "protectionUnchanged": true,
+    "existingAutomationAccessCount": 1
+  },
+  "humanStageProof": {
+    "type": "Founder screenshot, accepted by coordinator",
+    "source": "Coordinator delegation 2026-11-04",
+    "exactUrl": "https://ikigai-8xrqesa54-andres-projects-61b43c52.vercel.app/login",
+    "observed": "Nami heading/subtitle/Continue with Google/Vision/theme rendered",
+    "automatedBrowserPass": false,
+    "rootInspectedScreenshotDirectly": false
+  },
+  "publicHttp": {
+    "date": "2026-11-04T10:48:02.993Z",
+    "origin": "https://heynami.vercel.app",
+    "scope": "Unauthenticated safe GETs; no bypass headers or cookies; no raw bodies retained",
+    "results": [
+      {
+        "path": "/api/analyze",
+        "status": 410,
+        "expectedStatus": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "requestId": "cdg1::iad1::tfzq8-1793789281540-9f256f4eb599",
+        "jsonObject": true
+      },
+      {
+        "path": "/api/action-plan",
+        "status": 410,
+        "expectedStatus": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "requestId": "cdg1::iad1::z4mz2-1793789281784-68fdb21bde00",
+        "jsonObject": true
+      },
+      {
+        "path": "/api/questionnaire",
+        "status": 410,
+        "expectedStatus": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "requestId": "cdg1::iad1::vcsj6-1793789281974-f056721b0e9d",
+        "jsonObject": true
+      },
+      {
+        "path": "/api/session",
+        "status": 410,
+        "expectedStatus": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "requestId": "cdg1::iad1::pqvsv-1793789282121-dccd8ba21f15",
+        "jsonObject": true
+      },
+      {
+        "path": "/api/transcribe",
+        "status": 410,
+        "expectedStatus": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "requestId": "cdg1::iad1::hggq9-1793789282253-6fdfcd82ef7e",
+        "jsonObject": true
+      },
+      {
+        "path": "/api/analytics",
+        "status": 410,
+        "expectedStatus": 410,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "requestId": "cdg1::iad1::kcbqz-1793789282441-22d17595b167",
+        "jsonObject": true
+      },
+      {
+        "path": "/api/agent/workspace",
+        "status": 401,
+        "expectedStatus": 401,
+        "contentType": "application/json; charset=utf-8",
+        "cacheControl": "no-store",
+        "requestId": "cdg1::iad1::j7gq9-1793789282605-2f2904b39f7e",
+        "jsonObject": true
+      },
+      {
+        "path": "/api/auth/get-session",
+        "status": 200,
+        "expectedStatus": 200,
+        "contentType": "application/json",
+        "cacheControl": "no-store",
+        "requestId": "cdg1::iad1::wmtpx-1793789282760-ed5348a880ec",
+        "signedOutSessionNull": true
+      },
+      {
+        "path": "/login",
+        "status": 200,
+        "expectedStatus": 200,
+        "contentType": "text/html; charset=utf-8",
+        "cacheControl": "public, max-age=0, must-revalidate",
+        "requestId": "cdg1::rdbzn-1793789282969-fa2f3becc4c1",
+        "namiHtml": true
+      }
+    ]
+  },
+  "publicHeadlessRender": {
+    "date": "2026-11-04T10:49:04.605Z",
+    "headless": true,
+    "ownProfile": "/Users/andresm/.local/share/nami-release-qa-20261104",
+    "origin": "https://heynami.vercel.app",
+    "action": "Opened /legacy; waited for /login; fresh snapshot",
+    "finalPath": "/login",
+    "title": "Nami \u2014 Figure out what to work on next.",
+    "visibleControls": [
+      "Continue with Google",
+      "Our Vision",
+      "Switch to dark mode"
+    ],
+    "googleAction": false,
+    "qaSession": false,
+    "headedOrUserBrowser": false
+  },
+  "selectedImmutableProtection": [
+    {
+      "target": "ikigai-9t699q2ri-andres-projects-61b43c52.vercel.app",
+      "status": 302,
+      "locationOrigin": "https://vercel.com",
+      "locationPath": "/sso-api"
+    },
+    {
+      "target": "ikigai-8xrqesa54-andres-projects-61b43c52.vercel.app",
+      "status": 302,
+      "locationOrigin": "https://vercel.com",
+      "locationPath": "/sso-api"
+    }
+  ],
+  "prePromotionCompatibility": {
+    "passed": true,
+    "readOnly": true,
+    "columnsConstraintsIndexesMatch": true,
+    "duplicateIdentityGroups": 0,
+    "missingIdentityKeys": 0,
+    "firstDifferenceDiagnosis": "stage receipt and private catalog-first-difference-diagnosis.json"
+  },
+  "rebuildOrNewUploadForPromotion": false,
+  "feedbackIncluded": false,
+  "mainMergeOrPush": false,
+  "methodModelAudioExploitRequests": false,
+  "remainingAffectedPackageRecords": 51,
+  "privateEvidenceRoot": ".context/revelio/auth-security-delivery-20261104",
+  "qaVerification": {
+    "googleCallback": "Pass \u2014 accepted founder-reported manual sequence",
+    "workspaceIdentityRead": "Pass \u2014 accepted screenshot showing designated QA identity and workspace",
+    "returningSessionReload": "Pass \u2014 accepted founder-reported logout/login/reload sequence",
+    "attribution": "Human evidence accepted by coordinator, not autonomous OAuth",
+    "methodMetadataAfterComparison": "Pass \u2014 rolled-back READ ONLY aggregates unchanged",
+    "freshAuthWriteCorroboration": {
+      "googleAccountCountBefore": 1,
+      "googleAccountCountAfter": 1,
+      "activeSessionCountBefore": 1,
+      "activeSessionCountAfter": 2,
+      "freshSessionAfterPromotion": true,
+      "providerAccountTimestampAdvanced": true,
+      "noIdentifiersTokensOrPayloadExported": true
+    },
+    "origin": "https://heynami.vercel.app",
+    "additionalUserStepRequired": false
+  },
+  "finalAcceptance": "Complete at authorized security-release scope; no all-security-clear claim",
+  "runtimeConfigProtectionCredentialsSchemaChanges": false
+}
