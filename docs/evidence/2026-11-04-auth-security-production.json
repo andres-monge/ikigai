@@ -1,23 +1,20 @@
 {
   "date": "2026-11-04",
-  "status": "Promoted; fresh designated QA authentication acceptance pending",
+  "status": "Promoted and verified at authorized scope",
   "promotion": {
-    "date": "2026-11-04T10:47:32.271Z",
-    "alias": "heynami.vercel.app",
+    "date": "2026-11-04T10:52:07.817Z",
+    "publicOrigin": "https://heynami.vercel.app",
     "deploymentId": "dpl_DwwB53jRiUk6PV6EWzzcPYoGf5aR",
-    "expectedDeployment": "dpl_DwwB53jRiUk6PV6EWzzcPYoGf5aR",
-    "exactAliasMatch": true,
-    "projectId": "prj_sVqqIBKF1Q2lViOpvlUlFGmkvMT6",
+    "exactDeploymentId": true,
     "readyState": "READY",
-    "target": "production",
+    "projectId": "prj_sVqqIBKF1Q2lViOpvlUlFGmkvMT6",
     "nodeVersion": "24.x",
     "gitLabel": "4ed36a4831ed0735452c29d745b4cec38ffec86e",
     "runtimeSource": "958f59e752cf6438bb89aed5d106569081a3aca3",
     "manifestSha256": "0ef455cdc5310bcbf9aafe9af8594306dec274d9073357efb991b3f1bdcceb66",
     "environmentMetadataUnchanged": true,
     "protectionUnchanged": true,
-    "existingAutomationAccessCount": 1,
-    "promoted": true
+    "existingAutomationAccessCount": 1
   },
   "humanStageProof": {
     "type": "Founder screenshot, accepted by coordinator",
@@ -154,20 +151,30 @@
     "missingIdentityKeys": 0,
     "firstDifferenceDiagnosis": "stage receipt and private catalog-first-difference-diagnosis.json"
   },
-  "remainingQa": {
-    "googleCallback": "Not run",
-    "workspaceIdentityRead": "Not run",
-    "returningSessionReload": "Not run",
-    "methodMetadataAfterComparison": "Pending actual human QA result",
-    "manualStep": "Existing QA browser at https://heynami.vercel.app: logout if needed, Google login as designated QA, verify identity/workspace, reload, logout/login and returning-workspace reload; no messages/map changes",
-    "onlyDesignatedQa": true,
-    "baselineMetadataRetainedPrivately": true
-  },
   "rebuildOrNewUploadForPromotion": false,
-  "configProtectionCredentialsSchemaChanges": false,
   "feedbackIncluded": false,
   "mainMergeOrPush": false,
   "methodModelAudioExploitRequests": false,
   "remainingAffectedPackageRecords": 51,
-  "privateEvidenceRoot": ".context/revelio/auth-security-delivery-20261104"
+  "privateEvidenceRoot": ".context/revelio/auth-security-delivery-20261104",
+  "qaVerification": {
+    "googleCallback": "Pass \u2014 accepted founder-reported manual sequence",
+    "workspaceIdentityRead": "Pass \u2014 accepted screenshot showing designated QA identity and workspace",
+    "returningSessionReload": "Pass \u2014 accepted founder-reported logout/login/reload sequence",
+    "attribution": "Human evidence accepted by coordinator, not autonomous OAuth",
+    "methodMetadataAfterComparison": "Pass \u2014 rolled-back READ ONLY aggregates unchanged",
+    "freshAuthWriteCorroboration": {
+      "googleAccountCountBefore": 1,
+      "googleAccountCountAfter": 1,
+      "activeSessionCountBefore": 1,
+      "activeSessionCountAfter": 2,
+      "freshSessionAfterPromotion": true,
+      "providerAccountTimestampAdvanced": true,
+      "noIdentifiersTokensOrPayloadExported": true
+    },
+    "origin": "https://heynami.vercel.app",
+    "additionalUserStepRequired": false
+  },
+  "finalAcceptance": "Complete at authorized security-release scope; no all-security-clear claim",
+  "runtimeConfigProtectionCredentialsSchemaChanges": false
 }
