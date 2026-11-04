@@ -1,0 +1,29 @@
+# Security-only production stage — 2026-11-04
+
+**READY stage; public promotion and real Google/session verification pending.** Founder approval covered the reviewed auth-only prebuilt upload, scoped read-only compatibility, designated QA authentication and conditional promotion. It did not authorize feedback, configuration/protection/credential/schema changes, Method messages, model/audio calls or production exploit requests.
+
+The exact [auth-only candidate](2026-11-04-auth-security-release.md) was uploaded with `vercel deploy --prebuilt --prod --skip-domain --yes`. Stage: **`dpl_DwwB53jRiUk6PV6EWzzcPYoGf5aR`**, [immutable login](https://ikigai-8xrqesa54-andres-projects-61b43c52.vercel.app/login), production target, READY, project `prj_sVqqIBKF1Q2lViOpvlUlFGmkvMT6`, Node 24.x. The public `heynami.vercel.app` alias still points to **`dpl_CHZNBNyNwZL5J65P5GtvTUbwkmNk`**. No promotion occurred.
+
+Uploaded runtime source is `958f59e752cf6438bb89aed5d106569081a3aca3`; reviewed candidate receipt is `bbe6c51`. The CLI Git label is `4ed36a4`, which adds only the requested headless-verification runbook rule. No runtime source or prebuilt output changed. The 2,690-file manifest remains `0ef455cdc5310bcbf9aafe9af8594306dec274d9073357efb991b3f1bdcceb66`; archive SHA-256 is `689fd89a97b55eaa2333fc77f4c5726b89c9eeec0e5dc06f72d8e999d2556928`. The existing package checker passed again immediately before upload. Environment metadata, Node configuration and protection were checked unchanged before and after staging. No feedback code or migration 0002 is included.
+
+## Completed checks
+
+- **Pass — production compatibility:** intended Neon production endpoint `ep-spring-sun-adfk3oqc`, branch `br-sparkling-dust-adiobqet`, confirmed from prior management binding and existing production-role connection. All five auth tables' columns, constraints and indexes match the recorded catalog. Duplicate `(providerId, accountId)` groups/excess rows and missing identity keys are zero. Queries enforced `BEGIN READ ONLY`, rolled back, and exported no account IDs, emails or user records.
+- **Diagnosed — initial catalog mismatch:** the first probe used bare relation names while the prior receipt used schema-qualified `regclass` names. Standardizing search path alone did not resolve it. Structural inspection and the exact prior projection confirmed equality; no constraint was stripped or schema altered. Initial comparisons and the causal diagnosis remain private evidence.
+- **Pass — staged safe HTTP:** six retired API GETs returned JSON 410 and `Cache-Control: no-store`; `/api/agent/workspace` returned JSON 401/no-store; `/api/auth/get-session` returned 200 `null`/no-store; `/login` returned Nami HTML. Native Vercel CLI reused an existing automation-access entry; no bypass secret or protection setting was created. Raw cookies, tokens and full headers were not retained.
+- **Pass — selected host protection:** anonymous GETs to the previous and new immutable login URLs both redirected to Vercel's platform access gate. This is protection evidence, not authenticated rendering.
+- **Pass — QA baseline:** a unique designated QA identity and only its map revision, counts and timestamps were read in a read-only transaction, without map/message/history payloads or identifiers. Post-login comparison is pending.
+
+The first preupload metadata guard stopped before invoking deploy because it compared opaque-ID list ordering from different sort implementations. Exact records keyed by immutable ID were equal; no configuration drift occurred. A separate HTTP wrapper initially lacked the CLI executable on its scrubbed PATH and sent no request; the corrected wrapper used explicit Node 24/CLI paths. These local probe failures were diagnosed rather than treated as application failures.
+
+## Human authentication checkpoint
+
+The owned dedicated browser initially used `--headed` and caused focus interruptions. Only that owned session was closed; user Chrome/windows/tabs were untouched. Subsequent checks explicitly use headless mode and a new private profile, without CDP, session exports or founder profile inspection. The standing headless/no-focus rule is committed separately in `4ed36a4`.
+
+A fresh headless visit to the protected immutable deployment reached Vercel login. The coordinator accepted the founder-approved manual rendered route before staging. The single pending step is: **open the exact staged `/login` link above in an already authorized platform-owner browser and confirm the current Nami login page renders; do not click Google on the generated domain.** No additional visible browser will be opened automatically.
+
+After that confirmation, the approved conditional promotion can move this exact deployment to the registered public origin. Immediately afterward, designated QA must complete fresh logout/Google callback, visible QA identity/workspace read, reload and logout/login/returning-session proof at `https://heynami.vercel.app`; no Method message is needed. Compare the retained QA metadata afterward. Old in-flight OAuth state may require a fresh login attempt; no insecure fallback is present.
+
+If live verification fails, preserve the first failure and stop the rollout. The prior parser/auth baseline remains vulnerable and is not a safe automatic rollback. Retain current protection; use a bounded forward repair or separately authorized containment rather than automatically changing flags, access policy, credentials, schema or data. Remaining dependency inventory limits still apply: 51 affected-package records are classified, not cleared.
+
+Private proof is under `.context/revelio/auth-security-delivery-20261104/` in the auth-only managed worktree. No push, main merge, feedback activation, production schema write, real message/model/audio/exploit request or automatic promotion occurred.
