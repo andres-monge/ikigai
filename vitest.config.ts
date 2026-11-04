@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 
 const storageDatabaseTests = [
+  '**/server/auth.storage.test.ts',
   '**/server/storage.test.ts',
   '**/server/storage.feedback*.test.ts',
   '**/server/storage.career-map.test.ts',
