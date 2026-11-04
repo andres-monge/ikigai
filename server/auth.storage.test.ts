@@ -154,8 +154,10 @@ describe('native PostgreSQL auth compatibility and admission', () => {
   });
 
   it('starts a new counter window after expiry without weakening the limit', async () => {
-    await pool.query('update "rateLimit" set "lastRequest"=$1 where key=$2', [Date.now() - 120_000, '192.0.2.40|/get-session']);
-    expect((await auth.handler(request('/get-session'))).status).toBe(200);
-    expect((await pool.query('select count from "rateLimit" where key=$1', ['192.0.2.40|/get-session'])).rows).toEqual([{ count: 1 }]);
+    expect((await auth.handler(request('/get-session', undefined, '192.0.2.43'))).status).toBe(200);
+    const expired = await pool.query('update "rateLimit" set count=5, "lastRequest"=$1 where key=$2', [Date.now() - 120_000, '192.0.2.43|/get-session']);
+    expect(expired.rowCount).toBe(1);
+    expect((await auth.handler(request('/get-session', undefined, '192.0.2.43'))).status).toBe(200);
+    expect((await pool.query('select count from "rateLimit" where key=$1', ['192.0.2.43|/get-session'])).rows).toEqual([{ count: 1 }]);
   });
 });
